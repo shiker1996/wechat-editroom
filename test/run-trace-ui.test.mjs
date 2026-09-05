@@ -29,6 +29,7 @@ test('日志页面提供 Run Trace 入口并消费聚合指标', () => {
   assert.match(ui, /startTraceAutoRefresh/);
   assert.match(ui, /RUN_TRACE_POLL_INTERVAL_MS/);
   assert.match(ui, /cache: "no-store"/);
+  assert.match(ui, /shouldFollowScrollEnd/);
   assert.match(ui, /data-run-action="cancel"/);
   assert.match(ui, /newRootRunId/);
   assert.match(ui, /正在打开新的 Run Trace/);

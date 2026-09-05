@@ -31,6 +31,11 @@ function traceDataFingerprint(trace = {}, metrics = {}) {
   return [runState, trace.events?.length || 0, last(trace.events), trace.modelCalls?.length || 0, last(trace.modelCalls), trace.toolCalls?.length || 0, last(trace.toolCalls), trace.checkpoints?.length || 0, last(trace.checkpoints), metrics.durationMs, metrics.modelCalls, metrics.toolCalls].join("/");
 }
 
+function shouldFollowScrollEnd(element, threshold = 32) {
+  if (!element) return true;
+  return element.scrollHeight - element.clientHeight - element.scrollTop <= threshold;
+}
+
 function traceContent(value) {
   if (value == null) return "";
   if (typeof value === "string") return value;
@@ -569,8 +574,12 @@ async function refreshOpenRunTrace(id, { initial = false } = {}) {
   const selectedRef = document.querySelector("#run-trace-content .trace-row.is-selected")?.dataset.traceRef || "";
   const filterRef = document.querySelector("#run-trace-overview [data-trace-segment].is-active")?.dataset.traceSegmentRef || "";
   const detailWasOpen = !document.getElementById("run-trace-detail")?.hidden;
-  const contentScrollTop = document.getElementById("run-trace-content")?.scrollTop || 0;
-  const waterfallScrollTop = document.querySelector(".run-trace-waterfall-list")?.scrollTop || 0;
+  const contentElement = document.getElementById("run-trace-content");
+  const waterfallElement = document.querySelector(".run-trace-waterfall-list");
+  const contentScrollTop = contentElement?.scrollTop || 0;
+  const waterfallScrollTop = waterfallElement?.scrollTop || 0;
+  const followContentTail = initial || shouldFollowScrollEnd(contentElement);
+  const followWaterfallTail = initial || shouldFollowScrollEnd(waterfallElement);
   traceFingerprint = nextFingerprint;
   if (initial && snapshot.replayFixture) traceReplayFixture = snapshot.replayFixture;
   renderRunTrace(snapshot.trace, snapshot.metrics, id, traceReplayFixture);
@@ -585,8 +594,8 @@ async function refreshOpenRunTrace(id, { initial = false } = {}) {
   requestAnimationFrame(() => {
     const content = document.getElementById("run-trace-content");
     const waterfall = document.querySelector(".run-trace-waterfall-list");
-    if (content) content.scrollTop = contentScrollTop;
-    if (waterfall) waterfall.scrollTop = waterfallScrollTop;
+    if (content) content.scrollTop = followContentTail ? content.scrollHeight : contentScrollTop;
+    if (waterfall) waterfall.scrollTop = followWaterfallTail ? waterfall.scrollHeight : waterfallScrollTop;
   });
   setTraceLiveStatus(active ? `LIVE CAPTURE · ${new Date().toLocaleTimeString()}` : `已${snapshot.trace.status === "failed" ? "失败" : "完成"} · ${new Date().toLocaleTimeString()}`);
   return { changed: true, active };
