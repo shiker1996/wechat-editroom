@@ -136,6 +136,7 @@ export async function runSkill(request = {}) {
       checkpointing: execution.checkpointing ?? (prepared.snapshotId != null),
       modelStep: (turn) => execution.modelStep({ ...turn, state: runtime.restoredState, gateway: bindAgentGateway(prepared, catalog, turn.signal, { agentRunId: turn.agentRunId, agentStep: turn.step, workflowRunId: turn.workflowRunId || toolContext.workflowRunId, rootRunId: turn.rootRunId || toolContext.rootRunId, stageId: turn.stageId || toolContext.stageId }), generationSnapshotId: prepared.snapshotId }),
       resumeState: runtime.resumeState,
+      onRunCreated: runtime.onRunCreated,
       validateFinal: async (result) => { await gates.run('output', { ...gateContext, result }); await execution.validateFinal?.(result); },
     }); } finally { releaseResume(); }
   }

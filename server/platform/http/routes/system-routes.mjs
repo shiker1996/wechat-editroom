@@ -55,8 +55,10 @@ import { boundedLimit } from '../route-helpers.mjs';
 import { cancelAgentRun, isAgentRunActive } from '../../agent/run-control.mjs';
 import { stageSkillPackageRestore, stageWritingSkillRestore } from './system-restore-transactions.mjs';
 import { buildReplayFixture, buildRunMetrics, compareRunTraces } from '../../agent/replay.mjs';
-import { createRequestHarnessGateway } from '../../skills/pipeline-runtime.mjs';
+import { createRequestHarnessGateway, resolveSkillToolPolicy } from '../../skills/pipeline-runtime.mjs';
 import { buildRunInput, readRunInputDownload } from '../../agent/run-input.mjs';
+import { runEditorialAgentTurn } from '../../../features/articles/application/agent/editorial-adapter.mjs';
+import { extractLocalProjectPath } from '../../integrations/local-project-reader.mjs';
 
 function skillsUsingCapabilities(root, capabilities) {
   const expected=new Set(capabilities);
@@ -76,7 +78,7 @@ function requirePluginAdmin(request){
 export async function handleSystemRoutes(context) {
   const {
     request, response, pathname, searchParams, root, config, store, batchWorkdir,
-    json, body, binaryBody, createWorkbenchBackup, models, aiJobs,
+    json, body, binaryBody, createWorkbenchBackup, models, aiJobs, candidateEventGroups,
   } = context;
   const extensionSettingRepository=store?.repositories?.extensionSettings||{
     get:()=>null,save:()=>{throw new Error('扩展配置仓储不可用');},list:()=>[],
@@ -274,6 +276,56 @@ export async function handleSystemRoutes(context) {
         json(response, 202, { ...restarted, action, sourceRunId: rootRunId, newRootRunId: `job:${restarted.id}`, ...(action === 'resume' ? { resumedFrom: target.id, resumed: true } : {}), requeued: true });
       } catch (error) {
         json(response, 409, { error: `任务重新入队失败：${error.message}`, code: 'RUN_REQUEUE_FAILED', action, rootRunId, targetRunId: target.id });
+      }
+      return true;
+    }
+    // 编辑室对话不是批次 Job，而是直接由候选业务入口创建 Agent Run。
+    // Run Trace 仍然可以发起动作，但必须回到该入口重建候选、研判资料和
+    // 工具处理器；否则只拿 Run 上冻结的能力列表无法恢复业务上下文。
+    const editorialRoot = (trace.runs || []).find((run) => String(run.id) === rootRunId) || batchRoot;
+    const editorialCandidateId = target.candidate_row_id ?? target.candidateRowId ?? editorialRoot?.candidate_row_id ?? editorialRoot?.candidateRowId;
+    if (String(target.entry_point || editorialRoot?.entry_point || '') === 'editorial' && editorialCandidateId != null && typeof candidateEventGroups === 'function') {
+      // 编辑室的资料能力全部是 optional；是否可用由原入口重建目录时裁决，
+      // 不能因为某个可选插件当前缺失就阻断整个对话的重试/恢复。
+      const candidate = store.getCandidate?.(Number(editorialCandidateId));
+      if (!candidate) { json(response, 404, { error: '编辑室候选不存在', code: 'EDITORIAL_CANDIDATE_NOT_FOUND', targetRunId: target.id }); return true; }
+      const agentBudget = () => { const value = config.conversationAgent || {}; return { maxModelSteps: value.maxModelSteps, maxToolCalls: value.maxToolCalls, maxParallelToolCalls: value.maxParallelToolCalls, maxToolResultChars: value.maxToolResultChars, maxTotalToolResultChars: value.maxTotalToolResultChars, timeoutMs: value.timeoutMs }; };
+      const previousMessages = store.listEditorialMessages?.(candidate.id) || [];
+      const projectPath = [...previousMessages].reverse()
+        .map((message) => extractLocalProjectPath(String(message.content || '')))
+        .find(Boolean) || '';
+      const policy = await resolveSkillToolPolicy({ workspaceRoot: root, skillId: 'editorial-room-chat' });
+      let created;
+      let resolveCreated;
+      let rejectCreated;
+      created = new Promise((resolve, reject) => { resolveCreated = resolve; rejectCreated = reject; });
+      const operation = runEditorialAgentTurn({
+        gateway: models,
+        store,
+        registry: await getToolRegistry(),
+        candidateId: candidate.id,
+        provider: target.provider || models?.config?.defaultProvider,
+        answer: '',
+        events: candidateEventGroups(candidate, 12000),
+        // The original entry can rebuild the candidate/event context directly;
+        // long source excerpts remain optional and will use the adapter's
+        // bounded fallback when the retrieval slot is unavailable here.
+        retrieve: null,
+        workspaceRoot: root,
+        projectPath,
+        budget: agentBudget(),
+        resumeFrom: action === 'resume' ? target.id : '',
+        suppliedUrls: [],
+        allowedCapabilities: policy.allowedCapabilities,
+        onRunCreated: (agentRunId, traceContext) => resolveCreated({ agentRunId, traceContext }),
+      });
+      operation.catch((error) => rejectCreated(error));
+      try {
+        const started = await created;
+        const newRootRunId = started.traceContext?.rootRunId || (action === 'resume' ? rootRunId : started.agentRunId);
+        json(response, 202, { requeued: true, resumed: action === 'resume', action, sourceRunId: rootRunId, targetRunId: target.id, agentRunId: started.agentRunId, newRootRunId, ...(action === 'resume' ? { resumedFrom: target.id } : {}) });
+      } catch (error) {
+        json(response, 409, { error: `编辑室对话重新启动失败：${error.message}`, code: 'RUN_REQUEUE_FAILED', action, rootRunId, targetRunId: target.id });
       }
       return true;
     }

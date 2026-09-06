@@ -35,7 +35,7 @@ function nativeHistory(modelTurn,results,callByRequestId){
   ];
 }
 
-export async function runConversationAgent({entryPoint,modelStep,messages=[],registry,catalog,toolContext={},resolveArguments,sanitizeToolResult=(result)=>result,cacheLookup=null,onEvent=()=>{},onInternalEvent=()=>{},validateFinal=async()=>{},checkpointing=false,resumeState=null,store=null,budget={},signal=null}={}){
+export async function runConversationAgent({entryPoint,modelStep,messages=[],registry,catalog,toolContext={},resolveArguments,sanitizeToolResult=(result)=>result,cacheLookup=null,onEvent=()=>{},onInternalEvent=()=>{},validateFinal=async()=>{},checkpointing=false,resumeState=null,store=null,budget={},signal=null,onRunCreated=null}={}){
   if(typeof modelStep!=='function')throw new TypeError('modelStep 必须是函数');
   const limits=budgets(resumeState?.limits || budget),id=runId(),started=Date.now(),history=[...(resumeState?.history || messages)],seen=new Map(resumeState?.seen || []);let toolCalls=Number(resumeState?.toolCalls)||0,totalResultChars=Number(resumeState?.totalResultChars)||0,modelSteps=Number(resumeState?.modelSteps)||0;
   // Every run belongs to a stable trace tree. A standalone run is its own
@@ -48,6 +48,9 @@ export async function runConversationAgent({entryPoint,modelStep,messages=[],reg
   });
   const runContext = { ...toolContext, ...traceContext };
   store?.startAgentRun?.({id,entryPoint,...runContext});
+  // Let business-entry adapters return the new Agent Run as soon as its
+  // durable trace node exists, so Run Trace actions can follow it immediately.
+  onRunCreated?.(id, traceContext);
   const runController = new AbortController();
   const relayAbort = () => runController.abort(signal?.reason || Object.assign(new Error('Agent 已取消'), { code: 'AGENT_ABORTED' }));
   if (signal?.aborted) relayAbort(); else signal?.addEventListener('abort', relayAbort, { once: true });

@@ -346,7 +346,7 @@ async function api(request, response, url) {
   if (await handleThemeRoutes({ request, response, pathname, searchParams, json, store, body, models })) return;
   if (await handleContentRoutes({ request, response, pathname, searchParams, store, artifactRoots, mime, json, body, root, models })) return;
   if (await handleSystemRoutes({ request, response, pathname, searchParams, root, config, store, batchWorkdir, json, body, aiJobs,
-    binaryBody, createWorkbenchBackup, models })) return;
+    binaryBody, createWorkbenchBackup, models, candidateEventGroups })) return;
   const mediaResult = await handleMediaRoutes({ request, response, pathname, searchParams, store, config, json, body, path, fs, os, mime, root, execFileAsync, isInsideRoots, getImageWorkspace, batchArticlesDir, saveLocalImage, uploadImageToCdn, articleWorkdir, models, planImagePlaceholders, writeUtf8, saveImageMetadata, imageManifestFile, aiJobs, planArticleVisuals, defaultTypesetTheme, TYPESET_THEMES, analyzeVisualComplexity });
   if (mediaResult !== false) return mediaResult;
   const articleResult = await handleArticleRoutes({ request, response, pathname, store, json, body, candidateEventGroups, fetchCandidateSource, config, root, writeUtf8, path, batchWorkdir, lockedBrief, draftArticle, models, aiJobs, localSecurity });

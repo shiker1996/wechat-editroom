@@ -49,6 +49,23 @@ test('生产 Agent Run 支持通过系统接口取消活动执行并持久化 ab
   await assert.rejects(running,(error)=>error.code==='AGENT_ABORTED');assert.equal(store.getAgentRun(activeId).status,'aborted');
 });
 
+test('Agent Run 创建后立即通知业务入口，便于 Run Trace 动作跳转新轨迹', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-created-callback-'));
+  const store = new Store(path.join(root, 'test.db'));
+  t.after(() => { store.close(); fs.rmSync(root, { recursive: true, force: true }); });
+  let created = null;
+  const result = await runConversationAgent({
+    entryPoint: 'editorial',
+    catalog: [],
+    store,
+    onRunCreated: (id, traceContext) => { created = { id, traceContext }; },
+    modelStep: async () => ({ nativeTools: true, content: '完成' }),
+  });
+  assert.equal(result.agentRunId, created.id);
+  assert.equal(created.traceContext.rootRunId, created.id);
+  assert.equal(store.getAgentRun(created.id).status, 'completed');
+});
+
 test('Batch Job Run Trace 可直接重新入队失败任务', async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-job-retry-'));
   const store = new Store(path.join(root, 'test.db'));
