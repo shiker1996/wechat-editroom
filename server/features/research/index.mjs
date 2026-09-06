@@ -61,6 +61,7 @@ export {
   buildTopicResearchModelInput,
   buildResearchDigest,
   cleanSingleEventResearchReport,
+  inspectSingleEventResearchReport,
   generateDiscussionResearch,
   generateDiscussionResearchSinglePass,
   generateDiscussionResearchHypotheses,

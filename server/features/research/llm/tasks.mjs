@@ -1,11 +1,7 @@
 import { isFreshForBatch } from '../index.mjs';
 import { isResearchEligibleHotspot } from '../domain/hotspot-pipeline-scope.mjs';
 import { selectionPrompt } from './selection-prompts.mjs';
-
-function parseJson(content) {
-  const cleaned = content.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
-  return JSON.parse(cleaned);
-}
+import { parseModelJson } from '../../../platform/llm/model-json.mjs';
 
 function hasResearchTags(item) {
   try {
@@ -133,7 +129,7 @@ export async function tagBatch({ gateway, store, batchId, provider, limit, hotsp
       return;
     }
     let parsed;
-    try { parsed = parseJson(result.content); }
+    try { parsed = parseModelJson(result, { store, label: '热点语义打标' }); }
     catch (error) {
       const reason = result.finishReason === 'length' ? '模型达到输出上限，JSON 被截断' : `模型返回的 JSON 无效：${error.message}`;
       store.updateModelCall(result.callId, { status:'invalid_output', error:reason });

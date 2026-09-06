@@ -93,7 +93,6 @@ export function isSocialCardCandidate(item) {
 }
 
 function clamp(value, min, max) { return Math.max(min, Math.min(max, Number(value) || 0)); }
-function parseJson(content) { return JSON.parse(content.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')); }
 function parseModelJson(result, store) {
   return parseSharedModelJson(result,{store,label:'研判模型'});
 }

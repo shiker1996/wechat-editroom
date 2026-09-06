@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { getSocialCardTemplatePack, SOCIAL_CARD_RENDERER_BLOCK_TYPES } from '../rendering/social-card-template-registry.mjs';
 import { SOCIAL_CARD_PAGE_ROLES } from '../rendering/social-card-role.mjs';
+import { parseModelJson } from '../model-json.mjs';
 
 export const SOCIAL_TEMPLATE_PROPOSAL_PROMPT_VERSION='social-template-proposal-v2';
 export const SOCIAL_TEMPLATE_PROPOSAL_ERROR_CODES=Object.freeze({
@@ -253,13 +254,13 @@ export function buildSocialTemplateProposalMessages(request,{basePack,baseTheme=
   ];
 }
 
-function parseJson(content){if(typeof content!=='string')throw new Error('模型未返回文本');return JSON.parse(content);}
+function parseJson(result){return parseModelJson(result,{label:'Social 模板提案'});}
 async function parseWithRepair(gateway,result,{provider,signal}){
-  try{return {candidate:parseJson(result.content),formatRepaired:false,result};}
+  try{return {candidate:parseJson(result),formatRepaired:false,result};}
   catch(firstError){
     if(signal?.aborted)throw new SocialTemplateProposalError(SOCIAL_TEMPLATE_PROPOSAL_ERROR_CODES.GENERATION_CANCELLED,'Social 模板提案生成已取消');
     const repaired=await gateway.complete({provider,purpose:'social-template-proposal-format-repair',jsonMode:true,thinking:false,temperature:0,maxOutputTokens:7000,signal,messages:[{role:'system',protected:true,content:'将输入修复为严格 JSON 对象，只修复 JSON 格式，不改变语义，不新增 HTML/CSS、脚本或解释。'},{role:'user',protected:true,content:String(result.content||'').slice(0,40000)}]});
-    try{return {candidate:parseJson(repaired.content),formatRepaired:true,result:repaired};}catch{throw new SocialTemplateProposalError(SOCIAL_TEMPLATE_PROPOSAL_ERROR_CODES.MODEL_OUTPUT_INVALID,'模型未返回有效的 Social 模板提案 JSON',[issue('proposal','INVALID_JSON',firstError.message)]);}
+    try{return {candidate:parseJson(repaired),formatRepaired:true,result:repaired};}catch{throw new SocialTemplateProposalError(SOCIAL_TEMPLATE_PROPOSAL_ERROR_CODES.MODEL_OUTPUT_INVALID,'模型未返回有效的 Social 模板提案 JSON',[issue('proposal','INVALID_JSON',firstError.message)]);}
   }
 }
 

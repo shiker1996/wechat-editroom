@@ -64,7 +64,7 @@ brief → fact-base → planning → drafting → draft-quality-gate → title-g
 
 ## `review`
 
-同时使用总契约与 `article-reviewer`。依据事实基座修订，不新增事实。先输出可发布 Markdown，再在文末保留 `artifact-contracts.md` 规定的唯一 REVIEW 注释。存在 blocker 或未解决 major 时使用 `needs-revision` 并指定返工阶段；最多自动返工两轮。
+同时使用总契约与 `article-reviewer`。依据事实基座修订，不新增事实。只输出完整可发布 Markdown；审稿通过与否由编排器单独调用 `decision.article_review_gate` 工具判断，不在文章正文中嵌入 REVIEW 注释。存在 blocker 或未解决 major 时工具返回 `pass:false` 并提供结构化问题；最多自动返工两轮。
 
 ## `seo-keyword-scoring`
 

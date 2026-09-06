@@ -10,6 +10,7 @@ import {
   buildTopicResearchModelInput,
   buildResearchDigest,
   cleanSingleEventResearchReport,
+  inspectSingleEventResearchReport,
   buildTopicCandidates,
   buildVerifiedResearchMaterials,
   generateDiscussionResearchHypotheses,
@@ -231,6 +232,38 @@ test('单事件研判清理前置进度文本但保留无正式标题的原始�
     '# 事件研判报告\n\n## 事件内研判',
   );
   assert.equal(cleanSingleEventResearchReport('## 事件内研判\n\n- 结论：有效'), '## 事件内研判\n\n- 结论：有效');
+});
+
+test('单事件 Markdown 研判返回确定性的结构完整性报告，不改变 Markdown 交互协议', () => {
+  const input = { relation_candidates: [{ event_ids: ['E1', 'E2'] }] };
+  const complete = inspectSingleEventResearchReport(`# 事件研判报告
+
+## 事件内研判
+
+### 反常
+- 结论：存在差异
+
+### 利益冲突
+- 结论：收益与成本不对称
+
+### 可发散方向
+- 方向：关注行业影响
+
+## 事件外研判
+
+### 对比关系
+- 关联事件：E2；判断：动作不同
+
+## 来源
+- S1｜https://example.com/source`, { input });
+  assert.equal(complete.valid, true);
+  assert.deepEqual(complete.counts, { internal_items: 3, relation_items: 1, source_items: 1 });
+
+  const incomplete = inspectSingleEventResearchReport('# 事件研判报告\n\n## 事件内研判\n\n### 反常\n- 结论：待核实', { input });
+  assert.equal(incomplete.valid, false);
+  assert.ok(incomplete.issues.some((issue) => issue.code === 'RELATION_SECTION_MISSING'));
+  assert.ok(incomplete.issues.some((issue) => issue.code === 'INTERNAL_SUBSECTION_MISSING'));
+  assert.ok(incomplete.issues.some((issue) => issue.code === 'SOURCES_ITEMS_EMPTY'));
 });
 
 test('1A/2A/1B/2B 均使用模型联网，B阶段直接返回求证引用', async () => {

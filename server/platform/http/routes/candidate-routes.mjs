@@ -15,6 +15,7 @@ import { runTutorialAgentTurn, tutorialProjectAttachmentArguments } from '../../
 import { getFactAttachment, selectConversationSearchAttachments } from '../../agent/fact-attachments.mjs';
 import { runCustomSocialAgentTurn } from '../../../features/social-cards/application/agent/custom-social-adapter.mjs';
 import { runWithThinkingSink } from '../../llm/gateway.mjs';
+import { parseModelJson } from '../../llm/model-json.mjs';
 
 function readJsonFile(filePath) {
   try { return JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch { return null; }
@@ -234,7 +235,7 @@ export async function handleCandidateRoutes({ request, response, pathname, searc
         const hotInfo = context.facts.slice(0, 5).map((fact) => `- ${fact}`).join('\n');
         const harness=createRequestHarnessGateway({gateway:models,store,entryPoint:'composite-candidate-score',skillId:'composite-score',provider:models.config.defaultProvider,batchId,stageId:'composite-score'});
         let result; try { result = await harness.gateway.complete({ purpose: 'composite-score', batchId, jsonMode: true, maxOutputTokens: Math.min(3000, providerConfig.maxOutputTokens), messages: [{ role: 'system', protected: true, content: '你是热点探索编辑。只能依据给出的事实生成综合选题临时评分；不要把缺失事实当作 0 分。返回严格JSON：{"bScores":{"angleUniqueness":0,"emotionSpread":0,"titleHook":0,"readerStakeScore":0,"factSupport":0},"hProfile":{"historicalType":"bigtech","fiveSenseCount":0,"fiveQuestionCount":0,"recommendationFit":0,"emotionTheme":0,"searchFriendly":0},"angle":"","thesis":""}' }, { role: 'user', protected: true, content: `综合选题标题：${composite.hotspot_title}\n事件价值 T：${context.eventValue == null ? '缺失（不要生成正式 F 分）' : context.eventValue}\n包含以下热点信息：\n${hotInfo}` }] }); harness.finish('completed'); } catch (error) { harness.finish('failed',error.message); throw error; }
-        let parsed; try { parsed = JSON.parse(result.content.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')); } catch { parsed = null; }
+        let parsed; try { parsed = parseModelJson(result, { store, label: '综合选题临时评分' }); } catch { parsed = null; }
         if (parsed) {
           const card = { bScores: parsed.bScores || {}, hProfile: parsed.hProfile || { historicalType: 'bigtech', fiveSenseCount: 0, fiveQuestionCount: 0, recommendationFit: 0, emotionTheme: 0, searchFriendly: 0 }, angle: parsed.angle || '', thesis: parsed.thesis || '', source: { title: composite.hotspot_title, category: context.category, riskLevel: context.riskLevel, poolRole: '综合选题', hotspotId: null, composite: true, eventValue: context.eventValue, scoreStatus: context.scoreStatus, scoreWarning: context.scoreWarning } };
           const scored = scoreCards([card], { items: [] });

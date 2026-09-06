@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { articleLengthStatus, articleStageOutputIssue, authorizedWritingBrief, reviewGateOutputIssue, reviewGateResult, buildDraftUserPrompt, buildArticleStageSystem, buildReviewRepairPrompt, buildPublicationComplianceRepairPrompt, compositeSourceText, normalizePlanningResult, selectWriterSkill, ARTICLE_LENGTH_RANGE, ARTICLE_STAGE_CONTRACT, ARTICLE_QUALITY_GATE_TOOL, aiQualityGate, sourceCacheIssue, unverifiedFactBaseIssue } from '../server/features/articles/application/article-pipeline.mjs';
+import { articleLengthStatus, articleStageOutputIssue, authorizedWritingBrief, buildDraftUserPrompt, buildArticleStageSystem, buildReviewRepairPrompt, buildPublicationComplianceRepairPrompt, compositeSourceText, normalizePlanningResult, selectWriterSkill, ARTICLE_LENGTH_RANGE, ARTICLE_STAGE_CONTRACT, ARTICLE_QUALITY_GATE_TOOL, ARTICLE_REVIEW_GATE_TOOL, aiQualityGate, aiReviewGate, sourceCacheIssue, unverifiedFactBaseIssue } from '../server/features/articles/application/article-pipeline.mjs';
 import { inspectArticleQuality } from '../server/features/articles/domain/article-quality.mjs';
 import { loadArticleSkillBundle, loadSkillBundle } from '../server/platform/llm/skill-runtime.mjs';
 
@@ -22,12 +22,22 @@ test('文章阶段输出门禁识别工具操作说明和非完整文章',()=>{
   assert.equal(articleStageOutputIssue('# 完整标题\n\n这是文章正文。',{requireArticle:true}),null);
 });
 
-test('审稿门禁要求独立 result 行，并能明确诊断缺失原因',()=>{
-  const report='我已仔细审阅这篇文章。整体质量较高。';
-  assert.equal(reviewGateResult(report),null);
-  assert.match(reviewGateOutputIssue(report,{requireArticle:true}),/缺少独立一行 result: pass 或 result: needs-revision/);
-  assert.equal(reviewGateResult('<!-- REVIEW\nresult: needs-revision\n-->'),'needs-revision');
-  assert.equal(reviewGateOutputIssue('# 标题\n\n正文。\n\n<!-- REVIEW\nresult: pass\n-->',{requireArticle:true}),null);
+test('审稿正文不再承载 result 标记，门禁结论通过独立 decision tool 返回', async()=>{
+  const calls=[];
+  const gateway={
+    config:{defaultProvider:'mock',providers:{mock:{supportsNativeTools:true}}},
+    async complete(input){
+      calls.push(input);
+      return {callId:43,toolCalls:[{id:'call-review',name:'decision.article_review_gate',input:{pass:true,issues:[]},providerExecuted:false}]};
+    },
+  };
+  const store={repositories:{extensionSettings:{get(){return {value:{decisionToolsEnabled:true}};}}}};
+  const result=await aiReviewGate({gateway,store,provider:'mock',batchId:'b1',candidateId:'c1',article:'# 标题\n\n正文',factBase:{claims:[]},systemPrompt:'审稿门禁'});
+  assert.deepEqual(result,{pass:true,issues:[]});
+  assert.equal(calls.length,1);
+  assert.deepEqual(calls[0].toolChoice,{type:'function',name:'decision.article_review_gate'});
+  assert.equal(calls[0].jsonMode,false);
+  assert.deepEqual(calls[0].tools,[ARTICLE_REVIEW_GATE_TOOL]);
 });
 
 test('终稿统一字数门禁默认1300–2000个可见字符', () => {
@@ -52,12 +62,12 @@ test('成稿提示词展开真实标题、简报和大纲', () => {
   assert.doesNotMatch(prompt, /\$\{(?:selectedTitle|outline|JSON\.stringify\(brief\))\}/);
 });
 
-test('审稿返工提示词直接携带事实基座、大纲、去AI稿和首次审阅报告', () => {
-  const prompt = buildReviewRepairPrompt({ factBase: { claims: ['事实'] }, outline: '# 大纲', article: '# 去AI稿', review: 'result: needs-revision' });
+test('审稿返工提示词直接携带事实基座、大纲、去AI稿和结构化审稿结果', () => {
+  const prompt = buildReviewRepairPrompt({ factBase: { claims: ['事实'] }, outline: '# 大纲', article: '# 去AI稿', review: '{"pass":false,"issues":[{"message":"缺少来源"}]}' });
   assert.match(prompt, /事实基座：/);
   assert.match(prompt, /文章大纲（对应 02-outline\.md）：[\s\S]*# 大纲/);
   assert.match(prompt, /待修订文章（对应 05-humanized\.md）：[\s\S]*# 去AI稿/);
-  assert.match(prompt, /首次审阅报告与修订要求：[\s\S]*result: needs-revision/);
+  assert.match(prompt, /首次审稿门禁结果与修订要求：[\s\S]*缺少来源/);
   assert.match(prompt, /不要要求读取文件/);
 });
 

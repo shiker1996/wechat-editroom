@@ -13,6 +13,7 @@ import { buildSocialCardReflowPreview } from '../../../shared/rendering/social-c
 import { normalizeSocialCardPageTitle } from '../../../shared/rendering/social-card-title.mjs';
 import { socialCardPageBudget, socialCardPageBudgetMessage } from '../../../shared/rendering/social-card-page-budget.mjs';
 import { buildSocialThemeRoutingContext, resolveAutoTheme } from '../../application/themes/auto-theme-router.mjs';
+import { parseModelJson } from '../../llm/model-json.mjs';
 
 const SOCIAL_CARD_ENTRY_POINTS=Object.freeze({
   repository:'social-tool',
@@ -163,7 +164,7 @@ export async function handleSocialCardRoutes(context) {
           {role:'user',protected:true,content:JSON.stringify({facts:toLegacySocialCardPromptInput(factEnvelope),full_card_plan:cardPlan,target_page_number:pageIndex+1,target_page:previousPage,target_template:targetTemplateContext,layout_report_for_target_page:layoutPage})},
         ]});
         let parsed;
-        try{parsed=JSON.parse(String(result.content||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,''));}catch(error){throw new Error(`结构修复 JSON 无法解析：${error.message}`);}
+        try{parsed=parseModelJson(result,{store,label:'图文单页结构修复'});}catch(error){throw new Error(`结构修复 JSON 无法解析：${error.message}`);}
         let operations=Array.isArray(parsed)?parsed:parsed?.operations;
         const beforePlan=structuredClone(cardPlan);
        const pageBudget=socialCardPageBudget(contentType);
@@ -195,7 +196,7 @@ export async function handleSocialCardRoutes(context) {
         {role:'system',protected:true,content:`模板不可变上下文：${JSON.stringify(targetTemplateContext)}。保持当前页 role、layout_style、事实边界和尺寸不变；只使用模板支持的内容块，最多 ${Math.min(3,targetTemplateContext.maxBlocks)} 个块、${Math.min(9,targetTemplateContext.maxItems)} 个条目。`},
         {role:'user',protected:true,content:JSON.stringify({facts:toLegacySocialCardPromptInput(factEnvelope),full_card_plan:cardPlan,target_page_number:pageIndex+1,target_page:previousPage,target_template:targetTemplateContext,layout_report_for_target_page:layoutPage})},
       ]});
-      const parsed=JSON.parse(String(result.content||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,''));const generated=parsed?.page;
+      const parsed=parseModelJson(result,{store,label:'图文单页重生成'});const generated=parsed?.page;
       if(!generated||typeof generated!=='object'||!Array.isArray(generated.content_blocks)||!generated.content_blocks.length)throw new Error('单页重生成未返回有效内容块');
       const allowedBlockTypes=new Set(['text','list','code','note','stats','compare','steps','timeline','scenes','highlight']);
       if(generated.content_blocks.length>Math.min(3,targetTemplateContext.maxBlocks)||generated.content_blocks.some((block)=>!allowedBlockTypes.has(block?.type)))throw new Error('单页重生成返回了不支持的内容块结构');
@@ -360,7 +361,7 @@ export async function handleSocialCardRoutes(context) {
         {role:'system',protected:true,content:storyboardSystem},
         {role:'user',protected:true,content:JSON.stringify(toLegacySocialCardPromptInput(factEnvelope))}
       ]});
-      const parsed=JSON.parse(result.content.trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,''));
+      const parsed=parseModelJson(result,{store,label:'图文故事板'});
        const pageBudget=socialCardPageBudget(contentType);
        const rawCardPlan=Array.isArray(parsed.card_plan)?parsed.card_plan:[];
        const pageBudgetError=socialCardPageBudgetMessage(rawCardPlan.length,contentType);

@@ -7,6 +7,7 @@ import { compileThemePreview } from './theme-preview.mjs';
 import { colorContrast } from '../../../shared/themes/theme-validator.mjs';
 import { getBuiltinThemeRegistry } from '../../../shared/themes/theme-registry.mjs';
 import { compactThemeSignatures, compareAiThemeCandidate } from '../../../shared/themes/ai-theme-quality.mjs';
+import { parseModelJson } from '../../llm/model-json.mjs';
 import { SOCIAL_DENSITY_MAX_HIGH_VALUES, SOCIAL_DENSITY_THRESHOLDS, socialDensityHighFields, themeNumericLimits } from '../../../shared/themes/theme-numeric-limits.mjs';
 import { ARTICLE_COMPONENT_CATALOG, articleComponentDefaults, articleComponentEditorCatalog, SOCIAL_COMPONENT_CATALOG, socialComponentDefaults, socialComponentEditorCatalog } from '../../../shared/themes/component-catalog.mjs';
 import { validateCoverThemeSpec, sanitizeCoverThemeSpec } from '../../../shared/themes/cover-components.mjs';
@@ -168,12 +169,12 @@ export function buildAiThemeMessages(request){
   ];
 }
 
-function parseJson(content){if(typeof content!=='string')throw new Error('模型未返回文本');return JSON.parse(content);}
+function parseJson(result){return parseModelJson(result,{label:'AI 主题候选'});}
 async function parseWithOneRepair(gateway,result,input){
-  try{return {candidate:parseJson(result.content),formatRepaired:false,result};}
+  try{return {candidate:parseJson(result),formatRepaired:false,result};}
   catch(firstError){
     const repairResult=await gateway.complete({provider:input.provider,purpose:'theme-create-format-repair',jsonMode:true,thinking:false,temperature:0,maxOutputTokens:5000,messages:[{role:'system',protected:true,content:'把输入修复为一个严格 JSON 对象。只修复 JSON 格式，不增加、删除或改写语义；不要代码围栏或解释。'},{role:'user',protected:true,content:String(result.content||'').slice(0,30000)}]});
-    try{return {candidate:parseJson(repairResult.content),formatRepaired:true,result:repairResult};}catch{throw new AiThemeContractError(AI_THEME_ERROR_CODES.MODEL_OUTPUT_INVALID,'模型未返回有效的主题 JSON',[{field:'candidate',code:'INVALID_JSON',message:firstError.message}]);}
+    try{return {candidate:parseJson(repairResult),formatRepaired:true,result:repairResult};}catch{throw new AiThemeContractError(AI_THEME_ERROR_CODES.MODEL_OUTPUT_INVALID,'模型未返回有效的主题 JSON',[{field:'candidate',code:'INVALID_JSON',message:firstError.message}]);}
   }
 }
 

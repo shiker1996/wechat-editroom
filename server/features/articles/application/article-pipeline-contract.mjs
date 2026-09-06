@@ -22,21 +22,6 @@ export function articleStageOutputIssue(value,{requireArticle=false}={}) {
   return null;
 }
 
-const REVIEW_GATE_RESULT_PATTERN=/^\s*result\s*:\s*(pass|needs-revision)\s*$/im;
-
-export function reviewGateResult(value) {
-  return String(value||'').match(REVIEW_GATE_RESULT_PATTERN)?.[1]?.toLowerCase()||null;
-}
-
-export function reviewGateOutputIssue(value,{requireArticle=false}={}) {
-  const text=cleanMarkdown(value);
-  if(!text)return '模型返回空内容';
-  if(!reviewGateResult(text))return '审稿响应缺少独立一行 result: pass 或 result: needs-revision，必须放在文末 REVIEW 注释中';
-  const stageIssue=articleStageOutputIssue(text,{requireArticle});
-  if(stageIssue)return stageIssue;
-  return null;
-}
-
 export function normalizePlanningResult(input={}) {
   const plan=input&&typeof input==='object'&&!Array.isArray(input)?{...input}:{};
   plan.expectedAction=asArray(plan.expectedAction);

@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fetchMaterialSource } from '../../../platform/integrations/source-fetcher.mjs';
 import { batchTopicsDir } from '../../../platform/core/workspace-paths.mjs';
 import { delimitUntrusted, markdownInlineData } from '../../../platform/llm/context-safety.mjs';
-import { parseJsonText } from '../../../platform/llm/model-json.mjs';
+import { parseModelJson } from '../../../platform/llm/model-json.mjs';
 
 const ARTICLE_MAX={conflict:20,audienceRelevance:20,informationGain:15,emotionalTension:15,timeliness:15,impact:10,sourceReliability:5};
 const ARTICLE_PENALTY_MAX={factGap:15,unverifiedAllegation:20,saturation:10,accountMismatch:10};
@@ -44,7 +44,6 @@ const SYSTEM=`你是突发事件事实编辑与内容适配评估器。只能依
 function clamp(value,max){const number=Number(value);return Number.isFinite(number)?Math.max(0,Math.min(max,number)):0;}
 function object(value){return value&&typeof value==='object'&&!Array.isArray(value)?value:{};}
 function array(value){return Array.isArray(value)?value.filter(Boolean):value?String(value).split(/\r?\n|；/).map((item)=>item.trim()).filter(Boolean):[];}
-function parseJson(content){return parseJsonText(content);}
 export function normalizeScore(raw,maxima,penaltyMaxima){
   const dimensions={};for(const [key,max] of Object.entries(maxima))dimensions[key]=clamp(object(raw.dimensions)[key],max);
   const penalties={};for(const [key,max] of Object.entries(penaltyMaxima))penalties[key]=clamp(object(raw.penalties)[key],max);
@@ -107,7 +106,7 @@ export async function runBreakingAnalysisPipeline({gateway,store,batchId,provide
       {role:'system',content:SYSTEM,protected:true},
       {role:'user',content:`${attempt?'上次输出疑似误用了 1～5 分制。请严格使用各字段完整分值区间重新评估；推荐生产与极低维度总分不能同时出现。\n\n':''}${delimitUntrusted('breaking-materials',{eventTitle:hotspot.title,authorContext:batch.note,requestedTracks:batch.requested_tracks_list,sources:sourceInput},30000)}`,protected:true},
     ]});
-    try{raw=parseJson(result.content);}catch(error){store.updateModelCall(result.callId,{status:'invalid_output',error:`突发分析返回无效 JSON：${error.message}`});if(!attempt){onProgress('突发分析 JSON 无效，正在自动重试');continue;}throw new Error(`突发分析返回无效 JSON：${error.message}`);}
+    try{raw=parseModelJson(result,{store,label:'突发分析'});}catch(error){store.updateModelCall(result.callId,{status:'invalid_output',error:`突发分析返回无效 JSON：${error.message}`});if(!attempt){onProgress('突发分析 JSON 无效，正在自动重试');continue;}throw new Error(`突发分析返回无效 JSON：${error.message}`);}
     const articlePreview=normalizeScore(object(raw.article),ARTICLE_MAX,ARTICLE_PENALTY_MAX);
     const socialPreview=normalizeScore(object(raw.social),SOCIAL_MAX,SOCIAL_PENALTY_MAX);
     const articleContradiction=hasScoreScaleContradiction(articlePreview,raw.article?.recommendedType);

@@ -1334,6 +1334,72 @@ function sourceReferenceTokens(value, aliases, sources) {
   return [...new Set(found)].slice(0, SOURCE_LIMIT);
 }
 
+/**
+ * 研判报告仍然使用 Markdown 作为模型交互协议，但解析结果必须告诉调用方
+ * 哪些结构没有被模型完整返回。这里不改写正文，也不把完整性问题静默当成
+ * “没有信号”，只提供确定性的诊断结果供编排层、日志和编辑室使用。
+ */
+export function inspectSingleEventResearchReport(value, { input = {} } = {}) {
+  const report = String(value || '').trim();
+  const headings = [...report.matchAll(/^\s*(#{1,4})\s+(.+?)\s*$/gmu)].map((match) => ({
+    level: match[1].length,
+    title: match[2].trim(),
+  }));
+  const issues = [];
+  const addIssue = (code, message, expected = '') => issues.push({ code, message, expected });
+  if (!report) addIssue('REPORT_EMPTY', '模型没有返回研判报告正文', '非空 Markdown');
+  if (!headings.some((heading) => heading.level === 1 && /事件研判报告/u.test(heading.title))) {
+    addIssue('MISSING_REPORT_TITLE', '缺少一级标题“事件研判报告”', '# 事件研判报告');
+  }
+  const requiredSections = [
+    ['INTERNAL_SECTION_MISSING', '事件内研判', '## 事件内研判'],
+    ['RELATION_SECTION_MISSING', '事件外研判', '## 事件外研判'],
+    ['SOURCES_SECTION_MISSING', '来源', '## 来源'],
+  ];
+  for (const [code, label, expected] of requiredSections) {
+    const present = headings.some((heading) => label === '事件外研判'
+      ? /事件外研判|事件间研判/u.test(heading.title)
+      : heading.title.includes(label));
+    if (!present) addIssue(code, `缺少必需标题“${label}”`, expected);
+  }
+  const internalSubsections = ['反常', '利益冲突', '可发散方向'];
+  for (const subsection of internalSubsections) {
+    if (!headings.some((heading) => heading.level >= 3 && heading.title.includes(subsection))) {
+      addIssue('INTERNAL_SUBSECTION_MISSING', `事件内研判缺少“${subsection}”小节`, `### ${subsection}`);
+    }
+  }
+  const relationKinds = ['前后关系', '回应关系', '对比关系', '趋势关系', '反例关系'];
+  const hasRelationKind = headings.some((heading) => heading.level >= 3 && relationKinds.some((kind) => heading.title.includes(kind)));
+  if (list(input?.relation_candidates).length > 0 && !hasRelationKind) {
+    addIssue('RELATION_KIND_MISSING', '存在待研判的关联事件，但报告没有返回可识别的关系类型小节', relationKinds.join(' / '));
+  }
+  let section = '';
+  let internalItems = 0;
+  let relationItems = 0;
+  let sourceItems = 0;
+  for (const line of report.split(/\r?\n/)) {
+    const heading = line.match(/^\s*(#{2,4})\s+(.+?)\s*$/)?.[2] || '';
+    if (heading) {
+      if (/事件内研判/u.test(heading)) section = 'internal';
+      else if (/事件外研判|事件间研判/u.test(heading)) section = 'relation';
+      else if (/来源|参考资料|证据来源/u.test(heading)) section = 'sources';
+      continue;
+    }
+    if (!/^\s*[-*+]\s+/.test(line)) continue;
+    if (section === 'internal') internalItems += 1;
+    else if (section === 'relation') relationItems += 1;
+    else if (section === 'sources') sourceItems += 1;
+  }
+  if (internalItems === 0) addIssue('INTERNAL_ITEMS_EMPTY', '事件内研判小节没有可解析的列表项', '至少一条以 - 开头的判断');
+  if (sourceItems === 0) addIssue('SOURCES_ITEMS_EMPTY', '来源小节没有可解析的列表项', '至少一条来源列表项');
+  return {
+    valid: issues.length === 0,
+    issues,
+    headings,
+    counts: { internal_items: internalItems, relation_items: relationItems, source_items: sourceItems },
+  };
+}
+
 function parseReportSources(markdown, eventInput, eventId) {
   const original = list(eventInput?.sources);
   const sources = original.map((source) => ({ ...source }));
@@ -1401,6 +1467,7 @@ function parseReportSources(markdown, eventInput, eventId) {
 }
 
 function parseModelMarkdownResearch({ report, input }) {
+  const reportCompleteness = inspectSingleEventResearchReport(report, { input });
   const eventInput = input?.event || {};
   const eventId = String(eventInput.event_id || '');
   const { sources, sourceMap, aliases } = parseReportSources(report, eventInput, eventId);
@@ -1554,11 +1621,13 @@ function parseModelMarkdownResearch({ report, input }) {
     evidence_status: 'summary_only',
     evidence_clips: sources.filter((source) => source.url || source.summary || source.title).slice(0, SOURCE_LIMIT).map((source) => ({ source_id: source.source_id, url: source.url, title: source.title, excerpt: source.summary || source.content || '', evidence_level: levelForSource(source) })),
     source_kind: 'model_native_research',
+    report_completeness: reportCompleteness,
   };
   return {
     event_id: eventId,
     title: eventInput.title,
     report_markdown: String(report || '').trim(),
+    report_completeness: reportCompleteness,
     sources,
     internal_research: {
       event_id: eventId,
@@ -1574,6 +1643,7 @@ function parseModelMarkdownResearch({ report, input }) {
       signal_count: anomalies.length + conflicts.length + divergences.length,
       evidence_boundary: { confirmed_facts: eventInput.event_card?.confirmed_facts || [], unverified: eventInput.event_card?.unverified || [] },
       analysis_source: 'model',
+      report_completeness: reportCompleteness,
     },
     relations,
     reference_events: relations.flatMap((relation) => relation.reference_events || []),
@@ -1618,7 +1688,11 @@ export async function generateDiscussionResearchSinglePass({ gateway, store, eve
     onProgress(`单事件模型研判：${index + 1}/${selectedEvents.length}`);
     try {
       const result = await completeSingleEventResearchReport({ gateway, provider, batchId, workspaceRoot, input, providerConfig, onProgress, onModelRequest, onModelResponse });
-      reports.push(parseModelMarkdownResearch({ report: result.report, input }));
+      const parsedReport = parseModelMarkdownResearch({ report: result.report, input });
+      if (!parsedReport.report_completeness.valid) {
+        onProgress(`单事件模型研判结构不完整：${parsedReport.report_completeness.issues.map((issue) => issue.code).join('、')}`);
+      }
+      reports.push(parsedReport);
     } catch (error) {
       onModelResponse?.({
         phase: 'single_event',
@@ -1633,11 +1707,12 @@ export async function generateDiscussionResearchSinglePass({ gateway, store, eve
         event_id: idOf(event),
         title: text(event.representative_title, 220),
         report_markdown: `## 研判状态\n\n- 本次模型研判失败：${String(error?.message || error)}`,
+        report_completeness: { valid: false, issues: [{ code: 'MODEL_CALL_FAILED', message: String(error?.message || error), expected: '成功返回 Markdown 研判报告' }], headings: [], counts: { internal_items: 0, relation_items: 0, source_items: 0 } },
         sources: [],
-        internal_research: { event_id: idOf(event), title: text(event.representative_title, 220), status: 'failed', anomalies: [], conflicts: [], divergences: [], anomaly_points: [], interest_conflicts: [], divergence_directions: [], internal_research: { anomalies: [], interest_conflicts: [], divergence_directions: [] }, signal_count: 0, analysis_source: 'model' },
+        internal_research: { event_id: idOf(event), title: text(event.representative_title, 220), status: 'failed', anomalies: [], conflicts: [], divergences: [], anomaly_points: [], interest_conflicts: [], divergence_directions: [], internal_research: { anomalies: [], interest_conflicts: [], divergence_directions: [] }, signal_count: 0, analysis_source: 'model', report_completeness: { valid: false, issues: [{ code: 'MODEL_CALL_FAILED', message: String(error?.message || error), expected: '成功返回 Markdown 研判报告' }], headings: [], counts: { internal_items: 0, relation_items: 0, source_items: 0 } } },
         relations: [],
         reference_events: [],
-        report_material: { material_id: materialId('discussion_report', idOf(event)), material_type: 'discussion_report', status: 'failed', anchor_event_ids: [idOf(event)], statement: `${text(event.representative_title, 220)} 的模型研判报告`, report_markdown: `## 研判状态\n\n- 本次模型研判失败：${String(error?.message || error)}`, evidence_source_ids: [], evidence_levels: [], evidence_status: 'none', evidence_clips: [], source_kind: 'model_native_research' },
+        report_material: { material_id: materialId('discussion_report', idOf(event)), material_type: 'discussion_report', status: 'failed', anchor_event_ids: [idOf(event)], statement: `${text(event.representative_title, 220)} 的模型研判报告`, report_markdown: `## 研判状态\n\n- 本次模型研判失败：${String(error?.message || error)}`, evidence_source_ids: [], evidence_levels: [], evidence_status: 'none', evidence_clips: [], source_kind: 'model_native_research', report_completeness: { valid: false, issues: [{ code: 'MODEL_CALL_FAILED', message: String(error?.message || error), expected: '成功返回 Markdown 研判报告' }], headings: [], counts: { internal_items: 0, relation_items: 0, source_items: 0 } } },
         error: String(error?.message || error),
       });
     }

@@ -18,6 +18,7 @@ import {
 import { normalizeSocialCardCode, parseSocialCardFencedCode } from '../../../shared/rendering/social-card-code-utils.mjs';
 import { socialCardSlotSemanticTags } from '../../../shared/rendering/social-card-page-component-contract.mjs';
 import { validateInput } from '../../../platform/tools/schemas.mjs';
+import { parseModelJson } from '../../../platform/llm/model-json.mjs';
 
 const SOCIAL_CARD_CONTENT_PLANNER_SCHEMA = JSON.parse(fs.readFileSync(new URL('../../../shared/domain/schemas/social-card-content-planner.schema.json', import.meta.url), 'utf8'));
 
@@ -34,7 +35,7 @@ export const SOCIAL_CARD_CONTENT_PLANNER_OPERATION_TYPES = Object.freeze([
  * 结构校验器使用，不作为模型输入或对外操作类型。
  */
 export function validateSocialCardContentPlannerSchema(result) {
-  const value = typeof result === 'string' ? JSON.parse(result) : result;
+  const value = typeof result === 'string' ? parseModelJson({ content: result }, { label: '图文内容计划' }) : result;
   const message = validateInput(SOCIAL_CARD_CONTENT_PLANNER_SCHEMA, value);
   return { valid: !message, issues: message ? [message] : [] };
 }
@@ -266,7 +267,7 @@ function normalizeComponentOperation(operation, { cardPlan = [], contentComponen
  * 这只处理机器契约层；组件候选、槽位和浏览器布局仍由后续门禁裁决。
  */
 export function partitionSocialCardContentPlannerOperationsBySchema(result) {
-  const value = typeof result === 'string' ? JSON.parse(result) : result;
+  const value = typeof result === 'string' ? parseModelJson({ content: result }, { label: '图文内容计划' }) : result;
   const operations = Array.isArray(value) ? value : value?.operations;
   const accepted = [];
   const rejected = [];
@@ -279,7 +280,7 @@ export function partitionSocialCardContentPlannerOperationsBySchema(result) {
 }
 
 function normalizeSocialCardContentPlannerResultWithOptions(result, options = {}) {
-  const value = typeof result === 'string' ? JSON.parse(result) : result;
+  const value = typeof result === 'string' ? parseModelJson({ content: result }, { label: '图文内容计划' }) : result;
   const operations = Array.isArray(value) ? value : value?.operations;
   return {
     operations: Array.isArray(operations)

@@ -6,6 +6,7 @@ import { CLEAN_V1_CSS, renderCleanStoryboardSections } from '../../../shared/ren
 import { renderStoryboardSections } from '../../../shared/rendering/storyboard-page-renderer.mjs';
 import { renderStoryboardDocument } from '../../../shared/rendering/storyboard-document-renderer.mjs';
 import { resolveSocialCardTemplateContext } from '../../../shared/rendering/social-card-template-resolver.mjs';
+import { parseModelJson } from '../../../platform/llm/model-json.mjs';
 
 function extractCardPlanJsonText(value) {
   const raw = String(value || '').trim();
@@ -68,11 +69,14 @@ function normalizeCardPlanJsonText(json) {
 }
 
 export function cleanCardPlanJson(value) {
-  const json = extractCardPlanJsonText(value);
-  try { return JSON.parse(json); }
+  try { return parseModelJson({ content: value }, { label: '图文卡片计划' }); }
   catch (firstError) {
-    try { return JSON.parse(normalizeCardPlanJsonText(json)); }
-    catch { throw firstError; }
+    // 兼容历史模型偶发的尾逗号、字符串换行和未转义引号；
+    // 正常路径仍统一走共享模型 JSON 解析器和错误码。
+    try {
+      const json = extractCardPlanJsonText(value);
+      return JSON.parse(normalizeCardPlanJsonText(json));
+    } catch { throw firstError; }
   }
 }
 

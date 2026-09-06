@@ -8,15 +8,12 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { parseModelJson } from '../../../platform/llm/model-json.mjs';
 
 const QUERIES_FILE = 'repo-discovery-queries.json';
 
-function parseJsonLoose(raw) {
-  const text = String(raw || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
-  try { return JSON.parse(text); } catch {}
-  const brace = text.match(/(\{[\s\S]*\})/);
-  if (brace) try { return JSON.parse(brace[1]); } catch {}
-  return null;
+function parseJsonLoose(result, label) {
+  return parseModelJson(result, { label });
 }
 
 function clampNumber(value, min, max, fallback) {
@@ -84,7 +81,7 @@ export async function planRepoDiscoveryQueries({ workspaceRoot, gateway, account
       provider, purpose: 'repo-discovery-queries', jsonMode: true, maxOutputTokens: 2000,
       messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
     });
-    const queries = sanitizeQueries(parseJsonLoose(result.content), { maxQueries });
+    const queries = sanitizeQueries(parseJsonLoose(result, '兴趣查询组'), { maxQueries });
     if (!queries.length) throw new Error('模型未返回可用查询组');
     const generatedAt = new Date().toISOString();
     fs.mkdirSync(path.dirname(queriesPath(workspaceRoot)), { recursive: true });
@@ -117,7 +114,7 @@ export async function filterRepositoriesByInterest({ gateway, accountContext, re
         provider, purpose: 'repo-interest-filter', jsonMode: true, maxOutputTokens: 4000,
         messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
       });
-      const parsed = parseJsonLoose(result.content);
+      const parsed = parseJsonLoose(result, '仓库兴趣相关性评分');
       return new Map((Array.isArray(parsed?.results) ? parsed.results : [])
         .map((r) => [String(r?.repository || '').toLowerCase(), { score: clampNumber(r?.score, 0, 10, 0), reason: String(r?.reason || '').slice(0, 60) }]));
     } catch (error) {

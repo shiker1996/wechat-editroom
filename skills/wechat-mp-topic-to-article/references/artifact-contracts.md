@@ -122,27 +122,9 @@ articles/<topic-slug>/
 
 ### 06-reviewed.md
 
-先写可发布修订稿，再在文末 HTML 注释中记录审稿摘要，避免内部报告进入最终正文：
+先写可发布修订稿。机器审稿结论不写入 `06-reviewed.md` 正文，而由编排器单独调用 `decision.article_review_gate` 返回；`06-review-gate.md` 只保存模型原始 Markdown 响应，便于审计和重试。
 
-```markdown
-<!-- REVIEW
-result: pass|needs-revision
-verified_facts: 0
-citation_coverage: 100%
-publication_compliance: pass|needs-revision|blocked
-risk_categories: none|financial,reputation,privacy,sensitive_event,copyright
-blocked_claims: none|具体主张
-title_status: pass|rewrite|blocked
-content_role: 拉新|沉淀|搜索
-expected_action: 评论|分享|收藏|关注|搜索
-practical_increment: pass|needs-revision
-follow_reason: pass|needs-revision
-conversion_bridge_status: verified|type-only|none|needs-revision
-remaining_risks: none
--->
-```
-
-`conversion_bridge_status: verified` 只用于已提供真实标题或链接的具体推荐；只有后续内容类型、没有具体历史内容时使用 `type-only`。转化字段任一为 `needs-revision` 时，不得进入 SEO 或终稿阶段。
+`conversion_bridge_status: verified` 只用于已提供真实标题或链接的具体推荐；只有后续内容类型、没有具体历史内容时使用 `type-only`。转化字段任一为 `needs-revision` 时，不得进入 SEO 或终稿阶段。上述审稿摘要字段由决策工具返回并写入门禁 JSON，不再要求模型把它们嵌入 Markdown。
 
 ### 07-seo-keywords.md
 
