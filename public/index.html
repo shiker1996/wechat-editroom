@@ -73,7 +73,6 @@
         <div class="nav-group-items">
           <button class="nav-item" data-view="artifacts">产物中心</button>
           <button class="nav-item" data-view="logs">任务日志</button>
-          <button class="nav-item" data-view="models">模型运行</button>
           <button class="nav-item" data-view="system"><span>运行与配置</span><i id="nav-runtime-indicator" aria-hidden="true">●</i></button>
         </div>
       </details>
@@ -1202,27 +1201,6 @@
         </section>
       </div>
       <aside class="source-cost-note"><b>成本边界</b><span>读取公开 RSS/Atom 不会触发模型 API；成本主要是本机网络和存储。第三方 Feed 服务仍可能限流、停服或调整收费，因此采集器会隔离单源失败，不让它拖垮整批任务。</span></aside>
-    </section>
-
-    <section class="view" id="view-models">
-      <div class="section-intro"><div><span class="kicker">MODEL OPERATIONS</span></div><p>查看当前可用模型、执行最小连接诊断并查看模型调用明细。新增或修改服务请前往“运行与配置 → 模型接入”。 <button type="button" class="text-button" data-go="system">前往模型接入管理 →</button></p></div>
-      <div class="model-layout">
-        <section>
-          <div class="model-grid" id="model-cards"></div>
-          <article class="context-card">
-            <div><span class="kicker">CONTEXT POLICY</span><h3>分层上下文压缩</h3></div>
-            <div class="context-flow"><span>事实 / 来源 / 作者确认<br><b>永久保留</b></span><i>＋</i><span>最近 8 轮<br><b>原文保留</b></span><i>＋</i><span>更早讨论与旧稿<br><b>滚动摘要</b></span></div>
-            <p>输入预算 = 模型上下文上限 − 当前阶段输出预算 − 安全余量。各阶段不会直接占满模型最大输出；仅在模型明确返回长度截断时扩容重试一次。摘要必须保留来源 URL、数字、专名、反证、禁写项和未决问题。</p>
-          </article>
-        </section>
-        <aside class="model-actions-panel">
-          <span class="kicker">CONNECTION DIAGNOSTICS</span><h3>连接诊断</h3>
-          <label>服务商<select id="model-provider"></select></label>
-          <button class="ghost-button" id="test-model">最小请求测试连接</button>
-          <p class="fine-print">测试只发送最小提示词并产生少量模型费用，用于确认端点、密钥和模型名称是否可用。内容生产操作请回到对应批次或编辑室执行。</p>
-        </aside>
-      </div>
-      <section class="panel model-history"><div class="panel-head"><div><span class="kicker">AUDIT LOG</span><h3>模型调用记录</h3></div><span class="panel-count" id="call-summary"></span></div><div class="model-call-controls"><label><span>搜索</span><input id="model-call-query" type="search" placeholder="搜索供应商、阶段、模型或运行 ID" autocomplete="off"></label><label><span>状态</span><select id="model-call-status"><option value="">全部</option><option value="completed">已完成</option><option value="failed">失败</option><option value="interrupted">中断</option><option value="running">运行中</option></select></label><button type="button" class="ghost-button" id="model-call-refresh">刷新</button></div><div id="model-call-list"></div></section>
     </section>
 
     <section class="view" id="view-calendar">

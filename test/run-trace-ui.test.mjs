@@ -91,17 +91,14 @@ test('日志治理提供可配置留存和立即清理入口', () => {
   assert.match(routes, /pathname === '\/api\/system\/log-governance'/);
 });
 
-test('模型调用可在任务日志和模型运行页面查看', () => {
+test('模型调用统一在任务日志查看', () => {
   const html = read('public/index.html');
   const logs = read('public/src/views/logs.js');
-  const models = read('public/src/views/models.js');
   const routes = read('server/platform/http/routes/model-routes.mjs');
-  assert.match(html, /id="model-call-query"/);
-  assert.match(html, /id="model-call-status"/);
+  assert.match(html, /id="log-query"/);
+  assert.match(html, /id="log-status"/);
   assert.match(html, /data-log-type="model"[^>]*>模型调用/);
   assert.doesNotMatch(logs, /filter\(\(item\) => item\.log_type !== "model"\)/);
-  assert.match(models, /modelCallDetails/);
-  assert.match(models, /model-call-refresh/);
-  assert.doesNotMatch(models, /Run Trace/);
+  assert.match(logs, /model_call|model-call|模型调用/);
   assert.match(routes, /listModelCalls\(150\)/);
 });

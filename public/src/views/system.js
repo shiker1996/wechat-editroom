@@ -226,7 +226,7 @@ function addRsshubKvRow() {
 
 async function loadModelSettings() {
   runtimeModels = await request("/api/models");
-  // 与 models.js / main.js 共用一份模型快照，避免模型配置改动后其他视图拿到旧数据
+  // 与 main.js 共用一份模型快照，避免模型配置改动后其他视图拿到旧数据
   state.models = runtimeModels;
   window.__models = runtimeModels;
 }

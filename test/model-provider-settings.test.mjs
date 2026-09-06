@@ -1,4 +1,3 @@
-import { readStyles } from "./style-fixture.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -128,10 +127,9 @@ test('模型旧配置启动时迁移到统一数据库来源并清理旧字段',
   assert.equal(config.llm.providers.custom.model,'old');
 });
 
-test('模型统一接入统一配置资源，模型运行只负责诊断与观测',()=>{
+test('模型统一接入运行配置，调用记录统一进入任务日志',()=>{
   const html=fs.readFileSync(new URL('../public/index.html',import.meta.url),'utf8');
-  const styles=readStyles();
-  const modelsView=fs.readFileSync(new URL('../public/src/views/models.js',import.meta.url),'utf8');
+  const main=fs.readFileSync(new URL('../public/src/main.js',import.meta.url),'utf8');
   const systemView=fs.readFileSync(new URL('../public/src/views/system.js',import.meta.url),'utf8');
   const modelRoutes=fs.readFileSync(new URL('../server/platform/http/routes/model-routes.mjs',import.meta.url),'utf8');
   const systemRoutes=fs.readFileSync(new URL('../server/platform/http/routes/system-routes.mjs',import.meta.url),'utf8');
@@ -142,18 +140,14 @@ test('模型统一接入统一配置资源，模型运行只负责诊断与观�
   assert.match(html,/id="system-extension-list"/);
   assert.doesNotMatch(html,/模型接入配置/);
   assert.match(systemView,/model-provider/);
-  assert.match(html,/data-view="models">[\s\S]*?<b>模型运行<\/b>/);
+  assert.doesNotMatch(html,/data-view="models">模型运行/);
+  assert.doesNotMatch(html,/id="view-models"/);
+  assert.doesNotMatch(main,/views\/models\.js|models: \["system"\]|models: "模型运行"/);
   assert.match(systemView,/\/api\/system\/configuration\/model-provider/);
   assert.match(systemView,/method: ?"DELETE"/);
   assert.match(systemRoutes,/\/api\/system\/configuration\/model-provider/);
   assert.match(settingsModule,/createModelProvider/);
-  assert.doesNotMatch(modelsView,/modelFormPayload|saveModelConfig|deleteModelConfig/);
   assert.doesNotMatch(html,/id="ai-tag-batch"|id="tag-limit"/);
-  assert.doesNotMatch(modelsView,/aiTagBatch|\/ai\/tag/);
-  assert.match(modelsView,/filter\(\(provider\)=>provider\.enabled!==false&&provider\.configured\)/);
-  assert.match(styles,/\.model-layout \{ display:grid; grid-template-columns:minmax\(0,1fr\) minmax\(250px,270px\)/);
-  assert.match(styles,/@media \(max-width:1280px\) \{ \.model-layout \{ grid-template-columns:minmax\(0,1fr\)/);
-  assert.doesNotMatch(styles,/grid-template-columns:minmax\(180px,.7fr\) minmax\(220px,1fr\) minmax\(290px,1.3fr\)/);
   assert.match(modelRoutes,/saveModelProvider/);
   assert.match(modelRoutes,/deleteModelProvider/);
 });

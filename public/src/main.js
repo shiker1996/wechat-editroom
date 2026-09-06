@@ -14,7 +14,7 @@ const viewModules = {
   hotspots: "./views/hotspots.js", artifacts: "./views/artifacts.js",
   system: "./views/system.js", skills: "./views/skills.js", sources: "./views/subscriptions.js",
   themes: "./views/theme-manager.js",
-  models: "./views/models.js?v=20260905-model-calls8", logs: "./views/logs.js?v=20260906-run-input6",
+  logs: "./views/logs.js?v=20260906-run-input6",
   calendar: "./views/calendar.js",
   "material-inbox": "./views/material-inbox.js", "wechat-review-prep": "./views/wechat-review-prep.js", "wechat-review": "./views/wechat-review.js", "content-feedback": "./views/content-feedback.js",
 };
@@ -55,7 +55,6 @@ const viewStyles = {
   system: ["system"],
   skills: ["system"],
   sources: ["system"],
-  models: ["system"],
 };
 const loadedStyles = new Map();
 
@@ -105,14 +104,17 @@ const titles = {
   dashboard: "工作台总览", batches: "批次管理", overview: "热点全景",
   topics: "文章选题池", daily: "批次早报", tutorial: "自主写作", "social-topics": "图文选题池", "social-editor": "工具图文", "social-custom": "自定义图文", "social-event": "事件图文", editorial: "热点事件创作", editor: "文章编辑器",
   preview: "公众号排版", cover: "文章封面图", publication: "发布中心", hotspots: "热点档案", artifacts: "产物中心",
-  system: "运行与配置中心", themes: "主题中心", skills: "技能与工具", sources: "采集源", models: "模型运行",
+  system: "运行与配置中心", themes: "主题中心", skills: "技能与工具", sources: "采集源",
   logs: "任务日志", calendar: "内容日历", "material-inbox": "素材入箱", "wechat-review-prep": "复盘数据台", "wechat-review": "公众号复盘", "content-feedback": "内容反哺",
 };
 
 async function go(route) {
   // 切换视图时退出任何沉浸式对话，避免全屏层残留并清除 body.chat-immersive
   exitImmersiveChats();
-  const view = String(route || "").split("/")[0];
+  const rawRoute = String(route || "");
+  const rawView = rawRoute.split("/")[0];
+  const view = rawView === "models" ? "logs" : rawView;
+  const normalizedRoute = rawView === "models" ? "logs" : rawRoute;
   if (!(view in titles)) return;
   try {
     await loadViewStyles(view);
@@ -151,8 +153,11 @@ async function go(route) {
     scroller.scrollLeft = 0;
   }
   // 保留浏览器前进/后退能力；hash 相同（如批次切换重载当前视图）不重复压栈
-  const targetHash=`#${route}`;
-  if (!navigatingFromHistory && location.hash !== targetHash) history.pushState(null, "", targetHash);
+  const targetHash=`#${normalizedRoute}`;
+  if (location.hash !== targetHash) {
+    if (navigatingFromHistory) history.replaceState(null, "", targetHash);
+    else history.pushState(null, "", targetHash);
+  }
 
   const modPath = viewModules[view];
   if (modPath) {
@@ -249,7 +254,7 @@ function bindGlobal() {
   window.addEventListener("hashchange", () => {
     const route = location.hash.slice(1);
     const view = route.split("/")[0];
-    if (view in titles) {
+    if (view === "models" || view in titles) {
       navigatingFromHistory = true;
       go(route).finally(() => { navigatingFromHistory = false; });
     }
@@ -308,7 +313,7 @@ async function onReady() {
   // 首屏视图激活：切导航/视图样式、设置标题、加载 ESM 视图（go 内部已处理 batch-switcher 显隐）
   const route = location.hash.slice(1);
   const view = route.split("/")[0];
-  const current = view in titles ? route : "dashboard";
+  const current = view === "models" ? "logs" : (view in titles ? route : "dashboard");
   // 批次切换器与各视图共用 state.batches/overview；dashboard 视图会由 go 自行加载，避免重复请求
   if (current !== "dashboard") {
     try { await loadOverview(); } catch (error) { toast("工作台加载失败：" + error.message, "error"); }

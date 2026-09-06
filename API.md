@@ -63,7 +63,6 @@
 | 设置与采集 | `public/src/views/system.js` |
 | 技能与插件 | `public/src/views/skills.js` |
 | 订阅源 | `public/src/views/subscriptions.js` |
-| 模型中心 | `public/src/views/models.js` |
 | 日志 | `public/src/views/logs.js` |
 | 内容日历 | `public/src/views/calendar.js` |
 
@@ -688,19 +687,19 @@ AI 规划配图占位
 
 ### GET /api/models
 模型服务商列表 + 最近调用记录
-→ 模型中心
+→ 运行与配置中心、任务日志
 
 ### POST /api/models/config
 旧模型配置兼容接口。新配置应使用统一配置资源接口；密钥写入隔离凭据 Profile，响应不回传密钥原文。
-→ 模型中心
+→ 运行与配置中心
 
 ### DELETE /api/models/config/:provider
 删除用户维护的模型配置；内置配置按实现规则恢复默认或停用。
-→ 模型中心
+→ 运行与配置中心
 
 ### POST /api/models/test
 测试模型连接 { provider }
-→ 模型中心
+→ 运行与配置中心
 
 ---
 

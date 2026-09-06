@@ -3,16 +3,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-test('侧栏按五个任务阶段组织并自动展开当前阶段', () => {
+test('侧栏按六个任务阶段组织并自动展开当前阶段', () => {
   const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
   const main = fs.readFileSync(new URL('../public/src/main.js', import.meta.url), 'utf8');
   const publication = fs.readFileSync(new URL('../public/src/views/publication.js', import.meta.url), 'utf8');
   const styles = readStyles();
-  for (const label of ['今日工作', '发现与研判', '文章生产', '图文生产', '资产与审计']) {
+  for (const label of ['今日工作', '发现与研判', '文章生产', '图文生产', '发布与复盘', '资产与运行']) {
     assert.match(html, new RegExp(label));
   }
-  assert.equal((html.match(/class="nav-group"/g) || []).length, 5);
-  assert.equal((html.match(/class="nav-item/g) || []).length, 24);
+  assert.equal((html.match(/class="nav-group"/g) || []).length, 6);
+  assert.equal((html.match(/class="nav-item/g) || []).length, 25);
   assert.match(html, /data-view="material-inbox">素材入箱/);
   assert.match(html, /data-view="wechat-review-prep">复盘数据台/);
   assert.match(html, /data-view="wechat-review">公众号复盘/);
@@ -51,19 +51,15 @@ test('侧栏按五个任务阶段组织并自动展开当前阶段', () => {
   assert.doesNotMatch(fs.readFileSync(new URL('../public/src/views/editor.js', import.meta.url), 'utf8'), /takeFeedbackHandoff/);
   assert.match(html,/data-view="topics">文章选题池/);
   assert.match(html,/data-view="editorial">热点事件/);
-  assert.match(html, /class="nav-utility" data-view="system"/);
+  assert.doesNotMatch(html, /data-view="models">模型运行/);
   assert.match(html, /class="rail-utility-group" aria-label="扩展与定制"/);
-  assert.match(html, /class="rail-utility-group rail-maintenance-group" aria-label="系统维护"/);
-  for (const view of ['skills', 'themes', 'models']) assert.match(html, new RegExp(`class="nav-utility" data-view="${view}"`));
+  for (const view of ['skills', 'themes']) assert.match(html, new RegExp(`class="nav-utility" data-view="${view}"`));
   assert.ok(html.indexOf('data-view="skills"') < html.indexOf('data-view="themes"'));
-  assert.ok(html.indexOf('data-view="themes"') < html.indexOf('data-view="models"'));
-  assert.match(html, /服务 · 环境 · 备份/);
   assert.match(main, /group\.open = Boolean\(activeNavItem && group\.contains\(activeNavItem\)\)/);
   assert.match(main, /setAttribute\("aria-current", "page"\)/);
   assert.match(main, /\.nav-item\.active,\.nav-utility\.active/);
   assert.match(styles, /\.nav-group>summary/);
   assert.match(styles, /\.rail nav \{ flex:none;max-height:240px/);
-  assert.ok(html.indexOf('data-view="models"') < html.indexOf('data-view="system"'));
   assert.ok(html.indexOf('data-view="system"') < html.indexOf('class="rail-foot"'));
   assert.match(styles,/nav \{ flex:1;min-height:0/);
 });
