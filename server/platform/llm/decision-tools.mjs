@@ -210,7 +210,10 @@ export function extractDecisionToolArguments(result, { toolName, schema = { type
   if (call?.providerExecuted === true) throw new DecisionToolError('PROVIDER_EXECUTED_TOOL', '决策工具不能由 provider 代执行');
   const input = call?.input;
   const validation = validateDecisionToolArguments(input, schema);
-  if (!validation.valid) throw new DecisionToolError('INVALID_TOOL_ARGUMENTS', '决策工具参数校验失败', validation.issues);
+  if (!validation.valid) {
+    const detail = validation.issues.map((item) => `${item.path || '未知字段'}：${item.message}`).join('；');
+    throw new DecisionToolError('INVALID_TOOL_ARGUMENTS', `决策工具参数校验失败：${detail}`, validation.issues);
+  }
   return input;
 }
 

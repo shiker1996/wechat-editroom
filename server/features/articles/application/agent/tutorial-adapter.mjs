@@ -10,10 +10,10 @@ import { CONVERSATION_FINISH_CAPABILITY, buildConversationFinishTool, createConv
 export const TUTORIAL_AGENT_CAPABILITIES = Object.freeze(['cap_filesystem_project_read', 'cap_content_url_fetch', 'cap_content_web_search', 'cap_content_news_search', 'cap_content_document_search', 'cap_content_passage_retrieve']);
 const FORM_UPDATE_CAPABILITY = 'cap_agent_form_update';
 const TUTORIAL_FORM_FIELDS = Object.freeze({
-  articleMode: { kind: 'enum', normalize: (value) => ['experience', 'tutorial'].includes(String(value)) ? String(value) : undefined, validate: (value) => ['experience', 'tutorial'].includes(value) },
-  topic: { kind: 'text' }, audience: { kind: 'text' }, environment: { kind: 'text' }, thesis: { kind: 'text' }, limitations: { kind: 'text' },
-  points: { kind: 'list' }, steps: { kind: 'list' }, prerequisites: { kind: 'list' }, expected_results: { kind: 'list' }, common_errors: { kind: 'list' },
-  materialUrls: { kind: 'url-list' },
+  articleMode: { kind: 'enum', normalize: (value) => ['experience', 'tutorial'].includes(String(value)) ? String(value) : undefined, validate: (value) => ['experience', 'tutorial'].includes(value), validationMessage: () => 'articleMode 必须是 experience（经验）或 tutorial（教程）', description: '文章模式：experience 表示作者经验，tutorial 表示教程。' },
+  topic: { kind: 'text', description: '文章主题。' }, audience: { kind: 'text', description: '目标读者。' }, environment: { kind: 'text', description: '适用环境、版本或前置条件。' }, thesis: { kind: 'text', description: '文章要证明或解释的核心命题。' }, limitations: { kind: 'text', description: '适用边界、限制和不能外推的部分。' },
+  points: { kind: 'list', description: '文章要展开的核心事实、观点或要点。' }, steps: { kind: 'list', description: '教程的操作步骤；每项应是一条可执行步骤。' }, prerequisites: { kind: 'list', description: '开始前需要准备的环境、工具或知识。' }, expected_results: { kind: 'list', description: '完成步骤后应观察到的结果。' }, common_errors: { kind: 'list', description: '常见错误、失败现象及其解释。' },
+  materialUrls: { kind: 'url-list', description: '作者提供或确认可使用的公开素材链接。' },
 });
 export const TUTORIAL_APPLICATION_TOOLS = Object.freeze([
   buildFormUpdateTool({ capability: FORM_UPDATE_CAPABILITY, name: '更新自主写作表单', description: '增量更新自主写作事实表。多值字段追加/删除/清空，单值字段明确替换；不会因补一条内容覆盖已有内容。', fields: TUTORIAL_FORM_FIELDS }),

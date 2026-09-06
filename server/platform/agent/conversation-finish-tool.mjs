@@ -22,7 +22,7 @@ export function buildConversationFinishTool({
       additionalProperties: false,
       required: ['assistantReply'],
       properties: {
-        assistantReply: { type: 'string', minLength: 1, maxLength: 4000 },
+        assistantReply: { type: 'string', minLength: 1, maxLength: 4000, description: '提交给作者的本轮回复；不能为空，且不超过 4000 个字符。' },
       },
     },
   });

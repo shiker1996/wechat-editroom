@@ -9,11 +9,11 @@ import { CONVERSATION_FINISH_CAPABILITY, buildConversationFinishTool, createConv
 export const CUSTOM_SOCIAL_AGENT_CAPABILITIES = Object.freeze(['cap_filesystem_project_read', 'cap_content_url_fetch', 'cap_content_web_search', 'cap_content_news_search', 'cap_content_document_search', 'cap_content_repository_inspect', 'cap_content_passage_retrieve']);
 const FORM_UPDATE_CAPABILITY = 'cap_agent_form_update';
 const CUSTOM_SOCIAL_FORM_FIELDS = Object.freeze({
-  content_type: { kind: 'enum', normalize: (value) => ['tutorial', 'list', 'opinion'].includes(String(value)) ? String(value) : undefined, validate: (value) => ['tutorial', 'list', 'opinion'].includes(value) },
-  channel: { kind: 'enum', normalize: (value) => ['wechat', 'xiaohongshu'].includes(String(value)) ? String(value) : undefined, validate: (value) => ['wechat', 'xiaohongshu'].includes(value) },
-  topic: { kind: 'text' }, audience: { kind: 'text' }, scenario: { kind: 'text' }, thesis: { kind: 'text' }, limitations: { kind: 'text' },
-  points: { kind: 'list' }, steps: { kind: 'list' }, items: { kind: 'list' }, materialUrls: { kind: 'url-list' },
-  expected_pages: { kind: 'number', normalize: (value) => { const pages = Number(value); return Number.isFinite(pages) ? Math.min(10, Math.max(4, Math.round(pages))) : undefined; }, validate: (value) => Number.isInteger(value) && value >= 4 && value <= 10 },
+  content_type: { kind: 'enum', normalize: (value) => ['tutorial', 'list', 'opinion'].includes(String(value)) ? String(value) : undefined, validate: (value) => ['tutorial', 'list', 'opinion'].includes(value), validationMessage: () => 'content_type 必须是 tutorial（教程）、list（清单）或 opinion（观点）', description: '图文内容类型：tutorial、list 或 opinion。' },
+  channel: { kind: 'enum', normalize: (value) => ['wechat', 'xiaohongshu'].includes(String(value)) ? String(value) : undefined, validate: (value) => ['wechat', 'xiaohongshu'].includes(value), validationMessage: () => 'channel 必须是 wechat（公众号）或 xiaohongshu（小红书）', description: '发布渠道：wechat 或 xiaohongshu。' },
+  topic: { kind: 'text', description: '图文主题。' }, audience: { kind: 'text', description: '目标读者。' }, scenario: { kind: 'text', description: '读者使用场景或问题场景。' }, thesis: { kind: 'text', description: '核心观点或希望读者接受的结论。' }, limitations: { kind: 'text', description: '适用边界和不能外推的内容。' },
+  points: { kind: 'list', description: '图文要展示的核心要点；至少一条应明确标注为【体验】或【素材】。' }, steps: { kind: 'list', description: '教程步骤；教程类型至少需要两步。' }, items: { kind: 'list', description: '清单条目；清单类型至少需要三项。' }, materialUrls: { kind: 'url-list', description: '公开素材或证据链接，只能使用 http/https 地址。' },
+  expected_pages: { kind: 'number', normalize: (value) => { const pages = Number(value); return Number.isFinite(pages) ? Math.min(10, Math.max(4, Math.round(pages))) : undefined; }, validate: (value) => Number.isInteger(value) && value >= 4 && value <= 10, validationMessage: () => 'expected_pages 必须是 4 到 10 之间的整数', description: '预计页数，必须是 4–10 的整数。' },
 });
 export const CUSTOM_SOCIAL_APPLICATION_TOOLS = Object.freeze([
   buildFormUpdateTool({ capability: FORM_UPDATE_CAPABILITY, name: '更新图文策划表单', description: '增量更新自定义图文方案。多值字段追加/删除/清空，单值字段明确替换；不会因补一条内容覆盖已有内容。', fields: CUSTOM_SOCIAL_FORM_FIELDS }),

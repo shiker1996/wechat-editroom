@@ -4,8 +4,8 @@ export function failure(code,message,options={}){return {status:'error',error:{c
 
 function validateSchema(schema={},value,field='输入'){
   if(Array.isArray(schema.oneOf)){
-    const matches=schema.oneOf.some((candidate)=>!validateSchema(candidate,value,field));
-    if(!matches)return `${field} 不符合允许的结构`;
+    const failures=schema.oneOf.map((candidate)=>validateSchema(candidate,value,field)).filter(Boolean);
+    if(failures.length===schema.oneOf.length)return `${field} 不符合允许的结构：${failures.slice(0,3).join('；')}`;
     return '';
   }
   if(schema.const!==undefined&&value!==schema.const)return `${field} 必须为 ${schema.const}`;
@@ -22,7 +22,7 @@ function validateSchema(schema={},value,field='输入'){
     if(typeof value!=='string')return `${field} 必须是字符串`;
     if(Number.isInteger(schema.minLength)&&value.length<schema.minLength)return `${field} 长度不能少于 ${schema.minLength}`;
     if(Number.isInteger(schema.maxLength)&&value.length>schema.maxLength)return `${field} 长度不能超过 ${schema.maxLength}`;
-    if(schema.pattern){try{if(!(new RegExp(schema.pattern)).test(value))return `${field} 格式不符合要求`;}catch{/* 忽略无效正则，保持旧校验兼容 */}}
+    if(schema.pattern){try{if(!(new RegExp(schema.pattern)).test(value))return `${field} 格式不符合要求${schema.description?`：${schema.description}`:''}`;}catch{/* 忽略无效正则，保持旧校验兼容 */}}
   }
   else if(schema.type==='number'&&(typeof value!=='number'||!Number.isFinite(value)))return `${field} 必须是数字`;
   else if(schema.type==='integer'&&!Number.isInteger(value))return `${field} 必须是整数`;

@@ -114,13 +114,23 @@ function applyOne(current, operation, spec) {
       return { value: existing.filter((item) => !targets.has(entryKey(item))).join('\n') };
     }
     const value = normalizeValue(spec, raw);
-    if (value === undefined || !validateValue(spec, value)) return { error: fail(operation.field, '值不符合字段规则') };
+    if (value === undefined || !validateValue(spec, value)) {
+      const message = typeof spec.validationMessage === 'function'
+        ? spec.validationMessage(value === undefined ? raw : value)
+        : '';
+      return { error: fail(operation.field, message || '值不符合字段规则') };
+    }
     return { value };
   }
 
   if (op !== 'replace' && op !== 'set') return { error: fail(operation.field, `${kind} 字段只能使用 replace/set/clear`) };
   const value = normalizeValue(spec, raw);
-  if (value === undefined || !validateValue(spec, value)) return { error: fail(operation.field, '值不符合字段规则') };
+  if (value === undefined || !validateValue(spec, value)) {
+    const message = typeof spec.validationMessage === 'function'
+      ? spec.validationMessage(value === undefined ? raw : value)
+      : '';
+    return { error: fail(operation.field, message || '值不符合字段规则') };
+  }
   return { value };
 }
 
@@ -160,6 +170,10 @@ export function applyFormUpdateOperations(state, operations, fields = {}) {
 
 export function buildFormUpdateTool({ capability = 'cap_agent_form_update', name = '更新表单', description = '以增量方式更新当前 Agent 的策划表单。多值字段追加/删除，单值字段明确替换。', fields = {} } = {}) {
   const fieldNames = Object.keys(fields);
+  const fieldDescriptions = Object.entries(fields)
+    .filter(([, spec]) => String(spec?.description || '').trim())
+    .map(([field, spec]) => `${field}：${String(spec.description).trim()}`)
+    .join('；');
   return Object.freeze({
     capability,
     name,
@@ -176,15 +190,16 @@ export function buildFormUpdateTool({ capability = 'cap_agent_form_update', name
           type: 'array',
           minItems: 1,
           maxItems: 12,
+          ...(fieldDescriptions ? { description: `字段规则补充：${fieldDescriptions}` } : {}),
           items: {
             type: 'object',
             additionalProperties: false,
             required: ['field', 'op'],
             properties: {
-              field: { type: 'string', enum: fieldNames },
-              op: { type: 'string', enum: OPERATIONS },
-              value: {},
-              values: { type: 'array' },
+              field: { type: 'string', enum: fieldNames, description: '要更新的表单字段名；字段的具体规则见 operations 说明。' },
+              op: { type: 'string', enum: OPERATIONS, description: 'append 追加、remove 删除、replace/set 替换、clear 清空；单值字段通常使用 replace/set。' },
+              value: { description: '单值字段的值，或 append/remove 操作的一条文本值。' },
+              values: { type: 'array', description: '多值字段或文本增量操作的值列表。' },
             },
           },
         },
@@ -212,4 +227,3 @@ export function createFormUpdateHandler({ getState, setState, fields = {}, norma
     };
   };
 }
-

@@ -9,6 +9,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { saveFactAttachment } from './fact-attachments.mjs';
+import { decorateInputSchema } from './schema-guidance.mjs';
 
 export const RESOURCE_ID_SCHEMA=Object.freeze({type:'object',required:['resourceId'],additionalProperties:false,properties:{resourceId:{type:'string'}}});
 export const PROJECT_RESOURCE_SCHEMA=Object.freeze({type:'object',required:['resourceId'],additionalProperties:false,properties:{resourceId:{type:'string'},options:{type:'object',additionalProperties:false,properties:{includePaths:{type:'array',items:{type:'string'},maxItems:8},maxFiles:{type:'integer',minimum:1,maximum:200},maxFileBytes:{type:'integer',minimum:1,maximum:1048576},maxCharsPerFile:{type:'integer',minimum:1,maximum:100000},maxTotalChars:{type:'integer',minimum:1,maximum:200000}}}}});
@@ -197,7 +198,7 @@ export function applyCatalogSchemas(catalog,bindings=[],root){
   return catalog.map((item)=>{
     const profileName=CAPABILITY_RESOURCE_PROFILE[item.capability]||catalogProfiles[item.capability];
     const profile=RESOURCE_KIND_PROFILES[profileName];
-    return (bound.has(item.capability)||catalogProfiles[item.capability])&&profile?{...item,inputSchema:profile.schema}:item;
+    return (bound.has(item.capability)||catalogProfiles[item.capability])&&profile?{...item,inputSchema:decorateInputSchema(item.capability, profile.schema)}:item;
   });
 }
 

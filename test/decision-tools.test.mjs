@@ -107,7 +107,7 @@ test('callDecisionTool 使用工具时关闭 JSON mode，并在失败时记录 i
   const fallback = await callDecisionTool({ gateway: model, settings: { decisionToolsEnabled: true }, purpose: 'test-decision', definition, fallback: ({ reason }) => ({ reason }) });
   assert.equal(fallback.mode, 'fallback');
   assert.equal(fallback.value.reason, 'INVALID_TOOL_ARGUMENTS');
-  assert.deepEqual(updates, [{ id: 43, fields: { status: 'invalid_output', error: '[INVALID_TOOL_ARGUMENTS] 决策工具参数校验失败' } }]);
+  assert.deepEqual(updates, [{ id: 43, fields: { status: 'invalid_output', error: '[INVALID_TOOL_ARGUMENTS] 决策工具参数校验失败：$.pass：类型应为 boolean' } }]);
 });
 
 test('决策工具关闭时不调用模型，直接走回退', async () => {

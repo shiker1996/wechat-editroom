@@ -1,4 +1,5 @@
 import { toolRuntimeMetadata } from './tool-definition.mjs';
+import { decorateInputSchema } from './schema-guidance.mjs';
 const READ_ONLY_RISKS=new Set(['read-only','network-read']);
 
 export function buildConversationToolCatalog({registry,entryCapabilities=[],allowedCapabilities=null,applicationTools=[]}={}){
@@ -7,7 +8,7 @@ export function buildConversationToolCatalog({registry,entryCapabilities=[],allo
   const implementations=registry.listCapabilities().filter((item)=>entry.has(item.capability)&&(!allowed||allowed.has(item.capability))&&READ_ONLY_RISKS.has(item.riskLevel));
   const capabilities=[...new Set(implementations.map((item)=>item.capability))].sort();
   const catalog=capabilities.map((capability)=>{const manifest=registry.resolve(capability)?.manifest||{};return {
-    capability,name:manifest.name||capability,description:manifest.description||'',inputSchema:structuredClone(manifest.inputSchema||{type:'object'}),
+    capability,name:manifest.name||capability,description:manifest.description||'',inputSchema:decorateInputSchema(capability, manifest.inputSchema||{type:'object'}),
     ...toolRuntimeMetadata(manifest),outputSchema:structuredClone(manifest.outputSchema||{type:'object'}),
     implementations:implementations.filter((item)=>item.capability===capability).map((item)=>Object.freeze({plugin:item.plugin,version:item.version,riskLevel:item.riskLevel})),
   };});
@@ -19,7 +20,7 @@ export function buildConversationToolCatalog({registry,entryCapabilities=[],allo
     catalog.push({
       capability:String(tool.capability),name:String(tool.name||tool.capability),description:String(tool.description||''),
       ...toolRuntimeMetadata(tool,'local-write'),outputSchema:structuredClone(tool.outputSchema||{type:'object'}),
-      inputSchema:structuredClone(tool.inputSchema||{type:'object'}),implementations:[Object.freeze({plugin:String(tool.plugin||'application'),version:String(tool.version||'1.0.0'),riskLevel:String(tool.riskLevel||'local-write')})],
+      inputSchema:decorateInputSchema(String(tool.capability), tool.inputSchema||{type:'object'}),implementations:[Object.freeze({plugin:String(tool.plugin||'application'),version:String(tool.version||'1.0.0'),riskLevel:String(tool.riskLevel||'local-write')})],
     });
   }
   return Object.freeze(catalog.sort((left,right)=>left.capability.localeCompare(right.capability)).map((item)=>Object.freeze(item)));
@@ -38,7 +39,7 @@ export function buildNativeToolDefinitions(catalog = []) {
       function: {
         name,
         description: String(item.description || item.name || item.capability || '').slice(0, 1024),
-        parameters: structuredClone(item.inputSchema || { type: 'object' }),
+        parameters: decorateInputSchema(name, item.inputSchema || { type: 'object' }),
       },
     };
   });

@@ -20,8 +20,17 @@ const RESEARCH_ANCHOR_PATTERN=/(?:事件|报道|来源|两起|多起|同一|[0-9
 // 研判主线必须能回指具体事件或来源，并明确落在哪类研判关系上，
 // 防止“已融入某维度”“关注影响”这类看似填写、实际无法指导写作的空话通过门禁。
 export function researchBasisDecision(value){
+  return !researchBasisValidationMessage(value);
+}
+
+// 给表单工具返回可执行的修正原因，避免模型只能看到“值不符合字段规则”。
+export function researchBasisValidationMessage(value){
   const text=String(value??'').trim();
-  return substantiveDecision(text)&&RESEARCH_SIGNAL_PATTERN.test(text)&&RESEARCH_ANCHOR_PATTERN.test(text);
+  const issues=[];
+  if(!substantiveDecision(text))issues.push('内容不能为空，且不能使用“待定/未定/待确认”等占位表述');
+  if(!RESEARCH_SIGNAL_PATTERN.test(text))issues.push('需要写明研判关系，例如“反常、利益冲突、成本、前后变化、回应、对比、趋势”等');
+  if(!RESEARCH_ANCHOR_PATTERN.test(text))issues.push('需要引用具体锚点，例如事件、来源、报道、两起事件或明确日期');
+  return issues.length?issues.join('；'):'';
 }
 
 export function confirmedFactsDecision(value){
