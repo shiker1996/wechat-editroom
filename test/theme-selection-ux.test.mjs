@@ -49,3 +49,12 @@ test('生产编辑器使用与相邻控件等高的紧凑主题按钮', () => {
   assert.match(source, /textContent='主题'/);
   assert.match(source, /setAttribute\('aria-label',`更换主题/);
 });
+
+test('硬刷新直达排版或封面时也加载主题选择器公共样式', () => {
+  const common = read('public', 'assets', 'styles', 'common.css');
+  const buildStyles = read('scripts', 'build', 'build-styles.mjs');
+  assert.match(buildStyles, /theme-picker\.css/);
+  assert.match(common, /\.visually-hidden\{position:absolute/);
+  assert.match(common, /\.theme-picker-dialog\{width:min\(980px/);
+  assert.match(common, /\.theme-choice-card\{position:relative/);
+});
