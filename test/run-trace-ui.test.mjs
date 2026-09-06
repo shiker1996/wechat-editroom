@@ -57,6 +57,7 @@ test('日志页面提供 Run Trace 入口并消费聚合指标', () => {
   assert.match(ui, /row\.hidden = !visible;/);
   assert.doesNotMatch(ui, /row\.hidden = !visible \|\| !inFilter/);
   assert.match(html, /id="run-trace-resizer"[^>]*aria-valuemin="0"/);
+  assert.match(styles, /\.run-trace-overview\{[^}]*height:var\(--run-trace-overview-height/);
   assert.match(styles, /\.run-trace-overview\{[^}]*min-height:0/);
   assert.match(styles, /\.run-trace-body:not\(\.has-detail\) \.run-trace-content\{[^}]*overflow:auto/);
 });

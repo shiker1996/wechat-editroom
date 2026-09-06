@@ -227,7 +227,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .run-trace-tab-spacer{flex:1}
 .run-trace-live{display:inline-flex;align-items:center;gap:7px;color:#6e7b77;font:9px var(--mono);letter-spacing:.08em}
 .run-trace-live i{width:6px;height:6px;border-radius:50%;background:#72bca2;box-shadow:0 0 0 4px rgba(114,188,162,.12);animation:pulse 1.8s infinite}
-.run-trace-overview{display:block;min-height:0;padding:9px 18px;border-bottom:1px solid #363c3d;background:#232627}
+.run-trace-overview{display:block;height:var(--run-trace-overview-height,auto);min-height:0;box-sizing:border-box;overflow:hidden;padding:9px 18px;border-bottom:1px solid #363c3d;background:#232627}
 .run-trace-overview-labels{display:grid;grid-template-rows:repeat(4,12px);gap:5px;color:#677370;font:9px/1.1 var(--mono);text-transform:uppercase}
 .run-trace-overview-labels span{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .run-trace-overview-labels b{color:#bbc7c3;font-weight:500}.run-trace-overview-labels small{color:#687672;font-size:8px;text-transform:none}
