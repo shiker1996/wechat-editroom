@@ -25,6 +25,9 @@ export function applyWorkbenchSchema(db) {
         error TEXT,
         started_at TEXT NOT NULL,
         ended_at TEXT,
+        root_run_id TEXT,
+        workflow_run_id TEXT,
+        stage_id TEXT,
         FOREIGN KEY(batch_id) REFERENCES batches(id) ON DELETE CASCADE
       );
       CREATE TABLE IF NOT EXISTS subscription_runs (
@@ -41,6 +44,9 @@ export function applyWorkbenchSchema(db) {
         error TEXT,
         started_at TEXT NOT NULL,
         ended_at TEXT,
+        root_run_id TEXT,
+        workflow_run_id TEXT,
+        stage_id TEXT,
         FOREIGN KEY(batch_id) REFERENCES batches(id) ON DELETE CASCADE
       );
       CREATE TABLE IF NOT EXISTS hotspots (

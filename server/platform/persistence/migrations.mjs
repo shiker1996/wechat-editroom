@@ -2,7 +2,7 @@ import { applyWorkbenchSchema } from './workbench-schema.mjs';
 import { applyAgentHarnessSchema } from './agent-harness-schema.mjs';
 export { applyWorkbenchSchema };
 
-export const WORKBENCH_SCHEMA_VERSION = 43;
+export const WORKBENCH_SCHEMA_VERSION = 44;
 
 export function runDatabaseMigrations(db, migrateSchema) {
   if (!db || typeof db.exec !== 'function') throw new TypeError('数据库连接无效');
@@ -746,6 +746,20 @@ export function runDatabaseMigrations(db, migrateSchema) {
       if(!columns.has('side_effect'))db.exec("ALTER TABLE tool_executions ADD COLUMN side_effect TEXT NOT NULL DEFAULT 'none'");
       if(!columns.has('replay_policy'))db.exec("ALTER TABLE tool_executions ADD COLUMN replay_policy TEXT NOT NULL DEFAULT 'never'");
       db.prepare('INSERT INTO schema_migrations(version,applied_at) VALUES(43,?)').run(new Date().toISOString());
+      db.exec('COMMIT');
+    } catch (error) { db.exec('ROLLBACK'); throw error; }
+  }
+  if (arguments.length < 2 && !db.prepare('SELECT 1 FROM schema_migrations WHERE version=44').get()) {
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      const addColumns = (table, definitions) => {
+        const columns = new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((column) => column.name));
+        for (const [name, definition] of definitions) if (!columns.has(name)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${definition}`);
+      };
+      addColumns('source_runs', [['root_run_id', 'TEXT'], ['workflow_run_id', 'TEXT'], ['stage_id', 'TEXT']]);
+      addColumns('subscription_runs', [['root_run_id', 'TEXT'], ['workflow_run_id', 'TEXT'], ['stage_id', 'TEXT']]);
+      db.exec('CREATE INDEX IF NOT EXISTS idx_source_runs_root ON source_runs(root_run_id,started_at); CREATE INDEX IF NOT EXISTS idx_subscription_runs_root ON subscription_runs(root_run_id,started_at);');
+      db.prepare('INSERT INTO schema_migrations(version,applied_at) VALUES(44,?)').run(new Date().toISOString());
       db.exec('COMMIT');
     } catch (error) { db.exec('ROLLBACK'); throw error; }
   }

@@ -747,6 +747,7 @@ export async function runResearchPipeline({ gateway, store, batchId, provider, w
     const inputChars = modelMessages.reduce((sum, message) => sum + String(message?.content ?? '').length, 0);
     discussionResearchModelRequests.push({
       phase: request.phase,
+      stage_id: request.stageId || `discussion-research.${request.phase}`,
       attempt: request.attempt,
       pass,
       output_format: request.outputFormat || 'markdown',

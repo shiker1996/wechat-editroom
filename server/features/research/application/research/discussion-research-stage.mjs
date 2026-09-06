@@ -1180,6 +1180,7 @@ async function completeDiscussionPhase({ gateway, provider, batchId, workspaceRo
     onModelRequest?.({
       phase,
       attempt,
+      stageId: `discussion-research.${phase}`,
       input,
       messages,
       toolChoice,
@@ -1192,6 +1193,7 @@ async function completeDiscussionPhase({ gateway, provider, batchId, workspaceRo
       jsonMode: true,
       tools: toolChoice === 'auto' || toolChoice?.type === 'web_search' ? [{ type: 'web_search' }] : [],
       toolChoice,
+      stageId: `discussion-research.${phase}`,
       thinking: phase === 'topic_generation' ? false : !isInternalPhase,
       temperature: 0.1,
       maxOutputTokens: Math.min(isInternalPhase ? 5000 : 9000, Number(providerConfig.maxOutputTokens) || 18000),
@@ -1230,6 +1232,7 @@ async function completeSingleEventResearchReport({ gateway, provider, batchId, w
   const request = {
     phase: 'single_event',
     attempt: 0,
+    stageId: 'discussion-research.single_event',
     input,
     messages,
     toolChoice,
@@ -1245,6 +1248,7 @@ async function completeSingleEventResearchReport({ gateway, provider, batchId, w
     jsonMode: false,
     tools: toolChoice ? [{ type: 'web_search' }] : [],
     toolChoice,
+    stageId: 'discussion-research.single_event',
     thinking: true,
     temperature: 0.1,
     maxOutputTokens: Math.min(6500, Number(providerConfig.maxOutputTokens) || 18000),

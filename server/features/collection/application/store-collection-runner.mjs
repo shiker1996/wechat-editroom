@@ -1,11 +1,12 @@
 import { CollectionRunner } from './collection-runner.mjs';
 
-export function createStoreCollectionRunner({store,registry}){
+export function createStoreCollectionRunner({store,registry,traceContext={}}){
   const subscriptionRuns=new Map();
   const runner=new CollectionRunner({registry,sourceRepository:store.repositories.collectionSources,
     onSourceResult:(record)=>{const id=store.recordSubscriptionRun(record.batchId,{
       sourceGroup:record.sourceType,sourceType:record.sourceType,sourceKey:record.sourceKey,sourceName:record.sourceName,
       status:record.status==='ok'?'success':'failed',itemCount:record.itemCount,durationMs:record.durationMs,
+      rootRunId:traceContext.rootRunId,workflowRunId:traceContext.workflowRunId,stageId:traceContext.stageId || `source:${record.sourceType}`,
       error:record.error?.message||'',startedAt:new Date(Date.now()-record.durationMs).toISOString(),endedAt:new Date().toISOString(),
     },{indexFailure:false});subscriptionRuns.set(record.sourceId,id);},
     onFailure:(record)=>store.recordPipelineFailure({batchId:record.batchId,stage:'collect',objectType:'subscription',

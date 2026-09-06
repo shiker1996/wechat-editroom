@@ -188,9 +188,11 @@ Let me compile the report now.
   assert.equal(requests.length, 2);
   assert.equal(responses.length, 2);
   assert.ok(calls.every((call) => call.purpose === 'discussion-research'));
+  assert.ok(calls.every((call) => call.stageId === 'discussion-research.single_event'));
   assert.ok(calls.every((call) => call.jsonMode === false));
   assert.ok(calls.every((call) => call.thinking === true));
   assert.ok(calls.every((call) => call.toolChoice === 'auto'));
+  assert.ok(requests.every((request) => request.stageId === 'discussion-research.single_event'));
   assert.ok(calls.every((call) => Array.isArray(call.tools) && call.tools[0].type === 'web_search'));
   assert.ok(calls.every((call) => /不要输出 JSON/u.test(call.messages[1].content)));
   assert.ok(calls.every((call) => !/来源正文/u.test(call.messages[1].content)));

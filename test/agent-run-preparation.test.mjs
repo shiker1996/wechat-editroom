@@ -104,7 +104,7 @@ test('v37 数据库迁移保留已有 Run，可重复打开', (t) => {
     DELETE FROM schema_migrations WHERE version=38;`);
   f.reopen();
   assert.equal(f.store.getAgentRun('existing').status, 'running');
-  assert.equal(f.store.db.prepare('SELECT MAX(version) AS version FROM schema_migrations').get().version, 43);
+  assert.equal(f.store.db.prepare('SELECT MAX(version) AS version FROM schema_migrations').get().version, 44);
   f.store.appendAgentRunEvent('existing', { type: 'run.failed' });
   f.reopen();
   assert.equal(f.store.listAgentRunEvents('existing')[0].event.type, 'run.failed');

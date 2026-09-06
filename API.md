@@ -23,6 +23,9 @@
 - `GET /api/system/runs/:rootRunId/trace`：按系统路由别名返回同一份根 Run Trace。
 - `GET /api/runs/:rootRunId/events`、`/stages`、`/model-calls`、`/tool-calls`、`/artifacts`：按需读取根 Run 的单类 Trace 子资源；`/system/runs/:rootRunId/<resource>` 提供兼容别名。
 - `GET /api/runs/:rootRunId/metrics`：返回运行成功率、耗时、模型 token/延迟、工具成功率和阶段摘要。
+- `GET /api/runs/:rootRunId/input`：读取根 Run 已记录的业务输入；返回按配置截断后的 Run/Stage 输入预览，以及由现有任务文件生成的只读索引，不暴露本地文件路径。系统路由也提供同路径的兼容别名。
+- `GET /api/runs/:rootRunId/stages/:stageId/input`：只读取指定阶段的输入预览，并返回可匹配的模型调用编号、模型和 Token 元数据；系统路由也提供兼容别名。
+- `GET /api/runs/:rootRunId/input/download?stageId=...&attempt=...`：下载已记录输入的完整脱敏 JSON；可选 `stageId`、`attempt` 参数用于限定阶段和尝试次数，系统路由也提供兼容别名。
 - `GET /api/runs/:rootRunId/replay`：生成脱敏的固定模型响应、工具结果摘要和 Skill Snapshot 引用，可用于离线回放；外部副作用不会被标记为可重放。
 - `POST /api/runs/compare`：正文 `{ "rootRunIds": ["left", "right"] }`，比较两次运行的输出 hash、耗时、token、模型/工具调用和成功率差异。
 - `POST /api/system/runs/compare`：比较接口的系统路由别名，正文与返回结构同上。

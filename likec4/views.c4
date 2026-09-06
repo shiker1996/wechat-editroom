@@ -1,0 +1,225 @@
+views {
+  // ======================================================================
+  // View 1: 功能架构总览
+  // ======================================================================
+  view architecture {
+    title "功能架构图"
+    description "见字 (WeChat Newsroom Workbench) 整体功能架构（含 Agent Harness）"
+    include *
+    include -> user
+    include -> sqlite
+    include -> llmProvider
+    include -> externalSources
+    style user { color green; shape person }
+    style frontend { color blue }
+    style frontend.shell { color blue }
+    style frontend.router { color blue }
+    style frontend.core { color blue }
+    style httpLayer { color indigo }
+    style harness { color red }
+    style harness.facade { color red }
+    style harness.engine { color red }
+    style harness.broker { color red }
+    style harness.runPrep { color red; size sm }
+    style harness.contracts { color amber; size sm }
+    style harness.replay { color muted; size sm }
+    style harness.runControl { color muted; size sm }
+    style skills { color amber }
+    style skills.resolver { color amber; size sm }
+    style skills.runtimeDef { color amber; size sm }
+    style skills.gates { color amber; size sm }
+    style llm { color primary }
+    style tools { color primary }
+    style persistence { color primary }
+    style persistence.runStore { color red; size sm }
+    style jobs { color primary; size sm }
+    style features { color secondary }
+    style features.articles { color secondary }
+    style features.articles.adapter { color secondary; size sm }
+    style sqlite { color indigo; shape storage }
+    style plugins { color muted }
+    style llmProvider { color red; opacity 60% }
+    style externalSources { color green; opacity 60% }
+    autoLayout LeftRight
+  }
+
+  // ======================================================================
+  // View 2: Agent Harness 内核详解（本次改造核心）
+  // ======================================================================
+  view harnessDetail of harness {
+    title "Agent Harness 内核"
+    description "统一 Agent 运行生命周期、技能、工具、权限、恢复与评测"
+    include *
+    include -> harness
+    include harness -> skills
+    include harness -> llm
+    include harness -> tools
+    include harness -> persistence
+    include harness -> features
+    include -> harness.facade
+    style harness { color red }
+    style harness.facade { color red }
+    style harness.engine { color red }
+    style harness.broker { color red }
+    style harness.runPrep { color red; size sm }
+    style harness.contracts { color amber; size sm }
+    style harness.replay { color muted; size sm }
+    style harness.runControl { color muted; size sm }
+    style skills { color amber; opacity 50% }
+    style skills.resolver { color amber; size sm }
+    style skills.runtimeDef { color amber; size sm }
+    style skills.gates { color amber; size sm }
+    style llm { color primary; opacity 50% }
+    style tools { color primary; opacity 50% }
+    style tools.registry { color primary; size sm }
+    style persistence { color primary; opacity 60% }
+    style persistence.runStore { color red }
+    style features { color secondary; opacity 40% }
+    style features.articles.adapter { color secondary; size sm }
+    autoLayout LeftRight
+  }
+
+  // ======================================================================
+  // View 3: 主流程时序（用户请求到响应）
+  // ======================================================================
+  dynamic view mainWorkflow {
+    variant sequence
+    title "主流程 — 用户请求到响应"
+    description "从编辑操作到系统响应的完整数据流（经 Agent Harness）"
+    user -> frontend.shell "点击导航项"
+    frontend.shell -> frontend.router "URL hash 变更"
+    frontend.router -> frontend.viewModules "懒加载视图模块"
+    frontend.viewModules -> frontend.core.httpClient "调用 fetch"
+    frontend.core.httpClient -> httpLayer.server "HTTP POST /api" { technology "CSRF" }
+    httpLayer.server -> httpLayer.routes "按 pathname 分发"
+    parallel {
+      httpLayer.routes -> features.batches "批次 / 流水线请求"
+      httpLayer.routes -> features.articles.adapter "编审 / 成稿请求"
+    }
+    features.articles.adapter -> harness.facade "runSkill (阶段技能)"
+    harness.facade -> persistence.runStore "创建 Run / 事件持久化"
+    harness.facade -> llm.gateway "模型步骤"
+    llm.gateway -> llmProvider "API 调用"
+    llmProvider <- llm.gateway "响应"
+    harness.facade <- features.articles.adapter "Agent 结果"
+    httpLayer.routes -> httpLayer.server "组装 JSON/NDJSON"
+    httpLayer.server <- frontend.core.httpClient "HTTP 响应"
+    frontend.core.httpClient -> frontend.viewModules "解析数据"
+    frontend.viewModules -> frontend.shell "渲染 DOM"
+    frontend.shell -> user "显示结果"
+    include frontend.core with { opacity 10% }
+    include harness with { opacity 10% }
+    style user { color green; shape person }
+    style frontend { color blue; opacity 60% }
+    style httpLayer { color indigo; opacity 60% }
+    style harness.facade { color red }
+    style persistence.runStore { color red }
+    style llm.gateway { color primary }
+    style llmProvider { color red; opacity 50% }
+  }
+
+  // ======================================================================
+  // View 4: runSkill 统一入口时序（Agent 运行主流程）
+  // ======================================================================
+  dynamic view runSkillFlow {
+    variant sequence
+    title "runSkill 统一运行时序"
+    description "Agent Adapter → Facade → Skill 解析 → 模型循环 → Tool Broker → 持久化"
+    features.articles.adapter -> harness.facade "runSkill(skillId, entryPoint, input)"
+    harness.facade -> skills.resolver "解析 Skill Manifest"
+    skills.resolver -> skills.runtimeDef "读取 runtimeKind"
+    harness.facade -> skills.gates "输入门禁"
+    harness.facade -> harness.runPrep "冻结快照 + bindAgentGateway"
+    alt {
+      when "agent-skill" {
+        harness.facade -> harness.engine "runConversationAgent"
+        harness.engine -> llm.gateway "模型步骤"
+        llm.gateway -> llmProvider "API 调用"
+        llmProvider <- llm.gateway "文本 / 思考 / tool_call"
+        loop "模型请求工具" {
+          harness.engine -> harness.broker "提交 capability"
+          harness.broker -> tools.registry "授权校验并执行"
+          tools.registry <- harness.broker "工具结果"
+          harness.engine <- harness.broker "规范化 tool_result"
+        }
+        harness.engine -> persistence.runStore "保存 Step / Event / Checkpoint"
+      }
+      else "stage-skill / prompt-skill" {
+        harness.facade -> features.articles "executeStage 确定性阶段"
+        harness.facade -> llm.gateway "Gateway.complete"
+      }
+    }
+    features.articles.adapter <- harness.facade "结构化 Agent 结果"
+
+    style features.articles.adapter { color secondary }
+    style harness.facade { color red }
+    style harness.engine { color red }
+    style harness.broker { color red }
+    style harness.runPrep { color red }
+    style skills.resolver { color amber }
+    style skills.runtimeDef { color amber }
+    style skills.gates { color amber }
+    style llm.gateway { color primary }
+    style llmProvider { color red; opacity 60% }
+    style tools.registry { color primary }
+    style persistence.runStore { color red }
+  }
+
+  // ======================================================================
+  // View 5: 平台核心层（持久化 + Run Store）
+  // ======================================================================
+  view platformDetail of persistence {
+    title "持久化层与 Run Store"
+    description "SQLite、23 Repositories、Query Services 与 v43 Run/Step/Checkpoint 存储"
+    include *
+    include -> persistence
+    include persistence -> sqlite
+    include persistence -> harness
+    style persistence { color primary }
+    style persistence.database { color primary }
+    style persistence.repos { color primary; size sm }
+    style persistence.queries { color primary; size sm }
+    style persistence.runStore { color red }
+    style harness { color red; opacity 40% }
+    style sqlite { color indigo; shape storage }
+    autoLayout LeftRight
+  }
+
+  // ======================================================================
+  // View 6: 批次自动化管线
+  // ======================================================================
+  dynamic view batchPipeline {
+    variant sequence
+    title "批次自动化管线"
+    description "从数据采集到稿件生成的完整流水线，模型阶段统一经 Harness stage-skill 运行"
+    features.batches -> features.collection "启动采集" { technology "定时/手动" }
+    features.collection -[async]-> externalSources "抓取 RSS / Reddit / GitHub"
+    features.batches -> jobs.aiJobManager "提交批次 AI Job"
+    jobs.aiJobManager -> features.research "打标 / 事件卡 / 研判"
+    features.research -[sync]-> harness.facade "阶段技能（stage-skill）"
+    features.batches -> features.articles "触发成稿"
+    features.articles.adapter -> harness.facade "编辑会（agent-skill）"
+    features.articles -> shared.rendering "排版 / 预览"
+    features.articles -> shared.themes "主题应用"
+    alt {
+      when "需要社交卡片" {
+        features.socialCards -> harness.facade "卡片技能运行"
+        features.socialCards -> shared.rendering "渲染社交卡片"
+      }
+      else "仅文章" {}
+    }
+    harness.facade -> persistence.runStore "写入 batch-job 根 Run / 阶段事件"
+    features.batches -> features.contentPlanning "写入内容日历"
+
+    style features.batches { color secondary }
+    style features.collection { color secondary; opacity 70% }
+    style features.research { color secondary; opacity 70% }
+    style features.articles { color secondary; opacity 70% }
+    style features.socialCards { color secondary; opacity 70% }
+    style harness.facade { color red; size sm }
+    style persistence.runStore { color red; size sm }
+    style jobs.aiJobManager { color primary; size sm }
+    style shared { color secondary; opacity 60% }
+    style externalSources { color green }
+  }
+}

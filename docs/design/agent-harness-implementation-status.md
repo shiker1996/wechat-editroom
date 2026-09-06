@@ -139,6 +139,10 @@ Phase 5 的代码迁移已完成；按用户约定不在本轮执行生产环境
 展示 Workflow/Agent Run、阶段事件、Model Call、Tool Audit 和 Checkpoint；原有 `/api/logs`
 平铺列表与模型调用展开保持不变。
 
+采集任务现在作为独立的 `collection` 顶层日志展示，并可打开“采集 Workflow Trace”。批次采集根 Run
+关联 `source_runs` 与 `subscription_runs`，Trace 内展示来源状态、耗时、条目数、失败信息和质量过滤事件；
+原有采集页面的 PENDING FAILURES 重试与跳过入口保持不变。数据库 v44 为存量库幂等补齐采集来源运行关联列。
+
 本轮已推进控制台 Phase 4 P0：日志页增加运行 ID/阶段/消息搜索与状态筛选；能力页提供 Capability 受控测试；
 技能详情提供 JSON 测试输入和 `test run` 结果，测试 Run 只做契约/必需能力前置检查，不写入正式产物；
 Run Trace 增加取消、恢复预检和失败阶段重试入口。恢复与重试在服务端会重新校验 checkpoint、能力和快照，
@@ -151,7 +155,7 @@ Trace 弹窗接入 Replay Fixture、两次 Run Compare 和治理操作；日志�
 
 同步批次打标、文章草稿入口和 pipeline-failure-retry 已统一通过 Harness Gateway 执行；确定性信息、图表、仓库和本地项目能力也经 Tool Broker 统一完成授权、超时、输出校验与审计。新增能力边界静态检查覆盖同步入口、文章入口和失败重试入口，避免业务层重新直接持有原始 Gateway。
 
-全部内置技能清单现在显式声明 `runtimeKind`、正数 `budget` 和 `gates`；具备会话 Agent 入口的技能同时声明 Agent 预算。文章、日报、教程、排版和社交卡生产管线写入产物时携带 `rootRunId`、`workflowRunId` 和阶段标识，Run Trace 可按批次/候选或运行关联字段聚合这些产物。数据库保持 v43 兼容，存量库启动时幂等补齐产物关联列。
+全部内置技能清单现在显式声明 `runtimeKind`、正数 `budget` 和 `gates`；具备会话 Agent 入口的技能同时声明 Agent 预算。文章、日报、教程、排版和社交卡生产管线写入产物时携带 `rootRunId`、`workflowRunId` 和阶段标识，Run Trace 可按批次/候选或运行关联字段聚合这些产物。数据库保持 v44 兼容，存量库启动时幂等补齐产物和采集来源关联列。
 
 Run Trace 详情页补齐事件标签、时间线和模型调用详情的样式覆盖，模型调用页支持搜索、状态筛选和详情展开。全量回归：`npm test` 1675 项通过，0 失败、0 取消。
 
@@ -168,3 +172,19 @@ Run Trace 详情页补齐事件标签、时间线和模型调用详情的样式�
 前端收到新的根 Run ID 后在当前 Trace 对话框中自动切换。其它业务入口由于无法凭 Run ID 重建文章、日报或图文等
 业务输入及副作用回调，仍返回原业务入口、`resumeFrom` 和快照 ID，由调用方提交这些上下文。
 对话 Agent 入口已经支持请求体 `resumeFrom`，Pipeline 调用方可直接传入该参数。
+
+## 第八次交付：Run Trace 输入完整性 P0
+
+Run Trace 增加运行输入查询和完整输入下载入口。服务端沿用现有任务目录中的输入文件，按
+`root_run_id + stage_id + attempt` 定位，不新增通用输入快照表、输入摘要或前端可见文件路径。
+页面按输入类型展示受控预览，超长内容通过脱敏后的 JSON 下载；研判任务会从
+`discussion-research-input.json` 展示 `internal`、`inter_event`、验证和 `topic_generation` 等阶段输入。
+模型调用继续展示原有输出和审计信息，完整 Prompt 仍不复制进数据库。
+
+## 第九次交付：Run Trace 模型调用补链 P1
+
+研判输入文件中的 `response.call_id` 现在会与根 Run Trace 的 `model_calls.id` 对齐。阶段输入卡片展示对应模型、状态、输入/输出 Token 和调用编号，并可直接跳转到模型调用详情；找不到审计行时保留输入预览并显示未关联。完整 Prompt 仍按既定策略从阶段输入文件预览或下载，不复制进数据库。
+
+## 第十次交付：Run Trace 历史输入补链 P2
+
+Run Trace 输入接口现在同时返回由现有任务文件生成的只读索引，包含可识别文件、阶段、Attempt 和模型调用编号，但不暴露本地路径。旧批次的 `discussion-research-input.json`、阶段 3 输入和候选输入文件可按现有 Run 关联读取；无法可靠识别的历史 Run 继续显示未记录，不回写历史业务数据。

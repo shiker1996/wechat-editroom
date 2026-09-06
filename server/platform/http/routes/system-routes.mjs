@@ -56,6 +56,7 @@ import { cancelAgentRun, isAgentRunActive } from '../../agent/run-control.mjs';
 import { stageSkillPackageRestore, stageWritingSkillRestore } from './system-restore-transactions.mjs';
 import { buildReplayFixture, buildRunMetrics, compareRunTraces } from '../../agent/replay.mjs';
 import { createRequestHarnessGateway } from '../../skills/pipeline-runtime.mjs';
+import { buildRunInput, readRunInputDownload } from '../../agent/run-input.mjs';
 
 function skillsUsingCapabilities(root, capabilities) {
   const expected=new Set(capabilities);
@@ -74,7 +75,7 @@ function requirePluginAdmin(request){
 
 export async function handleSystemRoutes(context) {
   const {
-    request, response, pathname, searchParams, root, config, store,
+    request, response, pathname, searchParams, root, config, store, batchWorkdir,
     json, body, binaryBody, createWorkbenchBackup, models, aiJobs,
   } = context;
   const extensionSettingRepository=store?.repositories?.extensionSettings||{
@@ -165,6 +166,42 @@ export async function handleSystemRoutes(context) {
     const traces = ids.map((id) => store.getWorkflowRunTrace?.(id));
     if (traces.some((trace) => !trace)) { json(response, 404, { error: '运行不存在' }); return true; }
     json(response, 200, { leftRootRunId: ids[0], rightRootRunId: ids[1], comparison: compareRunTraces(traces[0], traces[1]) });
+    return true;
+  }
+  const runInputDownloadMatch = pathname.match(/^\/api\/runs\/([^/]+)\/input\/download$/) || pathname.match(/^\/api\/system\/runs\/([^/]+)\/input\/download$/);
+  const runStageInputMatch = pathname.match(/^\/api\/runs\/([^/]+)\/stages\/([^/]+)\/input$/) || pathname.match(/^\/api\/system\/runs\/([^/]+)\/stages\/([^/]+)\/input$/);
+  const runInputMatch = pathname.match(/^\/api\/runs\/([^/]+)\/input$/) || pathname.match(/^\/api\/system\/runs\/([^/]+)\/input$/);
+  if (request.method === 'GET' && (runInputDownloadMatch || runStageInputMatch || runInputMatch)) {
+    const rootRunId = decodeURIComponent((runInputDownloadMatch || runStageInputMatch || runInputMatch)[1]);
+    const trace = store.getWorkflowRunTrace?.(rootRunId, { eventLimit: 1000, modelCallLimit: 500, toolLimit: 500 });
+    if (!trace) { json(response, 404, { error: '运行不存在' }); return true; }
+    if (runInputDownloadMatch) {
+      const payload = readRunInputDownload({ root, store, trace, batchWorkdir, stageId: searchParams.get('stageId') || '', attempt: searchParams.has('attempt') ? searchParams.get('attempt') : null });
+      const bodyText = JSON.stringify(payload, null, 2);
+      response.writeHead(200, {
+        'content-type': 'application/json; charset=utf-8',
+        'content-disposition': `attachment; filename="run-input-${encodeURIComponent(rootRunId).replace(/%/g, '')}.json"`,
+        'cache-control': 'no-store',
+      });
+      response.end(bodyText);
+      return true;
+    }
+    const rawLimit = Number(searchParams.get('previewLimit'));
+    const previewLimit = Number.isFinite(rawLimit) ? Math.min(8000, Math.max(240, Math.floor(rawLimit))) : 2400;
+    const input = buildRunInput({ root, store, trace, batchWorkdir, previewLimit });
+    if (runStageInputMatch) {
+      const stageId = decodeURIComponent(runStageInputMatch[2]);
+      input.records = input.records.filter((record) => String(record.stageId || '') === stageId);
+      input.stages = input.stages.filter((record) => String(record.stageId || '') === stageId);
+      if (input.index) {
+        input.index.files = input.index.files.filter((record) => String(record.stageId || '') === stageId);
+        input.index.stages = input.index.stages.filter((record) => String(record.stageId || '') === stageId);
+      }
+      input.available = input.records.length > 0 || input.stages.length > 0;
+      input.message = input.available ? '' : '该阶段未记录输入';
+      input.stageId = stageId;
+    }
+    json(response, 200, { schemaVersion: 1, rootRunId, input });
     return true;
   }
   const runTraceMatch = pathname.match(/^\/api\/runs\/([^/]+)\/(trace|metrics|replay|events|stages|model-calls|tool-calls|artifacts)$/);

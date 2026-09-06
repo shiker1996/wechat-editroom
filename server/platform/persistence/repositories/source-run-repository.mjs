@@ -1,11 +1,11 @@
 export class SourceRunRepository {
   constructor(db) { this.db = db; }
-  start(batchId, source) { const result=this.db.prepare("INSERT INTO source_runs (batch_id,source,status,started_at) VALUES (?,?,'running',?)").run(batchId,source,new Date().toISOString());return Number(result.lastInsertRowid); }
+  start(batchId, source, traceContext = {}) { const result=this.db.prepare("INSERT INTO source_runs (batch_id,source,status,started_at,root_run_id,workflow_run_id,stage_id) VALUES (?,?,'running',?,?,?,?)").run(batchId,source,new Date().toISOString(),traceContext.rootRunId??traceContext.root_run_id??null,traceContext.workflowRunId??traceContext.workflow_run_id??null,traceContext.stageId??traceContext.stage_id??null);return Number(result.lastInsertRowid); }
   finish(id,status,itemCount=0,error=null) { this.db.prepare('UPDATE source_runs SET status=?,item_count=?,error=?,ended_at=? WHERE id=?').run(status,itemCount,error,new Date().toISOString(),id); }
   get(id) { return this.db.prepare('SELECT * FROM source_runs WHERE id=?').get(Number(id))??null; }
   recordSubscription(batchId,result) { const endedAt=result.endedAt||new Date().toISOString();const startedAt=result.startedAt||endedAt;const inserted=this.db.prepare(`INSERT INTO subscription_runs
-    (batch_id,source_group,source_type,source_key,source_name,status,item_count,duration_ms,error,started_at,ended_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
-    .run(batchId,result.sourceGroup,result.sourceType,result.sourceKey,result.sourceName,result.status,Number(result.itemCount||0),Number(result.durationMs||0),result.error||null,startedAt,endedAt);return Number(inserted.lastInsertRowid); }
+    (batch_id,source_group,source_type,source_key,source_name,status,item_count,duration_ms,error,started_at,ended_at,root_run_id,workflow_run_id,stage_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .run(batchId,result.sourceGroup,result.sourceType,result.sourceKey,result.sourceName,result.status,Number(result.itemCount||0),Number(result.durationMs||0),result.error||null,startedAt,endedAt,result.rootRunId??result.root_run_id??null,result.workflowRunId??result.workflow_run_id??null,result.stageId??result.stage_id??null);return Number(inserted.lastInsertRowid); }
   health() { return this.db.prepare(`SELECT r.* FROM subscription_runs r JOIN (SELECT source_key,MAX(id) id FROM subscription_runs GROUP BY source_key) latest ON latest.id=r.id ORDER BY r.source_name`).all(); }
   history({days=14,limit=500}={}) { const safeDays=Math.max(1,Math.min(90,Number(days)||14));const safeLimit=Math.max(1,Math.min(5000,Number(limit)||500));return this.db.prepare("SELECT * FROM subscription_runs WHERE ended_at >= datetime('now',?) ORDER BY ended_at DESC,id DESC LIMIT ?").all(`-${safeDays} days`,safeLimit); }
   recoverInterrupted() {
@@ -16,6 +16,7 @@ export class SourceRunRepository {
       const ai=this.db.prepare("UPDATE ai_runs SET status='interrupted',error=?,progress='任务已中断，可重新执行',updated_at=? WHERE status IN ('running','queued')").run(reason,now).changes;
       const sources=this.db.prepare("UPDATE source_runs SET status='interrupted',error=?,ended_at=? WHERE status='running'").run(reason,now).changes;
       const subscriptions=this.db.prepare("UPDATE subscription_runs SET status='interrupted',error=?,ended_at=? WHERE status='running'").run(reason,now).changes;
+      this.db.prepare("UPDATE agent_runs SET status='interrupted',error=?,finished_at=? WHERE status IN ('running','testing') AND entry_point='collection'").run(reason,now);
       const batches=this.db.prepare("UPDATE batches SET status='interrupted',updated_at=? WHERE status='running'").run(now).changes;
       const result={aiRuns:Number(ai),sourceRuns:Number(sources),subscriptionRuns:Number(subscriptions),batches:Number(batches)};
       this.db.exec('COMMIT');

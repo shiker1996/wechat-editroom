@@ -16,6 +16,85 @@ let tracePoller = null;
 let activeTraceId = "";
 let traceFingerprint = "";
 let traceRefreshInFlight = false;
+let traceWaterfallExpanded = new Set();
+let traceWaterfallFilterId = "";
+const TRACE_OVERVIEW_MIN_HEIGHT = 0;
+const TRACE_OVERVIEW_HEIGHT_KEY = "write-assistant.run-trace-overview-height";
+
+function traceOverviewHeightBounds() {
+  const viewportHeight = Number(window.innerHeight || 720);
+  return { min: TRACE_OVERVIEW_MIN_HEIGHT, max: Math.max(TRACE_OVERVIEW_MIN_HEIGHT, viewportHeight - 190) };
+}
+
+function setTraceOverviewHeight(value, { persist = true } = {}) {
+  const overview = document.getElementById("run-trace-overview");
+  const resizer = document.getElementById("run-trace-resizer");
+  if (!overview || !resizer) return 0;
+  const bounds = traceOverviewHeightBounds();
+  const height = Math.round(Math.min(bounds.max, Math.max(bounds.min, Number(value) || bounds.min)));
+  overview.style.setProperty("--run-trace-overview-height", `${height}px`);
+  resizer.setAttribute("aria-valuemin", String(bounds.min));
+  resizer.setAttribute("aria-valuemax", String(bounds.max));
+  resizer.setAttribute("aria-valuenow", String(height));
+  resizer.setAttribute("aria-valuetext", `轨迹区域高度 ${height} 像素`);
+  if (persist) {
+    try { window.localStorage.setItem(TRACE_OVERVIEW_HEIGHT_KEY, String(height)); } catch { /* storage unavailable */ }
+  }
+  return height;
+}
+
+function restoreTraceOverviewHeight() {
+  try {
+    const value = Number(window.localStorage.getItem(TRACE_OVERVIEW_HEIGHT_KEY));
+    if (Number.isFinite(value) && value > 0) setTraceOverviewHeight(value);
+  } catch { /* storage unavailable */ }
+}
+
+function bindTraceOverviewResizer() {
+  const resizer = document.getElementById("run-trace-resizer");
+  if (!resizer || resizer.dataset.bound === "true") return;
+  resizer.dataset.bound = "true";
+  const keyboardStep = 24;
+  resizer.addEventListener("keydown", (event) => {
+    const measured = document.getElementById("run-trace-overview")?.getBoundingClientRect().height;
+    const current = Number.isFinite(measured) ? measured : Number(resizer.getAttribute("aria-valuenow")) || 300;
+    const keys = ["ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"];
+    if (!keys.includes(event.key)) return;
+    event.preventDefault();
+    const bounds = traceOverviewHeightBounds();
+    const delta = event.key === "ArrowUp" ? -keyboardStep : event.key === "ArrowDown" ? keyboardStep : event.key === "PageUp" ? -keyboardStep * 4 : event.key === "PageDown" ? keyboardStep * 4 : 0;
+    setTraceOverviewHeight(event.key === "Home" ? bounds.min : event.key === "End" ? bounds.max : current + delta);
+  });
+  resizer.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    const overview = document.getElementById("run-trace-overview");
+    if (!overview) return;
+    event.preventDefault();
+    const startY = event.clientY;
+    const startHeight = overview.getBoundingClientRect().height;
+    const pointerId = event.pointerId;
+    resizer.classList.add("is-dragging");
+    document.body.classList.add("run-trace-resizing");
+    resizer.setPointerCapture?.(pointerId);
+    const move = (moveEvent) => setTraceOverviewHeight(startHeight + moveEvent.clientY - startY, { persist: false });
+    const end = () => {
+      resizer.releasePointerCapture?.(pointerId);
+      resizer.classList.remove("is-dragging");
+      document.body.classList.remove("run-trace-resizing");
+      const finalHeight = Number(resizer.getAttribute("aria-valuenow"));
+      if (Number.isFinite(finalHeight)) setTraceOverviewHeight(finalHeight);
+      resizer.removeEventListener("pointermove", move);
+      resizer.removeEventListener("pointerup", end);
+      resizer.removeEventListener("pointercancel", end);
+      resizer.removeEventListener("lostpointercapture", end);
+    };
+    resizer.addEventListener("pointermove", move);
+    resizer.addEventListener("pointerup", end);
+    resizer.addEventListener("pointercancel", end);
+    resizer.addEventListener("lostpointercapture", end);
+  });
+  restoreTraceOverviewHeight();
+}
 
 function setTraceLiveStatus(message) {
   const live = document.querySelector("#run-trace-dialog .run-trace-live");
@@ -28,7 +107,8 @@ function traceDataFingerprint(trace = {}, metrics = {}) {
     return [item.id, item.sequence, item.created_at, item.finished_at, item.status].filter(Boolean).join(":");
   };
   const runState = (trace.runs || []).map((run) => [run.id, run.status, run.finished_at || run.finishedAt].join(":")).join("|");
-  return [runState, trace.events?.length || 0, last(trace.events), trace.modelCalls?.length || 0, last(trace.modelCalls), trace.toolCalls?.length || 0, last(trace.toolCalls), trace.checkpoints?.length || 0, last(trace.checkpoints), metrics.durationMs, metrics.modelCalls, metrics.toolCalls].join("/");
+  const sourceRuns = [...(trace.sourceRuns || []), ...(trace.subscriptionRuns || [])];
+  return [runState, trace.events?.length || 0, last(trace.events), trace.modelCalls?.length || 0, last(trace.modelCalls), trace.toolCalls?.length || 0, last(trace.toolCalls), trace.checkpoints?.length || 0, last(trace.checkpoints), sourceRuns.length, last(sourceRuns), metrics.durationMs, metrics.modelCalls, metrics.toolCalls].join("/");
 }
 
 function shouldFollowScrollEnd(element, threshold = 32) {
@@ -55,6 +135,53 @@ function traceDate(value) {
 function tracePreview(value, limit = 180) {
   const text = traceContent(value).replace(/\s+/g, " ").trim();
   return text.length > limit ? `${text.slice(0, limit)}…` : text;
+}
+
+function boundedDetailText(value, limit = 6000) {
+  const text = traceContent(value);
+  if (text.length <= limit) return text;
+  const head = Math.max(240, Math.floor(limit * 0.72));
+  const tail = Math.max(120, limit - head);
+  return `${text.slice(0, head)}\n\n… 已截断 ${text.length - head - tail} 字符，完整内容请下载运行输入 …\n\n${text.slice(-tail)}`;
+}
+
+function runInputData(runInput) {
+  return runInput?.input || runInput || {};
+}
+
+function inputDownloadUrl(stageId = '', attempt = null) {
+  if (!activeTraceId) return '';
+  const query = new URLSearchParams();
+  if (stageId) query.set('stageId', stageId);
+  if (attempt != null) query.set('attempt', String(attempt));
+  return `/api/runs/${encodeURIComponent(activeTraceId)}/input/download${query.toString() ? `?${query}` : ''}`;
+}
+
+function modelInputForCall(call, replayFixture, runInput) {
+  const data = runInputData(runInput);
+  const callId = call?.id ?? call?.call_id ?? call?.callId;
+  const stageId = call?.stage_id || call?.stageId || '';
+  const stage = (data.stages || []).find((item) => String(item.modelCallId ?? '') === String(callId))
+    || (data.stages || []).find((item) => stageId && String(item.stageId || '') === String(stageId));
+  const snapshotId = call?.generation_snapshot_id || call?.generationSnapshotId || '';
+  const snapshot = (replayFixture?.snapshots || []).find((item) => String(item.id) === String(snapshotId));
+  const messages = Array.isArray(snapshot?.promptMessages) ? snapshot.promptMessages : [];
+  if (messages.length) {
+    const prompt = messages.map((message) => `[${String(message.role || 'context').toUpperCase()}]\n${traceContent(message.content)}`).join('\n\n');
+    return { inputPreview: boundedDetailText(prompt), inputLabel: 'Model Prompt 输入', inputSource: `generation snapshot #${snapshot.id}`, inputStageId: stageId, inputDownload: inputDownloadUrl(stageId) };
+  }
+  if (stage?.preview) return { inputPreview: boundedDetailText(stage.preview), inputLabel: '阶段模型输入', inputSource: stage.stageId || stageId || '运行输入', inputStageId: stage.stageId || stageId, inputAttempt: stage.attempt, inputDownload: inputDownloadUrl(stage.stageId || stageId, stage.attempt) };
+  const record = (data.records || []).find((item) => stageId && String(item.stageId || '') === String(stageId)) || (data.records || [])[0];
+  return record?.preview ? { inputPreview: boundedDetailText(record.preview), inputLabel: '运行输入', inputSource: record.label || '任务输入', inputStageId: record.stageId || stageId, inputDownload: inputDownloadUrl(record.stageId || stageId) } : null;
+}
+
+function inputForRun(run, runInput) {
+  const data = runInputData(runInput);
+  const stageId = run?.stage_id || run?.stageId || '';
+  const stage = (data.stages || []).find((item) => stageId && String(item.stageId || '') === String(stageId));
+  const record = (data.records || []).find((item) => stageId && String(item.stageId || '') === String(stageId)) || (data.records || [])[0];
+  const value = stage?.preview || record?.preview;
+  return value ? { inputPreview: boundedDetailText(value), inputLabel: stage ? '阶段输入' : '运行输入', inputSource: stage?.stageId || record?.label || '任务输入', inputStageId: stage?.stageId || record?.stageId || stageId, inputAttempt: stage?.attempt, inputDownload: inputDownloadUrl(stage?.stageId || record?.stageId || stageId, stage?.attempt) } : null;
 }
 
 function traceRecordRef(kind, record = {}, index = 0) {
@@ -130,6 +257,7 @@ function traceTimeBounds(trace, runs, replayFixture = null) {
   (trace.modelCalls || []).forEach((call) => { add(call.created_at); if (call.created_at && call.latency_ms != null) add(new Date(new Date(call.created_at).getTime() + Number(call.latency_ms || 0)).toISOString()); });
   [...(trace.toolCalls || []), ...(trace.toolExecutions || [])].forEach((call) => span(call.started_at || call.created_at, call.finished_at || call.completed_at));
   (trace.checkpoints || []).forEach((checkpoint) => add(checkpoint.created_at));
+  [...(trace.sourceRuns || []), ...(trace.subscriptionRuns || [])].forEach((run) => span(run.started_at || run.startedAt, run.ended_at || run.endedAt));
   const start = points.length ? Math.min(...points) : Date.now();
   const end = points.length ? Math.max(start + 1, ...points) : start + 1;
   return { start, end, duration: Math.max(1, end - start) };
@@ -151,14 +279,96 @@ function clearTraceTimelineHighlight() {
 
 function clearTraceSegmentFilter() {
   traceSegmentFilter = null;
+  traceWaterfallFilterId = "";
   document.querySelectorAll("#run-trace-overview [data-trace-segment].is-active").forEach((segment) => segment.classList.remove("is-active"));
   document.querySelectorAll("#run-trace-content .trace-row").forEach((row) => { row.hidden = false; row.classList.remove("is-time-filtered"); });
   const label = document.getElementById("run-trace-segment-selection");
-  if (label) label.hidden = true;
+  if (label) {
+    label.hidden = true;
+    const heading = label.querySelector("b");
+    if (heading) heading.textContent = "时间筛选";
+  }
+  syncTraceWaterfallRows();
+}
+
+function traceWaterfallSubtree(rowId) {
+  const rows = [...document.querySelectorAll("#run-trace-overview [data-trace-waterfall-id]")];
+  const children = new Map();
+  rows.forEach((row) => {
+    const parent = row.dataset.traceWaterfallParent || "";
+    if (!children.has(parent)) children.set(parent, []);
+    children.get(parent).push(row);
+  });
+  const subtree = new Set();
+  const visit = (id) => {
+    if (!id || subtree.has(id)) return;
+    subtree.add(id);
+    (children.get(id) || []).forEach((child) => visit(child.dataset.traceWaterfallId));
+  };
+  visit(rowId);
+  return { rows, children, subtree };
+}
+
+function syncTraceWaterfallRows() {
+  const { rows, children } = traceWaterfallSubtree("");
+  if (!rows.length) return;
+  const filterSubtree = traceWaterfallFilterId ? traceWaterfallSubtree(traceWaterfallFilterId).subtree : null;
+  const rowById = new Map(rows.map((row) => [row.dataset.traceWaterfallId, row]));
+  rows.forEach((row) => {
+    const id = row.dataset.traceWaterfallId || "";
+    const hasChildren = (children.get(id) || []).length > 0;
+    let visible = true;
+    let parent = row.dataset.traceWaterfallParent || "";
+    while (parent) {
+      if (!traceWaterfallExpanded.has(parent)) { visible = false; break; }
+      parent = rowById.get(parent)?.dataset.traceWaterfallParent || "";
+    }
+    row.hidden = !visible;
+    row.classList.toggle("is-collapsed", hasChildren && !traceWaterfallExpanded.has(id));
+    row.classList.toggle("is-expanded", hasChildren && traceWaterfallExpanded.has(id));
+    row.classList.toggle("is-node-selected", id === traceWaterfallFilterId);
+    if (hasChildren) row.setAttribute("aria-expanded", String(traceWaterfallExpanded.has(id)));
+    else row.removeAttribute("aria-expanded");
+  });
+  if (!traceWaterfallFilterId) return;
+  const selected = rowById.get(traceWaterfallFilterId);
+  if (!selected) return;
+  const refs = new Set();
+  rows.forEach((row) => {
+    if (filterSubtree.has(row.dataset.traceWaterfallId) && row.dataset.traceRef) refs.add(row.dataset.traceRef);
+  });
+  document.querySelectorAll("#run-trace-content .trace-row").forEach((row) => {
+    row.hidden = !refs.has(row.dataset.traceRef || "");
+    row.classList.toggle("is-time-filtered", !row.hidden);
+  });
+  const label = document.getElementById("run-trace-segment-selection");
+  if (label) {
+    label.hidden = false;
+    const heading = label.querySelector("b");
+    if (heading) heading.textContent = "节点筛选";
+    const labelText = label.querySelector("[data-trace-selection-text]");
+    if (labelText) labelText.textContent = `${selected.querySelector("b")?.textContent || "当前节点"} · 当前节点及子节点日志`;
+  }
+}
+
+function applyTraceWaterfallNodeFilter(row) {
+  if (!row) return;
+  const id = row.dataset.traceWaterfallId || "";
+  if (!id) return;
+  clearTraceSegmentFilter();
+  const hasChildren = [...document.querySelectorAll("#run-trace-overview [data-trace-waterfall-parent]")].some((item) => item.dataset.traceWaterfallParent === id);
+  if (hasChildren) {
+    if (traceWaterfallExpanded.has(id)) traceWaterfallExpanded.delete(id);
+    else traceWaterfallExpanded.add(id);
+  }
+  traceWaterfallFilterId = id;
+  syncTraceWaterfallRows();
 }
 
 function applyTraceSegmentFilter(segment) {
   if (!segment) return clearTraceSegmentFilter();
+  traceWaterfallFilterId = "";
+  syncTraceWaterfallRows();
   const start = Number(segment.dataset.traceSegmentStart);
   const end = Number(segment.dataset.traceSegmentEnd);
   const lane = segment.dataset.traceSegmentLane || "system";
@@ -225,8 +435,10 @@ function showTraceDetail(key) {
   const record = traceDetailRecords.get(key);
   const panel = document.getElementById("run-trace-detail");
   const body = document.getElementById("run-trace-detail-body");
+  const layout = document.querySelector(".run-trace-body");
   if (!record || !panel || !body) return;
   panel.hidden = false;
+  layout?.classList.add("has-detail");
   const preview = record.preview ? traceContent(record.preview) : "暂无预览";
   const raw = traceContent(record.raw || record);
   const startTime = record.time ? traceTime(record.time) : "—";
@@ -234,7 +446,11 @@ function showTraceDetail(key) {
   const duration = record.duration || (record.time && record.endTime ? `${Math.max(0, traceDate(record.endTime) - traceDate(record.time))} ms` : "");
   const round = record.round != null ? `<div><dt>轮次</dt><dd>第 ${escapeHtml(String(Number(record.round) + 1))} 轮</dd></div>` : "";
   const agentRun = record.agentRunId ? `<div><dt>运行</dt><dd>${escapeHtml(record.agentRunId)}</dd></div>` : "";
-  body.innerHTML = `<div class="run-trace-detail-kicker"><span class="trace-row-marker ${escapeHtml(record.kind || "context")}">${escapeHtml(record.marker || "CTX")}</span><span>${escapeHtml(record.label || "事件")}</span></div><dl class="run-trace-detail-meta"><div><dt>时间</dt><dd>${escapeHtml(startTime)}${endTime ? ` → ${escapeHtml(endTime)}` : ""}</dd></div><div><dt>来源</dt><dd>${escapeHtml(record.source || "运行事件")}</dd></div><div><dt>状态</dt><dd>${escapeHtml(record.status || "—")}</dd></div>${record.stage ? `<div><dt>阶段</dt><dd>${escapeHtml(record.stage)}</dd></div>` : ""}${round}${agentRun}${duration ? `<div><dt>耗时</dt><dd>${escapeHtml(duration)}</dd></div>` : ""}</dl><div class="run-trace-detail-tabs" role="tablist" aria-label="事件详情视图"><button type="button" class="run-trace-detail-tab active" role="tab" aria-selected="true" data-trace-detail-tab="summary">概览</button><button type="button" class="run-trace-detail-tab" role="tab" aria-selected="false" data-trace-detail-tab="preview">预览</button><button type="button" class="run-trace-detail-tab" role="tab" aria-selected="false" data-trace-detail-tab="raw">原始内容</button></div><section class="run-trace-detail-panel run-trace-detail-preview" data-trace-detail-panel="summary" role="tabpanel"><h4>时间摘要</h4><p>${escapeHtml(record.summary || "暂无摘要")}</p></section><section class="run-trace-detail-panel run-trace-detail-preview" data-trace-detail-panel="preview" role="tabpanel" hidden><h4>预览</h4><pre>${escapeHtml(preview)}</pre></section><section class="run-trace-detail-panel run-trace-detail-raw" data-trace-detail-panel="raw" role="tabpanel" hidden><h4>原始内容</h4><pre>${escapeHtml(raw)}</pre></section>`;
+  const defaultDetailTab = record.inputPreview && record.kind === "system" ? "input" : record.kind === "model" || record.isPrompt ? "preview" : "summary";
+  const detailTabButton = (value, label) => `<button type="button" class="run-trace-detail-tab${defaultDetailTab === value ? " active" : ""}" role="tab" aria-selected="${defaultDetailTab === value}" data-trace-detail-tab="${value}">${label}</button>`;
+  const inputTab = record.inputPreview ? detailTabButton("input", "输入") : "";
+  const inputBlock = record.inputPreview ? `<section class="run-trace-detail-panel run-trace-detail-input" data-trace-detail-panel="input" role="tabpanel"${defaultDetailTab === "input" ? "" : " hidden"}><div class="run-trace-detail-input-head"><h4>${escapeHtml(record.inputLabel || "运行输入")}</h4>${record.inputDownload ? `<a class="run-trace-input-download" href="${escapeHtml(record.inputDownload)}" download>下载完整输入</a>` : ""}</div>${record.inputSource ? `<small>${escapeHtml(record.inputSource)}</small>` : ""}<pre>${escapeHtml(record.inputPreview)}</pre></section>` : "";
+  body.innerHTML = `<div class="run-trace-detail-kicker"><span class="trace-row-marker ${escapeHtml(record.kind || "context")}">${escapeHtml(record.marker || "CTX")}</span><span>${escapeHtml(record.label || "事件")}</span></div><dl class="run-trace-detail-meta"><div><dt>时间</dt><dd>${escapeHtml(startTime)}${endTime ? ` → ${escapeHtml(endTime)}` : ""}</dd></div><div><dt>来源</dt><dd>${escapeHtml(record.source || "运行事件")}</dd></div><div><dt>状态</dt><dd>${escapeHtml(record.status || "—")}</dd></div>${record.stage ? `<div><dt>阶段</dt><dd>${escapeHtml(record.stage)}</dd></div>` : ""}${round}${agentRun}${duration ? `<div><dt>耗时</dt><dd>${escapeHtml(duration)}</dd></div>` : ""}</dl><div class="run-trace-detail-tabs" role="tablist" aria-label="事件详情视图">${detailTabButton("summary", "概览")}${inputTab}${detailTabButton("preview", "预览")}${detailTabButton("raw", "原始内容")}</div>${inputBlock}<section class="run-trace-detail-panel run-trace-detail-preview" data-trace-detail-panel="summary" role="tabpanel"${defaultDetailTab === "summary" ? "" : " hidden"}><h4>时间摘要</h4><p>${escapeHtml(record.summary || "暂无摘要")}</p></section><section class="run-trace-detail-panel run-trace-detail-preview" data-trace-detail-panel="preview" role="tabpanel"${defaultDetailTab === "preview" ? "" : " hidden"}><h4>预览</h4><pre>${escapeHtml(preview)}</pre></section><section class="run-trace-detail-panel run-trace-detail-raw" data-trace-detail-panel="raw" role="tabpanel"${defaultDetailTab === "raw" ? "" : " hidden"}><h4>原始内容</h4><pre>${escapeHtml(raw)}</pre></section>`;
   highlightTraceTimeline(record);
   document.querySelectorAll("#run-trace-content .trace-row.is-selected").forEach((row) => row.classList.remove("is-selected"));
   document.querySelector(`#run-trace-content [data-trace-item="${CSS.escape(key)}"]`)?.classList.add("is-selected");
@@ -242,14 +458,28 @@ function showTraceDetail(key) {
 
 function closeTraceDetail() {
   const panel = document.getElementById("run-trace-detail");
+  const layout = document.querySelector(".run-trace-body");
   if (panel) panel.hidden = true;
+  layout?.classList.remove("has-detail");
   document.querySelectorAll("#run-trace-content .trace-row.is-selected").forEach((row) => row.classList.remove("is-selected"));
   clearTraceTimelineHighlight();
+}
+
+function focusTraceModelCall(modelCallId) {
+  const id = String(modelCallId || '').trim();
+  if (!id) return;
+  const row = [...document.querySelectorAll('#run-trace-content .trace-row')]
+    .find((item) => String(item.dataset.traceRef || '').startsWith(`model:${id}:`));
+  if (!row) return toast('该模型调用已不在当前 Trace 留存范围内', 'error');
+  row.hidden = false;
+  row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  showTraceDetail(row.dataset.traceItem);
 }
 
 function bindLogs() {
   if (bound) return;
   bound = true;
+  bindTraceOverviewResizer();
   document.getElementById("log-type-filter").addEventListener("click", (event) => {
     const btn = event.target.closest("[data-log-type]");
     if (!btn) return;
@@ -297,12 +527,16 @@ function bindLogs() {
   const traceOverviewRoot = document.getElementById("run-trace-overview");
   traceOverviewRoot?.addEventListener("click", (event) => {
     const segment = event.target.closest("[data-trace-segment]");
-    if (segment) applyTraceSegmentFilter(segment);
+    if (segment) { applyTraceSegmentFilter(segment); return; }
     if (event.target.closest("[data-clear-trace-segment]")) clearTraceSegmentFilter();
+    const row = event.target.closest("[data-trace-waterfall-id]");
+    if (row) applyTraceWaterfallNodeFilter(row);
   });
   traceOverviewRoot?.addEventListener("keydown", (event) => {
     const segment = event.target.closest("[data-trace-segment]");
     if (segment && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); applyTraceSegmentFilter(segment); }
+    const row = event.target.closest("[data-trace-waterfall-id]");
+    if (row && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); applyTraceWaterfallNodeFilter(row); }
   });
   const traceContentRoot = document.getElementById("run-trace-content");
   traceContentRoot?.addEventListener("click", (event) => {
@@ -326,12 +560,20 @@ function bindLogs() {
       event.preventDefault(); showTraceDetail(event.target.closest("[data-trace-item]").dataset.traceItem);
     }
   });
+  document.getElementById("run-trace-input")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-focus-model-call]");
+    if (!button) return;
+    event.preventDefault();
+    focusTraceModelCall(button.dataset.focusModelCall);
+  });
   document.getElementById("run-trace-dialog")?.addEventListener("close", () => {
     tracePoller?.cancel();
     tracePoller = null;
     activeTraceId = "";
     traceFingerprint = "";
     traceRefreshInFlight = false;
+    traceWaterfallExpanded = new Set();
+    traceWaterfallFilterId = "";
     document.body.classList.remove("run-trace-open");
     document.getElementById("run-trace-actions")?.replaceChildren();
     closeTraceDetail();
@@ -394,6 +636,13 @@ function traceWaterfallEntries(trace, runs, replayFixture = null) {
     const parentId = run.parent_run_id || run.parentRunId ? runNodeId(run.parent_run_id || run.parentRunId) : (String(run.id) === String(rootRunId) ? "" : runNodeId(rootRunId));
     add({ id, parentId, depth: 0, kind: "system", lane: "system", marker: "SYS", traceRef: traceRecordRef("system-run", run, index), time: run.started_at || run.startedAt || "", endTime: run.finished_at || run.finishedAt || "", label: `运行 · ${run.entry_point || run.entryPoint || run.skill_id || run.skillId || run.id || "Workflow"}`, meta: `${run.stage_id || run.stageId || "job"} · ${run.status || "未知"}`, title: run.entry_point || run.entryPoint || run.skill_id || run.skillId || "运行" });
   });
+  [...(trace.sourceRuns || []), ...(trace.subscriptionRuns || [])].forEach((run, index) => {
+    const source = run.source || run.source_name || run.source_type || run.source_key || "采集来源";
+    const start = run.started_at || run.startedAt || "";
+    const end = run.ended_at || run.endedAt || "";
+    const status = run.status || "未知";
+    add({ id: `source:${run.id || index}:${source}`, parentId: runNodeId(run.root_run_id || run.rootRunId || rootRunId), depth: 0, kind: "context", lane: "source", marker: "SRC", traceRef: traceRecordRef("source", run, index), time: start, endTime: end, label: `${run.source_name ? "来源明细 · " : "采集 · "}${source}`, stage: run.stage_id || run.stageId || "collect", status, source: run.source_name ? "subscription_runs" : "source_runs", summary: `${run.item_count ?? 0} 条${run.error ? ` · ${run.error}` : ""}`, preview: run.error || run, raw: run, duration: start && end ? `${Math.max(0, traceDate(end) - traceDate(start))} ms` : "" });
+  });
   const modelNodes = (trace.modelCalls || []).map((call, index) => add({ id: `model:${traceRecordRef("model", call, index)}`, parentId: runNodeId(call.agent_run_id || call.agentRunId || call.run_id || call.runId) || runNodeId(nearestRun(call.created_at)?.id), depth: 0, kind: "model", lane: "model", marker: "LLM", traceRef: traceRecordRef("model", call, index), time: call.created_at || "", endTime: spanEnd({ time: call.created_at, latency_ms: call.latency_ms }), label: call.purpose || call.model || "模型调用", meta: `${call.provider || "模型"} · ${call.model || "—"} · ${call.status || "未知"}`, title: call.purpose || call.model || "模型调用" }));
   const toolNodes = traceToolEntries(trace).map((call) => add({ id: `tool:${call.traceRef}`, parentId: runNodeId(call.agent_run_id || call.agentRunId || call.run_id || call.runId) || runNodeId(nearestRun(call.time)?.id), depth: 0, kind: "tool", lane: "tool", marker: "TOOL", traceRef: call.traceRef, time: call.time, endTime: call.endTime, label: call.capability || "工具调用", meta: `${call.status || "未知"} · ${call.lifecycleCount || 0} 个生命周期事件`, title: call.capability || "工具调用" }));
   const modelForTime = (time) => modelNodes.filter((node) => {
@@ -428,9 +677,13 @@ function renderTraceOverview(trace, metrics, runs, replayFixture = null) {
   const markerClass = (kind) => kind === "model" ? "model" : kind === "tool" ? "tool" : kind === "checkpoint" ? "checkpoint" : kind === "prompt" || kind === "context" ? "prompt" : "system";
   const rows = entries.map((entry) => {
     const segment = traceSegment(entry.lane, entry.kind, entry.time, entry.endTime, bounds, entry.title, entry.traceRef, "run-trace-waterfall-segment");
-    return `<div class="run-trace-waterfall-row" style="--trace-depth:${entry.depth}" data-trace-waterfall-kind="${escapeHtml(entry.kind)}"><div class="run-trace-waterfall-label"><span class="trace-row-marker ${markerClass(entry.kind)}">${escapeHtml(entry.marker || "CTX")}</span><div><b>${escapeHtml(entry.label || "事件")}</b><small>${escapeHtml(entry.meta || "")}</small></div></div><div class="run-trace-waterfall-track">${segment}</div></div>`;
+    const hasChildren = entries.some((child) => child.parentId === entry.id);
+    const caret = `<span class="run-trace-waterfall-caret" aria-hidden="true">${hasChildren ? "▸" : "·"}</span>`;
+    return `<div class="run-trace-waterfall-row" role="button" tabindex="0" aria-label="${escapeHtml(hasChildren ? `展开并筛选 ${entry.label || "节点"}` : `筛选 ${entry.label || "节点"}`)}" style="--trace-depth:${entry.depth}" data-trace-waterfall-id="${escapeHtml(entry.id)}" data-trace-waterfall-parent="${escapeHtml(entry.parentId || "")}" data-trace-ref="${escapeHtml(entry.traceRef || "")}" data-trace-waterfall-kind="${escapeHtml(entry.kind)}"><div class="run-trace-waterfall-label">${caret}<span class="trace-row-marker ${markerClass(entry.kind)}">${escapeHtml(entry.marker || "CTX")}</span><div><b>${escapeHtml(entry.label || "事件")}</b><small>${escapeHtml(entry.meta || "")}</small></div></div><div class="run-trace-waterfall-track">${segment}</div></div>`;
   }).join("");
-  overview.innerHTML = `<div class="run-trace-waterfall-head"><span><b>CALL TREE</b><small>${entries.length} 个 span · 父子调用关系</small></span><span><b>WATERFALL</b><small>真实起止时间 · 可并行</small></span></div><div class="run-trace-waterfall-list">${rows || `<div class="run-trace-empty">暂无可视化链路</div>`}</div><div class="run-trace-overview-scale"><span>0 ms</span><span>${escapeHtml(String(metrics.durationMs ?? bounds.duration))} ms · ${escapeHtml(statusLabel)}</span></div><div class="run-trace-overview-legend"><span><i class="system"></i>运行/系统 ${runs.length}</span><span><i class="prompt"></i>输入 ${prompts.length}</span><span><i class="model"></i>模型 ${trace.modelCalls?.length || 0}</span><span><i class="tool"></i>工具 ${tools.length}</span><span><i class="checkpoint"></i>保存 ${trace.checkpoints?.length || 0}</span></div><div class="run-trace-segment-selection" id="run-trace-segment-selection" hidden><span><b>时间筛选</b><strong data-trace-selection-text></strong></span><button type="button" data-clear-trace-segment>清除筛选</button></div>`;
+  const sourceCount = (trace.sourceRuns?.length || 0) + (trace.subscriptionRuns?.length || 0);
+  overview.innerHTML = `<div class="run-trace-waterfall-head"><span><b>CALL TREE</b><small>${entries.length} 个 span · 父子调用关系</small></span><span><b>WATERFALL</b><small>真实起止时间 · 可并行</small></span></div><div class="run-trace-waterfall-list">${rows || `<div class="run-trace-empty">暂无可视化链路</div>`}</div><div class="run-trace-overview-scale"><span>0 ms</span><span>${escapeHtml(String(metrics.durationMs ?? bounds.duration))} ms · ${escapeHtml(statusLabel)}</span></div><div class="run-trace-overview-legend"><span><i class="system"></i>运行/系统 ${runs.length}</span><span><i class="prompt"></i>输入 ${prompts.length}</span><span><i class="model"></i>模型 ${trace.modelCalls?.length || 0}</span><span><i class="tool"></i>工具 ${tools.length}</span><span><i class="checkpoint"></i>保存 ${trace.checkpoints?.length || 0}</span><span><i class="prompt"></i>采集来源 ${sourceCount}</span></div><div class="run-trace-segment-selection" id="run-trace-segment-selection" hidden><span><b>时间筛选</b><strong data-trace-selection-text></strong></span><button type="button" data-clear-trace-segment>清除筛选</button></div>`;
+  syncTraceWaterfallRows();
 }
 
 function promptRowsFromTrace(trace, replayFixture) {
@@ -487,12 +740,18 @@ function buildTraceEventItems(trace) {
   return items;
 }
 
-function renderTraceTimeline(trace, replayFixture) {
+function renderTraceTimeline(trace, replayFixture, runInput) {
   const items = [];
   const add = (item) => items.push({ ...item, timeMs: traceDate(item.time), order: items.length });
-  (trace.runs || (trace.run ? [trace.run] : [])).forEach((run, index) => add({ kind: "system", marker: "SYS", label: `运行启动 · ${run.entry_point || run.entryPoint || run.skill_id || run.skillId || run.id || "Workflow"}`, stage: run.stage_id || run.stageId || "Workflow", status: run.status || "未知", source: "agent_runs", time: run.started_at || run.startedAt || "", endTime: run.finished_at || run.finishedAt || "", summary: `${run.status || "未知"}${run.finished_at ? ` · 结束于 ${traceTime(run.finished_at)}` : ""}`, preview: run.error || "运行阶段已记录", raw: run, duration: run.finished_at && run.started_at ? `${Math.max(0, new Date(run.finished_at) - new Date(run.started_at))} ms` : "", agentRunId: run.id, traceRef: traceRecordRef("system-run", run, index) }));
+  (trace.runs || (trace.run ? [trace.run] : [])).forEach((run, index) => { const input = inputForRun(run, runInput); add({ kind: "system", marker: "SYS", label: `运行启动 · ${run.entry_point || run.entryPoint || run.skill_id || run.skillId || run.id || "Workflow"}`, stage: run.stage_id || run.stageId || "Workflow", status: run.status || "未知", source: "agent_runs", time: run.started_at || run.startedAt || "", endTime: run.finished_at || run.finishedAt || "", summary: `${run.status || "未知"}${run.finished_at ? ` · 结束于 ${traceTime(run.finished_at)}` : ""}`, preview: run.error || "运行阶段已记录", raw: run, duration: run.finished_at && run.started_at ? `${Math.max(0, new Date(run.finished_at) - new Date(run.started_at))} ms` : "", agentRunId: run.id, traceRef: traceRecordRef("system-run", run, index), ...(input || {}) }); });
+  [...(trace.sourceRuns || []), ...(trace.subscriptionRuns || [])].forEach((run, index) => {
+    const source = run.source || run.source_name || run.source_type || run.source_key || "采集来源";
+    const start = run.started_at || run.startedAt || "";
+    const end = run.ended_at || run.endedAt || "";
+    add({ kind: "context", marker: "SRC", label: `${run.source_name ? "来源明细 · " : "采集 · "}${source}`, stage: run.stage_id || run.stageId || "collect", status: run.status || "未知", source: run.source_name ? "subscription_runs" : "source_runs", time: start, endTime: end, summary: `${run.item_count ?? 0} 条${run.error ? ` · ${run.error}` : ""}`, preview: run.error || run, raw: run, duration: start && end ? `${Math.max(0, traceDate(end) - traceDate(start))} ms` : "", traceRef: traceRecordRef("source", run, index) });
+  });
   buildTraceEventItems(trace).forEach((item) => add(item));
-  (trace.modelCalls || []).forEach((call, index) => add({ kind: "model", marker: "LLM", label: call.purpose || call.model || "模型调用", stage: call.stage_id || call.stageId || "", status: call.status || "未知", source: "model_calls", time: call.created_at || "", endTime: call.created_at && call.latency_ms != null ? new Date(new Date(call.created_at).getTime() + Number(call.latency_ms || 0)).toISOString() : "", summary: `${[call.provider, call.model].filter(Boolean).join(" · ") || "模型"} · ${call.latency_ms ?? 0} ms · prompt ${call.prompt_tokens ?? "—"} · completion ${call.completion_tokens ?? "—"}`, preview: call.error || call.output_text || call.reasoning_text || "模型调用已记录", raw: call, duration: call.latency_ms != null ? `${call.latency_ms} ms` : "", agentRunId: call.agent_run_id || call.agentRunId || "", round: call.agent_step ?? call.agentStep, traceRef: traceRecordRef("model", call, index) }));
+  (trace.modelCalls || []).forEach((call, index) => { const input = modelInputForCall(call, replayFixture, runInput); add({ kind: "model", marker: "LLM", label: call.purpose || call.model || "模型调用", stage: call.stage_id || call.stageId || "", status: call.status || "未知", source: "model_calls", time: call.created_at || "", endTime: call.created_at && call.latency_ms != null ? new Date(new Date(call.created_at).getTime() + Number(call.latency_ms || 0)).toISOString() : "", summary: `${[call.provider, call.model].filter(Boolean).join(" · ") || "模型"} · ${call.latency_ms ?? 0} ms · prompt ${call.prompt_tokens ?? "—"} · completion ${call.completion_tokens ?? "—"}`, preview: call.error || call.output_text || call.reasoning_text || "模型调用已记录", raw: call, duration: call.latency_ms != null ? `${call.latency_ms} ms` : "", agentRunId: call.agent_run_id || call.agentRunId || "", round: call.agent_step ?? call.agentStep, traceRef: traceRecordRef("model", call, index), ...(input || {}) }); });
   traceToolEntries(trace).forEach((call) => {
     const lifecycleText = call.lifecycleCount ? ` · ${call.lifecycleCount} 个生命周期事件` : "";
     add({ kind: "tool", marker: "TOOL", label: call.capability || "工具调用", stage: call.stage_id || call.stageId || "", status: call.status || "未知", source: "tool_call", time: call.time, endTime: call.endTime, summary: `${call.side_effect || call.sideEffect || "none"} · 复用策略 ${call.replay_policy || call.replayPolicy || "never"}${lifecycleText}`, preview: traceContent(call.result_summary || call.error_code || call.input_summary || "工具调用已记录"), raw: call, duration: call.time && call.endTime ? `${Math.max(0, traceDate(call.endTime) - traceDate(call.time))} ms` : (call.duration_ms != null ? `${call.duration_ms} ms` : ""), agentRunId: call.agent_run_id || call.agentRunId || "", round: call.agent_step ?? call.agentStep, traceRef: call.traceRef });
@@ -506,7 +765,23 @@ function renderTraceTimeline(trace, replayFixture) {
   return `<section class="run-trace-section trace-kind-context run-trace-timeline-section"><div class="run-trace-section-heading"><h3><i>FLOW</i> Workflow / Agent Run · 按时间排序的事件流 <small>${items.length} 条</small></h3><div class="run-trace-filters" role="toolbar" aria-label="事件流筛选">${filterItems.map(([value, label, count]) => `<button type="button" class="run-trace-filter${value === "all" ? " active" : ""}" data-trace-filter="${value}">${label} <small>${count}</small></button>`).join("")}</div></div><div class="run-trace-list">${rows || `<div class="run-trace-empty">暂无事件记录</div>`}</div></section>`;
 }
 
-function renderRunTrace(trace, metrics, rootRunId, replayFixture = null) {
+function renderRunInput(runInput, rootRunId) {
+  const panel = document.getElementById("run-trace-input");
+  if (!panel) return;
+  const data = runInput?.input || runInput || {};
+  const records = Array.isArray(data.records) ? data.records : [];
+  const stages = Array.isArray(data.stages) ? data.stages : [];
+  const downloadUrl = `/api/runs/${encodeURIComponent(rootRunId)}/input/download`;
+  if (!data.available || (!records.length && !stages.length)) {
+    panel.innerHTML = `<div class="run-trace-input-head"><span><b>RUN INPUT</b><small>业务输入</small></span></div><p class="run-trace-input-empty">${escapeHtml(data.message || "该运行未记录输入")}</p>`;
+    return;
+  }
+  const recordMarkup = records.map((record) => `<article class="run-trace-input-record"><div class="run-trace-input-record-head"><b>${escapeHtml(record.label || "运行输入")}</b><span>${escapeHtml(String(record.length ?? 0))} 字符${record.truncated ? " · 已截断" : ""}</span></div><pre>${escapeHtml(record.preview || "")}</pre></article>`).join("");
+  const stageMarkup = stages.length ? `<details class="run-trace-input-stages"><summary>阶段输入（${stages.length} 条）</summary>${stages.map((record) => { const stageId = String(record.stageId || ""); const stageDownload = `${downloadUrl}?stageId=${encodeURIComponent(stageId)}&attempt=${encodeURIComponent(String(record.attempt || 1))}`; const model = record.modelCall || null; const modelId = record.modelCallId ?? model?.id ?? null; const modelMeta = model ? `${model.provider || "模型"} · ${model.model || "—"} · prompt ${model.promptTokens ?? model.estimatedInputTokens ?? "—"} · completion ${model.completionTokens ?? "—"}` : (modelId ? `模型调用 #${modelId}` : "未关联模型调用"); const modelLink = modelId ? `<button type="button" class="run-trace-input-model-link" data-focus-model-call="${escapeHtml(String(modelId))}">查看模型调用</button>` : ""; return `<article class="run-trace-input-stage"><div><span><b>${escapeHtml(stageId || "阶段")}</b><span>Attempt ${escapeHtml(String(record.attempt || 1))} · ${escapeHtml(String(record.length ?? 0))} 字符${record.truncated ? " · 已截断" : ""}</span></span><span class="run-trace-input-stage-actions"><a class="run-trace-input-download" href="${stageDownload}" download>下载</a>${modelLink}</span></div><small class="run-trace-input-model-meta">${escapeHtml(modelMeta)}</small><pre>${escapeHtml(record.preview || "")}</pre></article>`; }).join("")}</details>` : "";
+  panel.innerHTML = `<div class="run-trace-input-head"><span><b>RUN INPUT</b><small>业务输入 · 页面按范围预览</small></span><a class="run-trace-input-download" href="${downloadUrl}" download>下载完整输入</a></div><div class="run-trace-input-records">${recordMarkup}</div>${stageMarkup}`;
+}
+
+function renderRunTrace(trace, metrics, rootRunId, replayFixture = null, runInput = null) {
   const summary = document.getElementById("run-trace-summary");
   const content = document.getElementById("run-trace-content");
   const runs = trace.runs || (trace.run ? [trace.run] : []);
@@ -520,14 +795,17 @@ function renderRunTrace(trace, metrics, rootRunId, replayFixture = null) {
     ["门禁失败", metrics.gateFailures ?? 0],
   ];
   summary.innerHTML = metricItems.map(([label, value]) => `<span><b>${escapeHtml(String(value))}</b><small>${escapeHtml(label)}</small></span>`).join("");
-  document.getElementById("run-trace-title").textContent = `运行详情 · ${rootRunId}`;
-  document.getElementById("run-trace-subtitle").textContent = "以调用树展示任务、输入、Model、Tool 与 Checkpoint；时间条保留真实起止与并行关系。";
-  content.innerHTML = renderTraceTimeline(trace, replayFixture);
+  const collectionTrace = runs.some((run) => run.entry_point === "collection" || run.entryPoint === "collection");
+  document.getElementById("run-trace-title").textContent = `${collectionTrace ? "采集 Workflow Trace" : "运行详情"} · ${rootRunId}`;
+  document.getElementById("run-trace-subtitle").textContent = collectionTrace ? "以调用树展示采集任务、来源执行、模型调用与质量过滤；时间条保留真实起止与并行关系。" : "以调用树展示任务、输入、Model、Tool 与 Checkpoint；时间条保留真实起止与并行关系。";
+  content.innerHTML = renderTraceTimeline(trace, replayFixture, runInput);
+  syncTraceWaterfallRows();
   const actions = document.getElementById("run-trace-actions");
   if (actions) {
-    const active = (trace.runs || []).some((run) => ["running", "testing"].includes(run.status));
-    const resumable = Boolean(trace.resumable);
-  const retryable = (trace.runs || []).some((run) => ["failed", "aborted", "interrupted", "limit"].includes(run.status));
+    const supportsActions = !collectionTrace;
+    const active = supportsActions && (trace.runs || []).some((run) => ["running", "testing"].includes(run.status));
+    const resumable = supportsActions && Boolean(trace.resumable);
+    const retryable = supportsActions && (trace.runs || []).some((run) => ["failed", "aborted", "interrupted", "limit"].includes(run.status));
     const actionsMarkup = `${active ? `<button type="button" class="ghost-button" data-run-action="cancel" data-run-id="${escapeHtml(rootRunId)}">取消运行</button>` : ""}${resumable ? `<button type="button" class="outline-button" data-run-action="resume" data-run-id="${escapeHtml(rootRunId)}">从 checkpoint 恢复</button>` : ""}${retryable ? `<button type="button" class="outline-button" data-run-action="retry" data-run-id="${escapeHtml(rootRunId)}">重试失败阶段</button>` : ""}`;
     actions.hidden = !actionsMarkup;
     actions.innerHTML = actionsMarkup ? `${actionsMarkup}<span class="run-trace-action-note">恢复和重试会再次校验能力、权限与快照。</span>` : "";
@@ -557,11 +835,11 @@ async function fetchTraceSnapshot(id, includeReplay = false) {
   const encoded = encodeURIComponent(id);
   const query = "?eventLimit=5000&modelCallLimit=2000&toolLimit=2000";
   const requestOptions = { cache: "no-store" };
-  const requests = [request(`/api/runs/${encoded}${query}`, requestOptions), request(`/api/runs/${encoded}/metrics`, requestOptions)];
+  const requests = [request(`/api/runs/${encoded}${query}`, requestOptions), request(`/api/runs/${encoded}/metrics`, requestOptions), request(`/api/runs/${encoded}/input`, requestOptions)];
   if (includeReplay) requests.push(request(`/api/runs/${encoded}/replay`, requestOptions));
   const results = await Promise.allSettled(requests);
   if (results[0].status === "rejected") throw results[0].reason;
-  return { trace: results[0].value, metrics: results[1].status === "fulfilled" ? results[1].value : {}, replayFixture: includeReplay && results[2]?.status === "fulfilled" ? results[2].value : null };
+  return { trace: results[0].value, metrics: results[1].status === "fulfilled" ? results[1].value : {}, runInput: results[2].status === "fulfilled" ? results[2].value : { input: { available: false, message: "运行输入加载失败" } }, replayFixture: includeReplay && results[3]?.status === "fulfilled" ? results[3].value : null };
 }
 
 async function refreshOpenRunTrace(id, { initial = false } = {}) {
@@ -582,7 +860,7 @@ async function refreshOpenRunTrace(id, { initial = false } = {}) {
   const followWaterfallTail = initial || shouldFollowScrollEnd(waterfallElement);
   traceFingerprint = nextFingerprint;
   if (initial && snapshot.replayFixture) traceReplayFixture = snapshot.replayFixture;
-  renderRunTrace(snapshot.trace, snapshot.metrics, id, traceReplayFixture);
+  renderRunTrace(snapshot.trace, snapshot.metrics, id, traceReplayFixture, snapshot.runInput);
   if (selectedRef && detailWasOpen) {
     const selected = [...document.querySelectorAll("#run-trace-content .trace-row")].find((row) => row.dataset.traceRef === selectedRef);
     if (selected) showTraceDetail(selected.dataset.traceItem);
@@ -628,11 +906,14 @@ async function openRunTrace(rootRunId) {
   activeTraceId = id;
   traceFingerprint = "";
   traceRefreshInFlight = false;
+  traceWaterfallExpanded = new Set();
+  traceWaterfallFilterId = "";
   const dialog = document.getElementById("run-trace-dialog");
   document.getElementById("run-trace-title").textContent = `运行详情 · ${id}`;
   document.getElementById("run-trace-subtitle").textContent = "正在加载持久化 Trace…";
   document.getElementById("run-trace-overview")?.replaceChildren();
   document.getElementById("run-trace-summary").replaceChildren();
+  document.getElementById("run-trace-input")?.replaceChildren();
   document.getElementById("run-trace-actions")?.replaceChildren();
   traceDetailRecords = new Map(); traceReplayFixture = null; closeTraceDetail();
   document.getElementById("run-trace-content").innerHTML = '<div class="empty-state">正在加载运行链路、提示词与执行记录…</div>';
@@ -702,7 +983,7 @@ function renderModelDetail(item, logKey) {
 
 async function loadLogs(logType) {
   const qs = logType ? `?type=${encodeURIComponent(logType)}&limit=${LOG_LIST_LIMIT}` : `?limit=${LOG_LIST_LIMIT}`;
-  const logs = (await request("/api/logs" + qs, { cache: "no-store" })).filter((item) => item.log_type !== "model");
+  const logs = await request("/api/logs" + qs, { cache: "no-store" });
   const filteredLogs = logs.filter((item) => {
     if (currentLogStatus && String(item.status || "") !== currentLogStatus) return false;
     if (!currentLogQuery) return true;
@@ -718,7 +999,7 @@ async function loadLogs(logType) {
           item.status === "completed" || item.status === "ok" || item.status === "success" ? "ok"
           : item.status === "failed" || item.status === "error" ? "bad"
           : item.status === "running" || item.status === "testing" ? "running" : "idle";
-        const tl = item.log_type === "ai" ? "AI" : item.log_type === "source" ? "采集" : item.log_type === "model" ? "模型" : item.log_type;
+        const tl = item.log_type === "collection" ? "采集任务" : item.log_type === "ai" ? "AI" : item.log_type === "source" ? "来源明细" : item.log_type === "model" ? "模型" : item.log_type;
         const message = item.message || "";
         // 超过 200 字符的消息截断展示，点击可展开完整内容
         const body = message.length > 200
@@ -726,7 +1007,7 @@ async function loadLogs(logType) {
           : `<span>${escapeHtml(message)}</span>`;
         const logKey = `${item.log_type}:${item.id}`;
         const providerDisplay=item.log_type === "model" ? (item.provider_display || [item.provider,item.model].filter(Boolean).join(" · ")) : item.provider;
-        const traceButton = item.root_run_id ? `<button type="button" class="inline-button log-trace-button" data-open-run-trace="${escapeHtml(item.root_run_id)}">查看 Run Trace</button>` : "";
+        const traceButton = item.root_run_id ? `<button type="button" class="inline-button log-trace-button" data-open-run-trace="${escapeHtml(item.root_run_id)}">${item.log_type === "collection" ? "查看采集 Workflow Trace" : "查看 Run Trace"}</button>` : "";
         return `<article class="log-entry ${sc}"><div class="log-head"><span class="log-type-badge">${tl}</span><time>${escapeHtml(ts)}</time>${item.batch_id ? `<span class="log-batch">${escapeHtml(item.batch_id)}</span>` : ""}<span class="log-status status-pill ${sc}">${escapeHtml(item.status)}</span></div><div class="log-body"><code>${escapeHtml(item.subtype || "")}</code>${body}</div>${providerDisplay ? `<div class="log-meta"><span>${item.log_type === "model" ? "供应商 / 模型" : "服务商"}：${escapeHtml(providerDisplay)}</span></div>` : ""}${traceButton ? `<div class="log-actions">${traceButton}</div>` : ""}${item.log_type === "model" ? renderModelDetail(item, logKey) : ""}</article>`;
       }).join("")
     : `<div class="empty-state">${logs.length ? "没有符合当前筛选条件的日志。" : "暂无日志记录。"}</div>`;

@@ -65,7 +65,11 @@ export class AgentRunRepository{
     const linkedArtifacts = this.db.prepare(`SELECT ${artifactColumns} FROM artifacts WHERE ${runArtifactWhere.join(' OR ')} ORDER BY modified_at DESC,id DESC LIMIT ?`).all(...runArtifactValues, Math.min(2000, Math.max(1, Number(eventLimit) || 1000)));
     const knownArtifactIds = new Set(artifacts.map((item) => item.id));
     for (const artifact of linkedArtifacts) if (!knownArtifactIds.has(artifact.id)) artifacts.push(artifact);
-    return { schemaVersion: 2, rootRunId: String(rootRunId), runs, events, steps, modelCalls, toolCalls, toolExecutions, checkpoints, artifacts,
+    const sourceRuns = this.db.prepare(`SELECT * FROM source_runs
+      WHERE root_run_id=? OR workflow_run_id=? ORDER BY started_at,id`).all(String(rootRunId), String(rootRunId));
+    const subscriptionRuns = this.db.prepare(`SELECT * FROM subscription_runs
+      WHERE root_run_id=? OR workflow_run_id=? ORDER BY started_at,id`).all(String(rootRunId), String(rootRunId));
+    return { schemaVersion: 3, rootRunId: String(rootRunId), runs, events, steps, modelCalls, toolCalls, toolExecutions, checkpoints, artifacts, sourceRuns, subscriptionRuns,
       resumable: runs.some((run) => run.status !== 'completed' && checkpoints.some((checkpoint) => checkpoint.agent_run_id === run.id && checkpoint.state?.resumable)) };
   }
   claimResume(agentRunId, claimToken, leaseMs=120000){

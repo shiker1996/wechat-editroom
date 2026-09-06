@@ -200,8 +200,8 @@ export class Store {
     return this.repositories.batches.delete(id);
   }
 
-  startSourceRun(batchId, source) {
-    return this.repositories.sourceRuns.start(batchId, source);
+  startSourceRun(batchId, source, traceContext = {}) {
+    return this.repositories.sourceRuns.start(batchId, source, traceContext);
   }
 
   finishSourceRun(id, status, itemCount = 0, error = null) {

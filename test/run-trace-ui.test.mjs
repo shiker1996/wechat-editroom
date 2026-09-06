@@ -7,7 +7,9 @@ const read = (path) => fs.readFileSync(new URL(`../${path}`, import.meta.url), '
 test('日志页面提供 Run Trace 入口并消费聚合指标', () => {
   const html = read('public/index.html');
   const ui = read('public/src/views/logs.js');
+  const styles = read('public/assets/styles/topics.css');
   assert.match(html, /id="run-trace-dialog"/);
+  assert.match(html, /data-log-type="collection"[^>]*>采集任务/);
   assert.match(ui, /data-open-run-trace/);
   assert.match(ui, /\/api\/runs\/\$\{encoded\}/);
   assert.match(ui, /\/metrics/);
@@ -33,6 +35,30 @@ test('日志页面提供 Run Trace 入口并消费聚合指标', () => {
   assert.match(ui, /data-run-action="cancel"/);
   assert.match(ui, /newRootRunId/);
   assert.match(ui, /正在打开新的 Run Trace/);
+  assert.match(ui, /采集 Workflow Trace/);
+  assert.match(ui, /const supportsActions = !collectionTrace/);
+  assert.match(ui, /sourceRuns/);
+  assert.match(html, /id="run-trace-resizer"[^>]*role="separator"/);
+  assert.match(ui, /bindTraceOverviewResizer/);
+  assert.match(ui, /layout\?\.classList\.add\("has-detail"\)/);
+  assert.match(ui, /layout\?\.classList\.remove\("has-detail"\)/);
+  assert.match(ui, /applyTraceWaterfallNodeFilter/);
+  assert.match(ui, /traceWaterfallExpanded/);
+  assert.match(ui, /data-trace-waterfall-id/);
+  assert.match(ui, /当前节点及子节点日志/);
+  assert.match(ui, /data-focus-model-call/);
+  assert.match(ui, /focusTraceModelCall/);
+  assert.match(ui, /modelCallId/);
+  assert.match(ui, /modelInputForCall/);
+  assert.match(ui, /run-trace-detail-input/);
+  assert.match(ui, /detailTabButton\("input", "输入"\)/);
+  assert.match(styles, /\.run-trace-section-heading\{[^}]*position:sticky/);
+  assert.match(ui, /Model Prompt 输入/);
+  assert.match(ui, /row\.hidden = !visible;/);
+  assert.doesNotMatch(ui, /row\.hidden = !visible \|\| !inFilter/);
+  assert.match(html, /id="run-trace-resizer"[^>]*aria-valuemin="0"/);
+  assert.match(styles, /\.run-trace-overview\{[^}]*min-height:0/);
+  assert.match(styles, /\.run-trace-body:not\(\.has-detail\) \.run-trace-content\{[^}]*overflow:auto/);
 });
 
 test('技能运行历史共享 Run Trace 详情入口', () => {
@@ -45,6 +71,7 @@ test('统一日志查询返回 Run Trace 关联字段', () => {
   const query = read('server/platform/persistence/queries/workbench-query-service.mjs');
   assert.match(query, /root_run_id, workflow_run_id, agent_run_id, stage_id/);
   assert.match(query, /LEFT JOIN agent_runs ar/);
+  assert.match(query, /entry_point='collection'/);
 });
 
 test('P1 Run Trace 暴露独立子资源和 Artifact 聚合', () => {
@@ -64,15 +91,15 @@ test('日志治理提供可配置留存和立即清理入口', () => {
   assert.match(routes, /pathname === '\/api\/system\/log-governance'/);
 });
 
-test('模型调用集中在模型运行页面', () => {
+test('模型调用可在任务日志和模型运行页面查看', () => {
   const html = read('public/index.html');
   const logs = read('public/src/views/logs.js');
   const models = read('public/src/views/models.js');
   const routes = read('server/platform/http/routes/model-routes.mjs');
   assert.match(html, /id="model-call-query"/);
   assert.match(html, /id="model-call-status"/);
-  assert.doesNotMatch(html, /data-log-type="model"/);
-  assert.match(logs, /filter\(\(item\) => item\.log_type !== "model"\)/);
+  assert.match(html, /data-log-type="model"[^>]*>模型调用/);
+  assert.doesNotMatch(logs, /filter\(\(item\) => item\.log_type !== "model"\)/);
   assert.match(models, /modelCallDetails/);
   assert.match(models, /model-call-refresh/);
   assert.doesNotMatch(models, /Run Trace/);

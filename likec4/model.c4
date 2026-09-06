@@ -1,0 +1,268 @@
+model {
+  // ============ Actors ============
+  user = person "编辑 (Editor)" {
+    description "微信公众号内容创作者，使用系统进行选题、写作、发布"
+  }
+
+  // ============ Frontend ============
+  frontend = system "前端 SPA" {
+    description "单页应用前端，所有视图内嵌于单个 index.html"
+    shell = container "SPA Shell (index.html)" {
+      #core
+      description "导航侧栏、19+ 视图区域、模态框、Toast"
+    }
+    router = container "main.js (路由器)" {
+      #core
+      description "Hash 路由分发、视图懒加载、批量切换"
+    }
+    core = container "core/ (基础模块)" {
+      #core
+      description "state.js / http.js / dom.js / ui.js / stream-chat.js"
+      httpClient = component "http.js" { description "Fetch 封装 + CSRF、NDJSON 流消费" }
+    }
+    viewModules = container "views/ (视图模块)" {
+      #feature
+      description "按需懒加载的视图模块"
+      logsView = component "logs.js" { description "任务日志 + Run Trace 弹窗" }
+    }
+  }
+
+  // ============ HTTP Layer ============
+  httpLayer = system "HTTP 服务层" {
+    #core
+    description "Node.js 原生 HTTP 服务器 + 顺序链式路由分发"
+    server = container "server.mjs" {
+      #core
+      description "装配 Store / ModelGateway / JobManager / Harness 单例，分发请求，静态资源"
+    }
+    routes = container "routes/ (11 个路由模块)" {
+      #feature
+      description "模型/内容/系统/媒体/文章/社交卡/批次/候选/任务/运行 Trace"
+      taskRoutes = component "task-routes.mjs" { description "AI Job 状态、运行日志" }
+      traceRoutes = component "system-routes.mjs" { description "含 /api/runs/:rootRunId Trace 聚合" }
+    }
+    security = container "local-security.mjs" { description "CSRF 令牌、确认头、请求边界校验" }
+  }
+
+  // ============ Agent Harness ============
+  harness = system "Agent Harness" {
+    #harness
+    description "统一 Agent 运行内核：run 生命周期、技能、工具、权限、恢复与评测"
+    facade = component "runSkill Facade" {
+      #harness
+      description "统一运行入口 runSkill(): 技能/入口校验、能力预检、授权交集、快照注入"
+    }
+    engine = component "Agent Run Engine" {
+      #harness
+      description "conversation-agent.mjs：模型循环、思考/工具事件、并行与重复限制、预算"
+    }
+    broker = component "Tool Broker" {
+      #harness
+      description "统一工具执行：Scope/Schema/权限/确认/幂等/超时/provenance 审计"
+    }
+    runPrep = component "Run Preparation" {
+      #harness
+      description "快照冻结、模型绑定（bindAgentGateway）、历史版本校验"
+    }
+    contracts = component "Contracts / Event Protocol" {
+      #harness
+      description "版本化错误码、NDJSON 事件（tool.* / assistant.* / done / error）、预算默认值"
+    }
+    replay = component "Replay / Eval" {
+      #harness
+      description "固定模型响应回放、工具结果摘要、两次 Run 对比评测"
+    }
+    runControl = component "Run Control" {
+      #harness
+      description "取消、恢复（resumeFrom）、checkpoint 租约、幂等结果复用"
+    }
+  }
+
+  // ============ Skill Runtime ============
+  skills = container "技能运行时" {
+    #harness
+    description "Skill 从 Prompt 文件升级为带契约的可运行定义"
+    resolver = component "Skill Resolver" { description "resolveSkillRuntime：manifest 解析 + runtimeKind" }
+    runtimeDef = component "Runtime Definition" { description "SKILL_RUN_KINDS：prompt-skill / stage-skill / agent-skill" }
+    gates = component "Gates" { description "输入/输出门禁执行，业务门禁注入" }
+    registry = component "Registry" { description "内置+已安装技能合并、createGenerationSnapshot" }
+    entryRouting = component "Entry Routing" { description "入口契约（hotspot-article 等）与阶段槽位路由" }
+    pipelineRuntime = component "Pipeline Runtime" { description "工具白名单 ∩ 注册中心能力、快照复跑" }
+  }
+
+  // ============ LLM Gateway ============
+  llm = container "LLM 网关" {
+    #core
+    description "OpenAI 兼容客户端与模型基础设施"
+    gateway = component "gateway.mjs" { description "complete() / streamComplete()、审计 model_calls" }
+    contextManager = component "context-manager.mjs" { description "CJK 加权 token 估算、上下文压缩" }
+    stageRouting = component "stage-model-routing.mjs" { description "阶段模型路由与快照" }
+    skillRuntime = component "skill-runtime.mjs" { description "技能 bundle 拼接 + 安全门禁段" }
+  }
+
+  // ============ Tools / Capabilities ============
+  tools = container "工具注册中心" {
+    #core
+    description "插件解析、能力实现、fallback 与执行日志"
+    registry = component "registry.mjs" { description "resolve(capability) 按优先级选实现" }
+    policy = component "policy.mjs" { description "能力白名单、external-write 授权、路径防穿越" }
+    packageManager = component "package-manager.mjs" { description "插件安装/更新/回滚" }
+  }
+
+  // ============ Persistence ============
+  persistence = container "持久化层" {
+    #core
+    description "SQLite 连接、迁移、按领域拆分的数据仓储与跨领域只读 Query Service"
+    database = component "database.mjs" { description "SQLite 连接管理（WAL 模式）" }
+    repos = component "23 Repositories" { description "每个领域实体一个 Repository" }
+    queries = component "4 QueryServices" { description "复杂读取模型" }
+    runStore = component "Run Store (v43)" {
+      #harness
+      description "agent_runs / agent_run_events / agent_steps / agent_checkpoints / agent_resume_claims / agent_tool_idempotency"
+    }
+  }
+
+  // ============ Jobs ============
+  jobs = container "任务调度" {
+    #core
+    description "采集任务与 AI 任务调度"
+    jobManager = component "job-manager.mjs" { description "非 AI 采集任务，按批次防重" }
+    aiJobManager = component "ai-job-manager.mjs" { description "AI 任务排队、并发上限、批次互斥" }
+    autoPipeline = component "auto-pipeline.mjs" { description "打标→事件卡→研判 复合流程" }
+  }
+
+  // ============ Feature Layer (DDD) ============
+  features = system "业务特性层 (DDD)" {
+    #feature
+    description "确定性 Workflow + 薄 Agent Adapter，领域门禁留在业务层"
+    collection = container "信息采集" {
+      #feature
+      description "RSS / Reddit / GitHub / 网页采集"
+    }
+    research = container "热点研究" {
+      #feature
+      description "AI 打标、事件聚类、热度排序、专家研判"
+    }
+    articles = container "稿件生产" {
+      #feature
+      description "编辑会(agent-skill)、成稿 Pipeline(stage-skill)、排版、封面"
+      adapter = component "editorial adapter" { description "业务上下文、状态更新、结果解释" }
+    }
+    socialCards = container "社交卡片" {
+      #feature
+      description "卡片编辑、故事板、渲染与 AI 视觉"
+    }
+    batches = container "批次管线" {
+      #feature
+      description "采集→打标→研究→撰稿，batch-job 根 Run 生命周期"
+    }
+    contentPlanning = container "内容规划" {
+      #feature
+      description "内容日历、微信审校、反馈闭环"
+    }
+  }
+
+  // ============ Shared Domain ============
+  shared = system "共享领域层" {
+    rendering = container "渲染引擎" { description "Markdown/HTML 纯函数渲染" }
+    themes = container "主题系统" { description "文章/封面/图文主题编译器" }
+  }
+
+  // ============ Storage ============
+  sqlite = storage "SQLite 数据库" {
+    #core
+    description "data/workbench.db (WAL)，Run/Step/Checkpoint/幂等存于 v43 schema"
+  }
+
+  // ============ Plugin System ============
+  plugins = system "插件/技能包" {
+    description "内置与已安装的扩展"
+    toolPlugins = container "工具插件" { description "url-fetch、tavily-search、mermaid-render 等" }
+    skillPackages = container "技能包" { description "writing / editorial / visualization 技能" }
+  }
+
+  // ============ External ============
+  llmProvider = system "LLM 提供商" { #external description "OpenAI 兼容 API（DeepSeek / MiniMax / Kimi）" }
+  externalSources = system "外部数据源" { #external description "RSS / Reddit / GitHub / 网页" }
+
+  // ======================================================================
+  // Relationships
+  // ======================================================================
+
+  // 用户 → 前端
+  user -> frontend.shell "浏览与操作"
+  user -> frontend.viewModules "触发操作"
+
+  // 前端内部
+  frontend.shell -> frontend.router "导航事件"
+  frontend.router -> frontend.viewModules "懒加载视图"
+  frontend.viewModules -> frontend.core.httpClient "发起 HTTP 请求"
+  frontend.core.httpClient -> httpLayer.server "HTTP /api/*" { technology "JSON + NDJSON + CSRF" }
+
+  // HTTP 分发
+  httpLayer.server -> httpLayer.routes "按 pathname 分发"
+  httpLayer.routes -> features.articles.adapter "编辑会/成稿请求"
+  httpLayer.routes -> features.batches "批次与流水线请求"
+  httpLayer.routes -> persistence.runStore "Run Trace 聚合查询"
+
+  // 特性层 → Harness（核心：薄 Adapter 调用统一入口）
+  features.articles.adapter -[sync]-> harness.facade "runSkill(skillId, input)"
+  features.socialCards -[sync]-> harness.facade "runSkill(stage/agent)"
+  features.batches -[async]-> harness.facade "阶段技能运行"
+  features.articles.adapter -[sync]-> skills.resolver "解析技能定义"
+
+  // Harness 内部
+  harness.facade -> harness.engine "agent-skill → runConversationAgent"
+  harness.facade -> skills.resolver "解析并加载 Skill"
+  harness.facade -> skills.gates "输入门禁"
+  harness.facade -> harness.runPrep "快照冻结/bindGateway"
+  harness.engine -> harness.broker "提交 tool_call"
+  harness.engine -> harness.contracts "事件/错误/预算契约"
+  harness.engine -> harness.runControl "取消/恢复/租约"
+  harness.broker -> tools.registry "校验授权并执行能力"
+  harness.broker -> tools.policy "外部写入/路径策略"
+  harness.runPrep -[data]-> persistence.runStore "保存 Agent Run / Snapshot"
+  harness.engine -[data]-> persistence.runStore "Step / Event / Checkpoint 持久化"
+  harness.replay -[data]-> persistence.runStore "读取历史 Run 对比"
+  harness.engine -> llm.gateway "模型步骤"
+
+  // 技能运行时
+  skills.resolver -> skills.runtimeDef "读取运行类型"
+  skills.registry -> skills.pipelineRuntime "能力交集、快照复跑"
+  skills.pipelineRuntime -> tools.registry "白名单 ∩ 能力"
+  skills.entryRouting -> skills.registry "入口契约路由"
+
+  // 阶段技能：Workflow 直接经 Harness 执行确定性阶段
+  features.articles -[sync]-> skills.pipelineRuntime "stage-skill 阶段执行"
+  features.socialCards -[sync]-> skills.pipelineRuntime "stage-skill 阶段执行"
+
+  // LLM
+  llm.gateway -> llm.contextManager "压缩上下文"
+  llm.gateway -> llm.stageRouting "阶段模型解析"
+  llm.gateway -[async]-> llmProvider "API 调用" { technology "HTTPS/OpenAI" }
+  llm.skillRuntime -> skills.registry "读取训练技能 bundle"
+
+  // 持久化 & 存储
+  features.collection -[sync]-> persistence.repos "读写采集数据"
+  features.research -[data]-> persistence.queries "复杂分析查询"
+  persistence.database -[data]-> sqlite "读/写" { technology "SQLite (WAL)" }
+  persistence.runStore -[data]-> persistence.database "Run 相关表存取"
+
+  // 任务调度
+  features.batches -[async]-> jobs.aiJobManager "提交 AI 任务"
+  features.collection -[async]-> jobs.jobManager "提交采集任务"
+  features.batches -[async]-> jobs.autoPipeline "触发复合流水线"
+
+  // 采集外部源
+  features.collection -[async]-> externalSources "抓取 RSS / Reddit / GitHub"
+
+  // 共享层
+  features.articles -> shared.rendering "排版 / 预览"
+  features.articles -> shared.themes "应用主题"
+  features.socialCards -> shared.rendering "卡片渲染"
+  features.socialCards -> shared.themes "社交主题编译"
+
+  // 插件系统
+  plugins.toolPlugins -> tools.registry "注册工具实现"
+  plugins.skillPackages -> skills.registry "注册技能包"
+}
