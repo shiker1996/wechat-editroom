@@ -20,7 +20,8 @@ test('技能与工具页展示工具健康状态',()=>{
 });
 
 test('内置技能详情直接只读展示 SKILL.md',()=>{
-  assert.match(html,/BUILT-IN SKILL · READ ONLY/);
+  assert.match(html,/id="skill-config-kicker"/);
+  assert.match(skills,/data\.thirdParty \? "INSTALLED SKILL" : "BUILT-IN SKILL"/);
   assert.match(html,/id="skill-markdown-view"/);
   assert.match(html,/id="skill-source-path"/);
   assert.match(html,/id="skill-prompt-hash"/);

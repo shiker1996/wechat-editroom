@@ -12,7 +12,7 @@ import { buildContentFeedbackSnapshot, extractArticleContentFeatures } from '../
 import { buildSocialContentFeedbackSnapshot } from '../../../features/content-planning/social-content-feedback.mjs';
 import { buildContentPlanningRecommendation, sortMaterialsByPlanningRecommendation } from '../../../features/content-planning/content-planning-recommendations.mjs';
 import { buildWechatStrategyRecommendations } from '../../../features/content-planning/wechat-strategy-recommendations.mjs';
-import { buildAdjustmentDraft, buildFeedbackAdjustmentMessages, buildFeedbackAdjustmentPatchMessages, confirmAdjustmentDraft, currentSkillFile, currentSkillPackageFiles, FEEDBACK_ADJUSTMENT_VERSION, listWriterSkillCatalog, resolveTitleSkillTarget, WRITER_SKILL_IDS, WRITER_SKILL_LABELS } from '../../../features/content-planning/feedback-adjustment.mjs';
+import { buildAdjustmentDraft, buildFeedbackAdjustmentMessages, buildFeedbackAdjustmentPatchMessages, confirmAdjustmentDraft, currentSkillFile, currentSkillPackageFiles, FEEDBACK_ADJUSTMENT_VERSION, listWriterSkillCatalog, resolveTitleSkillTarget, resolveWriterSkillTarget } from '../../../features/content-planning/feedback-adjustment.mjs';
 import { buildSocialFeedbackAdjustmentDraft, buildSocialFeedbackAdjustmentPatchMessages, buildSocialFeedbackAdjustmentPlanningMessages, resolveSocialSkillTargets } from '../../../features/content-planning/social-feedback-adjustment.mjs';
 import { parseModelJson } from '../../llm/model-json.mjs';
 import { materialBriefReadiness } from '../../../features/content-planning/material-brief-service.mjs';
@@ -316,7 +316,7 @@ const planMatch = pathname.match(/^\/api\/writing-material-plans\/(\d+)$/);
     json(response, 200, buildWechatStrategyRecommendations({ snapshots: store.listContentFeedbackSnapshots({ limit: 100 }), columnPerformance: store.listColumnPerformance(), review, accountContext: getAccountContext({ workspaceRoot: root }) })); return true;
   }
   if (request.method === 'GET' && pathname === '/api/wechat/feedback/adjustments') {
-    json(response, 200, { version: FEEDBACK_ADJUSTMENT_VERSION, items: store.listContentFeedbackAdjustmentDrafts({ limit: boundedLimit(searchParams, 20, 100) }), writerSkills: WRITER_SKILL_IDS.map((id) => ({ id, label: WRITER_SKILL_LABELS[id] || id })) }); return true;
+    json(response, 200, { version: FEEDBACK_ADJUSTMENT_VERSION, items: store.listContentFeedbackAdjustmentDrafts({ limit: boundedLimit(searchParams, 20, 100) }), writerSkills: listWriterSkillCatalog({ workspaceRoot: root }).map(({ id, label }) => ({ id, label })) }); return true;
   }
   if (request.method === 'POST' && pathname === '/api/wechat/feedback/adjustments/generate') {
     const streamProgress = typeof response?.writeHead === 'function' && typeof response?.write === 'function' && typeof response?.end === 'function';
@@ -377,20 +377,22 @@ const planMatch = pathname.match(/^\/api\/writing-material-plans\/(\d+)$/);
         else json(response, 201, saved);
         return true;
       }
-      const writerSkillHint = WRITER_SKILL_IDS.includes(String(input.writerSkillId || '')) ? String(input.writerSkillId) : '';
-      const read = (filePath) => filePath && fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : '';
       const writerSkillCatalog = listWriterSkillCatalog({ workspaceRoot: root });
+      const availableWriterSkillIds = new Set(writerSkillCatalog.map((item) => item.id));
+      const writerSkillTarget = resolveWriterSkillTarget({ workspaceRoot: root, entryPoint: 'hotspot-article' });
+      const writerSkillHint = availableWriterSkillIds.has(String(input.writerSkillId || '')) ? String(input.writerSkillId) : '';
+      const read = (filePath) => filePath && fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : '';
       const accountContext = getAccountContext({ workspaceRoot: root, refresh: true });
       const strategy = buildWechatStrategyRecommendations({ snapshots: store.listContentFeedbackSnapshots({ limit: 100 }), columnPerformance: store.listColumnPerformance(), review: enrichWechatReview(store.getWechatReview()), accountContext });
       emitProgress({ type: 'progress', stage: 'planning', message: '第一阶段：AI 正在判断调整目标（thinking）…' });
-      const planningMessages = buildFeedbackAdjustmentMessages({ feedback, strategy, accountContext, titleSkillId: titleSkillTarget.skillId, titleSkillEvidence: titleSkillTarget.evidence, writerSkillId: writerSkillHint, writerSkillCatalog });
+      const planningMessages = buildFeedbackAdjustmentMessages({ feedback, strategy, accountContext, titleSkillId: titleSkillTarget.skillId, titleSkillEvidence: titleSkillTarget.evidence, writerSkillId: writerSkillHint, currentWriterSkillId: writerSkillTarget.skillId, writerSkillCatalog });
       const planningResult = await harness.gateway.complete({ provider: input.provider, purpose: 'content-feedback-adjustment-plan', jsonMode: true, thinking: true, maxOutputTokens: 5000, messages: [{ role: 'system', protected: true, content: planningMessages.system }, { role: 'user', protected: true, content: planningMessages.user }] });
       const planning = parseModelJson(planningResult, { store, label: '复盘调整目标判断' });
       const planningWriterSkillId = String(planning.selected_writer_skill_id || '');
       const hasInferenceEvidence = Number(feedback.linked_article_count || 0) >= 3 && Array.isArray(feedback.body_signals) && feedback.body_signals.length > 0;
-      const selectedWriterSkillId = WRITER_SKILL_IDS.includes(planningWriterSkillId)
-        && ((feedback.writer_skill_evidence || []).some((item) => String(item?.skill_id || '') === planningWriterSkillId && Number(item?.sample_count || 0) >= 3) || hasInferenceEvidence)
-        ? planningWriterSkillId : '';
+      const selectedWriterSkillId = writerSkillTarget.skillId || (availableWriterSkillIds.has(planningWriterSkillId)
+        && ((writerSkillTarget.skillId === planningWriterSkillId) || (feedback.writer_skill_evidence || []).some((item) => String(item?.skill_id || '') === planningWriterSkillId && Number(item?.sample_count || 0) >= 3) || hasInferenceEvidence)
+        ? planningWriterSkillId : '');
       const resolvedTitlePath = currentSkillFile(root, titleSkillTarget.skillId);
       const writerPath = selectedWriterSkillId ? (writerSkillCatalog.find((item) => item.id === selectedWriterSkillId)?.sourcePath || '') : '';
       emitProgress({ type: 'progress', stage: 'patch', message: '第二阶段：AI 正在生成原有规则的精确 diff（thinking）…' });
@@ -398,7 +400,7 @@ const planMatch = pathname.match(/^\/api\/writing-material-plans\/(\d+)$/);
       const patchResult = await harness.gateway.complete({ provider: input.provider, purpose: 'content-feedback-adjustment-patch', jsonMode: true, thinking: true, maxOutputTokens: 8000, messages: [{ role: 'system', protected: true, content: patchMessages.system }, { role: 'user', protected: true, content: patchMessages.user }] });
       const patchOutput = parseModelJson(patchResult, { store, label: '复盘调整精确修改' });
       emitProgress({ type: 'progress', stage: 'validate', message: '正在校验原文定位并保存草案…' });
-      const draft = buildAdjustmentDraft({ workspaceRoot: root, feedback, strategy, accountContext, modelResult: { planning, patch: patchOutput }, titleSkillId: titleSkillTarget.skillId, titleSkillEvidence: titleSkillTarget.evidence, writerSkillId: writerSkillHint, provider: patchResult.provider || planningResult.provider || input.provider || '', model: patchResult.model || planningResult.model || '' });
+      const draft = buildAdjustmentDraft({ workspaceRoot: root, feedback, strategy, accountContext, modelResult: { planning, patch: patchOutput }, titleSkillId: titleSkillTarget.skillId, titleSkillEvidence: titleSkillTarget.evidence, titleSkillSelectionSource: titleSkillTarget.source, currentWriterSkillId: writerSkillTarget.skillId, writerSkillId: writerSkillHint, provider: patchResult.provider || planningResult.provider || input.provider || '', model: patchResult.model || planningResult.model || '' });
       if (!draft.changes.length) {
         const result = { ...draft, status: 'no_change', saved: false, message: '未发现可安全融合到现有配置或技能的规则修改，不创建草案。' };
         harness.finish('completed'); if (streamProgress) { emitProgress({ type: 'complete', stage: 'complete', message: result.message, draft: result }); response.end(); }

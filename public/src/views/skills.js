@@ -751,6 +751,7 @@ async function openSkillConfig(id) {
   document.getElementById("skill-detail-empty").hidden = true;
   document.getElementById("skill-config-editor").hidden = false;
   document.getElementById("skill-config-title").textContent = data.name || id;
+  document.getElementById("skill-config-kicker").textContent = `${data.thirdParty ? "INSTALLED SKILL" : "BUILT-IN SKILL"} · READ ONLY`;
   document.getElementById("skill-config-meta").textContent = `${id} · v${data.version} · ${data.fileCount} 个规则文件${data.configured ? " · 存在历史覆盖配置" : ""}`;
   const packageActions = document.getElementById("skill-package-actions");
   packageActions.hidden = !data.thirdParty;

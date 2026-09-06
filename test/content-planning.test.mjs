@@ -10,7 +10,7 @@ import { buildContentFeedbackSnapshot, buildContentFeedbackPromptContext, extrac
 import { buildSocialContentFeedbackSnapshot, extractSocialContentFeatures } from '../server/features/content-planning/social-content-feedback.mjs';
 import { buildContentPlanningRecommendation, sortMaterialsByPlanningRecommendation } from '../server/features/content-planning/content-planning-recommendations.mjs';
 import { buildWechatStrategyRecommendations } from '../server/features/content-planning/wechat-strategy-recommendations.mjs';
-import { buildAdjustmentDraft, buildFeedbackAdjustmentMessages, buildFeedbackAdjustmentPatchMessages, confirmAdjustmentDraft, currentSkillFile, resolveTitleSkillTarget } from '../server/features/content-planning/feedback-adjustment.mjs';
+import { buildAdjustmentDraft, buildFeedbackAdjustmentMessages, buildFeedbackAdjustmentPatchMessages, confirmAdjustmentDraft, currentSkillFile, listWriterSkillCatalog, resolveTitleSkillTarget, resolveWriterSkillTarget } from '../server/features/content-planning/feedback-adjustment.mjs';
 import { buildSocialFeedbackAdjustmentDraft, buildSocialFeedbackAdjustmentPatchMessages, buildSocialFeedbackAdjustmentPlanningMessages, resolveSocialSkillTargets } from '../server/features/content-planning/social-feedback-adjustment.mjs';
 import { loadSkillBundle } from '../server/platform/llm/skill-runtime.mjs';
 import { handleContentRoutes } from '../server/platform/http/routes/content-routes.mjs';
@@ -166,7 +166,7 @@ test('反馈快照注入上下文只作为不可信参考，按标题和写作�
   assert.match(writing, /有真实证据资产/); assert.match(writing, /补充失败边界/); assert.doesNotMatch(writing, /结果 \/ 数字承诺/);
 });
 
-test('反哺优先按文章 manifest 识别实际标题技能，并支持已安装技能覆盖', () => {
+test('反哺使用当前阶段默认标题技能，历史 manifest 只作为证据', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'content-feedback-title-target-'));
   try {
     const artifactDir = path.join(root, 'articles', 'sample');
@@ -181,9 +181,66 @@ test('反哺优先按文章 manifest 识别实际标题技能，并支持已安�
     fs.writeFileSync(path.join(root, 'writing-skills', 'hot-title-generator', 'SKILL.md'), '# 覆盖版标题技能\n');
     const target = resolveTitleSkillTarget({ workspaceRoot: root, analyses: [{ metric_id: 7, file_path: path.join(artifactDir, '09-FINAL.md') }], feedback: { source_metric_ids: [7] } });
     assert.equal(target.skillId, 'hot-title-generator');
-    assert.equal(target.source, 'artifact-manifest');
+    assert.equal(target.source, 'workspace-default');
     assert.equal(currentSkillFile(root, 'hot-title-generator'), path.join(root, 'writing-skills', 'hot-title-generator', 'SKILL.md'));
     assert.match(loadSkillBundle({ workspaceRoot: root, skillName: 'hot-title-generator' }).prompt, /覆盖版标题技能/);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('反哺使用当前有效的内置标题技能，不被历史第三方标题技能抢走', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'content-feedback-title-current-default-'));
+  try {
+    const articles = path.join(root, 'articles');
+    const external = path.join(articles, 'old-external');
+    const builtin = path.join(articles, 'current-builtin');
+    fs.mkdirSync(external, { recursive: true });
+    fs.mkdirSync(builtin, { recursive: true });
+    for (let index = 0; index < 3; index += 1) fs.writeFileSync(path.join(external, `${index}-skill-manifest.json`), JSON.stringify({ stageSkillSelections: { title: { selectedSkill: 'hot-title-generator' } } }));
+    fs.writeFileSync(path.join(external, '00-skill-manifest.json'), JSON.stringify({ stageSkillSelections: { title: { selectedSkill: 'hot-title-generator' } } }));
+    fs.writeFileSync(path.join(builtin, '00-skill-manifest.json'), JSON.stringify({ stageSkillSelections: { title: { selectedSkill: 'title-generator' } } }));
+    const target = resolveTitleSkillTarget({ workspaceRoot: root, analyses: [
+      { metric_id: 1, file_path: path.join(external, '09-FINAL.md') },
+      { metric_id: 2, file_path: path.join(external, '09-FINAL.md') },
+      { metric_id: 3, file_path: path.join(external, '09-FINAL.md') },
+      { metric_id: 4, file_path: path.join(builtin, '09-FINAL.md') },
+    ], feedback: { source_metric_ids: [1, 2, 3, 4] } });
+    assert.equal(target.skillId, 'title-generator');
+    assert.equal(target.source, 'builtin-default');
+    assert.equal(target.sampleCount, 1);
+    assert.deepEqual(target.evidence, [{ skill_id: 'hot-title-generator', sample_count: 3 }, { skill_id: 'title-generator', sample_count: 1 }]);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('反哺识别当前默认的外部写作技能并优先生成对应草案', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'content-feedback-writer-current-default-'));
+  try {
+    const skillId = 'wechat-mp-human-writing';
+    const installedDir = path.join(root, 'data', 'installed-skills', skillId);
+    fs.mkdirSync(installedDir, { recursive: true });
+    fs.writeFileSync(path.join(installedDir, 'SKILL.md'), '# 外部写作技能\n\n原有规则。\n');
+    fs.writeFileSync(path.join(installedDir, 'skill.json'), JSON.stringify({ schemaVersion: 1, id: skillId, name: '活人感公众号写作', version: '1.0.0', kind: 'writer', entryPoints: ['hotspot-article'], contentTypes: ['composite', 'tech_hotspot'], inputContract: 'article_fact_base', outputContract: 'wechat_markdown', requiredCapabilities: [], optionalCapabilities: [], compatibleApp: '>=0.1.0', source: { type: 'installed', url: 'local://test' } }));
+    fs.mkdirSync(path.dirname(path.join(root, 'data', 'skill-packages.json')), { recursive: true });
+    fs.writeFileSync(path.join(root, 'data', 'skill-packages.json'), JSON.stringify({ schemaVersion: 1, packages: { [skillId]: { id: skillId, status: 'enabled' } }, entryDefaults: { 'hotspot-article': skillId }, stageDefaults: {} }));
+    const catalog = listWriterSkillCatalog({ workspaceRoot: root });
+    assert.equal(catalog.find((item) => item.id === skillId)?.label, '活人感公众号写作');
+    assert.deepEqual(resolveWriterSkillTarget({ workspaceRoot: root }), { skillId, source: 'workspace-default' });
+    const draft = buildAdjustmentDraft({
+      workspaceRoot: root,
+      feedback: { id: 12, linked_article_count: 3, writer_skill_evidence: [{ skill_id: skillId, sample_count: 3 }] },
+      strategy: {},
+      accountContext: {},
+      currentWriterSkillId: skillId,
+      modelResult: {
+        planning: { selected_writer_skill_id: 'wechat-mp-tech-deep', writer_skill_reason: '模型错误地选择了内置技能。' },
+        patch: { skill_edits: [
+          { skill_id: skillId, edits: [{ old_text: '原有规则。', new_text: '正文先给出结论，再交代证据和边界。', reason: '当前默认写作技能需要保留结论前置。' }] },
+          { skill_id: 'wechat-mp-tech-deep', edits: [{ old_text: '不存在。', new_text: '不应写入。' }] },
+        ] },
+      },
+    });
+    assert.equal(draft.source.writer_skill_id, skillId);
+    assert.equal(draft.source.writer_skill_selection_source, 'workspace-default');
+    assert.deepEqual(draft.changes.map((item) => item.id), [skillId]);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 

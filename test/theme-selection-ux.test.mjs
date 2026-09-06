@@ -58,3 +58,11 @@ test('硬刷新直达排版或封面时也加载主题选择器公共样式', ()
   assert.match(common, /\.theme-picker-dialog\{width:min\(980px/);
   assert.match(common, /\.theme-choice-card\{position:relative/);
 });
+
+test('社交编辑视图加载相似内容和技能弹层所需样式分片', () => {
+  const main = read('public', 'src', 'main.js');
+  assert.match(main, /"social-editor": \["topics", "social", "editor", "system"\]/);
+  assert.match(main, /"social-custom": \["topics", "social", "editor", "system"\]/);
+  assert.match(main, /"social-event": \["topics", "social", "editor", "system"\]/);
+  assert.match(main, /editorial: \["topics", "editor", "system"\]/);
+});

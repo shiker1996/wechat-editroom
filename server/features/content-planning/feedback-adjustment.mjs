@@ -6,8 +6,9 @@ import { delimitUntrusted } from '../../platform/llm/context-safety.mjs';
 import { atomicWriteJson, atomicWriteUtf8 } from '../../platform/core/atomic-file.mjs';
 import { getAccountContext, loadAccountContext } from '../../shared/domain/account-context.mjs';
 import { readSkillPackageCatalog } from '../../platform/skills/package-manager.mjs';
+import { SkillRegistry } from '../../platform/skills/registry.mjs';
 
-export const FEEDBACK_ADJUSTMENT_VERSION = 'v6';
+export const FEEDBACK_ADJUSTMENT_VERSION = 'v7';
 export const WRITER_SKILL_IDS = Object.freeze([
   'wechat-mp-tech-hotspot', 'wechat-mp-tech-deep', 'wechat-mp-deep-dive',
   'wechat-mp-gossip-chill', 'wechat-mp-tutorial', 'wechat-mp-personal-writing', 'wechat-mp-daily', 'wechat-mp-composite',
@@ -102,9 +103,10 @@ function sanitizeAccountPatch(value, base, strategyReady) {
 
 function cleanPatchText(value, max = MAX_EDIT_TEXT_CHARS) { return String(value || '').trim().slice(0, max); }
 function containsSkillMeta(value) { return /根据(?:本期|最近|当前)?(?:反馈|周期)|样本(?:量)?|每千|平均(?:阅读|读)|关注率|非因果|复盘反馈|作为参考/.test(String(value || '')); }
-function eligibleWriterSkillIds(writerSkillEvidence) {
+function eligibleWriterSkillIds(writerSkillEvidence, allowedIds = WRITER_SKILL_IDS) {
+  const allowed = new Set(allowedIds);
   return new Set((Array.isArray(writerSkillEvidence) ? writerSkillEvidence : [])
-    .filter((item) => WRITER_SKILL_IDS.includes(String(item?.skill_id || '')) && Number(item?.sample_count || 0) >= MIN_WRITER_SKILL_SAMPLES)
+    .filter((item) => allowed.has(String(item?.skill_id || '')) && Number(item?.sample_count || 0) >= MIN_WRITER_SKILL_SAMPLES)
     .map((item) => String(item.skill_id)));
 }
 
@@ -141,18 +143,18 @@ export function resolveTitleSkillTarget({ workspaceRoot, analyses = [], feedback
     const skillId = titleSkillFromArtifact(row.file_path);
     if (skillId) counts.set(skillId, (counts.get(skillId) || 0) + 1);
   }
-  if (counts.size) {
-    const ranked = [...counts.entries()].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]));
-    const configured = (() => {
-      try { return String(readSkillPackageCatalog(workspaceRoot).stageDefaults?.[entryPoint]?.title || '').trim(); } catch { return ''; }
-    })();
-    const configuredObserved = configured && counts.has(configured) ? configured : '';
-    const selectedSkill = configuredObserved || ranked[0][0];
-    return { skillId: selectedSkill, source: 'artifact-manifest', sampleCount: counts.get(selectedSkill) || 0, evidence: ranked.map(([id, count]) => ({ skill_id: id, sample_count: count })) };
-  }
+  const ranked = [...counts.entries()].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]));
   let configured = '';
   try { configured = String(readSkillPackageCatalog(workspaceRoot).stageDefaults?.[entryPoint]?.title || '').trim(); } catch { /* Use the built-in fallback below. */ }
-  return { skillId: configured || 'title-generator', source: configured ? 'workspace-default' : 'builtin-default', sampleCount: 0, evidence: [] };
+  // 反哺面向“当前有效的标题技能”，不能因为历史文章曾使用过第三方技能，
+  // 就把新草案写到已经不再生效的技能包。历史 manifest 仍作为 evidence 传给模型。
+  const selectedSkill = configured || 'title-generator';
+  return {
+    skillId: selectedSkill,
+    source: configured ? 'workspace-default' : 'builtin-default',
+    sampleCount: counts.get(selectedSkill) || 0,
+    evidence: ranked.map(([id, count]) => ({ skill_id: id, sample_count: count })),
+  };
 }
 
 export function currentSkillFile(workspaceRoot, skillId) {
@@ -178,12 +180,33 @@ export function currentSkillPackageFiles(workspaceRoot, skillId, relativePaths =
     .filter(([, filePath]) => filePath));
 }
 
+function dynamicWriterSkillLabels(workspaceRoot) {
+  const labels = new Map();
+  try {
+    for (const skill of new SkillRegistry({ workspaceRoot }).list()) {
+      if (skill.kind === 'writer' && skill.enabled) labels.set(skill.id, skill.name || skill.id);
+    }
+  } catch { /* Fixed built-in catalog remains available in reduced test workspaces. */ }
+  return labels;
+}
+
 export function listWriterSkillCatalog({ workspaceRoot } = {}) {
-  return WRITER_SKILL_IDS.map((id) => {
+  const labels = dynamicWriterSkillLabels(workspaceRoot);
+  const ids = [...new Set([...WRITER_SKILL_IDS, ...labels.keys()])];
+  return ids.map((id) => {
     const sourcePath = currentSkillFile(workspaceRoot, id);
     const content = sourcePath ? fs.readFileSync(sourcePath, 'utf8') : '';
-    return { id, label: WRITER_SKILL_LABELS[id] || id, sourcePath, content };
+    return { id, label: labels.get(id) || WRITER_SKILL_LABELS[id] || id, sourcePath, content };
   });
+}
+
+export function resolveWriterSkillTarget({ workspaceRoot, entryPoint = 'hotspot-article' } = {}) {
+  let configured = '';
+  try { configured = String(readSkillPackageCatalog(workspaceRoot).entryDefaults?.[entryPoint] || '').trim(); } catch { /* Use evidence-based selection below. */ }
+  const available = new Set(listWriterSkillCatalog({ workspaceRoot }).filter((item) => item.sourcePath).map((item) => item.id));
+  return configured && available.has(configured)
+    ? { skillId: configured, source: 'workspace-default' }
+    : { skillId: '', source: 'evidence-selection' };
 }
 
 export function adjustmentTargets({ workspaceRoot, titleSkillId = 'title-generator', writerSkillId = 'wechat-mp-tech-hotspot' } = {}) {
@@ -195,8 +218,8 @@ export function adjustmentTargets({ workspaceRoot, titleSkillId = 'title-generat
   ].map((item) => ({ ...item, sourcePath: item.kind === 'json' ? path.join(workspaceRoot, 'account-context.json') : currentSkillFile(workspaceRoot, item.id) }));
 }
 
-export function buildFeedbackAdjustmentPlanningMessages({ feedback, strategy = {}, accountContext = {}, titleSkillId = 'title-generator', titleSkillEvidence = [], writerSkillId = '', writerSkillCatalog = [] } = {}) {
-  const source = { feedback, strategy, account_context: accountContext, active_title_skill: { skill_id: titleSkillId, evidence: titleSkillEvidence }, writer_skill_evidence: feedback?.writer_skill_evidence || [], writer_skill_candidates: writerSkillCatalog.map(({ id, label, content }) => ({ id, label, rules_preview: String(content || '').slice(0, 1200) })) };
+export function buildFeedbackAdjustmentPlanningMessages({ feedback, strategy = {}, accountContext = {}, titleSkillId = 'title-generator', titleSkillEvidence = [], writerSkillId = '', currentWriterSkillId = '', writerSkillCatalog = [] } = {}) {
+  const source = { feedback, strategy, account_context: accountContext, active_title_skill: { skill_id: titleSkillId, evidence: titleSkillEvidence }, active_writer_skill: currentWriterSkillId ? { skill_id: currentWriterSkillId, source: 'workspace-default' } : null, writer_skill_evidence: feedback?.writer_skill_evidence || [], writer_skill_candidates: writerSkillCatalog.map(({ id, label, content }) => ({ id, label, rules_preview: String(content || '').slice(0, 1200) })) };
   const selectedHint = writerSkillId ? `\n历史兼容调用传入的正文技能提示：${writerSkillId}。只有在模型无法判定时才使用它。` : '';
   const user = `${delimitUntrusted('wechat-feedback-evidence', source, 18000)}${selectedHint}`;
   const system = `你是内容系统的配置调整代理第一阶段：只判断“哪些目标需要调整、为什么调整”，不生成文件内容，不直接写文件。
@@ -213,7 +236,7 @@ export function buildFeedbackAdjustmentPlanningMessages({ feedback, strategy = {
 
 规则：
 - 账号策略与当前实际使用的标题技能（${titleSkillId}）是固定检查目标；正文写作技能必须先根据反馈中的题材、文章类型和正文结构，从候选技能中自动选择一个，不要要求用户预先指定；
-- 如果 writer_skill_evidence 中存在至少 3 个已映射样本的技能，优先从这些技能中选择；如果没有映射证据，但 linked_article_count 至少为 3 且存在 body_signals，可以根据题材、文章类型和正文结构从候选技能中做低置信度推断，并在 writer_skill_reason 和 warnings 中明确“AI 推断”，不得把它表述为历史表现已证明；
+- 如果 active_writer_skill 中存在当前入口已配置且实际可用的正文技能，必须优先把它作为正文技能目标；历史 writer_skill_evidence 只用于说明依据，不得把旧技能替换成当前未生效的目标；如果没有当前默认技能，且 writer_skill_evidence 中存在至少 3 个已映射样本的技能，再从这些技能中选择；如果没有映射证据，但 linked_article_count 至少为 3 且存在 body_signals，可以根据题材、文章类型和正文结构从候选技能中做低置信度推断，并在 writer_skill_reason 和 warnings 中明确“AI 推断”，不得把它表述为历史表现已证明；
 - 只有没有足够 linked_article_count 或 body_signals 时，才必须把 selected_writer_skill_id 填 null，且 target_intents 不得包含正文技能；不能用“最接近”或无正文信号的猜测兜底；
 - 只根据反馈中的历史相关性提出可验证的调整，不把相关性写成因果；
 - 只有 strategy.ready=true 且有至少两个内容周期时才允许提出 account_intent.action=update；否则必须返回 no_change；
@@ -253,13 +276,18 @@ export function buildFeedbackAdjustmentPatchMessages({ feedback, strategy = {}, 
 // Backward-compatible export for callers that only need to inspect the planning prompt.
 export function buildFeedbackAdjustmentMessages(args = {}) { return buildFeedbackAdjustmentPlanningMessages(args); }
 
-function normalizePlanningResult(raw, { feedback = {}, titleSkillId = 'title-generator', writerSkillId, writerSkillEvidence = [] }) {
-  const eligibleWriterSkills = eligibleWriterSkillIds(writerSkillEvidence);
+function normalizePlanningResult(raw, { feedback = {}, titleSkillId = 'title-generator', writerSkillId, currentWriterSkillId = '', writerSkillEvidence = [], availableWriterSkillIds = [] }) {
+  const availableWriterSkills = new Set(availableWriterSkillIds);
+  const eligibleWriterSkills = eligibleWriterSkillIds(writerSkillEvidence, availableWriterSkills.size ? availableWriterSkills : WRITER_SKILL_IDS).size
+    ? new Set([...eligibleWriterSkillIds(writerSkillEvidence, availableWriterSkills.size ? availableWriterSkills : WRITER_SKILL_IDS)].filter((id) => !availableWriterSkills.size || availableWriterSkills.has(id)))
+    : new Set();
   const inferenceAllowed = canInferWriterSkill(feedback);
   const requestedWriterSkillId = String(raw?.selected_writer_skill_id || raw?.writer_skill_selection?.skill_id || '');
-  const selectedWriterSkillId = WRITER_SKILL_IDS.includes(requestedWriterSkillId) && (eligibleWriterSkills.has(requestedWriterSkillId) || inferenceAllowed) ? requestedWriterSkillId : null;
-  const writerSkillSelectionSource = selectedWriterSkillId ? eligibleWriterSkills.has(selectedWriterSkillId) ? 'mapped_evidence' : 'ai_inference' : 'none';
-  const writerSkillReason = cleanText(raw?.writer_skill_reason || raw?.writer_skill_selection?.reason, 800) || (selectedWriterSkillId ? writerSkillSelectionSource === 'mapped_evidence' ? '根据题材、文章类型、正文结构和已映射样本自动选择。' : '根据题材、文章类型和正文结构做低置信度 AI 推断。' : '当前正文样本没有足够的题材与正文结构信号，暂不修改正文技能。');
+  const configuredWriterSkillId = currentWriterSkillId && (!availableWriterSkills.size || availableWriterSkills.has(currentWriterSkillId)) ? currentWriterSkillId : '';
+  const requested = configuredWriterSkillId || requestedWriterSkillId;
+  const selectedWriterSkillId = requested && (!availableWriterSkills.size || availableWriterSkills.has(requested)) && (eligibleWriterSkills.has(requested) || inferenceAllowed) ? requested : null;
+  const writerSkillSelectionSource = selectedWriterSkillId ? selectedWriterSkillId === configuredWriterSkillId ? 'workspace-default' : eligibleWriterSkills.has(selectedWriterSkillId) ? 'mapped_evidence' : 'ai_inference' : 'none';
+  const writerSkillReason = cleanText(raw?.writer_skill_reason || raw?.writer_skill_selection?.reason, 800) || (selectedWriterSkillId ? writerSkillSelectionSource === 'workspace-default' ? '使用当前入口已配置且实际可用的正文技能。' : writerSkillSelectionSource === 'mapped_evidence' ? '根据题材、文章类型、正文结构和已映射样本自动选择。' : '根据题材、文章类型和正文结构做低置信度 AI 推断。' : '当前正文样本没有足够的题材与正文结构信号，暂不修改正文技能。');
   const allowedSkills = new Set([titleSkillId, ...(selectedWriterSkillId ? [selectedWriterSkillId] : [])]);
   const targetIntents = Array.isArray(raw?.target_intents) ? raw.target_intents.map((item) => ({ ...item, skill_id: String(item?.skill_id || '') === 'title-generator' ? titleSkillId : String(item?.skill_id || ''), intent: cleanText(item?.intent, 1000), evidence_summary: cleanText(item?.evidence_summary || item?.reason, 800) })).filter((item) => allowedSkills.has(item.skill_id) && item.intent).slice(0, 2) : [];
   return { version: FEEDBACK_ADJUSTMENT_VERSION, titleSkillId, summary: cleanText(raw?.summary, 500) || '根据复盘信号生成最小调整草案', selectedWriterSkillId, writerSkillSelectionSource, writerSkillReason, targetIntents, accountIntent: raw?.account_intent && typeof raw.account_intent === 'object' ? { action: raw.account_intent.action === 'update' ? 'update' : 'no_change', intent: cleanText(raw.account_intent.intent, 1000), evidence_summary: cleanText(raw.account_intent.evidence_summary || raw.account_intent.reason, 800) } : { action: 'no_change', intent: '', evidence_summary: '' }, warnings: Array.isArray(raw?.warnings) ? raw.warnings.map((item) => cleanText(item, 500)).filter(Boolean).slice(0, 12) : [] };
@@ -282,8 +310,9 @@ export function applySkillEdits(oldContent, edits = []) {
   return { content, applied, warnings };
 }
 
-export function buildAdjustmentDraft({ workspaceRoot, feedback, strategy, accountContext, modelResult = {}, titleSkillId = 'title-generator', titleSkillEvidence = [], writerSkillId = '', writerSkillEvidence = feedback?.writer_skill_evidence || [], provider = '', model = '' } = {}) {
-  const planning = normalizePlanningResult(modelResult.planning || modelResult.plan || modelResult, { feedback, titleSkillId, writerSkillId, writerSkillEvidence });
+export function buildAdjustmentDraft({ workspaceRoot, feedback, strategy, accountContext, modelResult = {}, titleSkillId = 'title-generator', titleSkillEvidence = [], titleSkillSelectionSource = '', currentWriterSkillId = '', writerSkillId = '', writerSkillEvidence = feedback?.writer_skill_evidence || [], provider = '', model = '' } = {}) {
+  const writerSkillCatalog = listWriterSkillCatalog({ workspaceRoot });
+  const planning = normalizePlanningResult(modelResult.planning || modelResult.plan || modelResult, { feedback, titleSkillId, writerSkillId, currentWriterSkillId, writerSkillEvidence, availableWriterSkillIds: writerSkillCatalog.map((item) => item.id) });
   const patch = modelResult.patch || {};
   const selectedWriterSkillId = planning.selectedWriterSkillId;
   const accountPath = path.join(workspaceRoot, 'account-context.json');
@@ -311,7 +340,7 @@ export function buildAdjustmentDraft({ workspaceRoot, feedback, strategy, accoun
     if (!applied.applied.length || applied.content === oldContent) continue;
     changes.push({ id: update.skill_id, kind: 'skill', label: update.skill_id === resolvedTitleSkillId ? '标题生成技能' : `${WRITER_SKILL_LABELS[update.skill_id] || update.skill_id} 写作技能`, path: `writing-skills/${update.skill_id}/SKILL.md`, source_path: path.relative(workspaceRoot, sourcePath).replaceAll('\\', '/'), old_content: oldContent, new_content: applied.content, old_hash: sha256(oldContent), new_hash: sha256(applied.content), edits: applied.applied, reason: applied.applied.map((item) => item.reason).filter(Boolean).join('；') || '根据反馈证据生成针对原有规则的精确修改。' });
   }
-  return { version: FEEDBACK_ADJUSTMENT_VERSION, feedback_snapshot_id: feedback?.id || null, generated_at: new Date().toISOString(), provider, model, summary: planning.summary, warnings, changes, source: { adjustment_version: FEEDBACK_ADJUSTMENT_VERSION, confidence: feedback?.confidence || 'low', linked_article_count: Number(feedback?.linked_article_count || 0), metric_window: [feedback?.metric_window_start || '', feedback?.metric_window_end || ''], strategy_ready: Boolean(strategy?.ready), title_skill_id: resolvedTitleSkillId, title_skill_selection_source: titleSkillEvidence.length ? 'artifact-manifest' : 'workspace-default', title_skill_evidence: titleSkillEvidence, writer_skill_id: selectedWriterSkillId, writer_skill_selection_source: planning.writerSkillSelectionSource, writer_skill_reason: planning.writerSkillReason, stages: ['planning', 'patch'] } };
+  return { version: FEEDBACK_ADJUSTMENT_VERSION, feedback_snapshot_id: feedback?.id || null, generated_at: new Date().toISOString(), provider, model, summary: planning.summary, warnings, changes, source: { adjustment_version: FEEDBACK_ADJUSTMENT_VERSION, confidence: feedback?.confidence || 'low', linked_article_count: Number(feedback?.linked_article_count || 0), metric_window: [feedback?.metric_window_start || '', feedback?.metric_window_end || ''], strategy_ready: Boolean(strategy?.ready), title_skill_id: resolvedTitleSkillId, title_skill_selection_source: titleSkillSelectionSource || (titleSkillEvidence.length ? 'artifact-manifest' : 'workspace-default'), title_skill_evidence: titleSkillEvidence, writer_skill_id: selectedWriterSkillId, writer_skill_selection_source: planning.writerSkillSelectionSource, writer_skill_reason: planning.writerSkillReason, stages: ['planning', 'patch'] } };
 }
 
 export function confirmAdjustmentDraft({ workspaceRoot, draft } = {}) {
