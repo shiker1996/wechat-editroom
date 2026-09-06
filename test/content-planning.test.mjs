@@ -10,7 +10,7 @@ import { buildContentFeedbackSnapshot, buildContentFeedbackPromptContext, extrac
 import { buildSocialContentFeedbackSnapshot, extractSocialContentFeatures } from '../server/features/content-planning/social-content-feedback.mjs';
 import { buildContentPlanningRecommendation, sortMaterialsByPlanningRecommendation } from '../server/features/content-planning/content-planning-recommendations.mjs';
 import { buildWechatStrategyRecommendations } from '../server/features/content-planning/wechat-strategy-recommendations.mjs';
-import { buildAdjustmentDraft, buildFeedbackAdjustmentMessages, buildFeedbackAdjustmentPatchMessages, confirmAdjustmentDraft, currentSkillFile, listWriterSkillCatalog, resolveTitleSkillTarget, resolveWriterSkillTarget } from '../server/features/content-planning/feedback-adjustment.mjs';
+import { buildAdjustmentDraft, buildFeedbackAdjustmentMessages, buildFeedbackAdjustmentPatchMessages, confirmAdjustmentDraft, currentSkillFile, FEEDBACK_ADJUSTMENT_VERSION, listWriterSkillCatalog, resolveTitleSkillTarget, resolveWriterSkillTarget } from '../server/features/content-planning/feedback-adjustment.mjs';
 import { buildSocialFeedbackAdjustmentDraft, buildSocialFeedbackAdjustmentPatchMessages, buildSocialFeedbackAdjustmentPlanningMessages, resolveSocialSkillTargets } from '../server/features/content-planning/social-feedback-adjustment.mjs';
 import { loadSkillBundle } from '../server/platform/llm/skill-runtime.mjs';
 import { handleContentRoutes } from '../server/platform/http/routes/content-routes.mjs';
@@ -312,6 +312,21 @@ test('复盘反馈草案确认检测源文件冲突，不覆盖用户新改内�
     assert.throws(() => confirmAdjustmentDraft({ workspaceRoot: root, draft }), (error) => error.code === 'ADJUSTMENT_SOURCE_CONFLICT');
     assert.equal(fs.existsSync(path.join(root, 'writing-skills', 'title-generator', 'SKILL.md')), false);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('反馈调整草案可以只保存单个文件的手动修改，且不提前写入正式文件', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'content-feedback-adjustment-edit-'));
+  const store = new Store(path.join(root, 'workbench.db'));
+  try {
+    const draft = store.saveContentFeedbackAdjustmentDraft({ source: { adjustment_version: FEEDBACK_ADJUSTMENT_VERSION }, changes: [{ id: 'title-generator', kind: 'skill', path: 'writing-skills/title-generator/SKILL.md', old_content: '旧内容', new_content: 'AI 草案' }] });
+    let response;
+    const handled = await handleContentRoutes({ request: { method: 'POST' }, response: {}, pathname: `/api/wechat/feedback/adjustments/${draft.id}/change/0/save`, searchParams: new URLSearchParams(), store, artifactRoots: [], root, body: async () => ({ new_content: '人工修改后的草案' }), json: (_response, status, data) => { response = { status, data }; } });
+    assert.equal(handled, true);
+    assert.equal(response.status, 200);
+    assert.equal(response.data.status, 'pending');
+    assert.equal(response.data.changes[0].new_content, '人工修改后的草案');
+    assert.equal(response.data.changes[0].manually_edited, true);
+  } finally { store.close(); fs.rmSync(root, { recursive: true, force: true }); }
 });
 
 test('反馈调整 Prompt 不强制猜测正文技能，且旧版本草案不能确认', () => {

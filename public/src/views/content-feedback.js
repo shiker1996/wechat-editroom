@@ -4,6 +4,8 @@ import { escapeHtml, toast } from "../core/ui.js";
 let bound = false;
 let feedbackMode = "article";
 let pageData = null;
+const editableDiffSources = new Map();
+let activeAdjustmentEditor = null;
 
 const fmt = (value) => new Intl.NumberFormat("zh-CN").format(Number(value || 0));
 const levelLabel = (value) => ({ high: "高", medium: "中", low: "低" }[value] || "低");
@@ -168,24 +170,27 @@ function pairDiffOps(ops) {
   return rows;
 }
 
-function sideDiff(oldText, newText, { oldLabel = '原文件', newLabel = '修改后草案' } = {}) {
+function sideDiff(oldText, newText, { oldLabel = '原文件', newLabel = '修改后草案', editable = false, changeIndex = '', draftId = '' } = {}) {
   const ops = diffOps(oldText, newText); const rows = pairDiffOps(visibleDiffOps(ops));
-  const header = `<div class="adjustment-diff-head"><div><b>${escapeHtml(oldLabel)}</b><span>当前版本</span></div><div><b>${escapeHtml(newLabel)}</b><span>待确认版本</span></div></div>`;
+  const changeKey = editable ? `${draftId}:${changeIndex}` : '';
+  if (editable) editableDiffSources.set(changeKey, { draftId, changeIndex, path: newLabel, newText });
+  const header = `<div class="adjustment-diff-head"><div><b>${escapeHtml(oldLabel)}</b><span>当前版本</span></div><div><b>${escapeHtml(newLabel)}</b><span>${editable ? '点击右侧代码行编辑' : '待确认版本'}</span></div></div>`;
   const body = rows.map((row) => {
     if (row.type === 'collapsed') return '<div class="adjustment-diff-collapsed"><span>···</span><small>中间内容未变化</small><span>···</span></div>';
     const oldCell = row.old ? `<span class="adjustment-diff-number">${row.old.oldLine}</span><code>${escapeHtml(row.old.oldText)}</code>` : '<span class="adjustment-diff-number">·</span><code></code>';
-    const newCell = row.next ? `<span class="adjustment-diff-number">${row.next.newLine}</span><code>${escapeHtml(row.next.newText)}</code>` : '<span class="adjustment-diff-number">·</span><code></code>';
+    const codeEditAttrs = editable && row.next ? ` data-feedback-adjustment-edit="${escapeHtml(changeKey)}" data-feedback-adjustment-line="${row.next.newLine - 1}" role="button" tabindex="0" aria-label="点击编辑第 ${row.next.newLine} 行"` : '';
+    const newCell = row.next ? `<span class="adjustment-diff-number">${row.next.newLine}</span><code${codeEditAttrs}>${escapeHtml(row.next.newText)}</code>` : '<span class="adjustment-diff-number">·</span><code></code>';
     return `<div class="adjustment-diff-row ${row.type}"><div class="adjustment-diff-side old">${oldCell}</div><div class="adjustment-diff-side new">${newCell}</div></div>`;
   }).join('');
   return `${header}${body || '<div class="adjustment-diff-empty">没有文本变化</div>'}`;
 }
 
-function changeDiff(change) {
+function changeDiff(change, index, draft, editable) {
   let oldText = change.old_content; let newText = change.new_content;
   if (change.kind === 'json') {
     try { oldText = JSON.stringify(JSON.parse(oldText || '{}'), null, 2); newText = JSON.stringify(JSON.parse(newText || '{}'), null, 2); } catch { /* Fall back to the raw JSON text. */ }
   }
-  return sideDiff(oldText, newText, { oldLabel: change.source_path || '原文件', newLabel: change.path || '修改后草案' });
+  return sideDiff(oldText, newText, { oldLabel: change.source_path || '原文件', newLabel: change.path || '修改后草案', editable, changeIndex: index, draftId: draft.id });
 }
 
 function adjustmentSelection(draft, skillLabels) {
@@ -205,9 +210,95 @@ function renderAdjustments(data = {}) {
   const version = data.version || 'v6';
   const list = document.getElementById('content-feedback-adjustment-list');
   if (!list) return;
+  editableDiffSources.clear();
   const items = data.items || [];
   if (!items.length) { list.innerHTML = '<div class="empty-state">还没有调整草案。生成后会先在这里展示 diff，不会立即修改文件。</div>'; return; }
-  list.innerHTML = items.slice(0, 5).map((draft) => { const selection = adjustmentSelection(draft, skillLabels); const stale = draft.status === 'pending' && draft.source?.adjustment_version !== version; const status = stale ? '已过期' : draft.status === 'pending' ? '待确认' : draft.status === 'confirmed' ? '已写入' : '已跳过'; return `<article class="feedback-adjustment-draft ${draft.status} ${stale ? 'stale' : ''}"><header><div><b>${escapeHtml(draft.summary || '复盘调整草案')}</b><span class="feedback-adjustment-scope">${selection.scope === 'social' ? '图文' : '文章'}</span><span class="feedback-adjustment-status ${stale ? 'stale' : draft.status}">${status}</span></div><small>${escapeHtml(String(draft.generated_at || '').slice(0, 16).replace('T', ' '))} · ${draft.changes?.length || 0} 个文件</small></header><div class="feedback-adjustment-selection"><b>${escapeHtml(selection.label)}</b><strong>${escapeHtml(selection.value)}</strong><span>${escapeHtml(selection.reason)}</span></div>${draft.warnings?.length ? `<div class="feedback-adjustment-warnings">${draft.warnings.map((item) => `<span>· ${escapeHtml(item)}</span>`).join('')}</div>` : ''}<div class="feedback-adjustment-changes">${(draft.changes || []).map((change) => `<details><summary><b>${escapeHtml(change.label || change.path)}</b><span>${escapeHtml(change.path)}</span></summary>${change.reason ? `<div class="feedback-adjustment-rationale"><small>调整依据（不写入文件）</small><p>${escapeHtml(change.reason)}</p></div>` : ''}<div class="adjustment-diff"><small class="feedback-adjustment-diff-label">变更对照</small>${changeDiff(change)}</div></details>`).join('')}</div>${stale ? `<div class="feedback-adjustment-actions"><span class="feedback-adjustment-stale-note">这份草案由旧版规则生成，请重新生成。</span><button type="button" class="text-button" data-feedback-adjustment-action="reject" data-feedback-adjustment-id="${Number(draft.id)}">移除旧草案</button></div>` : draft.status === 'pending' ? `<div class="feedback-adjustment-actions"><button type="button" class="primary-button" data-feedback-adjustment-action="confirm" data-feedback-adjustment-id="${Number(draft.id)}">确认写入</button><button type="button" class="text-button" data-feedback-adjustment-action="reject" data-feedback-adjustment-id="${Number(draft.id)}">跳过草案</button></div>` : draft.status === 'rejected' ? `<div class="feedback-adjustment-actions"><span class="feedback-adjustment-stale-note">已跳过，仅保留草案记录。</span><button type="button" class="text-button" data-feedback-adjustment-action="delete" data-feedback-adjustment-id="${Number(draft.id)}">删除记录</button></div>` : ''}</article>`; }).join('');
+  list.innerHTML = items.slice(0, 5).map((draft) => {
+    const selection = adjustmentSelection(draft, skillLabels);
+    const stale = draft.status === 'pending' && draft.source?.adjustment_version !== version;
+    const status = stale ? '已过期' : draft.status === 'pending' ? '待确认' : draft.status === 'confirmed' ? '已写入' : '已跳过';
+    const editable = !stale && draft.status === 'pending';
+    const changes = (draft.changes || []).map((change, index) => {
+      const written = change.write_status === 'confirmed' || draft.status === 'confirmed';
+      const changeStatus = written ? '已写入' : change.manually_edited ? '已手动调整，待写入' : '待写入';
+      return `<details class="feedback-adjustment-change"><summary><b>${escapeHtml(change.label || change.path)}</b><span>${escapeHtml(change.path)}</span><em class="feedback-adjustment-file-status ${written ? 'written' : change.manually_edited ? 'edited' : ''}">${changeStatus}</em></summary>${change.reason ? `<div class="feedback-adjustment-rationale"><small>调整依据（不写入文件）</small><p>${escapeHtml(change.reason)}</p></div>` : ''}<div class="adjustment-diff"><small class="feedback-adjustment-diff-label">变更对照</small>${changeDiff(change, index, draft, editable)}</div></details>`;
+    }).join('');
+    return `<article class="feedback-adjustment-draft ${draft.status} ${stale ? 'stale' : ''}"><header><div><b>${escapeHtml(draft.summary || '复盘调整草案')}</b><span class="feedback-adjustment-scope">${selection.scope === 'social' ? '图文' : '文章'}</span><span class="feedback-adjustment-status ${stale ? 'stale' : draft.status}">${status}</span></div><small>${escapeHtml(String(draft.generated_at || '').slice(0, 16).replace('T', ' '))} · ${draft.changes?.length || 0} 个文件</small></header><div class="feedback-adjustment-selection"><b>${escapeHtml(selection.label)}</b><strong>${escapeHtml(selection.value)}</strong><span>${escapeHtml(selection.reason)}</span></div>${draft.warnings?.length ? `<div class="feedback-adjustment-warnings">${draft.warnings.map((item) => `<span>· ${escapeHtml(item)}</span>`).join('')}</div>` : ''}<div class="feedback-adjustment-changes">${changes}</div>${stale ? `<div class="feedback-adjustment-actions"><span class="feedback-adjustment-stale-note">这份草案由旧版规则生成，请重新生成。</span><button type="button" class="text-button" data-feedback-adjustment-action="reject" data-feedback-adjustment-id="${Number(draft.id)}">移除旧草案</button></div>` : draft.status === 'pending' ? `<div class="feedback-adjustment-actions"><span class="feedback-adjustment-stale-note">点击右侧具体代码行可单独编辑，保存只更新该文件草案。</span><button type="button" class="primary-button" data-feedback-adjustment-action="confirm" data-feedback-adjustment-id="${Number(draft.id)}">确认写入</button><button type="button" class="text-button" data-feedback-adjustment-action="reject" data-feedback-adjustment-id="${Number(draft.id)}">跳过草案</button></div>` : draft.status === 'rejected' ? `<div class="feedback-adjustment-actions"><span class="feedback-adjustment-stale-note">已跳过，仅保留草案记录。</span><button type="button" class="text-button" data-feedback-adjustment-action="delete" data-feedback-adjustment-id="${Number(draft.id)}">删除记录</button></div>` : ''}</article>`;
+  }).join('');
+}
+
+function positionAdjustmentEditor(target, popover) {
+  if (!target || !popover || popover.hidden) return;
+  const rect = target.getBoundingClientRect();
+  const margin = 12;
+  const gap = 8;
+  const maxLeft = Math.max(margin, window.innerWidth - popover.offsetWidth - margin);
+  const left = Math.min(Math.max(margin, rect.left), maxLeft);
+  const below = rect.bottom + gap;
+  const above = rect.top - popover.offsetHeight - gap;
+  const top = below + popover.offsetHeight <= window.innerHeight - margin
+    ? below
+    : Math.max(margin, above);
+  popover.style.left = `${left}px`;
+  popover.style.top = `${top}px`;
+}
+
+function resizeAdjustmentEditor() {
+  const textarea = document.getElementById('feedback-adjustment-code-editor');
+  if (!textarea) return;
+  textarea.style.height = 'auto';
+  const height = Math.min(220, Math.max(64, textarea.scrollHeight + 2));
+  textarea.style.height = `${height}px`;
+  if (activeAdjustmentEditor) positionAdjustmentEditor(activeAdjustmentEditor.target, document.getElementById('feedback-adjustment-code-dialog'));
+}
+
+function closeAdjustmentEditor() {
+  const popover = document.getElementById('feedback-adjustment-code-dialog');
+  if (activeAdjustmentEditor?.target) activeAdjustmentEditor.target.setAttribute('aria-expanded', 'false');
+  if (popover) {
+    popover.hidden = true;
+    popover.setAttribute('aria-hidden', 'true');
+    popover.style.left = '';
+    popover.style.top = '';
+  }
+  activeAdjustmentEditor = null;
+}
+
+function openAdjustmentEditor(changeKey, lineIndexValue = '0', target = null) {
+  const source = editableDiffSources.get(changeKey);
+  const popover = document.getElementById('feedback-adjustment-code-dialog');
+  const textarea = document.getElementById('feedback-adjustment-code-editor');
+  if (!source || !popover || !textarea) return;
+  activeAdjustmentEditor = { ...source, changeKey, target };
+  const lineIndex = Number(lineIndexValue);
+  activeAdjustmentEditor.lineIndex = Number.isInteger(lineIndex) ? lineIndex : 0;
+  document.getElementById('feedback-adjustment-code-title').textContent = `${source.path || '编辑草案文件'} · 第 ${activeAdjustmentEditor.lineIndex + 1} 行`;
+  textarea.value = String(source.newText || '').split(/\r?\n/)[activeAdjustmentEditor.lineIndex] || '';
+  if (target) target.setAttribute('aria-expanded', 'true');
+  popover.hidden = false;
+  popover.setAttribute('aria-hidden', 'false');
+  resizeAdjustmentEditor();
+  positionAdjustmentEditor(target, popover);
+  textarea.focus();
+  textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+}
+
+async function saveAdjustmentEditor(button) {
+  if (!activeAdjustmentEditor) return;
+  const textarea = document.getElementById('feedback-adjustment-code-editor');
+  if (!textarea) return;
+  const { draftId, changeIndex, lineIndex, newText } = activeAdjustmentEditor;
+  button.disabled = true;
+  try {
+    const lines = String(newText || '').split(/\r?\n/);
+    if (lineIndex < 0 || lineIndex >= lines.length) throw new Error('当前代码行不存在，请刷新后重试');
+    lines[lineIndex] = textarea.value;
+    await request(`/api/wechat/feedback/adjustments/${draftId}/change/${changeIndex}/save`, { method: 'POST', body: JSON.stringify({ new_content: lines.join('\n') }) });
+    toast('当前代码行已保存到该文件草案，尚未写入正式文件', 'success');
+    closeAdjustmentEditor();
+    await load();
+  } catch (error) { toast(error.message, 'error'); }
+  finally { button.disabled = false; }
 }
 
 function render(data) {
@@ -296,7 +387,45 @@ function bind() {
     catch (error) { if (progress) { progress.className = 'feedback-adjustment-progress error'; progress.textContent = `生成失败：${error.message}`; } toast(error.message, 'error'); }
     finally { button.disabled = false; button.textContent = feedbackMode === 'social' ? 'AI 生成图文技能草案' : 'AI 两阶段生成草案'; }
   });
-  document.getElementById('content-feedback-adjustment-list')?.addEventListener('click', async (event) => {
+  const adjustmentList = document.getElementById('content-feedback-adjustment-list');
+  const codePopover = document.getElementById('feedback-adjustment-code-dialog');
+  codePopover?.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-feedback-adjustment-editor-save]');
+    if (button) await saveAdjustmentEditor(button);
+  });
+  codePopover?.querySelectorAll('[data-feedback-adjustment-editor-close]').forEach((button) => button.addEventListener('click', closeAdjustmentEditor));
+  document.getElementById('feedback-adjustment-code-editor')?.addEventListener('input', resizeAdjustmentEditor);
+  document.getElementById('feedback-adjustment-code-editor')?.addEventListener('keydown', async (event) => {
+    if (event.key === 'Escape') { event.preventDefault(); closeAdjustmentEditor(); }
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      const saveButton = codePopover?.querySelector('[data-feedback-adjustment-editor-save]');
+      if (saveButton && !saveButton.disabled) await saveAdjustmentEditor(saveButton);
+    }
+  });
+  document.addEventListener('pointerdown', (event) => {
+    if (!activeAdjustmentEditor || codePopover?.hidden) return;
+    if (codePopover.contains(event.target) || event.target.closest('[data-feedback-adjustment-edit]')) return;
+    closeAdjustmentEditor();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && activeAdjustmentEditor) closeAdjustmentEditor();
+  });
+  window.addEventListener('resize', () => {
+    if (activeAdjustmentEditor && codePopover) positionAdjustmentEditor(activeAdjustmentEditor.target, codePopover);
+  });
+  document.addEventListener('scroll', () => {
+    if (activeAdjustmentEditor && codePopover) positionAdjustmentEditor(activeAdjustmentEditor.target, codePopover);
+  }, true);
+  adjustmentList?.addEventListener('keydown', (event) => {
+    const target = event.target.closest('[data-feedback-adjustment-edit]');
+    if (!target || (event.key !== 'Enter' && event.key !== ' ')) return;
+    event.preventDefault();
+    openAdjustmentEditor(target.dataset.feedbackAdjustmentEdit, target.dataset.feedbackAdjustmentLine, target);
+  });
+  adjustmentList?.addEventListener('click', async (event) => {
+    const editTarget = event.target.closest('[data-feedback-adjustment-edit]');
+    if (editTarget) { openAdjustmentEditor(editTarget.dataset.feedbackAdjustmentEdit, editTarget.dataset.feedbackAdjustmentLine, editTarget); return; }
     const button = event.target.closest('[data-feedback-adjustment-action]'); if (!button) return;
     const action = button.dataset.feedbackAdjustmentAction; const id = button.dataset.feedbackAdjustmentId;
     button.disabled = true;

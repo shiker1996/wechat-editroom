@@ -417,6 +417,24 @@ const planMatch = pathname.match(/^\/api\/writing-material-plans\/(\d+)$/);
     }
     return true;
   }
+  const adjustmentChangeMatch = pathname.match(/^\/api\/wechat\/feedback\/adjustments\/(\d+)\/change\/(\d+)\/save$/);
+  if (adjustmentChangeMatch && request.method === 'POST') {
+    try {
+      const draftId = Number(adjustmentChangeMatch[1]);
+      const changeIndex = Number(adjustmentChangeMatch[2]);
+      const draft = store.getContentFeedbackAdjustmentDraft(draftId);
+      if (!draft) { json(response, 404, { error: '调整草案不存在', code: 'ADJUSTMENT_DRAFT_NOT_FOUND' }); return true; }
+      if (draft.status !== 'pending') { json(response, 409, { error: '只有待确认的调整草案可以修改', code: 'ADJUSTMENT_DRAFT_NOT_PENDING' }); return true; }
+      if (draft.source?.adjustment_version !== FEEDBACK_ADJUSTMENT_VERSION) { json(response, 409, { error: '调整草案来自旧版本，请重新生成', code: 'ADJUSTMENT_DRAFT_STALE' }); return true; }
+      if (!Number.isInteger(changeIndex) || changeIndex < 0 || changeIndex >= (draft.changes || []).length) { json(response, 404, { error: '调整草案文件不存在', code: 'ADJUSTMENT_CHANGE_NOT_FOUND' }); return true; }
+      const input = await body(request);
+      if (typeof input?.new_content !== 'string') { json(response, 400, { error: 'new_content 必须是字符串', code: 'ADJUSTMENT_CHANGE_CONTENT_INVALID' }); return true; }
+      const changes = [...(draft.changes || [])];
+      changes[changeIndex] = { ...changes[changeIndex], new_content: input.new_content, manually_edited: true };
+      json(response, 200, store.updateContentFeedbackAdjustmentDraftChanges(draftId, changes));
+    } catch (error) { json(response, error.code === 'ADJUSTMENT_DRAFT_NOT_FOUND' ? 404 : 400, { error: error.message, code: error.code || 'FEEDBACK_ADJUSTMENT_CHANGE_SAVE_FAILED' }); }
+    return true;
+  }
   const adjustmentMatch = pathname.match(/^\/api\/wechat\/feedback\/adjustments\/(\d+)\/(confirm|reject|delete)$/);
   if (adjustmentMatch && request.method === 'POST') {
     try {

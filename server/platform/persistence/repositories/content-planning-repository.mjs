@@ -636,6 +636,15 @@ export class ContentPlanningRepository {
     );
     return this.getContentFeedbackAdjustmentDraft(Number(result.lastInsertRowid));
   }
+  updateContentFeedbackAdjustmentDraftChanges(id, changes, { status = 'pending' } = {}) {
+    const draft = this.getContentFeedbackAdjustmentDraft(id);
+    if (!draft) { const error = new Error('调整草案不存在'); error.code = 'ADJUSTMENT_DRAFT_NOT_FOUND'; throw error; }
+    if (draft.status !== 'pending') { const error = new Error('只有待确认的调整草案可以修改'); error.code = 'ADJUSTMENT_DRAFT_NOT_PENDING'; throw error; }
+    if (!['pending', 'confirmed'].includes(status)) throw new Error('调整草案状态无效');
+    if (status === 'confirmed') this.db.prepare('UPDATE content_feedback_adjustment_drafts SET changes_json=?,status=?,confirmed_at=? WHERE id=? AND status=?').run(JSON.stringify(changes || []), status, now(), Number(id), 'pending');
+    else this.db.prepare('UPDATE content_feedback_adjustment_drafts SET changes_json=? WHERE id=? AND status=?').run(JSON.stringify(changes || []), Number(id), 'pending');
+    return this.getContentFeedbackAdjustmentDraft(id);
+  }
   updateContentFeedbackAdjustmentDraftStatus(id, status) {
     if (!['confirmed', 'rejected'].includes(status)) throw new Error('调整草案状态无效');
     this.db.prepare('UPDATE content_feedback_adjustment_drafts SET status=?,confirmed_at=? WHERE id=? AND status=?').run(status, now(), Number(id), 'pending');

@@ -643,6 +643,7 @@ export class Store {
   listContentFeedbackAdjustmentDrafts(input = {}) { return this.repositories.contentPlanning.listContentFeedbackAdjustmentDrafts(input); }
   getContentFeedbackAdjustmentDraft(id) { return this.repositories.contentPlanning.getContentFeedbackAdjustmentDraft(id); }
   saveContentFeedbackAdjustmentDraft(input = {}) { return this.repositories.contentPlanning.saveContentFeedbackAdjustmentDraft(input); }
+  updateContentFeedbackAdjustmentDraftChanges(id, changes, options = {}) { return this.repositories.contentPlanning.updateContentFeedbackAdjustmentDraftChanges(id, changes, options); }
   updateContentFeedbackAdjustmentDraftStatus(id, status) { return this.repositories.contentPlanning.updateContentFeedbackAdjustmentDraftStatus(id, status); }
   deleteContentFeedbackAdjustmentDraft(id) { return this.repositories.contentPlanning.deleteContentFeedbackAdjustmentDraft(id); }
   listArticleEvidenceAssets(input = {}) { return this.repositories.contentPlanning.listArticleEvidenceAssets(input); }
