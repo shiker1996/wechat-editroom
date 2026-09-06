@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { articleLengthStatus, articleStageOutputIssue, authorizedWritingBrief, buildDraftUserPrompt, buildArticleStageSystem, buildReviewRepairPrompt, buildPublicationComplianceRepairPrompt, compositeSourceText, normalizePlanningResult, selectWriterSkill, ARTICLE_LENGTH_RANGE, ARTICLE_STAGE_CONTRACT, ARTICLE_QUALITY_GATE_TOOL, aiQualityGate, sourceCacheIssue, unverifiedFactBaseIssue } from '../server/features/articles/application/article-pipeline.mjs';
+import { articleLengthStatus, articleStageOutputIssue, authorizedWritingBrief, reviewGateOutputIssue, reviewGateResult, buildDraftUserPrompt, buildArticleStageSystem, buildReviewRepairPrompt, buildPublicationComplianceRepairPrompt, compositeSourceText, normalizePlanningResult, selectWriterSkill, ARTICLE_LENGTH_RANGE, ARTICLE_STAGE_CONTRACT, ARTICLE_QUALITY_GATE_TOOL, aiQualityGate, sourceCacheIssue, unverifiedFactBaseIssue } from '../server/features/articles/application/article-pipeline.mjs';
 import { inspectArticleQuality } from '../server/features/articles/domain/article-quality.mjs';
 import { loadArticleSkillBundle, loadSkillBundle } from '../server/platform/llm/skill-runtime.mjs';
 
@@ -20,6 +20,14 @@ test('文章阶段输出门禁识别工具操作说明和非完整文章',()=>{
   assert.match(articleStageOutputIssue('我先读取相关契约文件，确认环境后开始处理 humanize 阶段。',{requireArticle:true}),/工具操作说明/);
   assert.match(articleStageOutputIssue('这里只是一段说明。',{requireArticle:true}),/一级标题/);
   assert.equal(articleStageOutputIssue('# 完整标题\n\n这是文章正文。',{requireArticle:true}),null);
+});
+
+test('审稿门禁要求独立 result 行，并能明确诊断缺失原因',()=>{
+  const report='我已仔细审阅这篇文章。整体质量较高。';
+  assert.equal(reviewGateResult(report),null);
+  assert.match(reviewGateOutputIssue(report,{requireArticle:true}),/缺少独立一行 result: pass 或 result: needs-revision/);
+  assert.equal(reviewGateResult('<!-- REVIEW\nresult: needs-revision\n-->'),'needs-revision');
+  assert.equal(reviewGateOutputIssue('# 标题\n\n正文。\n\n<!-- REVIEW\nresult: pass\n-->',{requireArticle:true}),null);
 });
 
 test('终稿统一字数门禁默认1300–2000个可见字符', () => {

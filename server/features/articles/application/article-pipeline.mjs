@@ -20,12 +20,12 @@ import {
   publicationCompliancePrompt, publicationFactBaseIssues, scanPublicationRisk,
 } from '../domain/publication-compliance.mjs';
 import {
-  ARTICLE_LENGTH_RANGE, articleLengthStatus, articleStageOutputIssue, authorizedWritingBrief,
+  ARTICLE_LENGTH_RANGE, articleLengthStatus, articleStageOutputIssue, authorizedWritingBrief, reviewGateOutputIssue, reviewGateResult,
   buildDraftUserPrompt, compositeSourceText, normalizePlanningResult, selectWriterSkill,
   sourceCacheIssue, unverifiedFactBaseIssue, buildResearchCoveragePrompt,
 } from './article-pipeline-contract.mjs';
 export {
-  ARTICLE_LENGTH_RANGE, articleLengthStatus, articleStageOutputIssue, authorizedWritingBrief,
+  ARTICLE_LENGTH_RANGE, articleLengthStatus, articleStageOutputIssue, authorizedWritingBrief, reviewGateOutputIssue, reviewGateResult,
   buildDraftUserPrompt, compositeSourceText, normalizePlanningResult, selectWriterSkill,
   sourceCacheIssue, unverifiedFactBaseIssue, buildResearchCoveragePrompt,
 } from './article-pipeline-contract.mjs';
@@ -504,20 +504,26 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   recordStage('humanize',stageSkills['humanizer-zh'],['04-draft.md','02-fact-base.json'],'05-humanized.md');
   onProgress('Step 5 审稿与事实/逻辑/风险门禁');
   const reviewSystem=buildArticleStageSystem(orchestratorSkill,'review',stageSkills['article-reviewer']);
-  const reviewResult=await textCall(gateway,{provider,purpose:'article-review',batchId,candidateId},reviewSystem,`事实基座:${JSON.stringify(factBase)}\n\n发布主张登记:${JSON.stringify(publicationClaimRegister)}\n\n作者采用的研判拓展点:${JSON.stringify(brief.adoptedResearchPoints)}\n\n作者明确不采用的方向:${JSON.stringify(brief.rejectedAngles)}\n\n发布风险扫描:${JSON.stringify(scanPublicationRisk({article:human,factBase}))}\n\n文章:\n${human}`,Math.min(6500,providerConfig.maxOutputTokens));
+  const reviewOutputInstruction='输出契约：直接输出修订后的完整 Markdown 文章，不要输出审稿报告、结论摘要、评分或修订说明。文末必须保留唯一 REVIEW HTML 注释，并在注释中单独一行写且只能写以下结果之一：result: pass 或 result: needs-revision。即使文章需要返工，也必须返回完整修订稿和该 result 行。';
+  const reviewResult=await textCall(gateway,{provider,purpose:'article-review',batchId,candidateId},reviewSystem,`事实基座:${JSON.stringify(factBase)}\n\n发布主张登记:${JSON.stringify(publicationClaimRegister)}\n\n作者采用的研判拓展点:${JSON.stringify(brief.adoptedResearchPoints)}\n\n作者明确不采用的方向:${JSON.stringify(brief.rejectedAngles)}\n\n发布风险扫描:${JSON.stringify(scanPublicationRisk({article:human,factBase}))}\n\n文章:\n${human}\n\n${reviewOutputInstruction}`,Math.min(6500,providerConfig.maxOutputTokens));
   let reviewed=cleanMarkdown(reviewResult.content);
   const reviewLogPath=path.join(workdir,'06-review-gate.md');
   let reviewLog=`# 首次审稿响应\n\n${reviewed}`;writeFile(reviewLogPath,reviewLog);
   let finalReviewResult=reviewResult;
-  if(/result:\s*needs-revision/i.test(reviewed)) {
-    onProgress('Step 5 审稿未通过,执行一次定向修订复审');
+  let reviewIssue=reviewGateOutputIssue(reviewed,{requireArticle:true});
+  if(reviewIssue||reviewGateResult(reviewed)==='needs-revision') {
+    onProgress(reviewIssue?`Step 5 审稿输出异常，自动重试：${reviewIssue}`:'Step 5 审稿未通过,执行一次定向修订复审');
+    if(reviewIssue)store.updateModelCall(reviewResult.callId,{status:'invalid_output',error:reviewIssue});
     const repairResult=await textCall(gateway,{provider,purpose:'article-review-repair',batchId,candidateId},reviewSystem,
-      `${buildReviewRepairPrompt({factBase,outline,article:human,review:reviewed})}\n\n作者采用的研判拓展点：${JSON.stringify(brief.adoptedResearchPoints)}；作者明确不采用的方向：${JSON.stringify(brief.rejectedAngles)}。修订时保留并兑现采用点，不要重新引入舍弃方向。`,Math.min(6500,providerConfig.maxOutputTokens));
+      `${buildReviewRepairPrompt({factBase,outline,article:human,review:reviewed})}\n\n作者采用的研判拓展点：${JSON.stringify(brief.adoptedResearchPoints)}；作者明确不采用的方向：${JSON.stringify(brief.rejectedAngles)}。修订时保留并兑现采用点，不要重新引入舍弃方向。${reviewIssue?`\n上一次响应未通过审稿输出契约：${reviewIssue}。这次必须返回完整 Markdown 文章，不能返回审稿报告或结论摘要。`:''}`,Math.min(6500,providerConfig.maxOutputTokens));
     reviewed=cleanMarkdown(repairResult.content);
-    finalReviewResult=repairResult;reviewLog+=`\n\n# 定向修订复审响应\n\n${reviewed}`;writeFile(reviewLogPath,reviewLog);
+    finalReviewResult=repairResult;reviewLog+=`\n\n# 定向修订复审响应\n\n${reviewed}`;writeFile(reviewLogPath,reviewLog);reviewIssue=reviewGateOutputIssue(reviewed,{requireArticle:true});
   }
-  if(!/result:\s*pass/i.test(reviewed)){
-    const reason=`审稿响应不符合门禁契约：未返回 result: pass 或 result: needs-revision；原始响应已保存到 06-review-gate.md；返回摘要：${outputExcerpt(reviewed)}`;
+  const finalReviewStatus=reviewGateResult(reviewed);
+  if(reviewIssue||finalReviewStatus!=='pass'){
+    const reason=reviewIssue
+      ? `审稿响应不符合门禁契约：${reviewIssue}；原始响应已保存到 06-review-gate.md；返回摘要：${outputExcerpt(reviewed)}`
+      : `审稿复审仍未通过：result: ${finalReviewStatus||'缺失'}；原始响应已保存到 06-review-gate.md；返回摘要：${outputExcerpt(reviewed)}`;
     store.updateModelCall(finalReviewResult.callId,{status:'invalid_output',error:reason});
     throw new Error(reason);
   }

@@ -54,4 +54,6 @@ return_to: none|outline|titles|draft
 -->
 ```
 
+编排模式不得只返回审稿报告、结论摘要或问题清单。`result` 必须是 REVIEW 注释中独立的一行，且只能为 `result: pass` 或 `result: needs-revision`；即使需要返工，也必须同时返回完整修订后的 Markdown 文章。
+
 存在 `blocker` 或未解决的 `major` 时使用 `needs-revision`，并准确指定返工阶段。`publication_compliance: blocked` 时不得进入排版；`title_status: blocked` 时必须回到标题阶段，不能只修改正文。不要在正文中留下审稿报告标题。审稿结论必须来自事实基座和发布主张登记，不得根据关键词命中单独判定文章违规。
