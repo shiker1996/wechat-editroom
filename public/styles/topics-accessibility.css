@@ -388,3 +388,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 }
 
 /* Keep accessibility sizing last so legacy component rules cannot shrink targets. */
+/* Run Trace waterfall fills the user-resizable overview instead of stopping at a fixed height. */
+.run-trace-overview{display:grid;grid-template-rows:auto minmax(0,1fr) auto auto auto}
+.run-trace-waterfall-list{min-height:0;max-height:none}
+@media(max-width:760px){.run-trace-waterfall-list{max-height:none}}
