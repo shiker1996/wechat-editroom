@@ -57,5 +57,8 @@ output/
 # Agents / skills（本地开发技能，不纳入版本控制）
 .agents/
 
+# 复盘确认后的技能运行时覆盖层
+/writing-skills/
+
 # 本地清理隔离区（确认回归通过后再人工删除）
 _delete/
