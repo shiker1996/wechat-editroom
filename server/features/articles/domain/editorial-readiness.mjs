@@ -1,6 +1,6 @@
 import { normalizeResearchPoints, researchPointsComplete } from './research-selection.mjs';
 
-// 编辑室就绪判定：代码确定性校验 9 个表单项，替代模型自觉的状态声明。
+// 编辑室就绪判定：代码确定性校验 12 个表单项（其中 9 个参与门禁），替代模型自觉的状态声明。
 // 编辑室只是辅助作者填表：必填项填好即可成稿，选填项不参与门禁。
 // 设计见 docs/design/conversation-agent-form-unification-design.md。
 
@@ -48,10 +48,13 @@ export const EDITORIAL_FIELDS=Object.freeze([
   {key:'thesis',label:'锁定命题',required:true,scope:'candidate'},
   {key:'adopted_research_points',label:'采用的研判拓展点',required:true,scope:'editorial'},
   {key:'research_basis',label:'采用的研判主线',required:true,scope:'editorial'},
+  {key:'reader_consequence',label:'读者后果',required:true,scope:'editorial'},
+  {key:'conflict',label:'利益/责任冲突',required:true,scope:'editorial'},
   // 没有额外禁写项时，空值本身就是明确边界；若填写内容仍需通过实质性校验。
   {key:'forbidden_claims',label:'禁止写入',required:true,allowEmpty:true,scope:'editorial'},
   {key:'confirmed_experiences',label:'已确认实践',required:false,scope:'editorial'},
   {key:'rejected_angles',label:'否定角度/反证边界',required:false,scope:'editorial'},
+  {key:'reader_action',label:'读者行动依据',required:false,scope:'editorial'},
 ]);
 
 export function editorialFieldComplete(field,value){
@@ -62,11 +65,15 @@ export function editorialFieldComplete(field,value){
 }
 
 export function evaluateEditorialReadiness({candidate={},editorial={}}={}){
+  const materialBrief=editorial.material_brief&&typeof editorial.material_brief==='object'?editorial.material_brief:{};
   const fields=EDITORIAL_FIELDS.map((field)=>{
     const source=field.scope==='candidate'?candidate:editorial;
+    const rawSource=field.scope==='editorial'&&['reader_consequence','conflict','reader_action'].includes(field.key)
+      ? {...materialBrief,...editorial}
+      : source;
     const rawValue=field.key==='adopted_research_points'
-      ? normalizeResearchPoints(source[field.key])
-      : String(source[field.key]??'').trim();
+      ? normalizeResearchPoints(rawSource[field.key])
+      : String(rawSource[field.key]??'').trim();
     const value=field.key==='adopted_research_points'
       ? rawValue.map((item)=>item.statement).join('；')
       : rawValue;

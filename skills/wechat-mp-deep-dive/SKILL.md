@@ -13,6 +13,8 @@ description: 撰写微信公众号行业、职场或社会事件深度分析文�
 
 ## 分析框架
 
+先读取 `material_brief`，把 `reader_consequence` 作为开头和实用增量的落点，把 `conflict` 展开为参与方的收益、成本与责任分配；`baseline_change` 只能在事实基座有支持时使用，`evidence_boundary` 约束因果和反方表述，结尾兑现 `reader_action`。素材成熟度不是结论，也不能掩盖证据缺口。
+
 - 读取上游 `distribution_lane` 与 `reader_stake`；开头用具体事件进入，并在第二段前给出作者立场和本文服务的读者利益。
 - 识别主要参与方、各自激励、权力或资源约束，以及谁承担成本。
 - 将相关性与因果性分开；无法证明因果时使用更克制的表述。

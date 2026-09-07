@@ -6,6 +6,7 @@ import { formatAccountContext } from '../../../shared/domain/account-context.mjs
 import { normalizeDistributionLane } from '../../../shared/domain/distribution-strategy.mjs';
 import { parseModelJson } from '../../../platform/llm/model-json.mjs';
 import { evaluateEditorialReadiness } from '../domain/editorial-readiness.mjs';
+import { normalizeMaterialBrief } from '../../../shared/domain/material-brief.mjs';
 import { normalizeResearchPoints, normalizeRejectedAngles } from '../domain/research-selection.mjs';
 import { normalizeResearchCoverageResult, researchCoverageNeedsRevision } from '../domain/research-coverage.mjs';
 import { loadArticleSkillBundle, loadSkillBundle } from '../../../platform/llm/skill-runtime.mjs';
@@ -366,10 +367,14 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   const readerStake=String(candidate.reader_stake||'').trim();
   const requestedDistributionLane=normalizeDistributionLane(candidate.distribution_lane);
   const distributionLane=requestedDistributionLane==='通知池'&&!readerStake?'实验池':requestedDistributionLane;
+  const materialBrief=normalizeMaterialBrief(editorial.material_brief);
   const brief={candidateId:candidate.candidate_id,topic:candidate.hotspot_title,sourceUrl:sourceUrls,category:candidate.category,score:candidate.f_score,
     angle:candidate.angle,thesis:candidate.thesis,researchBasis:editorial.research_basis,adoptedResearchPoints:normalizeResearchPoints(editorial.adopted_research_points),confirmedFacts:editorial.confirmed_facts,authorOpinions:editorial.author_opinions,
     confirmedExperiences:editorial.confirmed_experiences,rejectedAngles:normalizeRejectedAngles(editorial.rejected_angles),forbiddenClaims:editorial.forbidden_claims,
-    experienceRequired:Boolean(editorial.experience_required),distributionLane,readerStake,composite:Boolean(candidate.composite)};
+    experienceRequired:Boolean(editorial.experience_required),distributionLane,readerStake,composite:Boolean(candidate.composite),materialBrief,
+    action:materialBrief.action,affectedGroup:materialBrief.affected_group,readerConsequence:materialBrief.reader_consequence,
+    conflict:materialBrief.conflict,baselineChange:materialBrief.baseline_change,counterEvidence:materialBrief.counter_evidence,
+    evidenceBoundary:materialBrief.evidence_boundary,readerAction:materialBrief.reader_action,materialReadiness:materialBrief.material_readiness};
   // 将已抓取的原始来源一并交给规划器，禁止模型凭常识补写日期、任职经历和合同细节。
   try {
     if(candidate.composite){
@@ -445,7 +450,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   onProgress('Step 1.5 基于来源建立结构化事实基座');
   const factBaseResult=await gateway.complete({provider,purpose:'article-fact-base',batchId,candidateId,jsonMode:true,maxOutputTokens:Math.min(5000,providerConfig.maxOutputTokens),messages:[
     {role:'system',protected:true,content:buildArticleStageSystem(orchestratorSkill,'fact-base')},
-    {role:'user',protected:true,content:JSON.stringify({topic:brief.topic,researchBasis:brief.researchBasis,adoptedResearchPoints:brief.adoptedResearchPoints,rejectedAngles:brief.rejectedAngles,confirmedFacts:brief.confirmedFacts,authorOpinions:brief.authorOpinions,forbiddenClaims:brief.forbiddenClaims,sourceUrl:brief.sourceUrl,sourceText:brief.sourceText||''})},
+    {role:'user',protected:true,content:JSON.stringify({topic:brief.topic,researchBasis:brief.researchBasis,adoptedResearchPoints:brief.adoptedResearchPoints,rejectedAngles:brief.rejectedAngles,confirmedFacts:brief.confirmedFacts,authorOpinions:brief.authorOpinions,forbiddenClaims:brief.forbiddenClaims,materialBrief:brief.materialBrief,sourceUrl:brief.sourceUrl,sourceText:brief.sourceText||''})},
   ]});
   const factBase=parseJsonResult(factBaseResult,store);
   brief.factBase=factBase;
@@ -469,7 +474,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   const planningResult=await gateway.complete({provider,purpose:'article-planning',batchId,candidateId,jsonMode:true,maxOutputTokens:Math.min(5000,providerConfig.maxOutputTokens),
     messages:[{role:'system',content:PLAN_SYSTEM,protected:true},{role:'user',content:JSON.stringify(writingBrief),protected:true}]});
   const plan=normalizePlanningResult(parseJsonResult(planningResult,store)); const selectedTitle=String(plan.selectedTitle||candidate.hotspot_title).trim();
-  const materials=`# 作者素材\n\n- topic:${brief.topic}\n- angle:${brief.angle}\n- adopted_research_points:${JSON.stringify(brief.adoptedResearchPoints)}\n- rejected_angles:${JSON.stringify(brief.rejectedAngles)}\n- research_basis:${brief.researchBasis||'未提供'}\n- article_brief_path:${briefPath}\n- brief_status:LOCKED\n- distribution_lane:${brief.distributionLane}\n- reader_stake:${brief.readerStake||'待明确'}\n- experience_required:${brief.experienceRequired}\n- experience:${brief.confirmedExperiences||'无;公共资料分析,不得使用第一人称亲测'}\n- author_opinion:${brief.authorOpinions||'未提供'}\n- avoid:${brief.forbiddenClaims||'不得虚构事实与经历'}\n- writer_skill:${chosenWriterSkill}\n- writer_skill_reason:${writerDecision.reason}\n- content_role:${plan.contentRole}\n- expected_action:${(plan.expectedAction||[]).join('、')}\n- practical_increment:${plan.practicalIncrement||'观察框架'}\n\n${plan.materialsMarkdown||''}`;
+  const materials=`# 作者素材\n\n- topic:${brief.topic}\n- angle:${brief.angle}\n- adopted_research_points:${JSON.stringify(brief.adoptedResearchPoints)}\n- rejected_angles:${JSON.stringify(brief.rejectedAngles)}\n- research_basis:${brief.researchBasis||'未提供'}\n- material_brief:${JSON.stringify(brief.materialBrief)}\n- article_brief_path:${briefPath}\n- brief_status:LOCKED\n- distribution_lane:${brief.distributionLane}\n- reader_stake:${brief.readerStake||'待明确'}\n- experience_required:${brief.experienceRequired}\n- experience:${brief.confirmedExperiences||'无;公共资料分析,不得使用第一人称亲测'}\n- author_opinion:${brief.authorOpinions||'未提供'}\n- avoid:${brief.forbiddenClaims||'不得虚构事实与经历'}\n- writer_skill:${chosenWriterSkill}\n- writer_skill_reason:${writerDecision.reason}\n- content_role:${plan.contentRole}\n- expected_action:${(plan.expectedAction||[]).join('、')}\n- practical_increment:${plan.practicalIncrement||'观察框架'}\n\n${plan.materialsMarkdown||''}`;
   const outline=`# 文章大纲\n\n## 分发与读者利益\n- 分发池：${brief.distributionLane}\n- 读者利益：${brief.readerStake||'待明确'}\n\n${plan.outlineMarkdown||''}\n\n## 来源\n- [原始热点来源](${brief.sourceUrl||''})\n\n## 剩余风险\n${plan.remainingRisks.map((x)=>`- ${typeof x==='string'?x:(x?.message||JSON.stringify(x))}`).join('\n')||'- 无'}`;
   const titles=`# 标题候选\n\ndistribution_lane: ${brief.distributionLane}\nreader_stake: ${brief.readerStake||'待明确'}\ncore_keywords: ${(plan.coreKeywords||[]).join('、')}\n\n${(plan.titleCandidates||[]).map((x,i)=>`${i+1}. ${x.title} - ${x.reason}`).join('\n')}\n\nSELECTED_TITLE: ${selectedTitle}\nwriter_skill: ${chosenWriterSkill}`;
   const p01=path.join(workdir,'01-personal-materials.md'),p02=path.join(workdir,'02-outline.md'),p03=path.join(workdir,'03-titles.md'); writeFile(p01,materials);writeFile(p02,outline);writeFile(p03,titles);
@@ -512,16 +517,17 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   const titlePurpose='article-title-generation';
   const titleMessages=[{role:'system',content:titleGenSystem,protected:true},{role:'user',content:JSON.stringify({topic:candidate.hotspot_title,
     distribution_lane:brief.distributionLane,reader_stake:brief.readerStake,draft,factBase,publicationClaimRegister,
-    forbiddenClaims:brief.forbiddenClaims,publicationRiskRules:'高影响财经、名誉和敏感主张必须有已核验事实与明确归因；标题不得把传闻、推断或绝对化判断写成事实。'}),protected:true}];
+    materialBrief:brief.materialBrief,forbiddenClaims:brief.forbiddenClaims,publicationRiskRules:'高影响财经、名誉和敏感主张必须有已核验事实与明确归因；标题不得把传闻、推断或绝对化判断写成事实。'}),protected:true}];
   const titleFallback=async()=>{try{return parseJsonResult(await gateway.complete({provider,purpose:titlePurpose,batchId,candidateId,jsonMode:true,maxOutputTokens:Math.min(5000,providerConfig.maxOutputTokens),messages:titleMessages}),store);}catch{return {};}};
   const titleDecision=await callDecisionTool({gateway,provider,repository:store?.repositories?.extensionSettings,purpose:titlePurpose,batchId,candidateId,
     definition:DECISION_TITLE_PLAN_TOOL,schema:DECISION_TITLE_PLAN_TOOL.function.parameters,
     messages:[{...titleMessages[0],content:`${titleMessages[0].content}\n\n如果当前调用提供了 decision.title_plan 工具，必须调用一次该工具；工具参数就是标题规划结果，不要输出解释文字。`},titleMessages[1]],fallback:titleFallback});
   let titleGen=normalizeDecisionTitlePlan(titleDecision.value,{fallbackTitle:selectedTitle});
   const finalSelectedTitle=String(titleGen.selectedTitle||selectedTitle).trim();
+  brief.materialBrief.title_promise=String(brief.materialBrief.title_promise||finalSelectedTitle).trim();
   titleGen=normalizePlanningResult(titleGen);
   const finalTitleCandidates=titleGen.titleCandidates; const finalCoreKeywords=titleGen.coreKeywords.length?titleGen.coreKeywords:plan.coreKeywords;
-  const updatedTitles='# 标题候选\n\ndistribution_lane: '+brief.distributionLane+'\nreader_stake: '+(brief.readerStake||'待明确')+'\ncore_keywords: '+finalCoreKeywords.join('、')+'\n\n'+finalTitleCandidates.map((x,i)=>(i+1)+'. '+x.title+' - '+x.reason+(x.score!=null?' (得分:'+x.score+'/12)':'')).join('\n')+'\n\nSELECTED_TITLE: '+finalSelectedTitle+'; // 初稿正文重生成\nwriter_skill: '+chosenWriterSkill;
+  const updatedTitles='# 标题候选\n\ndistribution_lane: '+brief.distributionLane+'\nreader_stake: '+(brief.readerStake||'待明确')+'\nmaterial_title_promise: '+brief.materialBrief.title_promise+'\ncore_keywords: '+finalCoreKeywords.join('、')+'\n\n'+finalTitleCandidates.map((x,i)=>(i+1)+'. '+x.title+' - '+x.reason+(x.score!=null?' (得分:'+x.score+'/12)':'')).join('\n')+'\n\nSELECTED_TITLE: '+finalSelectedTitle+'; // 初稿正文重生成\nwriter_skill: '+chosenWriterSkill;
   writeFile(p03,updatedTitles);
   const selectedTitleRisk=scanPublicationRisk({title:extractArticleTitle(draft)||finalSelectedTitle,article:draft,factBase});
   selectedTitleRisk.generatedTitle=finalSelectedTitle;

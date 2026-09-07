@@ -1,6 +1,6 @@
 # 决策底稿研判采用与文章贴合度改造方案
 
-状态：已实施，待用户重跑编辑室与成稿链验证
+状态：研判采用清单已实施；文章素材承接待实施
 日期：2026-09-03
 关联方案：[从讨论研判到高讨论文章的选题链改造方案](./discussion-oriented-topic-research-adjustment-plan.md)
 
@@ -75,9 +75,23 @@
 | `author_opinions` | 作者明确表达的观点、判断和理由 | 必填 |
 | `angle` | 文章从哪个冲突、变化、差异或反例切入 | 必填 |
 | `thesis` | 文章最终要证明的命题及成立条件 | 必填 |
+| `reader_consequence` | 具体读者会受到的工作、收入、成本、效率或选择影响 | 必填；由研判结果预填，作者确认或修正 |
+| `conflict` | 谁获益、谁承担成本、责任或解释权 | 必填；由研判结果预填，作者确认或明确无冲突 |
+| `reader_action` | 读者读完后获得的判断或行动依据 | 选填；系统建议，作者确认或修改 |
+| `material_readiness` | 当前研判素材成熟度：`insufficient` / `promising` / `verified` | 只读，由系统生成 |
 | `forbidden_claims` | 待核内容、来源分歧和禁止越界的说法 | 必填，可明确留空 |
 | `confirmed_experiences` | 作者可验证的第一人称实践 | 选填，但必须询问是否依赖 |
 | `rejected_angles` | 明确舍弃的研判点、事件或角度及原因 | 选填；发生舍弃时追加 |
+
+### 3.3 文章素材承接区
+
+编辑室不要求作者填写 `material_brief` JSON，也不要求输入事件 ID、研判素材 ID 或来源 ID。页面以自然语言展示系统预填内容，作者只确认以下三件事：
+
+1. 读者具体会受到什么影响；
+2. 文章要展开的利益冲突是什么；
+3. 本文最终要证明什么。
+
+`action`、`affected_group`、`baseline_change`、`impact_evidence`、`counter_evidence` 和 `material_readiness` 从研判结果只读带入；`research_material_ids`、`event_ids` 和来源 ID 只用于内部回溯。作者修改后的 `reader_consequence`、`conflict` 和 `thesis` 写入锁定简报，作为写作、标题和审稿的共同输入。
 
 `editor_question`、`open_questions` 继续作为系统状态字段，不属于作者最终决策，也不传给文章模型作为写作内容。
 
@@ -102,6 +116,8 @@
   查看研判卡
   ↓
   确认支撑事实和证据边界
+  ↓
+  确认读者后果与利益冲突
   ↓
   确认 author_opinions
   ↓
@@ -155,6 +171,8 @@
 ```
 
 `statement` 是人和模型共同读取的主要内容，引用 ID 只用于系统回溯、素材拼装和审计。它不要求文章正文出现 ID，也不把 ID 匹配作为写作门禁。
+
+编辑室承接区未锁定前将草稿保存在现有 `editorial_sessions.material_brief_json` 中，不新增独立素材表；仓库层向表单和门禁展平 `reader_consequence`、`conflict` 等字段。锁定时将该 JSON 固化为结构化快照，`article-brief.md` 只渲染快照供人阅读和后续成稿链消费。
 
 ## 6. 传给文章阶段的研究包
 
@@ -224,6 +242,9 @@
 ### 阶段 1：数据和服务契约
 
 - 增加 `adopted_research_points` 的存储与读取；
+- 在 `editorial_sessions` 增加 `material_brief_json`，默认 `{}`，通过现有迁移机制兼容旧数据库；
+- 将 `reader_consequence`、`conflict` 纳入编辑底稿字段清单；`material_readiness` 只读，`reader_action` 不阻塞成稿；
+- 复用研判素材现有的 `reader_impact`、`difference_or_conflict` 和 `parties`，只在文章简报层映射为 `reader_consequence`、`conflict`；
 - 增加 `editorial-research-selection.json` 产物；
 - 保持现有字段的追加、去重和明确删除规则；
 - 不改变阶段 3 的候选生成和评分门禁。
@@ -234,6 +255,8 @@
 - 增加“采用/暂不采用”操作；
 - 采用后自动填入或更新研究清单；
 - 明确舍弃时追加 `rejected_angles`；
+- 增加“文章素材承接”区域，预填并确认 `reader_consequence`、`conflict` 和 `material_readiness`；
+- `event_ids`、`research_material_ids`、来源 ID、`action` 和 `impact_evidence` 只读展示或内部回溯，不要求作者填写；
 - `research_basis` 改为对采用清单的总结，不再独自承担素材选择。
 
 ### 阶段 3：成稿输入
@@ -255,10 +278,11 @@
 2. 页面首次打开不自动选择研判点；角度和命题明确后，编辑室 Agent 能提出不超过 3 条针对当前命题的研判点建议，作者可以确认、取消或补选，不需要手填内部 ID；
 3. `adopted_research_points` 至少包含一条具体研判点；
 4. 采用清单、支撑事实、证据边界和舍弃方向能进入锁定简报；
-5. 大纲和写作模型能收到采用清单，而不是只有一句 `research_basis`；
-6. 成稿检查能够区分 `full`、`partial`、`omitted` 和 `contradicted`；
-7. 核心研判点遗漏或舍弃方向泄漏时，能够生成明确返工提示；
-8. 不强制文章采用全部研判点，也不强制没有可靠关系的文章补写事件间关系。
+5. 锁定简报包含已确认的 `reader_consequence`、`conflict` 和 `thesis`，并保留 `material_readiness`；
+6. 大纲和写作模型能收到采用清单，而不是只有一句 `research_basis`；
+7. 成稿检查能够区分 `full`、`partial`、`omitted` 和 `contradicted`；
+8. 核心研判点遗漏或舍弃方向泄漏时，能够生成明确返工提示；
+9. 不强制文章采用全部研判点，也不强制没有可靠关系的文章补写事件间关系。
 
 ## 10. 与既有方案的边界
 

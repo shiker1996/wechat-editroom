@@ -7,6 +7,8 @@ import { runEditorialAgentTurn } from '../../../features/articles/application/ag
 import { extractLocalProjectPath } from '../../integrations/local-project-reader.mjs';
 import { createNdjsonSession } from '../route-helpers.mjs';
 import { runWithThinkingSink } from '../../llm/gateway.mjs';
+import { readDiscussionResearchContext } from '../../../features/research/index.mjs';
+import { buildMaterialBrief } from '../../../shared/domain/material-brief.mjs';
 
 // capability-call: cap_content_passage_retrieve
 
@@ -158,9 +160,13 @@ export async function handleArticleRoutes(context) {
     const editorial = candidate.editorial;
     const readiness = evaluateEditorialReadiness({ candidate, editorial });
     if (!readiness.ready) return json(response, 409, { error: `编辑底稿未就绪，仍缺：${readiness.missing.join('、')}` });
+    const events = candidateEventGroups(candidate);
+    const researchContext = readDiscussionResearchContext({ workspaceRoot: root, batchId: candidate.batch_id, candidate, events });
+    const materialBrief = buildMaterialBrief({ candidate, editorial, researchContext, events });
+    const lockedEditorial = { ...editorial, material_brief: materialBrief };
     const batch = store.getBatch(candidate.batch_id);
     const filePath = path.join(batchWorkdir(batch), candidate.candidate_id, 'article-brief.md');
-    const file = writeUtf8(filePath, lockedBrief(candidate, editorial));
+    const file = writeUtf8(filePath, lockedBrief(candidate, lockedEditorial));
     const researchSelectionPath = path.join(batchWorkdir(batch), candidate.candidate_id, 'editorial-research-selection.json');
     const researchSelection = writeUtf8(researchSelectionPath, JSON.stringify({
       candidate_id: candidate.candidate_id,
@@ -168,7 +174,7 @@ export async function handleArticleRoutes(context) {
       rejected: normalizeRejectedAngles(editorial.rejected_angles),
       generated_at: new Date().toISOString(),
     }, null, 2));
-    store.saveEditorial(candidate.id, { ...editorial, brief_status: 'LOCKED' });
+    store.saveEditorial(candidate.id, { ...lockedEditorial, brief_status: 'LOCKED' });
     store.updateCandidate(candidate.id, { status: 'locked' });
     store.updateBatch(batch.id, { stage: 'drafting', status: 'running' });
     store.upsertArtifact({ batchId: batch.id, kind: '锁定简报', name: 'article-brief.md', path: filePath, ...file });

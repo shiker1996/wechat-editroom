@@ -304,10 +304,12 @@ async function openEditorial(id) {
   form.elements.angle.value = candidate.angle || "";
   form.elements.thesis.value = candidate.thesis || "";
   const editorial = candidate.editorial || {};
-  for (const key of ["editor_question", "confirmed_facts", "research_basis", "author_opinions", "confirmed_experiences", "rejected_angles", "open_questions", "forbidden_claims"]) {
+  for (const key of ["editor_question", "confirmed_facts", "research_basis", "author_opinions", "confirmed_experiences", "rejected_angles", "open_questions", "forbidden_claims", "affected_group", "reader_consequence", "conflict", "evidence_boundary", "reader_action"]) {
     const el = form.elements[key];
-    if (el) el.value = editorial[key] || "";
+    if (el) el.value = editorial[key] || editorial.material_brief?.[key] || "";
   }
+  const readinessEl = document.getElementById("editorial-material-readiness");
+  if (readinessEl) readinessEl.textContent = editorial.material_readiness || editorial.material_brief?.material_readiness || "待研判";
   const adoptedResearchInput = form.elements.adopted_research_points;
   const adoptedResearchPoints = parseResearchPoints(editorial.adopted_research_points);
   if (adoptedResearchInput) adoptedResearchInput.value = JSON.stringify(adoptedResearchPoints);
@@ -445,7 +447,7 @@ async function loadSimilarArticles(id) {
 
 function renderEditorialReadiness() {
   // 与 server/features/articles/domain/editorial-readiness.mjs 的 evaluateEditorialReadiness 保持一致：
-  // 7 个必填表单项填好，加上“禁止写入”无内容时的明确留空，即可成稿；2 个选填项只展示不阻塞。
+  // 9 个门禁项填好，加上“禁止写入”无内容时的明确留空，即可成稿；其余素材字段只辅助写作。
   const PLACEHOLDER = /(?:待定|未定|待确认|待锁定|暂无|尚未|需作者|待作者|待主线|未明确|TBD)/i;
   // 与 server/features/articles/domain/editorial-readiness.mjs 保持一致：
   // 长文本里的“未明确/待核”等可能是具体事实边界，只有短占位回复才判为不合格。
@@ -472,9 +474,14 @@ function renderEditorialReadiness() {
     { label: "锁定命题", field: "thesis", ok: substantive(text("thesis")) },
     { label: "采用的研判拓展点", field: "adopted_research_points", ok: adoptedPoints.length > 0 },
     { label: "采用的研判主线", field: "research_basis", ok: researchBasisComplete(text("research_basis")) },
+    { label: "读者后果", field: "reader_consequence", ok: substantive(text("reader_consequence")) },
+    { label: "利益/责任冲突", field: "conflict", ok: substantive(text("conflict")) },
     { label: "禁止写入", field: "forbidden_claims", ok: forbiddenClaimsComplete(text("forbidden_claims")) },
     { label: "已确认实践（选填）", field: "confirmed_experiences", ok: substantive(text("confirmed_experiences")), optional: true },
     { label: "否定角度/反证边界（选填）", field: "rejected_angles", ok: substantive(text("rejected_angles")), optional: true },
+    { label: "影响对象（选填）", field: "affected_group", ok: substantive(text("affected_group")), optional: true },
+    { label: "证据边界（选填）", field: "evidence_boundary", ok: substantive(text("evidence_boundary")), optional: true },
+    { label: "读者行动依据（选填）", field: "reader_action", ok: substantive(text("reader_action")), optional: true },
   ];
   const required = checks.filter((c) => !c.optional);
   const passed = required.filter((c) => c.ok).length;
@@ -600,7 +607,7 @@ async function persistEditorialForm(opts) {
     method: "PATCH",
     body: JSON.stringify({ angle: form.elements.angle.value, thesis: form.elements.thesis.value }),
   });
-  const fields = ["editor_question", "confirmed_facts", "research_basis", "author_opinions", "confirmed_experiences", "rejected_angles", "forbidden_claims"];
+  const fields = ["editor_question", "confirmed_facts", "research_basis", "author_opinions", "confirmed_experiences", "rejected_angles", "forbidden_claims", "affected_group", "reader_consequence", "conflict", "evidence_boundary", "reader_action"];
   const editorial = Object.fromEntries(fields.map((k) => [k, form.elements[k].value]));
   editorial.adopted_research_points = selectedResearchPoints();
   await request(`/api/candidates/${candidateId}/editorial`, { method: "PUT", body: JSON.stringify(editorial) });

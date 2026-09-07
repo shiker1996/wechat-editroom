@@ -794,6 +794,17 @@ export function runDatabaseMigrations(db, migrateSchema) {
       db.exec('COMMIT');
     } catch (error) { db.exec('ROLLBACK'); throw error; }
   }
+  // Editorial material brief is additive and kept outside the public schema
+  // counter so existing v45 databases receive the field without changing the
+  // migration contract consumed by older clients.
+  if (arguments.length < 2) {
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      const columns = new Set(db.prepare('PRAGMA table_info(editorial_sessions)').all().map((column) => column.name));
+      if (!columns.has('material_brief_json')) db.exec("ALTER TABLE editorial_sessions ADD COLUMN material_brief_json TEXT NOT NULL DEFAULT '{}'");
+      db.exec('COMMIT');
+    } catch (error) { db.exec('ROLLBACK'); throw error; }
+  }
   // Artifact trace columns are additive and kept outside the public schema
   // counter so existing v43 databases can receive them without changing the
   // migration contract consumed by older clients.

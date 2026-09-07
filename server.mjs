@@ -274,6 +274,8 @@ function researchPointsBrief(points) {
 }
 
 function lockedBrief(candidate, editorial) {
+  const materialBrief = editorial.material_brief && typeof editorial.material_brief === 'object' ? editorial.material_brief : {};
+  const materialLine = (value, fallback = '未提供') => String(value || '').trim() || fallback;
   return `---
 brief_status: LOCKED
 candidate_id: ${candidate.candidate_id}
@@ -306,6 +308,20 @@ ${candidate.angle.trim() || '未单独填写，以锁定命题为准。'}
 
 - 分发池：${candidate.distribution_lane || '推荐池'}
 - 读者利益：${candidate.reader_stake || '待明确'}
+
+## 文章素材简报
+
+JSON:
+${JSON.stringify(materialBrief, null, 2)}
+
+- 素材成熟度：${materialLine(materialBrief.material_readiness, '待研判')}
+- 主体做了什么：${materialLine(materialBrief.action)}
+- 影响谁：${materialLine(materialBrief.affected_group)}
+- 读者后果：${materialLine(materialBrief.reader_consequence)}
+- 利益/责任冲突：${materialLine(materialBrief.conflict)}
+- 相对过去或基线的变化：${materialLine(materialBrief.baseline_change)}
+- 读者行动依据：${materialLine(materialBrief.reader_action)}
+- 证据边界：${materialLine(materialBrief.evidence_boundary)}
 
 ## 已确认公共事实
 

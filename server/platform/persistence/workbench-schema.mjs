@@ -302,6 +302,7 @@ export function applyWorkbenchSchema(db) {
         confirmed_facts TEXT NOT NULL DEFAULT '',
         research_basis TEXT NOT NULL DEFAULT '',
         adopted_research_points_json TEXT NOT NULL DEFAULT '[]',
+        material_brief_json TEXT NOT NULL DEFAULT '{}',
         author_opinions TEXT NOT NULL DEFAULT '',
         confirmed_experiences TEXT NOT NULL DEFAULT '',
         rejected_angles TEXT NOT NULL DEFAULT '',
@@ -942,6 +943,7 @@ export function applyWorkbenchSchema(db) {
     const editorialSessionColumns=new Set(db.prepare('PRAGMA table_info(editorial_sessions)').all().map((column)=>column.name));
     if(!editorialSessionColumns.has('research_basis'))db.exec("ALTER TABLE editorial_sessions ADD COLUMN research_basis TEXT NOT NULL DEFAULT ''");
     if(!editorialSessionColumns.has('adopted_research_points_json'))db.exec("ALTER TABLE editorial_sessions ADD COLUMN adopted_research_points_json TEXT NOT NULL DEFAULT '[]'");
+    if(!editorialSessionColumns.has('material_brief_json'))db.exec("ALTER TABLE editorial_sessions ADD COLUMN material_brief_json TEXT NOT NULL DEFAULT '{}'");
     if(!editorialSessionColumns.has('excluded_events'))db.exec("ALTER TABLE editorial_sessions ADD COLUMN excluded_events TEXT NOT NULL DEFAULT '[]'");
     if(!cardEditorialColumns.has('card_plan_json'))db.exec("ALTER TABLE card_editorial_sessions ADD COLUMN card_plan_json TEXT NOT NULL DEFAULT '[]'");
     if(!cardEditorialColumns.has('layout_style'))db.exec("ALTER TABLE card_editorial_sessions ADD COLUMN layout_style TEXT NOT NULL DEFAULT 'auto'");

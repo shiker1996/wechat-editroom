@@ -1,4 +1,5 @@
 import { normalizeResearchPoints } from '../../../shared/domain/research-selection.mjs';
+import { normalizeMaterialBrief } from '../../../shared/domain/material-brief.mjs';
 
 export class EditorialRepository {
   constructor(db) {
@@ -7,24 +8,41 @@ export class EditorialRepository {
 
   getArticle(candidateId) {
     const row = this.db.prepare('SELECT * FROM editorial_sessions WHERE candidate_row_id=?').get(candidateId) ?? {
-      candidate_row_id: Number(candidateId), editor_question: '', confirmed_facts: '', research_basis: '', author_opinions: '',
+      candidate_row_id: Number(candidateId), editor_question: '', confirmed_facts: '', research_basis: '', author_opinions: '', material_brief_json: '{}',
       confirmed_experiences: '', rejected_angles: '', open_questions: '', forbidden_claims: '',
       adopted_research_points_json: '[]', next_action: 'DISCUSS', experience_required: 0, brief_status: 'DISCUSS',
     };
-    const { adopted_research_points_json, ...editorial } = row;
-    return { ...editorial, adopted_research_points: normalizeResearchPoints(adopted_research_points_json) };
+    const { adopted_research_points_json, material_brief_json, ...editorial } = row;
+    const material_brief = normalizeMaterialBrief(material_brief_json);
+    return {
+      ...editorial,
+      adopted_research_points: normalizeResearchPoints(adopted_research_points_json),
+      material_brief,
+      affected_group: material_brief.affected_group,
+      reader_consequence: material_brief.reader_consequence,
+      conflict: material_brief.conflict,
+      evidence_boundary: material_brief.evidence_boundary,
+      reader_action: material_brief.reader_action,
+      material_readiness: material_brief.material_readiness,
+    };
   }
 
   saveArticle(candidateId, input) {
     const now = new Date().toISOString();
     // excluded_events 列保留在表结构中（避免动迁移历史），但机制已回滚，不再读写
-    const fields = ['editor_question', 'confirmed_facts', 'research_basis', 'adopted_research_points_json', 'author_opinions', 'confirmed_experiences',
+    const fields = ['editor_question', 'confirmed_facts', 'research_basis', 'adopted_research_points_json', 'material_brief_json', 'author_opinions', 'confirmed_experiences',
       'rejected_angles', 'open_questions', 'forbidden_claims', 'next_action', 'experience_required', 'brief_status'];
     const current = this.getArticle(candidateId);
     const values = fields.map((key) => {
-      const sourceKey = key === 'adopted_research_points_json' ? 'adopted_research_points' : key;
+      const sourceKey = key === 'adopted_research_points_json' ? 'adopted_research_points' : key === 'material_brief_json' ? 'material_brief' : key;
       const value = key === 'adopted_research_points_json'
         ? JSON.stringify(normalizeResearchPoints(input[sourceKey] ?? current[sourceKey] ?? []))
+        : key === 'material_brief_json'
+          ? JSON.stringify(normalizeMaterialBrief({
+            ...current.material_brief,
+            ...(input.material_brief || input.materialBrief || {}),
+            ...Object.fromEntries(['affected_group', 'reader_consequence', 'conflict', 'evidence_boundary', 'reader_action'].filter((field) => Object.prototype.hasOwnProperty.call(input, field)).map((field) => [field, input[field]])),
+          }))
         : input[sourceKey] ?? current[sourceKey];
       if (key === 'experience_required') return value ? 1 : 0;
       return value;

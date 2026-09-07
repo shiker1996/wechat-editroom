@@ -35,6 +35,7 @@ description: 将已锁定文章简报或用户直接确认的热点命题编排�
 - `conversion_bridge`：可选，后续承接内容的类型、真实标题或链接
 - `follow_reason`：可选，关注后可持续获得的具体价值
 - `publication_claim_register`：可选，事实主张、状态、来源、允许写法和禁止写法；由事实基座阶段生成
+- `material_brief`：锁定简报中的文章素材承接契约，包含主体动作、影响对象、读者后果、利益/责任冲突、证据边界和读者行动依据
 - `workdir`：默认 `articles/<topic-slug>/`
 - `seo`：默认开启；用户明确不需要时关闭
 - `min_visible_chars`：默认 `1300`；仅当用户在当前文章中明确要求其它长度时覆盖
@@ -69,6 +70,10 @@ brief → fact-base → planning → drafting → draft-quality-gate → title-g
 按 [references/artifact-contracts.md](references/artifact-contracts.md) 检查 `00-article-brief.md` 或上游 `article-brief.md`。把锁定命题、作者决定、已确认实践、反证与边界、最终包装和禁写项作为后续唯一创作约束。聊天中的临时建议、探索卡的 `provisional_package` 和未确认资产不得覆盖锁定简报。
 
 若简报声明 `experience_required: false`，允许没有第一人称实践，但正文不得写“我测试了”“我使用后发现”等亲历叙述。若声明 `experience_required: true`，至少需要一项已确认实践及其证据；否则停止。
+
+### 素材承接契约
+
+`material_brief` 是事实基座、规划、标题和类型化初稿共同读取的上游约束。优先兑现 `reader_consequence`、`conflict`、`thesis` 和 `reader_action`，并把 `evidence_boundary` 作为全程表达边界；`material_readiness` 只表示素材成熟度，不是爆款分，也不能替代事实核验。若素材简报与锁定事实或作者立场冲突，回到事实基座或编辑会收窄命题，不得自行填补缺口。文章开头应交代主体动作、影响对象和现实后果，正文解释利益/成本/责任冲突，结尾给出读者可据此判断或行动的依据。
 
 ### 1. 建立作者素材
 
@@ -133,6 +138,7 @@ brief → fact-base → planning → drafting → draft-quality-gate → title-g
 写入 `04-draft.md`。要求：
 
 - 只使用事实基座允许的事实；`restricted_claims` 只能按登记的归因和限定方式出现，禁止把研判假设写成事实；每个关键事实就近标注来源
+- 必须围绕 `material_brief` 的读者后果和冲突组织正文，不能只复述事件；如果 `reader_action` 为空，输出基于已核验事实的判断依据，不凭空承诺具体结果
 - 至少嵌入一个作者素材锚点
 - 遵守 `voice_guardrails`，并让正文兑现 `reader_job`，不能只在元数据里记录
 - 让开头、主体分析和实用增量共同兑现 `distribution_lane` 与 `reader_stake`，不能只在作者素材中记录

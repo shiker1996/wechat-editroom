@@ -13,7 +13,7 @@ export const EDITORIAL_AGENT_CAPABILITIES = Object.freeze(['cap_filesystem_proje
 const FORM_UPDATE_CAPABILITY = 'cap_agent_form_update';
 const EDITORIAL_FORM_FIELDS = Object.freeze({
   confirmed_facts: { kind: 'text', operations: ['append', 'replace', 'remove', 'clear'], validate: confirmedFactsDecision }, author_opinions: { kind: 'text', operations: ['append', 'replace', 'remove', 'clear'], validate: substantiveDecision }, confirmed_experiences: { kind: 'text', operations: ['append', 'replace', 'remove', 'clear'], validate: substantiveDecision }, rejected_angles: { kind: 'text', operations: ['append', 'replace', 'remove', 'clear'], validate: substantiveDecision }, forbidden_claims: { kind: 'text', operations: ['append', 'replace', 'remove', 'clear'] },
-  angle: { kind: 'text', validate: substantiveDecision }, thesis: { kind: 'text', validate: substantiveDecision }, research_basis: {
+  angle: { kind: 'text', validate: substantiveDecision }, thesis: { kind: 'text', validate: substantiveDecision }, affected_group: { kind: 'text', operations: ['append', 'replace', 'remove', 'clear'], validate: substantiveDecision, description: '具体说明谁会受到影响。' }, reader_consequence: { kind: 'text', operations: ['append', 'replace', 'remove', 'clear'], validate: substantiveDecision, description: '具体说明读者的工作、收入、成本、效率或选择发生什么变化。' }, conflict: { kind: 'text', operations: ['append', 'replace', 'remove', 'clear'], validate: substantiveDecision, description: '具体说明谁获益、谁承担成本或责任；如果没有明显冲突请明确写“无冲突”。' }, evidence_boundary: { kind: 'text', operations: ['append', 'replace', 'remove', 'clear'], validate: substantiveDecision, description: '说明哪些可以确定表达，哪些必须限定，哪些禁止扩写。' }, reader_action: { kind: 'text', operations: ['append', 'replace', 'remove', 'clear'], validate: substantiveDecision, description: '说明读者读完后获得的判断或行动依据，可留空。' }, research_basis: {
     kind: 'text',
     validate: researchBasisDecision,
     validationMessage: researchBasisValidationMessage,
@@ -83,7 +83,7 @@ function persistEditorialFormState(store, candidateId, state) {
   for (const field of ['angle', 'thesis']) if (Object.prototype.hasOwnProperty.call(state, field)) candidateFields[field] = state[field];
   if (Object.keys(candidateFields).length) store.updateCandidate(candidateId, candidateFields);
   const editorialFields = {};
-  for (const field of ['confirmed_facts', 'author_opinions', 'confirmed_experiences', 'rejected_angles', 'forbidden_claims', 'research_basis']) {
+  for (const field of ['confirmed_facts', 'author_opinions', 'confirmed_experiences', 'rejected_angles', 'forbidden_claims', 'affected_group', 'reader_consequence', 'conflict', 'evidence_boundary', 'reader_action', 'research_basis']) {
     if (Object.prototype.hasOwnProperty.call(state, field)) editorialFields[field] = state[field];
   }
   if (Object.keys(editorialFields).length) store.saveEditorial(candidateId, editorialFields);

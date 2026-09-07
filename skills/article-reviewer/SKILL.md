@@ -13,6 +13,8 @@ description: 审阅并修订中文或英文文章，检查事实支持、事实�
 
 编排模式同时读取 `02-outline.md` 的事实基座和 `05-humanized.md`，写入 `06-reviewed.md`。
 
+同时核对 `material_brief`：标题和前 200 字是否兑现 `title_promise` 或读者后果，正文是否确实解释了 `conflict`，结尾是否提供 `reader_action` 对应的判断依据；不得把 `material_readiness` 当成事实充分性结论，也不得越过 `evidence_boundary` 扩写。
+
 ## 审阅顺序
 
 1. **事实**：拆分可核验主张，检查来源是否直接支持、时效是否适用、引语是否准确、数字口径是否一致。

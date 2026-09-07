@@ -36,6 +36,7 @@
 |---|---|
 | [consumer-capability-adaptation-design.md](./design/consumer-capability-adaptation-design.md) | 消费者—能力—工具实现统一治理方案（阶段 0–6 已实施，现行机制的权威描述） |
 | [consumer-capability-expansion-design.md](./design/consumer-capability-expansion-design.md) | 消费者能力扩展方案：三类消费者纳入、页面三分组与接入清单（阶段 A–D 已实施，§5.1/§10 有遗留裁定项） |
+| [end-to-end-material-to-article-pipeline-design.md](./design/end-to-end-material-to-article-pipeline-design.md) | 从热点采集、事件卡、研判素材、编辑会到公众号成稿和数据反馈的端到端承接设计；以 `material_brief` 贯通动作、影响、后果、冲突、证据和标题兑现（待评审） |
 | [capability-onboarding-configurability-plan.md](./design/capability-onboarding-configurability-plan.md) | 能力接入配置化与开发规范化：五种情形分级、能力生命周期状态机、Agent 登记驱动（阶段 1–4 已实施；页面添加入口 2026-08-15 已下线） |
 | [capability-expansion-guide.md](./design/capability-expansion-guide.md) | 能力拓展单一视图：消费者×能力类型成本矩阵、生命周期状态机、三类消费者 SOP 与遗留方向（2026-08-15 汇总，拓展先读） |
 | [agent-adapter-configurability-design.md](./design/agent-adapter-configurability-design.md) | Agent 能力适配层配置化设计：resourceKind 档案表 + Agent 双 map 声明，资源类能力接入免改代码（2026-08-15，阶段 1–4 已实施） |

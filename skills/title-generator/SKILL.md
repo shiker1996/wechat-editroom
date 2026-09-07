@@ -9,7 +9,7 @@ description: 为微信公众号文章、社交内容或一般中文内容生成�
 
 ## 输入
 
-提取主题、核心判断、目标读者、`distribution_lane`、`reader_stake`、事实基座、发布主张登记、已核验主体/事件/数字、核心关键词和渠道限制。缺少可用数字时不要强行加入数字；缺少事实基座时把候选标记为待核验。
+提取主题、核心判断、目标读者、`distribution_lane`、`reader_stake`、`material_brief`、事实基座、发布主张登记、已核验主体/事件/数字、核心关键词和渠道限制。标题优先兑现 `material_brief.title_promise`；没有时从 `reader_consequence` 和 `conflict` 提炼真实张力。缺少可用数字时不要强行加入数字；缺少事实基座时把候选标记为待核验。
 
 编排模式读取 `02-outline.md`，写入 `03-titles.md`。独立调用时直接返回候选和推荐结果。
 
