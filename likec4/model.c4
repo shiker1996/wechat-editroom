@@ -141,12 +141,15 @@ model {
     }
     research = container "热点研究" {
       #feature
-      description "AI 打标、事件聚类、热度排序、专家研判"
+      description "AI 打标、事件聚类、热度排序、专家研判；研判素材 verified_research_materials + material_readiness 路由"
     }
     articles = container "稿件生产" {
       #feature
-      description "编辑会(agent-skill)、成稿 Pipeline(stage-skill)、排版、封面"
-      adapter = component "editorial adapter" { description "业务上下文、状态更新、结果解释" }
+      description "编辑会(agent-skill)、成稿 Pipeline(stage-skill)、排版、封面；素材简报锁定与兑现"
+      adapter = component "editorial adapter" {
+        #feature
+        description "编辑会 agent-skill：表单更新工具(cap_agent_form_update)维护 affected_group/reader_consequence/conflict/evidence_boundary、研判拓展点选择(cap_editorial_research_select)"
+      }
     }
     socialCards = container "社交卡片" {
       #feature
@@ -166,6 +169,10 @@ model {
   shared = system "共享领域层" {
     rendering = container "渲染引擎" { description "Markdown/HTML 纯函数渲染" }
     themes = container "主题系统" { description "文章/封面/图文主题编译器" }
+    materialBrief = component "素材简报 (material-brief.mjs)" {
+      #feature
+      description "写作契约：action / affected_group / reader_consequence / conflict / thesis / evidence_boundary / title_promise 贯穿研判→候选→编辑会→文章链"
+    }
   }
 
   // ============ Storage ============
@@ -261,6 +268,13 @@ model {
   features.articles -> shared.themes "应用主题"
   features.socialCards -> shared.rendering "卡片渲染"
   features.socialCards -> shared.themes "社交主题编译"
+
+  // 素材简报贯穿链（研判素材 → 编辑会锁定 → 成稿消费）
+  features.research -[data]-> shared.materialBrief "推导 material_readiness / 研判素材字段"
+  features.articles.adapter -[sync]-> shared.materialBrief "确认并锁定 reader_consequence / conflict / thesis"
+  features.articles -> shared.materialBrief "事实基座 / 写作 / 标题 / 审稿消费写作文契约"
+  shared.materialBrief -[data]-> persistence.repos "material_brief_json 快照 (editorial_sessions)"
+  features.articles.adapter -[sync]-> features.research "读取研判报告与可选拓展点"
 
   // 插件系统
   plugins.toolPlugins -> tools.registry "注册工具实现"

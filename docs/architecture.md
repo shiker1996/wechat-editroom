@@ -145,6 +145,19 @@ Agent Harness 改造把运行时概念收敛为四种对象分工：**Skill**（
 
 业务迁移状态：编辑会、自主写作、自定义图文与共享 AI 视觉文档经 `runSkill`（agent-skill）启动；文章、日报、社交卡 Pipeline 的 `Gateway.complete` 阶段经 `bindPipelineHarnessGateway` 以 `stage-skill` 运行并各自创建独立 Agent Run；批次 AI Job 建立 `batch-job:<type>` 根 Run 生命周期，`ai_runs` 仍作页面兼容状态来源。
 
+## 素材简报（material-brief）
+
+![素材简报贯穿链](./diagrams/materialBriefFlow.png)
+
+> 上图展示素材简报从研判素材推导 → 编辑会锁定 → 成稿流水线兑现的完整链路。
+
+素材简报是贯穿 研判→候选→编辑会→文章链 的写作文契约（非独立数据表）：
+
+- 领域规则与推导位于 `server/shared/domain/material-brief.mjs`：`normalizeMaterialBrief` / `buildMaterialBrief` / `deriveMaterialReadiness`，字段含 `action` / `affected_group` / `reader_consequence` / `conflict` / `thesis` / `evidence_boundary` / `title_promise` / `article_type` 与 `material_readiness`（`insufficient` / `promising` / `verified` 三档路由）。
+- 编辑会适配器（`server/features/articles/application/agent/editorial-adapter.mjs`）新增表单字段与工具：`cap_agent_form_update` 增量维护 `affected_group` / `reader_consequence` / `conflict` / `evidence_boundary` / `reader_action`，`cap_editorial_research_select` 选择研判拓展点；`editorial-readiness.mjs` 将 `reader_consequence`、`conflict` 纳入锁题门禁。
+- 持久化：`editorial_sessions` 增加 `material_brief_json`（锁题快照），`editorial-repository.mjs` 展平 JSON 供表单与门禁。
+- 成稿链：`article-pipeline.mjs` / `article-routes.mjs` 将同一份结构化简报传给事实基座、规划、写作、标题与审稿阶段（`lockedBrief` 组装）。
+
 ## 两条流水线
 
 ### 批次自动化管线

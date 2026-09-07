@@ -90,9 +90,10 @@ articles/ topics/ social-cards/  内容产物（运行时生成）
 | ![功能架构图](docs/diagrams/architecture.png) | **功能架构图** — 整体系统分层：前端 SPA、HTTP 服务层、Agent Harness、平台核心层、业务特性层、共享领域层、存储与插件系统 |
 | ![Agent Harness](docs/diagrams/harnessDetail.png) | **Agent Harness 内核** — 统一 Agent 运行生命周期、上下会话技能、工具、权限、恢复与评测 |
 | ![主流程](docs/diagrams/mainWorkflow.png) | **主流程时序图** — 用户操作 → 路由分发 → runSkill → AI/DB 操作 → 响应渲染的完整数据流 |
+| ![素材简报](docs/diagrams/materialBriefFlow.png) | **素材简报贯穿链** — 研判素材 → 编辑会锁定 → 成稿流水线兑现的写作文契约链路 |
 | ![批次管线](docs/diagrams/batchPipeline.png) | **批次自动化管线** — 从数据采集到稿件生成的完整流水线，模型阶段统一经 Harness stage-skill 运行 |
 
-> 架构图由 [LikeC4](https://likec4.dev/) 从 `likec4/model.c4` 生成，更多视图（runSkill 时序、持久化层与 Run Store）见[架构总览](./docs/architecture.md)。
+> 架构图由 [LikeC4](https://likec4.dev/) 从 `likec4/model.c4` 生成，更多视图（runSkill 时序、素材简报、持久化层与 Run Store）见[架构总览](./docs/architecture.md)。
 
 ## 配置与数据
 

@@ -36,6 +36,7 @@ views {
     style features { color secondary }
     style features.articles { color secondary }
     style features.articles.adapter { color secondary; size sm }
+    style shared.materialBrief { color green; size sm }
     style sqlite { color indigo; shape storage }
     style plugins { color muted }
     style llmProvider { color red; opacity 60% }
@@ -221,5 +222,30 @@ views {
     style jobs.aiJobManager { color primary; size sm }
     style shared { color secondary; opacity 60% }
     style externalSources { color green }
+  }
+
+  // ======================================================================
+  // View 7: 素材简报贯穿链（研判 → 编辑会 → 成稿）
+  // ======================================================================
+  dynamic view materialBriefFlow {
+    title "素材简报贯穿链"
+    description "素材简报 material_brief 从研判素材到编辑会锁定、再到成稿流水线兑现的完整链路"
+    features.collection -> features.research "采集热点 → 打标 / 事件归并"
+    features.research -> shared.materialBrief "推导 action / conflict / material_readiness"
+    shared.materialBrief -> features.articles.adapter "编辑会预填 + lock 门禁校验"
+    features.articles.adapter -> persistence.repos "material_brief_json 快照 (editorial_sessions)"
+    features.batches -> features.articles "触发成稿 Pipeline"
+    features.articles -> shared.materialBrief "事实基座 / 写作 / 标题 / 审稿消费"
+    features.articles -> shared.rendering "排版 / 预览"
+    features.articles -> shared.themes "主题应用"
+    style features.collection { color secondary; opacity 70% }
+    style features.research { color secondary }
+    style features.articles { color secondary }
+    style features.articles.adapter { color secondary }
+    style features.batches { color secondary; opacity 70% }
+    style shared.materialBrief { color green }
+    style persistence.repos { color primary; size sm }
+    style shared.rendering { color secondary; opacity 60% }
+    style shared.themes { color secondary; opacity 60% }
   }
 }
