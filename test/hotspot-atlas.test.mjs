@@ -47,6 +47,8 @@ test('事件关系图使用固定视窗、缩放平移和确定性维度排序',
   const ui = fs.readFileSync(new URL('../public/src/views/atlas.js', import.meta.url), 'utf8');
   const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
   const css = readStyles();
+  const commonCss = fs.readFileSync(new URL('../public/assets/styles/common.css', import.meta.url), 'utf8');
+  const systemCss = fs.readFileSync(new URL('../public/assets/styles/system.css', import.meta.url), 'utf8');
   assert.match(ui, /viewportHeight = 500/);
   assert.match(ui, /zoomGraph/);
   assert.match(ui, /pointermove/);
@@ -60,6 +62,9 @@ test('事件关系图使用固定视窗、缩放平移和确定性维度排序',
   assert.match(css, /\.atlas-relation-panel \{[^}]*overflow:hidden/);
   assert.match(css, /\.discussion-relation-item \{[^}]*display:grid/);
   assert.match(css, /\.research-relation-label \{[^}]*border:1px solid var\(--red\)/);
+  assert.match(css, /\.event-hotlist-summary \{[^}]*padding:10px 20px/);
+  assert.match(commonCss, /\.event-hotlist-summary \{[^}]*padding:10px 20px/);
+  assert.doesNotMatch(systemCss, /\.event-hotlist-summary/);
   assert.match(html, /data-atlas-insight-tab="relations"/);
   assert.match(html, /data-atlas-insight-tab="dimensions"/);
   assert.match(html, /data-atlas-insight-panel="relations"/);

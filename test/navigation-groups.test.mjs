@@ -8,6 +8,7 @@ test('侧栏按六个任务阶段组织并自动展开当前阶段', () => {
   const main = fs.readFileSync(new URL('../public/src/main.js', import.meta.url), 'utf8');
   const publication = fs.readFileSync(new URL('../public/src/views/publication.js', import.meta.url), 'utf8');
   const styles = readStyles();
+  const editorCss = fs.readFileSync(new URL('../public/assets/styles/editor.css', import.meta.url), 'utf8');
   for (const label of ['今日工作', '发现与研判', '文章生产', '图文生产', '发布与复盘', '资产与运行']) {
     assert.match(html, new RegExp(label));
   }
@@ -59,6 +60,8 @@ test('侧栏按六个任务阶段组织并自动展开当前阶段', () => {
   assert.match(main, /setAttribute\("aria-current", "page"\)/);
   assert.match(main, /\.nav-item\.active,\.nav-utility\.active/);
   assert.match(styles, /\.nav-group>summary/);
+  assert.match(styles, /\.content-feedback-metrics\{[^}]*grid-template-columns:repeat\(5,minmax\(0,1fr\)\)/);
+  assert.match(editorCss, /\.content-feedback-metrics\{[^}]*grid-template-columns:repeat\(5,minmax\(0,1fr\)\)/);
   assert.match(styles, /\.rail nav \{ flex:none;max-height:240px/);
   assert.ok(html.indexOf('data-view="system"') < html.indexOf('class="rail-foot"'));
   assert.match(styles,/nav \{ flex:1;min-height:0/);

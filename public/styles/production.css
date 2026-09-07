@@ -545,3 +545,4 @@
   .pipeline-next,.pipeline-next button { width:100%; }
   .pipeline-retry-menu>div { position:static; width:100%; margin-top:5px; box-shadow:none; }
 }
+.event-hotlist-summary { padding:10px 20px; border-bottom:1px solid var(--line); background:var(--paper); color:var(--muted); font-size:11px; }

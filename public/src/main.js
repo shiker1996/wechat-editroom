@@ -22,7 +22,7 @@ const viewModules = {
 // 三个导航入口共用同一视图 DOM：工具图文 / 自定义图文 / 事件图文都落在 #view-social-editor
 const viewSectionAliases = { "social-custom": "view-social-editor", "social-event": "view-social-editor" };
 
-const styleVersion = "20260906-run-input12";
+const styleVersion = "20260907-run-input13";
 const styleModules = {
   social: "/assets/styles/social.css",
   topics: "/assets/styles/topics.css",
@@ -98,7 +98,7 @@ const jobNoticeState = new Map();
 let jobNoticeTimer = null;
 // 浏览器前进/后退触发 go 时不重复压栈
 let navigatingFromHistory = false;
-const moduleVersion = "20260906-run-input12";
+const moduleVersion = "20260907-run-input13";
 
 const titles = {
   dashboard: "工作台总览", batches: "批次管理", overview: "热点全景",
