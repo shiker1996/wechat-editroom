@@ -335,7 +335,7 @@ const planMatch = pathname.match(/^\/api\/writing-material-plans\/(\d+)$/);
   }
   if (request.method === 'GET' && pathname === '/api/wechat/strategy') {
     const review = enrichWechatReview(store.getWechatReview());
-    json(response, 200, buildWechatStrategyRecommendations({ snapshots: store.listContentFeedbackSnapshots({ limit: 100 }), columnPerformance: store.listColumnPerformance(), review, accountContext: getAccountContext({ workspaceRoot: root }) })); return true;
+    json(response, 200, buildWechatStrategyRecommendations({ snapshots: store.listContentFeedbackSnapshots({ limit: 100 }), review, accountContext: getAccountContext({ workspaceRoot: root }) })); return true;
   }
   if (request.method === 'GET' && pathname === '/api/wechat/feedback/adjustments') {
     json(response, 200, { version: FEEDBACK_ADJUSTMENT_VERSION, items: store.listContentFeedbackAdjustmentDrafts({ limit: boundedLimit(searchParams, 20, 100) }), writerSkills: listWriterSkillCatalog({ workspaceRoot: root }).map(({ id, label }) => ({ id, label })) }); return true;
@@ -405,7 +405,7 @@ const planMatch = pathname.match(/^\/api\/writing-material-plans\/(\d+)$/);
       const writerSkillHint = availableWriterSkillIds.has(String(input.writerSkillId || '')) ? String(input.writerSkillId) : '';
       const read = (filePath) => filePath && fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : '';
       const accountContext = getAccountContext({ workspaceRoot: root, refresh: true });
-      const strategy = buildWechatStrategyRecommendations({ snapshots: store.listContentFeedbackSnapshots({ limit: 100 }), columnPerformance: store.listColumnPerformance(), review: enrichWechatReview(store.getWechatReview()), accountContext });
+      const strategy = buildWechatStrategyRecommendations({ snapshots: store.listContentFeedbackSnapshots({ limit: 100 }), review: enrichWechatReview(store.getWechatReview()), accountContext });
       emitProgress({ type: 'progress', stage: 'planning', message: '第一阶段：AI 正在判断调整目标（thinking）…' });
       const planningMessages = buildFeedbackAdjustmentMessages({ feedback, strategy, accountContext, titleSkillId: titleSkillTarget.skillId, titleSkillEvidence: titleSkillTarget.evidence, writerSkillId: writerSkillHint, currentWriterSkillId: writerSkillTarget.skillId, writerSkillCatalog });
       const planningResult = await harness.gateway.complete({ provider: input.provider, purpose: 'content-feedback-adjustment-plan', jsonMode: true, thinking: true, maxOutputTokens: 5000, messages: [{ role: 'system', protected: true, content: planningMessages.system }, { role: 'user', protected: true, content: planningMessages.user }] });

@@ -85,7 +85,7 @@ function distributionSuggestion(review = {}) {
   };
 }
 
-export function buildWechatStrategyRecommendations({ snapshots = [], columnPerformance = [], review = {}, accountContext = {} } = {}) {
+export function buildWechatStrategyRecommendations({ snapshots = [], review = {}, accountContext = {} } = {}) {
   const cycles = validCycles(snapshots);
   if (cycles.length < 2) return { ready: false, required_cycles: 2, cycle_count: cycles.length, cycles, suggestions: [], caveats: ['至少需要两个不同指标周期，且每个周期至少关联 3 篇正文，才生成账号级建议。', '同一指标周期重复生成反馈快照不会被当作新的内容周期。'] };
   const topicSignals = signalFromCycles(cycles.slice(0, 2), 'topic_signals');
@@ -95,10 +95,6 @@ export function buildWechatStrategyRecommendations({ snapshots = [], columnPerfo
   const suggestions = [{
     id: 'content-ratio', type: 'contentRatio', title: '内容配比建议', level: ratio.changed ? 'medium' : 'low', current: ratio.current, proposed: ratio.proposed, reason: ratio.note, evidence: `${cycles[0].metric_window_start}—${cycles[0].metric_window_end} 与 ${cycles[1].metric_window_start}—${cycles[1].metric_window_end} 两个周期；主要信号：${strongestTopic}`,
   }];
-  if (columnPerformance.length) {
-    const columns = [...columnPerformance].sort((left, right) => number(right.avg_reads) - number(left.avg_reads));
-    suggestions.push({ id: 'column-priority', type: 'columnPriority', title: '栏目优先级建议', level: columns[0].sample_count >= 3 ? 'medium' : 'low', proposed: columns.slice(0, 5).map((item, index) => ({ column: item.column_name || '未命名栏目', priority: index + 1, sample_count: Number(item.sample_count || 0), avg_reads: number(item.avg_reads), follows_per_thousand_reads: number(item.follows_per_thousand_reads) })), reason: '按已登记栏目且成功关联公众号指标的文章表现排序；未登记栏目或未匹配文章不参与比较。', evidence: `${columns.reduce((sum, item) => sum + Number(item.sample_count || 0), 0)} 篇栏目样本` });
-  } else suggestions.push({ id: 'column-priority', type: 'columnPriority', title: '栏目优先级建议', level: 'low', proposed: [], reason: '当前没有足够的“发布信息 + 栏目 + 公众号指标”关联，暂不对栏目排优先级；先在内容日历补齐栏目和发布信息。', evidence: '栏目表现数据不足' });
   const distribution = distributionSuggestion(review);
   suggestions.push({ id: 'distribution-ratio', type: 'distributionRatio', title: '推荐 / 通知 / 实验比例建议', level: distribution.confidence, proposed: distribution.proposed, reason: distribution.reason, evidence: '文章级通知与非通知样本' });
   const bestFollow = [...topicSignals].sort((left, right) => number(right.follows_per_thousand_reads) - number(left.follows_per_thousand_reads))[0];
