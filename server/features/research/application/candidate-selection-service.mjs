@@ -1,14 +1,4 @@
-function repositoryKey(url, rawJson = '') {
-  let raw = {}; try { raw = JSON.parse(rawJson || '{}'); } catch {}
-  const declared = String(raw.repository || '').trim().replace(/\.git$/i, '').toLowerCase();
-  if (declared) return declared;
-  try {
-    const parsed = new URL(String(url || ''));
-    if (parsed.hostname.toLowerCase() !== 'github.com') return '';
-    const parts = parsed.pathname.split('/').filter(Boolean).slice(0, 2);
-    return parts.length === 2 ? parts.join('/').replace(/\.git$/i, '').toLowerCase() : '';
-  } catch { return ''; }
-}
+import { repositoryKey } from '../../../shared/domain/github-repository.mjs';
 
 export class CandidateSelectionService {
   constructor(db, repositories, candidateQueries) {

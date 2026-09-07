@@ -7,10 +7,14 @@ const tags={eventKey:'repo|发布|工具',chinaRelevance:8,relevanceReason:'适�
   preScores:{conflict:5,audience:14,informationGain:12,emotion:5,impact:7,sourceReliability:8},credibleScoop:0,saturationPenalty:1};
 
 test('GitHub 元数据进入打标输入且限制字段规模',()=>{
-  const input=buildTaggingInput({id:1,source:'github:search',source_group:'github',source_type:'search',source_name:'GitHub 新项目增长发现',title:'o/r',url:'https://github.com/o/r',published_at:'2026-07-20',raw_json:JSON.stringify({repository:'o/r',description:'AI workflow tool',language:'TypeScript',stars:1500,topics:['ai','workflow'],createdAt:'2026-07-10',discoveryChannels:['search']})});
+  const input=buildTaggingInput({id:1,source:'github:search',source_group:'github',source_type:'search',source_name:'GitHub 新项目增长发现',title:'o/r',url:'https://github.com/o/r',published_at:'2026-07-20',raw_json:JSON.stringify({repository:'o/r',description:'AI workflow tool',language:'TypeScript',stars:1500,topics:['ai','workflow'],createdAt:'2026-07-10',discoveryChannels:['search'],discoveryContexts:[{channel:'ai-search',label:'skills-workflows'}],projectType:'skill-workflow',scenarioIds:['skills-workflows'],directUseCase:'把能力接入工作流'})});
   assert.equal(input.repository.stars,1500);
   assert.deepEqual(input.repository.topics,['ai','workflow']);
   assert.deepEqual(input.repository.discoveryChannels,['search']);
+  assert.equal(input.repository.projectType,'skill-workflow');
+  assert.deepEqual(input.repository.scenarioIds,['skills-workflows']);
+  assert.equal(input.repository.directUseCase,'把能力接入工作流');
+  assert.deepEqual(input.repository.discoveryContexts,[{channel:'ai-search',label:'skills-workflows'}]);
 });
 
 test('图文研判使用仓库描述、Star 与发现渠道',()=>{

@@ -19,6 +19,8 @@ import { ensureBatchEventCards, generateEventCards, overviewHtml, readEventCards
 import { brainstorm, breakingSynthesis, synthesize } from './research/editorial-exploration.mjs';
 import { classifyContentRoute, scoreStatusForCard } from '../domain/content-routing.mjs';
 import { G_SOCIAL_CLASS_CAPS, G_SOCIAL_THRESHOLDS, G_SOCIAL_WEIGHTS, scoreSocialCandidate, selectSocialCandidates, selectSocialPool } from '../domain/social-scoring.mjs';
+import { applyProjectReaderValuesToHeatRanking, attachProjectReaderValues, evaluateProjectReaderValue, selectProjectReaderValueCandidates } from '../domain/project-reader-value.mjs';
+import { applyProjectDiscoveryFeedbackToHeatRanking, applyProjectDiscoveryFeedbackToRanking } from '../../content-planning/project-discovery-feedback.mjs';
 import { buildResearchDigest, generateDiscussionResearchSinglePass, generateDiscussionResearchTopics } from './research/discussion-research-stage.mjs';
 
 // 研究子阶段仍统一通过 selectionPrompt 加载项目技能：hotspot-brainstorm、hotspot-synthesis、event-card-generator。
@@ -33,6 +35,7 @@ export { DIMENSION_POOL_ROLES, dimensionSelections };
 export { ensureBatchEventCards, generateEventCards, overviewHtml, readEventCardsFile };
 export { brainstorm, breakingSynthesis, synthesize };
 export { G_SOCIAL_CLASS_CAPS, G_SOCIAL_THRESHOLDS, G_SOCIAL_WEIGHTS, scoreSocialCandidate, selectSocialCandidates, selectSocialPool };
+export { applyProjectReaderValuesToHeatRanking, attachProjectReaderValues, evaluateProjectReaderValue, selectProjectReaderValueCandidates };
 export { DISCUSSION_RESEARCH_TOP_K, buildDiscussionResearch, discussionResearchMarkdown, resolveDiscussionResearchTopK };
 export { buildTopicCandidates, selectTopicCandidates, topicCandidatesMarkdown };
 
@@ -680,6 +683,11 @@ export async function runResearchPipeline({ gateway, store, batchId, provider, w
       if (event.card?.classification) event.classification = event.card.classification;
     }
     eventHeatRanking = buildEventHeatRanking({ store, batch, previousItems, events: researchEvents });
+    const projectFeedback = store.getLatestAppliedGithubProjectFeedbackSnapshot?.();
+    if (projectFeedback) {
+      eventHeatRanking = applyProjectDiscoveryFeedbackToHeatRanking(eventHeatRanking, projectFeedback);
+      onProgress(`已应用项目发现反馈：${projectFeedback.id}，只调整下一批项目排序偏置`);
+    }
     writeFile(eventHeatPath, JSON.stringify(eventHeatRanking, null, 2));
     onProgress(`四类事件榜单生成完成：${eventHeatRanking.totalEvents || 0} 个稳定事件`);
   } catch (error) {
@@ -954,7 +962,9 @@ export async function runResearchPipeline({ gateway, store, batchId, provider, w
   if(breaking)onProgress('执行突发事件单题研判，不参与常规 8+2 竞争');
   const accountContext = getAccountContext({workspaceRoot});
   const scoring = resolveScoring(accountContext);
-  const ranking = preselection(clusters, batch.batch_date, scoring, eventHeatRanking.items || []);
+  const appliedProjectFeedback = store.getLatestAppliedGithubProjectFeedbackSnapshot?.();
+  let ranking = preselection(clusters, batch.batch_date, scoring, eventHeatRanking.items || []);
+  if (appliedProjectFeedback) ranking = applyProjectDiscoveryFeedbackToRanking(ranking, appliedProjectFeedback);
   const topicCandidates = buildTopicCandidates({ events: clusters, discussionResearch, ranking });
   const topicSelection = selectTopicCandidates(topicCandidates, { coreLimit: 8, blackLimit: 2, backupLimit: 3 });
   const topicRoleById = new Map([...topicSelection.core, ...topicSelection.black, ...topicSelection.backup].map((item) => [item.candidate_id, item.poolRole]));
@@ -970,6 +980,27 @@ export async function runResearchPipeline({ gateway, store, batchId, provider, w
   writeFile(topicCandidateReportPath, topicCandidatesMarkdown({ candidates: topicCandidatesWithRoles, selection: topicSelection, coverage: topicCoverage }));
   if (topicCoverage.length) onProgress(`阶段 3 事件覆盖：${topicCoverage.filter((item) => item.status === 'covered').length}/${topicCoverage.length} 个事件形成候选，${topicCoverage.filter((item) => item.status === 'uncovered').length} 个明确未形成`);
   onProgress(`阶段 3 候选生成完成：${topicSelection.all.length} 条（核心 ${topicSelection.core.length}、黑马 ${topicSelection.black.length}、候补 ${topicSelection.backup.length}）`);
+  const projectReaderValueCandidates = selectProjectReaderValueCandidates({ clusters, eventHeatRanking, topK: discussionResearchTopK });
+  const projectReaderValue = await evaluateProjectReaderValue({ gateway, workspaceRoot, projects: projectReaderValueCandidates,
+    provider, batchId, topK: discussionResearchTopK });
+  writeFile(path.join(sourcesDir, 'project-reader-value-input.json'), JSON.stringify({
+    schema_version: 1, generated_at: new Date().toISOString(), batch_id: batch.id,
+    top_k: projectReaderValue.topK, candidates: projectReaderValueCandidates,
+  }, null, 2));
+  writeFile(path.join(sourcesDir, 'project-reader-value.json'), JSON.stringify({
+    schema_version: 1, generated_at: new Date().toISOString(), batch_id: batch.id,
+    purpose: 'project-reader-value', status: projectReaderValue.status, reason: projectReaderValue.reason || '',
+    top_k: projectReaderValue.topK, candidate_count: projectReaderValue.candidateCount,
+    results: projectReaderValue.results || [], call_id: projectReaderValue.callId || null, usage: projectReaderValue.usage || null,
+  }, null, 2));
+  if (projectReaderValue.status === 'completed' && projectReaderValue.results.length) {
+    ranking = attachProjectReaderValues(ranking, projectReaderValue.results);
+    eventHeatRanking = applyProjectReaderValuesToHeatRanking(eventHeatRanking, projectReaderValue.results);
+    writeFile(eventHeatPath, JSON.stringify(eventHeatRanking, null, 2));
+    onProgress(`阶段 3 项目读者价值完成：研判 Top-${projectReaderValue.topK} 个项目，更新项目图文榜单`);
+  } else {
+    onProgress(`阶段 3 项目读者价值跳过：${projectReaderValue.reason || '没有可用研判结果'}；保留确定性项目榜单`);
+  }
   // 维度优先统一选题：who（含单事件主体）/ what / where 混排，账号契合加分来自 account-context.json
   const pool = breaking
     ? {selected:ranking.map((item)=>({...item,poolRole:'突发专题',eliminationReason:'',dimension:'event',events:null})),backup:[],groups:[]}

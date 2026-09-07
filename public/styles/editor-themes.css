@@ -310,3 +310,9 @@ body.editor-focus #editor-focus-mode{border-color:var(--red);background:var(--re
 .wechat-content-actions .text-button{padding:7px 11px;min-height:34px;border:1px solid var(--line);background:var(--paper);font:700 12px/1.5 var(--body)}
 .wechat-content-actions .text-button:hover{border-color:var(--red);background:var(--paper-deep)}
 .wechat-content-actions .text-button:disabled{opacity:.55;cursor:wait}
+
+/* Feedback adjustment file states. */
+.feedback-adjustment-change{display:block}
+.feedback-adjustment-file-status{padding:2px 6px;border:1px solid var(--line);color:var(--muted);font-size:10px;font-style:normal;white-space:nowrap}
+.feedback-adjustment-file-status.written{border-color:var(--studio-green);color:var(--studio-green)}
+.feedback-adjustment-file-status.edited{border-color:var(--yellow);color:#80651b}

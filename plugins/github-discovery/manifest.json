@@ -29,6 +29,44 @@
         "maximum": 365,
         "default": 7
       },
+      "activeSearchEnabled": {
+        "type": "boolean",
+        "title": "启用近期活跃项目发现",
+        "default": true
+      },
+      "activeWithinDays": {
+        "type": "integer",
+        "title": "活跃时间窗口（天）",
+        "minimum": 7,
+        "maximum": 365,
+        "default": 30
+      },
+      "activeMinStars": {
+        "type": "integer",
+        "title": "活跃项目最低 Star",
+        "minimum": 1,
+        "maximum": 1000000,
+        "default": 100
+      },
+      "evergreenSearchEnabled": {
+        "type": "boolean",
+        "title": "启用成熟项目发现",
+        "default": true
+      },
+      "evergreenWithinDays": {
+        "type": "integer",
+        "title": "成熟项目活跃窗口（天）",
+        "minimum": 30,
+        "maximum": 730,
+        "default": 180
+      },
+      "evergreenMinStars": {
+        "type": "integer",
+        "title": "成熟项目最低 Star",
+        "minimum": 10,
+        "maximum": 1000000,
+        "default": 500
+      },
       "minStars": {
         "type": "integer",
         "title": "最低 Star",
@@ -103,6 +141,38 @@
         "maximum": 365,
         "default": 7
       },
+      "activeSearchEnabled": {
+        "type": "boolean",
+        "default": true
+      },
+      "activeWithinDays": {
+        "type": "integer",
+        "minimum": 7,
+        "maximum": 365,
+        "default": 30
+      },
+      "activeMinStars": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 1000000,
+        "default": 100
+      },
+      "evergreenSearchEnabled": {
+        "type": "boolean",
+        "default": true
+      },
+      "evergreenWithinDays": {
+        "type": "integer",
+        "minimum": 30,
+        "maximum": 730,
+        "default": 180
+      },
+      "evergreenMinStars": {
+        "type": "integer",
+        "minimum": 10,
+        "maximum": 1000000,
+        "default": 500
+      },
       "minStars": {
         "type": "integer",
         "minimum": 1,
@@ -148,6 +218,38 @@
         "minimum": 1,
         "maximum": 365,
           "default": 7
+        },
+        "activeSearchEnabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "activeWithinDays": {
+          "type": "integer",
+          "minimum": 7,
+          "maximum": 365,
+          "default": 30
+        },
+        "activeMinStars": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000,
+          "default": 100
+        },
+        "evergreenSearchEnabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "evergreenWithinDays": {
+          "type": "integer",
+          "minimum": 30,
+          "maximum": 730,
+          "default": 180
+        },
+        "evergreenMinStars": {
+          "type": "integer",
+          "minimum": 10,
+          "maximum": 1000000,
+          "default": 500
         },
         "minStars": {
           "type": "integer",

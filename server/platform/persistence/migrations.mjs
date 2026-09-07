@@ -2,7 +2,7 @@ import { applyWorkbenchSchema } from './workbench-schema.mjs';
 import { applyAgentHarnessSchema } from './agent-harness-schema.mjs';
 export { applyWorkbenchSchema };
 
-export const WORKBENCH_SCHEMA_VERSION = 44;
+export const WORKBENCH_SCHEMA_VERSION = 45;
 
 export function runDatabaseMigrations(db, migrateSchema) {
   if (!db || typeof db.exec !== 'function') throw new TypeError('数据库连接无效');
@@ -760,6 +760,37 @@ export function runDatabaseMigrations(db, migrateSchema) {
       addColumns('subscription_runs', [['root_run_id', 'TEXT'], ['workflow_run_id', 'TEXT'], ['stage_id', 'TEXT']]);
       db.exec('CREATE INDEX IF NOT EXISTS idx_source_runs_root ON source_runs(root_run_id,started_at); CREATE INDEX IF NOT EXISTS idx_subscription_runs_root ON subscription_runs(root_run_id,started_at);');
       db.prepare('INSERT INTO schema_migrations(version,applied_at) VALUES(44,?)').run(new Date().toISOString());
+      db.exec('COMMIT');
+    } catch (error) { db.exec('ROLLBACK'); throw error; }
+  }
+  if (arguments.length < 2 && !db.prepare('SELECT 1 FROM schema_migrations WHERE version=45').get()) {
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      db.exec(`CREATE TABLE IF NOT EXISTS github_project_feedback_snapshots (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        generated_at TEXT NOT NULL,
+        metric_window_start TEXT NOT NULL DEFAULT '',
+        metric_window_end TEXT NOT NULL DEFAULT '',
+        source_metric_ids_json TEXT NOT NULL DEFAULT '[]',
+        source_batch_ids_json TEXT NOT NULL DEFAULT '[]',
+        matched_project_count INTEGER NOT NULL DEFAULT 0,
+        sample_count INTEGER NOT NULL DEFAULT 0,
+        confidence TEXT NOT NULL DEFAULT 'low' CHECK(confidence IN ('low','medium','high')),
+        baseline_json TEXT NOT NULL DEFAULT '{}',
+        scenario_signals_json TEXT NOT NULL DEFAULT '[]',
+        project_type_signals_json TEXT NOT NULL DEFAULT '[]',
+        repository_signals_json TEXT NOT NULL DEFAULT '[]',
+        adjustments_json TEXT NOT NULL DEFAULT '{}',
+        recommendations_json TEXT NOT NULL DEFAULT '[]',
+        unresolved_questions_json TEXT NOT NULL DEFAULT '[]',
+        samples_json TEXT NOT NULL DEFAULT '[]',
+        can_apply INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','applied','rejected')),
+        applied_at TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_github_project_feedback_generated ON github_project_feedback_snapshots(generated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_github_project_feedback_status ON github_project_feedback_snapshots(status,id DESC);`);
+      db.prepare('INSERT INTO schema_migrations(version,applied_at) VALUES(45,?)').run(new Date().toISOString());
       db.exec('COMMIT');
     } catch (error) { db.exec('ROLLBACK'); throw error; }
   }

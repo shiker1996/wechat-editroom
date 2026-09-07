@@ -640,6 +640,13 @@ export class Store {
   getLatestContentFeedbackSnapshot() { return this.repositories.contentPlanning.getLatestContentFeedbackSnapshot(); }
   listContentFeedbackSnapshots(input = {}) { return this.repositories.contentPlanning.listContentFeedbackSnapshots(input); }
   saveContentFeedbackSnapshot(input = {}) { return this.repositories.contentPlanning.saveContentFeedbackSnapshot(input); }
+  listGithubProjectFeedbackRows(input = {}) { return this.repositories.contentPlanning.listGithubProjectFeedbackRows(input); }
+  getLatestGithubProjectFeedbackSnapshot() { return this.repositories.contentPlanning.getLatestGithubProjectFeedbackSnapshot(); }
+  getLatestAppliedGithubProjectFeedbackSnapshot() { return this.repositories.contentPlanning.getLatestAppliedGithubProjectFeedbackSnapshot(); }
+  listGithubProjectFeedbackSnapshots(input = {}) { return this.repositories.contentPlanning.listGithubProjectFeedbackSnapshots(input); }
+  saveGithubProjectFeedbackSnapshot(input = {}) { return this.repositories.contentPlanning.saveGithubProjectFeedbackSnapshot(input); }
+  getGithubProjectFeedbackSnapshot(id) { return this.repositories.contentPlanning.getGithubProjectFeedbackSnapshot(id); }
+  updateGithubProjectFeedbackSnapshotStatus(id, status) { return this.repositories.contentPlanning.updateGithubProjectFeedbackSnapshotStatus(id, status); }
   listContentFeedbackAdjustmentDrafts(input = {}) { return this.repositories.contentPlanning.listContentFeedbackAdjustmentDrafts(input); }
   getContentFeedbackAdjustmentDraft(id) { return this.repositories.contentPlanning.getContentFeedbackAdjustmentDraft(id); }
   saveContentFeedbackAdjustmentDraft(input = {}) { return this.repositories.contentPlanning.saveContentFeedbackAdjustmentDraft(input); }
@@ -661,6 +668,10 @@ export class Store {
 
   findSimilarSocialCards(candidateId) {
     return this.queries.workbench.findSimilarSocialCards(candidateId);
+  }
+
+  findGitHubHistoryCoverage(repositories, options = {}) {
+    return this.queries.workbench.findGitHubHistoryCoverage(repositories, options);
   }
 
   articleStats() {

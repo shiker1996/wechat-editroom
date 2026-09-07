@@ -44,6 +44,12 @@
 
     {"source":"config","path":"githubDiscovery.enabled","secret":false,"target":"collector:github-discovery.enabled","consumer":{"file":"collectors/github-discovery.mjs","token":"searchEnabled"}},
     {"source":"config","path":"githubDiscovery.createdWithinDays","secret":false,"target":"collector:github-discovery.createdWithinDays","consumer":{"file":"collectors/github-discovery.mjs","token":"createdWithinDays"}},
+    {"source":"config","path":"githubDiscovery.activeSearchEnabled","secret":false,"target":"collector:github-discovery.activeSearchEnabled","consumer":{"file":"plugins/github-discovery/manifest.json","token":"activeSearchEnabled"}},
+    {"source":"config","path":"githubDiscovery.activeWithinDays","secret":false,"target":"collector:github-discovery.activeWithinDays","consumer":{"file":"plugins/github-discovery/manifest.json","token":"activeWithinDays"}},
+    {"source":"config","path":"githubDiscovery.activeMinStars","secret":false,"target":"collector:github-discovery.activeMinStars","consumer":{"file":"plugins/github-discovery/manifest.json","token":"activeMinStars"}},
+    {"source":"config","path":"githubDiscovery.evergreenSearchEnabled","secret":false,"target":"collector:github-discovery.evergreenSearchEnabled","consumer":{"file":"plugins/github-discovery/manifest.json","token":"evergreenSearchEnabled"}},
+    {"source":"config","path":"githubDiscovery.evergreenWithinDays","secret":false,"target":"collector:github-discovery.evergreenWithinDays","consumer":{"file":"plugins/github-discovery/manifest.json","token":"evergreenWithinDays"}},
+    {"source":"config","path":"githubDiscovery.evergreenMinStars","secret":false,"target":"collector:github-discovery.evergreenMinStars","consumer":{"file":"plugins/github-discovery/manifest.json","token":"evergreenMinStars"}},
     {"source":"config","path":"githubDiscovery.minStars","secret":false,"target":"collector:github-discovery.minStars","consumer":{"file":"collectors/github-discovery.mjs","token":"minStars"}},
     {"source":"config","path":"githubDiscovery.limit","secret":false,"target":"collector:github-discovery.limit","consumer":{"file":"collectors/github-discovery.mjs","token":"config.limit"}},
     {"source":"config","path":"githubDiscovery.cacheTtlMs","secret":false,"target":"collector:github-discovery.cacheTtlMs","consumer":{"file":"collectors/github-discovery.mjs","token":"cacheTtlMs"}},

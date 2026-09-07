@@ -27,6 +27,22 @@ test('GitHub 项目没有足够资料时只保留候补，不进入可创作候�
   assert.equal(selectSocialCandidates([item], 10, true)[0].qualificationStatus, 'below_threshold');
 });
 
+test('GitHub 项目的直接用途和场景元数据可参与可演示性判断', () => {
+  const result = scoreSocialCandidate({ contentClass: 'github_project', title: 'workflow helper', chinaRelevance: 6,
+    repositoryMeta: { projectType: 'skill-workflow', scenarioIds: ['skills-workflows'], directUseCase: '把能力接入工作流', stars: 120 },
+    articles: [{ source: 'github:ai-search', title: 'workflow helper', url: 'https://github.com/example/workflow-helper' }], riskLevel: '低' });
+  assert.notEqual(result.qualificationStatus, 'type_gate_blocked');
+  assert.ok(result.reasons.includes('可演示工具'));
+});
+
+test('项目读者价值低于 60 时不能进入图文候选线', () => {
+  const result = scoreSocialCandidate({ contentClass: 'github_project', title: 'workflow helper', chinaRelevance: 10,
+    repositoryMeta: { projectType: 'tool', directUseCase: '自动处理日常文件', projectReaderValue: 55, description: '可运行的文件处理工具', stars: 120 },
+    articles: [{ source: 'github:ai-search', title: 'workflow helper', url: 'https://github.com/example/workflow-helper' }], riskLevel: '低' });
+  assert.equal(result.qualificationStatus, 'reader_value_blocked');
+  assert.equal(result.candidateEligible, false);
+});
+
 test('开源技术必须有机制、架构或性能证据', () => {
   const base = { contentClass: 'open_source_technology', title: '一个开源项目说明', keywords: ['开源', '项目'], chinaRelevance: 9,
     preScores: { audience: 17 }, sourceCount: 2, confirmedFactCount: 2,

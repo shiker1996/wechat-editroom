@@ -1,14 +1,11 @@
-function repositoryKey(url, rawJson = '') {
-  let raw = {};
-  try { raw = JSON.parse(rawJson || '{}'); } catch {}
-  const declared = String(raw.repository || '').trim().replace(/\.git$/i, '').toLowerCase();
-  if (declared) return declared;
-  try {
-    const parsed = new URL(String(url || ''));
-    if (parsed.hostname.toLowerCase() !== 'github.com') return '';
-    const parts = parsed.pathname.split('/').filter(Boolean).slice(0, 2);
-    return parts.length === 2 ? parts.join('/').replace(/\.git$/i, '').toLowerCase() : '';
-  } catch { return ''; }
+import { extractScenarioIds, repositoryKey } from '../../../shared/domain/github-repository.mjs';
+
+function parseRaw(value) {
+  try { const parsed = JSON.parse(value || '{}'); return parsed && typeof parsed === 'object' ? parsed : {}; } catch { return {}; }
+}
+
+function historyScenarios(raw) {
+  return extractScenarioIds(raw).length ? extractScenarioIds(raw) : extractScenarioIds(raw.repositoryMeta || {});
 }
 
 function localDateKey(date = new Date()) {
@@ -182,6 +179,85 @@ export class WorkbenchQueryService {
     }
     return matches.sort((left, right) => right.score - left.score
       || String(right.updatedAt).localeCompare(String(left.updatedAt))).slice(0, 5);
+  }
+
+  findGitHubHistoryCoverage(repositories = [], { batchId = '' } = {}) {
+    const requestedItems = (repositories || []).map((value) => {
+      if (typeof value === 'string') return { repository: value, scenarioIds: [] };
+      return { repository: value?.repository, scenarioIds: extractScenarioIds(value) };
+    }).map((item) => ({ ...item, key: String(item.repository || '').trim().toLowerCase() })).filter((item) => item.key);
+    if (!requestedItems.length) return {};
+    const coverage = Object.fromEntries(requestedItems.map((item) => [item.key, {
+      status: 'uncovered', penalty: 0, sameScenarioCount: 0, matches: [], scenarioIds: item.scenarioIds,
+    }]));
+    const publishedRows = this.db.prepare(`
+      SELECT h.url,h.raw_json,COALESCE(h.title,d.title) AS title,
+        COALESCE(d.updated_at,a.modified_at) AS published_at,b.batch_date
+      FROM hotspots h
+      JOIN candidates c ON c.hotspot_id=h.id
+      LEFT JOIN documents d ON d.candidate_row_id=c.id AND d.kind='final'
+      LEFT JOIN artifacts a ON a.candidate_row_id=c.id AND a.track='social_cards'
+        AND a.name IN ('my-design.html','ai-beautified.html') AND a.status='ready'
+      LEFT JOIN batches b ON b.id=c.batch_id
+      WHERE c.batch_id<>?
+        AND (d.id IS NOT NULL OR a.id IS NOT NULL)
+        AND (h.source_group='github' OR h.url LIKE 'https://github.com/%')
+    `).all(batchId || '');
+    const draftRows = this.db.prepare(`
+      SELECT h.url,h.raw_json,COALESCE(h.title,c.hotspot_titles) AS title,
+        ct.status,c.updated_at,b.batch_date
+      FROM candidates c
+      JOIN candidate_tracks ct ON ct.candidate_row_id=c.id
+      LEFT JOIN hotspots h ON h.id=c.hotspot_id
+      LEFT JOIN batches b ON b.id=c.batch_id
+      WHERE c.batch_id<>?
+        AND ct.status IN ('locked','drafting','review','preview')
+        AND (h.source_group='github' OR h.url LIKE 'https://github.com/%')
+    `).all(batchId || '');
+    const scenarioRows = publishedRows.map((row) => ({ ...row, kind: 'published' }))
+      .concat(draftRows.map((row) => ({ ...row, kind: 'draft' })));
+    for (const row of scenarioRows) {
+      const raw = parseRaw(row.raw_json);
+      const key = repositoryKey(row.url, row.raw_json);
+      if (!key || !coverage[key]) continue;
+      const entry = coverage[key];
+      const match = { title: row.title || '', kind: row.kind, batchDate: row.batch_date || '', publishedAt: row.published_at || row.updated_at || '' };
+      if (row.kind === 'published') {
+        entry.publishedCount = Number(entry.publishedCount || 0) + 1;
+        if (entry.status !== 'same_repository_published') entry.status = 'same_repository_published';
+        entry.penalty = 0;
+      } else if (entry.status === 'uncovered') {
+        entry.status = 'same_repository_drafted';
+        entry.penalty = -20;
+      }
+      entry.matches.push(match);
+    }
+    const scenarioCutoff = Date.now() - 30 * 86400000;
+    for (const row of publishedRows) {
+      const raw = parseRaw(row.raw_json);
+      const key = repositoryKey(row.url, row.raw_json);
+      if (!key) continue;
+      const rowScenarios = historyScenarios(raw);
+      if (!rowScenarios.length) continue;
+      const publishedAt = Date.parse(row.published_at || row.batch_date || '');
+      if (Number.isFinite(publishedAt) && publishedAt < scenarioCutoff) continue;
+      for (const [requestedKey, entry] of Object.entries(coverage)) {
+        if (requestedKey === key || entry.status === 'same_repository_published' || !entry.scenarioIds.length) continue;
+        if (entry.scenarioIds.some((scenario) => rowScenarios.includes(scenario))) {
+          entry.sameScenarioCount += 1;
+          entry.matches.push({ title: row.title || '', kind: 'same_scenario_published', batchDate: row.batch_date || '', publishedAt: row.published_at || '' });
+        }
+      }
+    }
+    for (const entry of Object.values(coverage)) {
+      if (entry.status === 'uncovered' && entry.sameScenarioCount >= 2) {
+        entry.status = 'same_scenario_published';
+        entry.penalty = -10;
+      }
+      if (!entry.publishedCount) entry.publishedCount = 0;
+      delete entry.scenarioIds;
+    }
+    return coverage;
   }
 
   articleStats() {

@@ -336,6 +336,12 @@
       "optionalCapabilities": []
     },
     {
+      "id": "project-reader-value",
+      "name": "项目读者价值研判",
+      "requiredCapabilities": [],
+      "optionalCapabilities": []
+    },
+    {
       "id": "repository-card-storyboard",
       "name": "工具图文故事板",
       "requiredCapabilities": [],

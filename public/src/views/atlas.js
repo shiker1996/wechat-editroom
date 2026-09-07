@@ -477,7 +477,7 @@ function renderEventHotlist() {
     return;
   }
   const stateLabels = { new_event: "新事件", new_update: "有增量", continuing: "持续", stale: "过时" };
-  const modelLabels = { news_event: "T_news", open_source_technology: "T_technology", open_source_trend: "T_trend", github_project: "projectDiscoveryScore" };
+  const modelLabels = { news_event: "T_news", open_source_technology: "T_technology", open_source_trend: "T_trend", github_project: "projectReaderValue" };
   const contentClass = state.atlasFilters.contentClass || "news_event";
   const summary = `<div class="event-hotlist-summary">${escapeHtml(modelLabels[contentClass] || "分类评分")} 独立排序；默认展示前 ${Math.min(HOTLIST_DISPLAY_LIMIT, allItems.length)} 条，共 ${allItems.length} 条符合当前筛选。`;
   container.innerHTML = summary + items.map((item) => {

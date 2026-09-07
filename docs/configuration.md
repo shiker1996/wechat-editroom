@@ -64,7 +64,7 @@
 - `port`（4317）、`workspaceRoot`、`contentRoots`：服务端口与内容扫描根目录。
 - `reddit`：Reddit 采集连接参数。`cdpUrl`、`navigationTimeoutMs`。具体分区来源在「采集源」页面维护（存入 `collection_sources` 表），不再由配置文件声明。
 - `rsshub`：RSSHub 采集连接参数。`baseUrl`、`maxAgeHours`（168，旧闻窗口）、`concurrency`（5）、`keepAlive`、`startupTimeoutMs`。具体路由 / 直连 Feed 来源在「采集源」页面维护（存入 `collection_sources` 表）。
-- `githubDiscovery`：GitHub 新项目发现采集器参数。`createdWithinDays`（7，最近 7 天）、`minStars`（1000）、`limit`、`cacheTtlMs`。`github:search` 采集源实例在「采集源」页面维护（存入 `collection_sources` 表）。
+- `githubDiscovery`：GitHub 项目发现采集器参数。`createdWithinDays`（30，新项目窗口）、`minStars`（1000）、`limit`、`cacheTtlMs`；`activeSearchEnabled`、`activeWithinDays`（30）、`activeMinStars`（100）用于近期活跃项目；`evergreenSearchEnabled`、`evergreenWithinDays`（180）、`evergreenMinStars`（500）用于成熟项目。`github:search` 采集源实例在「采集源」页面维护（存入 `collection_sources` 表）。
   - `aiQueries`：AI 兴趣仓库发现。`enabled`、`refreshDays`（7，查询组缓存天数，缓存文件 `data/repo-discovery-queries.json`，可手工编辑）、`maxQueries`（6）、`perQueryLimit`（15）、`relevanceFilter`、`minInterestScore`（6，兴趣分阈值）。LLM 按 `account-context.json` 内容支柱生成 Search 查询组并做相关性打分过滤；任一环节失败自动退化为纯规则发现（Trending + 增长搜索 + 热点提及）。
 - `llm`：模型网关运行参数。
   - `requestTimeoutMs`、`safetyReserveTokens`、`recentMessageCount`。

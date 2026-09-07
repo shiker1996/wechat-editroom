@@ -65,6 +65,10 @@ export function buildTaggingInput({ id, source, source_group, source_type, sourc
     stars:Number.isFinite(Number(raw.stars))?Number(raw.stars):null, topics:Array.isArray(raw.topics)?raw.topics.slice(0,12):[],
     createdAt:raw.createdAt||null, updatedAt:raw.updatedAt||null,
     discoveryChannels:Array.isArray(raw.discoveryChannels)?raw.discoveryChannels:[], primaryDiscovery:raw.primaryDiscovery||source_type||'',
+    discoveryContexts:Array.isArray(raw.discoveryContexts)?raw.discoveryContexts.slice(0,12):[],
+    projectType:raw.projectType||'', scenarioIds:Array.isArray(raw.scenarioIds)?raw.scenarioIds:[],
+    directUseCase:String(raw.directUseCase||'').slice(0,180), agentDependency:raw.agentDependency||'none',
+    agentSignals:Array.isArray(raw.agentSignals)?raw.agentSignals.slice(0,6):[],
     trendingPeriods:Array.isArray(raw.periods)?raw.periods:raw.period?[raw.period]:[],
     mentionedBy:Array.isArray(raw.mentionedBy)?raw.mentionedBy.slice(0,3):[],
   };

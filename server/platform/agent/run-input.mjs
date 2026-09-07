@@ -71,6 +71,8 @@ function inputFilesForRun({ root, store, trace, batchWorkdir }) {
     addKnown(files, '讨论研判模型输入', path.join(sources, 'discussion-research-input.json'), 'discussion-research');
     addKnown(files, '研判阶段 3 输入', path.join(sources, 'discussion-research-stage3-input.json'), 'discussion-research.topic_generation');
     addKnown(files, 'Top-K 研判范围', path.join(sources, 'topk-research-scope.json'), 'discussion-research');
+    addKnown(files, '项目读者价值研判输入', path.join(sources, 'project-reader-value-input.json'), 'project-reader-value');
+    addKnown(files, '项目读者价值研判结果', path.join(sources, 'project-reader-value.json'), 'project-reader-value');
   } else {
     // 其它 Pipeline 沿用各自已经落盘的输入 / 计划文件，不扫描或暴露任意产物。
     const preferred = [

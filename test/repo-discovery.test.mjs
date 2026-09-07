@@ -36,10 +36,9 @@ test('sanitizeQueries 校验字段并夹紧范围', () => {
       { label: '纯逻辑运算符应丢弃', query: 'AND OR NOT' },
     ],
   }, { maxQueries: 6 });
-  assert.equal(queries.length, 2);
-  assert.equal(queries[0].createdWithinDays, 7);
-  assert.equal(queries[0].minStars, 5000);
-  assert.equal(queries[1].query.length, 200);
+  assert.equal(queries.length, 1, '宽泛的 agent framework 查询应被拒绝');
+  assert.equal(queries[0].query.length, 200);
+  assert.equal(queries[0].activityWindowDays, 30);
 });
 
 test('expandAiQueryKeywords 拆分纯限定符 OR 查询，保留含文本词条的原样查询', () => {
@@ -68,13 +67,14 @@ test('planRepoDiscoveryQueries 生成查询组并落缓存，缓存期内不再�
   assert.equal(third.queries.length, 1);
 });
 
-test('planRepoDiscoveryQueries 模型失败时优雅降级为空数组', async () => {
+test('planRepoDiscoveryQueries 模型失败时回退内置场景查询', async () => {
   const root = tmpRoot();
   const gateway = { async complete() { throw new Error('模型不可用'); } };
   const planned = await planRepoDiscoveryQueries({ workspaceRoot: root, gateway, accountContext });
-  assert.deepEqual(planned.queries, []);
+  assert.ok(planned.queries.length >= 4);
+  assert.ok(planned.queries.every((query) => query.lane));
   const badJson = await planRepoDiscoveryQueries({ workspaceRoot: root, gateway: fakeGateway('不是 JSON'), accountContext });
-  assert.deepEqual(badJson.queries, []);
+  assert.ok(badJson.queries.length >= 4);
 });
 
 test('filterRepositoriesByInterest 按阈值过滤并附分数理由，失败放行', async () => {
@@ -137,7 +137,7 @@ test('discoverGitHubRepositories 执行 AI 查询组并按优先级归并通道'
   const sourceResults = [];
   const items = await discoverGitHubRepositories([], {
     enabled: true, minStars: 1000, createdWithinDays: 30, limit: 5,
-    aiQueries: [{ label: 'MCP 工具', query: 'mcp server', createdWithinDays: 60, minStars: 100, limit: 10 }],
+    aiQueries: [{ label: 'MCP 工具', lane: 'skills-workflows', query: 'mcp server', projectTypes: ['plugin-extension'], directUseCase: '把能力接入工作流', createdWithinDays: 60, minStars: 100, limit: 10 }],
     fetchImpl,
   }, () => {}, (r) => sourceResults.push(r));
 
@@ -151,8 +151,13 @@ test('discoverGitHubRepositories 执行 AI 查询组并按优先级归并通道'
   const ageHours = (Date.now() - Date.parse(aiRepo.publishedAt)) / 3600000;
   assert.ok(ageHours < 1, `ai-search publishedAt 应为发现时间，实际距现在 ${ageHours.toFixed(1)} 小时`);
   assert.equal(aiRepo.createdAt, '2026-08-01', '仓库创建时间保留在 createdAt 字段');
+  assert.equal(aiRepo.projectType, 'plugin-extension');
+  assert.deepEqual(aiRepo.scenarioIds, ['skills-workflows']);
+  assert.equal(aiRepo.directUseCase, '把能力接入工作流');
+  assert.ok(aiRepo.discoveryContexts.some((context) => context.channel === 'ai-search' && context.lane === 'skills-workflows'));
   const searchRepo = items.find((i) => i.repository === 'y/hot');
   assert.ok((Date.now() - Date.parse(searchRepo.publishedAt)) / 3600000 < 1, 'search publishedAt 同样应为发现时间');
+  assert.ok(searchRepo.discoveryContexts.some((context) => context.channel === 'search' && context.mode === 'new'));
   assert.ok(sourceResults.some((r) => r.sourceType === 'ai-search' && r.status === 'success' && r.itemCount === 1));
 
   // trending 通道优先级高于 ai-search：同仓库被两通道发现时保持 trending 身份

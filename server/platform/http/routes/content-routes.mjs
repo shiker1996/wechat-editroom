@@ -10,6 +10,7 @@ import { matchWechatArticles } from '../../../features/content-planning/wechat-a
 import { fetchWechatArticleContent, linkWechatArticlesContent } from '../../../features/content-planning/article-content-linker.mjs';
 import { buildContentFeedbackSnapshot, extractArticleContentFeatures } from '../../../features/content-planning/wechat-content-feedback.mjs';
 import { buildSocialContentFeedbackSnapshot } from '../../../features/content-planning/social-content-feedback.mjs';
+import { buildProjectDiscoveryFeedbackSnapshot } from '../../../features/content-planning/project-discovery-feedback.mjs';
 import { buildContentPlanningRecommendation, sortMaterialsByPlanningRecommendation } from '../../../features/content-planning/content-planning-recommendations.mjs';
 import { buildWechatStrategyRecommendations } from '../../../features/content-planning/wechat-strategy-recommendations.mjs';
 import { buildAdjustmentDraft, buildFeedbackAdjustmentMessages, buildFeedbackAdjustmentPatchMessages, confirmAdjustmentDraft, currentSkillFile, currentSkillPackageFiles, FEEDBACK_ADJUSTMENT_VERSION, listWriterSkillCatalog, resolveTitleSkillTarget, resolveWriterSkillTarget } from '../../../features/content-planning/feedback-adjustment.mjs';
@@ -310,6 +311,27 @@ const planMatch = pathname.match(/^\/api\/writing-material-plans\/(\d+)$/);
     const feedback = store.getLatestContentFeedbackSnapshot();
     const analyses = store.listArticleContentAnalyses({ limit: 2000 });
     json(response, 200, { feedback, stats: { linked_articles: analyses.filter((item) => item.content_status === 'ok').length, features: analyses.filter((item) => item.feature_id).length } }); return true;
+  }
+  if (request.method === 'GET' && pathname === '/api/wechat/project-feedback') {
+    json(response, 200, { feedback: store.getLatestGithubProjectFeedbackSnapshot(), applied: store.getLatestAppliedGithubProjectFeedbackSnapshot(), history: store.listGithubProjectFeedbackSnapshots({ limit: 10 }) }); return true;
+  }
+  if (request.method === 'POST' && pathname === '/api/wechat/project-feedback/rebuild') {
+    try {
+      const rows = store.listGithubProjectFeedbackRows({ limit: 2000 });
+      const feedback = store.saveGithubProjectFeedbackSnapshot(buildProjectDiscoveryFeedbackSnapshot(rows));
+      json(response, 200, { status: 'ok', feedback, source_count: rows.length });
+    } catch (error) { json(response, 400, { error: error.message }); }
+    return true;
+  }
+  const projectFeedbackAction = pathname.match(/^\/api\/wechat\/project-feedback\/(\d+)\/(apply|reject)$/);
+  if (projectFeedbackAction && request.method === 'POST') {
+    try {
+      const snapshot = store.getGithubProjectFeedbackSnapshot(Number(projectFeedbackAction[1]));
+      if (!snapshot) { json(response, 404, { error: '项目发现反馈快照不存在' }); return true; }
+      if (projectFeedbackAction[2] === 'apply' && !snapshot.can_apply) { json(response, 400, { error: '当前样本不足或没有可应用的项目发现调整' }); return true; }
+      json(response, 200, store.updateGithubProjectFeedbackSnapshotStatus(Number(projectFeedbackAction[1]), projectFeedbackAction[2] === 'apply' ? 'applied' : 'rejected'));
+    } catch (error) { json(response, 400, { error: error.message }); }
+    return true;
   }
   if (request.method === 'GET' && pathname === '/api/wechat/strategy') {
     const review = enrichWechatReview(store.getWechatReview());

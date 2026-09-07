@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "project-reader-value",
+  "name": "项目读者价值研判",
+  "version": "1.0.0",
+  "kind": "stage",
+  "entryPoints": [],
+  "contentTypes": [],
+  "inputContract": "github_project_candidates",
+  "outputContract": "project_reader_value_judgments",
+  "requiredCapabilities": [],
+  "optionalCapabilities": [],
+  "compatibleApp": ">=0.1.0",
+  "source": {
+    "type": "builtin",
+    "url": ""
+  },
+  "runtimeKind": "stage-skill",
+  "budget": {
+    "maxModelSteps": 1,
+    "maxToolCalls": 1,
+    "timeoutMs": 120000
+  },
+  "gates": []
+}

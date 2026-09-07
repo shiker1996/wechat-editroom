@@ -468,6 +468,23 @@ export class ContentPlanningRepository {
       LEFT JOIN article_artifact_index aa ON aa.id=mm.article_artifact_id
       WHERE ${where.join(' AND ')} ORDER BY CASE mm.status WHEN 'pending' THEN 0 WHEN 'unmatched' THEN 1 ELSE 2 END,wm.published_date DESC,mm.id DESC LIMIT ?`).all(...values).map((row) => this.#decorateMatch(row));
   }
+  listGithubProjectFeedbackRows({ limit = 1000 } = {}) {
+    return this.db.prepare(`SELECT mm.id AS match_id,mm.status AS match_status,mm.confidence,mm.match_method,mm.content_type,
+      aa.id AS article_artifact_id,aa.title AS artifact_title,aa.article_date,aa.artifact_type,aa.file_path,
+      wm.id AS metric_id,wm.import_batch_id,wm.title AS metric_title,wm.published_date,wm.reads,wm.shares,wm.follows_after_read,wm.content_url,
+      c.id AS candidate_row_id,c.content_class,c.classification_features_json,
+      h.title AS hotspot_title,h.url AS hotspot_url,h.source AS hotspot_source,h.source_group AS hotspot_source_group,h.raw_json AS hotspot_raw_json
+      FROM wechat_article_metric_matches mm
+      JOIN wechat_article_metrics wm ON wm.id=mm.metric_id
+      LEFT JOIN article_artifact_index aa ON aa.id=mm.article_artifact_id
+      LEFT JOIN artifacts ar ON ar.id=aa.artifact_id
+      LEFT JOIN candidates c ON c.id=ar.candidate_row_id
+      LEFT JOIN hotspots h ON h.id=c.hotspot_id
+      WHERE mm.status IN ('confirmed','auto_confirmed')
+        AND (mm.content_type='social' OR aa.artifact_type='图文发布文案')
+        AND (c.content_class='github_project' OR h.source_group='github' OR lower(COALESCE(h.url,'')) LIKE 'https://github.com/%')
+      ORDER BY wm.published_date DESC,wm.id DESC LIMIT ?`).all(Math.min(Math.max(Number(limit) || 1000, 1), 2000));
+  }
   listWechatMatchArtifacts() {
     return this.db.prepare(`SELECT id,title,artifact_type,article_date,version_label,file_path,content_url
       FROM article_artifact_index WHERE artifact_type IN ('文章终稿','早报终稿','图文发布文案')
@@ -621,6 +638,31 @@ export class ContentPlanningRepository {
     );
     return this.#decorateFeedbackSnapshot(this.db.prepare('SELECT * FROM content_feedback_snapshots WHERE id=?').get(Number(result.lastInsertRowid)));
   }
+  getLatestGithubProjectFeedbackSnapshot() {
+    return this.#decorateGithubProjectFeedbackSnapshot(this.db.prepare('SELECT * FROM github_project_feedback_snapshots ORDER BY id DESC LIMIT 1').get());
+  }
+  getLatestAppliedGithubProjectFeedbackSnapshot() {
+    return this.#decorateGithubProjectFeedbackSnapshot(this.db.prepare("SELECT * FROM github_project_feedback_snapshots WHERE status='applied' ORDER BY id DESC LIMIT 1").get());
+  }
+  listGithubProjectFeedbackSnapshots({ limit = 20 } = {}) {
+    return this.db.prepare('SELECT * FROM github_project_feedback_snapshots ORDER BY id DESC LIMIT ?').all(Math.min(Math.max(Number(limit) || 20, 1), 100)).map((row) => this.#decorateGithubProjectFeedbackSnapshot(row));
+  }
+  saveGithubProjectFeedbackSnapshot(input = {}) {
+    const result = this.db.prepare(`INSERT INTO github_project_feedback_snapshots
+      (generated_at,metric_window_start,metric_window_end,source_metric_ids_json,source_batch_ids_json,matched_project_count,sample_count,confidence,baseline_json,scenario_signals_json,project_type_signals_json,repository_signals_json,adjustments_json,recommendations_json,unresolved_questions_json,samples_json,can_apply,status)
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+      String(input.generated_at || input.generatedAt || now()), String(input.metric_window_start || input.metricWindowStart || ''), String(input.metric_window_end || input.metricWindowEnd || ''),
+      JSON.stringify(input.source_metric_ids || input.sourceMetricIds || []), JSON.stringify(input.source_batch_ids || input.sourceBatchIds || []), Number(input.matched_project_count ?? input.matchedProjectCount ?? 0), Number(input.sample_count ?? input.sampleCount ?? 0),
+      ['low', 'medium', 'high'].includes(input.confidence) ? input.confidence : 'low', JSON.stringify(input.baseline || {}), JSON.stringify(input.scenario_signals || input.scenarioSignals || []), JSON.stringify(input.project_type_signals || input.projectTypeSignals || []), JSON.stringify(input.repository_signals || input.repositorySignals || []), JSON.stringify(input.adjustments || {}), JSON.stringify(input.recommendations || []), JSON.stringify(input.unresolved_questions || input.unresolvedQuestions || []), JSON.stringify(input.samples || []), input.can_apply ? 1 : 0, 'pending',
+    );
+    return this.getGithubProjectFeedbackSnapshot(Number(result.lastInsertRowid));
+  }
+  getGithubProjectFeedbackSnapshot(id) { return this.#decorateGithubProjectFeedbackSnapshot(this.db.prepare('SELECT * FROM github_project_feedback_snapshots WHERE id=?').get(Number(id))); }
+  updateGithubProjectFeedbackSnapshotStatus(id, status) {
+    if (!['applied', 'rejected'].includes(status)) throw new Error('项目发现反馈状态无效');
+    this.db.prepare('UPDATE github_project_feedback_snapshots SET status=?,applied_at=CASE WHEN ?=\'applied\' THEN ? ELSE applied_at END WHERE id=? AND status=\'pending\'').run(status, status, status === 'applied' ? now() : null, Number(id));
+    return this.getGithubProjectFeedbackSnapshot(id);
+  }
   listContentFeedbackAdjustmentDrafts({ limit = 20 } = {}) {
     return this.db.prepare('SELECT * FROM content_feedback_adjustment_drafts ORDER BY id DESC LIMIT ?').all(Math.min(Math.max(Number(limit) || 20, 1), 100)).map((row) => this.#decorateAdjustmentDraft(row));
   }
@@ -722,6 +764,15 @@ export class ContentPlanningRepository {
       unresolved_questions: jsonValue(row.unresolved_questions_json, []),
       writer_skill_evidence: jsonValue(row.writer_skill_evidence_json, []),
     } : null;
+  }
+  #decorateGithubProjectFeedbackSnapshot(row) {
+    if (!row) return null;
+    return {
+      ...row, source_metric_ids: jsonValue(row.source_metric_ids_json, []), source_batch_ids: jsonValue(row.source_batch_ids_json, []), baseline: jsonValue(row.baseline_json, {}),
+      scenario_signals: jsonValue(row.scenario_signals_json, []), project_type_signals: jsonValue(row.project_type_signals_json, []), repository_signals: jsonValue(row.repository_signals_json, []),
+      adjustments: jsonValue(row.adjustments_json, {}), recommendations: jsonValue(row.recommendations_json, []), unresolved_questions: jsonValue(row.unresolved_questions_json, []), samples: jsonValue(row.samples_json, []),
+      can_apply: Boolean(row.can_apply),
+    };
   }
   #decorateAdjustmentDraft(row) {
     return row ? {

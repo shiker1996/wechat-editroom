@@ -34,6 +34,7 @@ export { buildTopicScoreOperationsMetrics } from './application/topic-score-oper
 export { CandidateSelectionService } from './application/candidate-selection-service.mjs';
 export { classifyResearchFailure, recordResearchFailure } from './application/research-failure.mjs';
 export { buildEventHeatRanking, loadPreviousEventHeatItems, scoreClassifiedEvent, scoreEventHeat } from './domain/event-heat-ranking.mjs';
+export { PROJECT_READER_VALUE_TOP_K, PROJECT_READER_VALUE_TOP_K_OPTIONS, PROJECT_READER_VALUE_WEIGHTS, applyProjectReaderValuesToHeatRanking, attachProjectReaderValues, evaluateProjectReaderValue, projectReaderValueInput, resolveProjectReaderValueTopK, scoreProjectReaderValue, selectProjectReaderValueCandidates } from './domain/project-reader-value.mjs';
 export { DISCUSSION_RESEARCH_SCHEMA_VERSION, DISCUSSION_RESEARCH_TOP_K, DISCUSSION_RESEARCH_TOP_K_OPTIONS, resolveDiscussionResearchTopK, DISCUSSION_RESEARCH_EXCLUDED_CONTENT_CLASSES, buildDiscussionResearch, discussionResearchMarkdown, readDiscussionResearchContext } from './domain/discussion-research.mjs';
 export {
   RESEARCH_SEARCH_SCHEMA_VERSION,

@@ -1089,6 +1089,26 @@ GET 返回脱敏后的当前运行设置；PUT 更新受支持的 `.env` 字段�
 按已确认的图文发布文案与公众号指标重新计算图文题材、发布文案结构及传播信号。图文反馈直接由当前匹配数据计算，不创建独立反馈快照。
 → 公众号复盘
 
+### GET /api/wechat/project-feedback
+
+读取最近一次 GitHub 项目发现反馈快照、最近一次已应用快照及历史记录。反馈按项目场景、项目类型和仓库聚合公众号阅读表现，只作为下一轮项目发现排序的有界偏置。
+→ 内容反哺
+
+### POST /api/wechat/project-feedback/rebuild
+
+根据已确认或自动确认的公众号匹配，重新计算 GitHub 项目发现反馈快照。接口复用现有内容匹配与指标数据，不调用模型，也不会自动应用调整。
+→ 内容反哺
+
+### POST /api/wechat/project-feedback/:id/apply
+
+人工确认并应用一份可应用的 GitHub 项目发现反馈快照。应用后只影响下一轮项目发现与事件热榜排序，调整总量和单项均有上限。
+→ 内容反哺
+
+### POST /api/wechat/project-feedback/:id/reject
+
+拒绝一份待确认的 GitHub 项目发现反馈快照，不影响现有排序，也不会修改文章、图文或写作技能。
+→ 内容反哺
+
 ### GET /api/wechat/feedback/adjustments
 
 读取最近生成的公众号反馈调整草案。草案包含账号配置、标题技能和 AI 根据题材、正文结构及已映射样本自动判定的写作技能原文与新版本 diff；无映射但有足够正文信号时会标记为 AI 推断。旧版本待确认草案会标记为过期，不能写入。
@@ -1112,6 +1132,11 @@ GET 返回脱敏后的当前运行设置；PUT 更新受支持的 `.env` 字段�
 ### POST /api/wechat/feedback/adjustments/:id/delete
 
 删除一份已经跳过（`rejected`）的反馈调整草案记录。待确认或已写入草案不能删除，不影响任何配置、技能覆盖文件或已写入结果。
+→ 内容反哺
+
+### POST /api/wechat/feedback/adjustments/:id/change/:index/save
+
+手动保存反馈调整草案中指定文件变更的内容，只更新草案记录，不直接写入正式配置或技能文件。
 → 内容反哺
 
 ### GET /api/wechat/review

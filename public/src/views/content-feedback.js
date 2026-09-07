@@ -111,6 +111,31 @@ function renderSocialFeedback(track) {
   if (content) content.innerHTML = `<div class="wechat-feedback-meta"><span>样本范围：${escapeHtml(artifactFeedback.metric_window_start || "-")} — ${escapeHtml(artifactFeedback.metric_window_end || "-")}</span><span>文案成品：${artifactFeedback.copy_ready_count || 0}/${track.count} · 平均 ${fmt(copySummary.avg_chars || 0)} 字</span><span>故事板：${artifactFeedback.storyboard_ready_count || 0}/${track.count} · 平均 ${fmt(storyboardSummary.avg_pages || 0)} 页</span><span>布局报告：${artifactFeedback.layout_ready_count || 0}/${track.count}</span></div><div class="wechat-feedback-grid"><section><header><b>图文选题表现</b><small>反馈到图文选题池</small></header>${insights.topics?.length ? insights.topics.slice(0, 5).map((item) => feedbackSignal(item)).join("") : '<div class="empty-state">暂无题材样本</div>'}</section><section><header><b>发布文案成品</b><small>分析实际 copy.txt</small></header><div class="wechat-feedback-note-grid"><span>平均 ${fmt(copySummary.avg_paragraphs || 0)} 段</span><span>${Math.round(Number(copySummary.cta_rate || 0) * 100)}% 有行动提示</span><span>${Math.round(Number(copySummary.boundary_rate || 0) * 100)}% 有边界说明</span></div>${artifactFeedback.copy_signals?.length ? artifactFeedback.copy_signals.slice(0, 5).map(socialArtifactSignal).join("") : '<div class="empty-state">暂无文案成品特征</div>'}</section><section><header><b>故事板成品</b><small>分析实际 card-plan.json</small></header><div class="wechat-feedback-note-grid"><span>${Math.round(Number(storyboardSummary.complete_narrative_rate || 0) * 100)}% 有问题→能力叙事链</span><span>${Math.round(Number(storyboardSummary.evidence_binding_rate || 0) * 100)}% 有事实绑定</span><span>平均 ${fmt(storyboardSummary.avg_blocks_per_page || 0)} 块/页</span></div>${artifactFeedback.storyboard_signals?.length ? artifactFeedback.storyboard_signals.slice(0, 6).map(socialArtifactSignal).join("") : '<div class="empty-state">暂无故事板成品特征</div>'}</section><section><header><b>布局交付观察</b><small>只判断交付质量，不等同传播效果</small></header><div class="wechat-social-feedback-note"><b>已纳入布局报告</b><p>${escapeHtml(`报告覆盖 ${artifactFeedback.layout_ready_count || 0} 条，门禁通过率 ${Math.round(Number(layoutSummary.valid_rate || 0) * 100)}%，平均利用率 ${layoutSummary.avg_utilization || 0}%；发现 ${layoutSummary.issue_count || 0} 个问题、${layoutSummary.overflow_page_count || 0} 个溢出页。布局通过只能说明可交付，不能单独证明更涨粉。`)}</p></div></section></div><div class="wechat-feedback-recommendations"><header><b>图文下一轮可验证提示</b><small>作为故事板与文案技能调整的证据，不自动改写</small></header>${artifactFeedback.recommendations?.length ? artifactFeedback.recommendations.map(renderRecommendation).join("") : '<div class="empty-state">样本不足，暂不生成推荐。</div>'}</div>${artifactFeedback.unresolved_questions?.length ? `<details class="wechat-feedback-questions"><summary>分析边界（${artifactFeedback.unresolved_questions.length}）</summary><ul>${artifactFeedback.unresolved_questions.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></details>` : ""}`;
 }
 
+function renderProjectSignal(signal) {
+  const ratioText = Number(signal.median_read_ratio || 0) ? `基线 ${Number(signal.median_read_ratio).toFixed(2)} 倍` : '暂无基线';
+  return `<div class="wechat-feedback-signal social-artifact-signal"><div><b>${escapeHtml(signal.label || signal.id || "未命名场景")}</b><span class="wechat-feedback-level ${signal.confidence || "low"}">${levelLabel(signal.confidence)}置信</span></div><small>${fmt(signal.sample_count || 0)} 个样本 · 中位 ${fmt(signal.median_reads || 0)} 阅读 · ${escapeHtml(ratioText)}</small><small>分享 ${Number(signal.shares_per_thousand_reads || 0).toFixed(2)}/千阅读 · 关注 ${Number(signal.follows_per_thousand_reads || 0).toFixed(2)}/千阅读</small></div>`;
+}
+
+function renderProjectFeedback(feedback) {
+  const summary = document.getElementById("content-feedback-summary");
+  const content = document.getElementById("content-feedback-content");
+  const rebuild = document.getElementById("content-feedback-rebuild");
+  const socialRebuild = document.getElementById("content-feedback-social-rebuild");
+  const projectRebuild = document.getElementById("content-feedback-project-rebuild");
+  if (rebuild) rebuild.hidden = true;
+  if (socialRebuild) socialRebuild.hidden = true;
+  if (projectRebuild) projectRebuild.hidden = false;
+  if (!feedback) {
+    if (summary) summary.textContent = "尚未生成";
+    if (content) content.innerHTML = '<div class="empty-state">先确认 GitHub 项目图文与公众号指标的关联，再生成项目发现反馈。</div>';
+    return;
+  }
+  const adjustments = [...(feedback.adjustments?.scenarios || []), ...(feedback.adjustments?.project_types || [])];
+  if (summary) summary.textContent = `${feedback.sample_count || 0} 个项目样本 · ${levelLabel(feedback.confidence)}置信 · ${feedback.status === 'applied' ? '已应用' : feedback.status === 'rejected' ? '已拒绝' : '待确认'}`;
+  const action = feedback.status === 'pending' && feedback.can_apply ? `<button class="primary-button" type="button" data-project-feedback-action="apply" data-project-feedback-id="${Number(feedback.id)}">应用到下一批项目发现</button><button class="text-button" type="button" data-project-feedback-action="reject" data-project-feedback-id="${Number(feedback.id)}">暂不应用</button>` : `<span class="muted">${feedback.status === 'applied' ? '调整将在下一次研判时生效' : feedback.status === 'rejected' ? '本次调整已跳过' : '样本不足，暂不可应用'}</span>`;
+  if (content) content.innerHTML = `<div class="wechat-feedback-meta"><span>样本范围：${escapeHtml(feedback.metric_window_start || "-")} — ${escapeHtml(feedback.metric_window_end || "-")}</span><span>仓库数：${fmt(feedback.matched_project_count || 0)}</span><span>账号项目样本中位：${fmt(feedback.baseline?.median_reads || 0)} 阅读</span></div><div class="wechat-feedback-grid"><section><header><b>场景表现</b><small>只作为下一批召回偏置</small></header>${feedback.scenario_signals?.length ? feedback.scenario_signals.slice(0, 8).map(renderProjectSignal).join("") : '<div class="empty-state">暂无场景样本</div>'}</section><section><header><b>项目类型表现</b><small>工具、组件、Skill 等</small></header>${feedback.project_type_signals?.length ? feedback.project_type_signals.slice(0, 8).map(renderProjectSignal).join("") : '<div class="empty-state">暂无类型样本</div>'}</section><section><header><b>建议调整</b><small>人工确认后才生效</small></header>${adjustments.length ? adjustments.map((item) => `<div class="wechat-feedback-signal"><div><b>${escapeHtml(item.label || item.id)}</b><span class="wechat-feedback-level ${item.delta > 0 ? 'high' : 'medium'}">${item.delta > 0 ? '+' : ''}${item.delta} 分</span></div><p>${escapeHtml(item.reason || '')}</p><small>${fmt(item.sample_count || 0)} 个样本 · ${levelLabel(item.confidence)}置信</small></div>`).join('') : '<div class="empty-state">暂无达到样本门槛的调整建议</div>'}</section></div><div class="wechat-feedback-recommendations"><header><b>应用边界</b><small>不回写历史文章评分，不修改文章和图文技能</small></header><p>项目发现反馈只会对下一批 GitHub 项目排序增加有限偏置，并保留场景探索位，避免推荐集中到单一场景。</p><div class="content-feedback-actions">${action}</div></div>${feedback.unresolved_questions?.length ? `<details class="wechat-feedback-questions"><summary>分析边界（${feedback.unresolved_questions.length}）</summary><ul>${feedback.unresolved_questions.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul></details>` : ''}`;
+}
+
 function renderStrategy(strategy) {
   const summary = document.getElementById("content-strategy-summary");
   const content = document.getElementById("content-strategy-content");
@@ -307,11 +332,13 @@ function render(data) {
   const review = data.review || {};
   const social = review.review_tracks?.social || {};
   const strategy = data.strategy || {};
+  const projectFeedback = data.projectFeedback || null;
   const metrics = [
     ["已关联文章正文", fmt(feedback?.linked_article_count || 0), "正文反馈样本"],
     ["文章反馈信号", fmt((feedback?.recommendations || []).length), "选题 · 标题 · 正文"],
     ["图文传播样本", fmt(social.count || 0), "题材 · 发布文案"],
     ["策略观察周期", `${strategy.cycle_count || 0}/${strategy.required_cycles || 2}`, strategy.ready ? "已形成草案" : "积累中"],
+    ["项目发现样本", fmt(projectFeedback?.sample_count || 0), projectFeedback?.status === 'applied' ? "反馈已应用" : "待生成 / 确认"],
   ];
   document.getElementById("content-feedback-metrics").innerHTML = metrics.map(([label, value, note]) => `<article class="content-feedback-metric"><span>${escapeHtml(label)}</span><strong>${value}</strong><small>${escapeHtml(note)}</small></article>`).join("");
   renderStrategy(strategy);
@@ -319,16 +346,20 @@ function render(data) {
   const fixedTargets = document.getElementById('content-feedback-fixed-targets');
   const autoTarget = document.getElementById('content-feedback-auto-target');
   const socialMode = feedbackMode === 'social';
+  const projectMode = feedbackMode === 'project';
   if (fixedTargets) fixedTargets.innerHTML = socialMode ? '<b>图文反哺目标</b><span>故事板技能</span><span>文案生成技能</span>' : '<b>固定检查目标</b><span>账号策略与选题评分</span><span>标题生成技能</span>';
   if (autoTarget) autoTarget.innerHTML = socialMode ? '<b>技能定位方式</b><strong>按实际执行记录自动判定</strong><small>第一阶段识别真实使用的故事板与文案技能，第二阶段只融合到对应技能原有章节。</small>' : '<b>正文写作技能</b><strong>由 AI 自动判定落点</strong><small>第一阶段选择最匹配的正文技能，第二阶段只修改该技能原有章节，不新增复盘章节。</small>';
   const strategyPanel = document.getElementById('content-strategy-panel');
-  if (strategyPanel) strategyPanel.hidden = feedbackMode === 'social';
+  if (strategyPanel) strategyPanel.hidden = socialMode || projectMode;
+  const adjustmentPanel = document.querySelector('.content-feedback-adjustments');
+  if (adjustmentPanel) adjustmentPanel.hidden = projectMode;
   if (feedbackMode === "social") renderSocialFeedback(social);
+  else if (projectMode) renderProjectFeedback(projectFeedback);
   else renderArticleFeedback(feedback);
 }
 
 function setMode(mode) {
-  feedbackMode = mode === "social" ? "social" : "article";
+  feedbackMode = mode === "social" || mode === "project" ? mode : "article";
   const generateButton = document.getElementById('content-feedback-generate-adjustment');
   if (generateButton && !generateButton.disabled) generateButton.textContent = feedbackMode === 'social' ? 'AI 生成图文技能草案' : 'AI 两阶段生成草案';
   document.querySelectorAll("[data-content-feedback-mode]").forEach((button) => {
@@ -340,13 +371,14 @@ function setMode(mode) {
 }
 
 async function load() {
-  const [feedback, strategy, review, adjustments] = await Promise.all([
+  const [feedback, strategy, review, adjustments, projectFeedback] = await Promise.all([
     request("/api/wechat/feedback"),
     request("/api/wechat/strategy"),
     request("/api/wechat/review"),
     request("/api/wechat/feedback/adjustments"),
+    request("/api/wechat/project-feedback"),
   ]);
-  render({ feedback: feedback.feedback, feedbackStats: feedback.stats, strategy, review, adjustments });
+  render({ feedback: feedback.feedback, feedbackStats: feedback.stats, strategy, review, adjustments, projectFeedback: projectFeedback.feedback });
 }
 
 function bind() {
@@ -370,6 +402,20 @@ function bind() {
     try { const result = await request("/api/wechat/feedback/rebuild-social", { method: "POST", body: "{}" }); toast(`图文反馈已重新生成：${result.count || 0} 条样本`, "success"); await load(); }
     catch (error) { toast(error.message, "error"); }
     finally { button.disabled = false; button.textContent = "重新生成图文反馈"; }
+  });
+  document.getElementById("content-feedback-project-rebuild")?.addEventListener("click", async () => {
+    const button = document.getElementById("content-feedback-project-rebuild");
+    button.disabled = true; button.textContent = "统计中…";
+    try { const result = await request("/api/wechat/project-feedback/rebuild", { method: "POST", body: "{}" }); toast(`项目发现反馈已生成：${result.feedback?.sample_count || 0} 个项目样本`, "success"); await load(); }
+    catch (error) { toast(error.message, "error"); }
+    finally { button.disabled = false; button.textContent = "重新生成项目反馈"; }
+  });
+  document.getElementById("content-feedback-content")?.addEventListener("click", async (event) => {
+    const button = event.target.closest('[data-project-feedback-action]');
+    if (!button) return;
+    button.disabled = true;
+    try { await request(`/api/wechat/project-feedback/${button.dataset.projectFeedbackId}/${button.dataset.projectFeedbackAction}`, { method: "POST", body: "{}" }); toast(button.dataset.projectFeedbackAction === 'apply' ? '项目发现反馈已应用到下一批排序' : '本次项目发现反馈已跳过', 'success'); await load(); }
+    catch (error) { toast(error.message, 'error'); button.disabled = false; }
   });
   document.getElementById('content-feedback-generate-adjustment')?.addEventListener('click', async () => {
     const button = document.getElementById('content-feedback-generate-adjustment');

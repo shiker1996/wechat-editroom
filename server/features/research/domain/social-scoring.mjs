@@ -125,12 +125,18 @@ function trendSignals(item, text, sourceCount) {
 function commonSignals(item, text, sourceCount, articleCount) {
   const china = clamp(Number(item?.chinaRelevance || item?.china_relevance_score || 0) / 12 * 60);
   const audience = clamp(Number(item?.preScores?.audience || 0) / 20 * 40);
-  const readerValue = clamp(china + audience);
+  const baselineReaderValue = clamp(china + audience);
+  const projectReaderValue = Number(item?.repositoryMeta?.projectReaderValue);
+  const projectFeedbackAdjustment = Number(item?.repositoryMeta?.projectFeedbackAdjustment);
+  const feedbackAdjustment = Number.isFinite(projectFeedbackAdjustment) ? clamp(projectFeedbackAdjustment, -8, 8) : 0;
+  const readerValue = Number.isFinite(projectReaderValue)
+    ? clamp(baselineReaderValue * 0.5 + clamp(projectReaderValue, 0, 100) * 0.5 + feedbackAdjustment)
+    : clamp(baselineReaderValue + feedbackAdjustment);
   const keywords = Array.isArray(item?.keywords) ? item.keywords.length : 0;
   const hasTitle = Boolean(String(item?.title || '').trim());
   const hasSummary = articlesOf(item).some((article) => String(article?.summary || '').trim());
   const clarity = clamp((hasTitle ? 25 : 0) + Math.min(25, keywords * 5) + (hasSummary ? 18 : 0) + (sourceCount ? 12 : 0) + (articleCount > 1 ? 10 : 0) + (text.length > 80 ? 10 : 0));
-  return { readerValue, contentClarity: clarity };
+  return { readerValue, projectReaderValue: Number.isFinite(projectReaderValue) ? clamp(projectReaderValue, 0, 100) : null, projectFeedbackAdjustment: feedbackAdjustment, contentClarity: clarity };
 }
 
 function qualificationFor(item, contentClass, signals) {
@@ -139,8 +145,12 @@ function qualificationFor(item, contentClass, signals) {
   if (item?.riskLevel === '高') return { status: 'blocked', reason: '风险等级为高', candidateEligible: false, autoEligible: false };
   if (contentClass === 'github_project') {
     const repository = item?.repositoryMeta || {};
-    const text = textOf([item?.title, item?.chinaRelevanceReason, repository.description, repository.language, repository.topics, repository.discoveryChannels]);
+    const text = textOf([item?.title, item?.chinaRelevanceReason, repository.description, repository.language, repository.topics,
+      repository.projectType, repository.scenarioIds, repository.directUseCase, repository.discoveryChannels]);
     if (!DEMONSTRABLE_PATTERN.test(text)) return { status: 'type_gate_blocked', reason: '项目缺少可演示的工具或使用场景证据', candidateEligible: false, autoEligible: false };
+    if (Number.isFinite(Number(repository.projectReaderValue)) && Number(repository.projectReaderValue) < 60) {
+      return { status: 'reader_value_blocked', reason: `项目读者价值 ${Number(repository.projectReaderValue).toFixed(1)}，低于候选线 60`, candidateEligible: false, autoEligible: false };
+    }
   }
   if (contentClass === 'news_event' && (signals.confirmedFacts < 1 || sourceCount < 1)) {
     return { status: 'type_gate_blocked', reason: '普通事件缺少已确认事实或来源证据', candidateEligible: false, autoEligible: false };
@@ -161,7 +171,8 @@ function qualificationFor(item, contentClass, signals) {
 export function scoreSocialCandidate(item) {
   const contentClass = normalizeContentClass(item);
   const repository = item?.repositoryMeta || {};
-  const text = textOf([item?.title, item?.chinaRelevanceReason, item?.keywords, item?.articles?.map((article) => [article?.title, article?.summary, article?.source]), repository.description, repository.language, repository.topics, repository.discoveryChannels, evidenceTextOf(item)]);
+  const text = textOf([item?.title, item?.chinaRelevanceReason, item?.keywords, item?.articles?.map((article) => [article?.title, article?.summary, article?.source]), repository.description, repository.language, repository.topics,
+    repository.projectType, repository.scenarioIds, repository.directUseCase, repository.discoveryChannels, evidenceTextOf(item)]);
   const sourceCount = sourceCountOf(item);
   const articleCount = articleCountOf(item);
   const common = commonSignals(item, text, sourceCount, articleCount);
@@ -186,9 +197,9 @@ export function scoreSocialCandidate(item) {
   const penalties = { saturationPenalty: round(saturationPenalty), riskPenalty: round(riskPenalty), missingEvidencePenalty: round(missingEvidencePenalty) };
   const weighted = Object.entries(G_SOCIAL_WEIGHTS).reduce((sum, [key, weight]) => sum + dimensions[key] * weight, 0);
   const gSocial = round(weighted - saturationPenalty - riskPenalty - missingEvidencePenalty);
-  const signals = { ...dimensions, ...penalties, gSocial, confirmedFacts: cardCountOf(item, 'confirmedFactCount'), technicalEvidence: Boolean(typeSignals.technicalEvidence), signal: Boolean(typeSignals.signal), actorCount: Number(typeSignals.actorCount || 0), timeCount: Number(typeSignals.timeCount || uniqueTimeCount(item)), sourceCount, articleCount };
+  const signals = { ...dimensions, ...penalties, gSocial, projectReaderValue: common.projectReaderValue, projectFeedbackAdjustment: common.projectFeedbackAdjustment, confirmedFacts: cardCountOf(item, 'confirmedFactCount'), technicalEvidence: Boolean(typeSignals.technicalEvidence), signal: Boolean(typeSignals.signal), actorCount: Number(typeSignals.actorCount || 0), timeCount: Number(typeSignals.timeCount || uniqueTimeCount(item)), sourceCount, articleCount };
   const qualification = qualificationFor(item, contentClass, { ...signals, gSocial });
-  const repositoryText = textOf([item?.title, repository.description, repository.language, repository.topics, repository.discoveryChannels]);
+  const repositoryText = textOf([item?.title, repository.description, repository.language, repository.topics, repository.projectType, repository.scenarioIds, repository.directUseCase, repository.discoveryChannels]);
   const trending = /github\s*trending/i.test(repositoryText) || repository?.discoveryChannels?.includes('trending');
   const demonstrable = DEMONSTRABLE_PATTERN.test(repositoryText);
   const reasons = [
@@ -200,6 +211,8 @@ export function scoreSocialCandidate(item) {
     repository?.discoveryChannels?.includes('search') ? '近期增长发现' : null,
     repository?.discoveryChannels?.includes('mentioned') ? '热点提及' : null,
     Number(repository?.stars) >= 1000 ? `${repository.stars} Stars` : null,
+    Number.isFinite(Number(repository?.projectReaderValue)) ? `读者价值 ${Number(repository.projectReaderValue).toFixed(1)}` : null,
+    common.projectFeedbackAdjustment ? `反馈调整 ${common.projectFeedbackAdjustment > 0 ? '+' : ''}${common.projectFeedbackAdjustment}` : null,
     demonstrable ? '可演示工具' : null,
   ].filter(Boolean);
   return {
@@ -207,7 +220,7 @@ export function scoreSocialCandidate(item) {
     ...socialRouteForContentClass(contentClass),
     gSocial,
     socialScore: gSocial,
-    socialScoreDetails: { ...dimensions, ...penalties, finalScore: gSocial, scoreStage: 'discovery', scoreModel: 'g_social-v1', weights: G_SOCIAL_WEIGHTS,
+    socialScoreDetails: { ...dimensions, ...penalties, projectReaderValue: common.projectReaderValue, projectFeedbackAdjustment: common.projectFeedbackAdjustment, finalScore: gSocial, scoreStage: 'discovery', scoreModel: 'g_social-v1', weights: G_SOCIAL_WEIGHTS,
       contentClass, qualificationStatus: qualification.status, qualificationReason: qualification.reason,
       candidateEligible: qualification.candidateEligible, autoEligible: qualification.autoEligible },
     qualificationStatus: qualification.status,
