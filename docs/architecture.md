@@ -44,11 +44,13 @@
 
 ![主流程时序图](./diagrams/mainWorkflow.png)
 
-> 上图展示了用户点击导航 → 路由分发 → API 调用 → AI/DB 操作 → 响应渲染的完整时序。
+> 上图展示了用户点击导航 → 路由分发 → API 调用 → AI/DB 操作（经 Agent Harness `runSkill`）→ 响应渲染的完整时序。
 
-## 平台核心层
+## 平台核心层（持久化与 Run Store）
 
-![平台核心层详解](./diagrams/platformDetail.png)
+![持久化层与 Run Store](./diagrams/platformDetail.png)
+
+> 上图展示持久化层：SQLite、23 Repositories、4 QueryServices，以及 v43 新增的 Run / Step / Event / Checkpoint 存储。
 
 ### Store（server/platform/core/）
 
@@ -104,9 +106,44 @@
 - `server/features/collection/application/` 负责采集源配置、统一采集 Runner、Store 事件落库和静态页面采集助手；这些属于采集业务用例。
 - `server/features/collection/domain/` 负责采集结果质量规则。业务入口统一从 `server/features/collection/index.mjs` 导出。
 
-## 业务特性层
+## Agent Harness（Agent 运行内核）
 
-![业务特性层详解](./diagrams/featureDetail.png)
+![Agent Harness 内核](./diagrams/harnessDetail.png)
+
+> 上图展示 `server/platform/agent` 收敛后的统一运行内核，是当前 Agent 运行生命周期、技能、工具、权限、恢复与评测的唯一入口。
+
+Agent Harness 改造把运行时概念收敛为四种对象分工：**Skill**（指令、方法、契约与运行策略，类型为 `prompt-skill` / `stage-skill` / `agent-skill`）、**Agent**（在 Harness 中执行 Skill 的多轮运行实例）、**Tool**（具 Schema / 权限 / 副作用边界的执行能力）、**Workflow**（业务代码控制的确定性阶段编排）。业务 Feature 保留领域判断与门禁，只通过薄 Adapter 调用统一入口 `runSkill`。
+
+| 模块 | 职责 |
+|---|---|
+| `harness.mjs` | `runSkill` Facade：技能/入口校验、必需能力预检、能力授权交集、快照注入；按 `runtimeKind` 分流到 agent/stage/prompt 分支 |
+| `conversation-agent.mjs` | Agent Run Engine：模型循环、思考/工具事件、并行与重复限制、上下文预算 |
+| `tool-broker.mjs` | 统一工具执行：Scope / Schema / 权限 / 确认 / 幂等 / 超时 / provenance 审计；原生、Chat Completions、Responses function call 统一进入同一循环 |
+| `run-preparation.mjs` | 运行时准备：`prepareAgentRun` 冻结快照、`bindAgentGateway` 绑定模型网关并阻止历史模型漂移 |
+| `contracts.mjs` / `events.mjs` | 版本化契约：错误码、NDJSON 事件（`tool.*` / `assistant.*` / `run.*` / `done` / `error`）、预算默认值与上限 |
+| `replay.mjs` | Replay / Eval：固定模型响应回放、工具结果摘要、两次 Run 对比评测（`GET /api/runs/compare`） |
+| `run-control.mjs` | 取消、恢复（`resumeFrom`）、checkpoint 租约、幂等结果跨 Run 复用 |
+
+技能运行时（`server/platform/skills/`）随改造新增：
+
+- `runtime-definition.mjs`：`SKILL_RUN_KINDS`（prompt-skill / stage-skill / agent-skill），统一 Skill 类型与运行策略。
+- `resolver.mjs`：`resolveSkillRuntime` 加载 manifest、解析运行时类型与必需能力。
+- `gates.mjs`：输入 / 输出门禁执行，业务门禁经 `gateHandlers` 注入，门禁失败不写 completed。
+- 现有 `registry.mjs`、`entry-routing.mjs`、`pipeline-runtime.mjs`、`roles.mjs`、`package-manager.mjs` 继续承担技能合并、入口路由、工具白名单与包管理。
+
+持久化随运行内核升级为 v43 Run Store（`server/platform/persistence/agent-harness-schema.mjs`）：
+
+- `agent_runs`（关联 `generation_snapshot_id`）、`agent_run_events`、`agent_steps`
+- `agent_checkpoints`（可恢复状态 + 阶段/预算计数）、`agent_resume_claims`（恢复租约）、`agent_tool_idempotency`（幂等工具结果）
+- 模型与工具审计通过 `agentRunId/rootRunId/workflowRunId/stageId` 关联，跨业务 Run Trace 聚合见 `GET /api/runs/:rootRunId`。
+
+### runSkill 统一运行时序
+
+![runSkill 运行时序](./diagrams/runSkillFlow.png)
+
+> 上图展示 Adapter → Facade → Skill 解析 → 输入门禁 → 快照冻结 →（agent-skill：模型循环 + Tool Broker）/（stage-skill：确定性阶段）→ 结果返回的完整时序。
+
+业务迁移状态：编辑会、自主写作、自定义图文与共享 AI 视觉文档经 `runSkill`（agent-skill）启动；文章、日报、社交卡 Pipeline 的 `Gateway.complete` 阶段经 `bindPipelineHarnessGateway` 以 `stage-skill` 运行并各自创建独立 Agent Run；批次 AI Job 建立 `batch-job:<type>` 根 Run 生命周期，`ai_runs` 仍作页面兼容状态来源。
 
 ## 两条流水线
 
