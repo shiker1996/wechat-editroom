@@ -120,7 +120,8 @@ export async function handleArticleRoutes(context) {
       if(result.reply)send({type:'assistant.delta',text:result.reply});
       send({type:'done',data:{candidate:result.candidate,editorial:result.editorial,usage:result.usage,model:result.model,agentRunId:result.agentRunId,toolCalls:result.toolCalls,ignoredBecauseLocked:Boolean(result.ignoredBecauseLocked)}});
     } catch(error) {
-      send({type:'error',error:error.message});
+      const message=error instanceof Error?error.message:String(error||'编辑会调用失败');
+      send({type:'error',code:error?.code||'EDITORIAL_AGENT_FAILED',message,error:message});
     }
     stream.end();return true;
   }

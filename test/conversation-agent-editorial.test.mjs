@@ -160,6 +160,21 @@ test('编辑室网页抓取成功后可用同一资源 ID 做段落检索', asyn
   assert.equal(result.toolCalls, 3);
 });
 
+test('编辑室达到 Agent 限额时保留可见的 assistant 提示，避免 done 刷新后变成空白', async (t) => {
+  const { root, store, hotspot, candidate } = fixture(t);
+  const events = [{ event_id: 'E001', title: '测试事件', hotspots: [{ ...hotspot, sourceDoc: null }] }];
+  const fetchRequest = native('fetch', [call('cap_content_url_fetch', { resourceId: `source:${hotspot.id}` }, 'fetch')]);
+  const result = await runEditorialAgentTurn({
+    gateway: gateway([fetchRequest]),
+    store, registry: registry(), candidateId: candidate.id, provider: 'mock', events, workspaceRoot: root,
+    budget: { maxModelSteps: 1 },
+  });
+  assert.equal(result.limited, true);
+  assert.equal(result.reply, '本轮已达到资料读取上限，请继续对话以完成编辑决策。');
+  assert.equal(store.getCandidate(candidate.id).messages.at(-1).content, result.reply);
+  assert.equal(store.getAgentRun(result.agentRunId).status, 'limit');
+});
+
 test('编辑室业务工具可选择有效研判拓展点，结束工具不需要再提交 JSON', async (t) => {
   const { root, store, candidate } = fixture(t);
   store.updateCandidate(candidate.id, { angle: '从实测落差切入', thesis: '宣传与实际效果的差异值得解释' });

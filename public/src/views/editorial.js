@@ -584,6 +584,7 @@ async function sendEditorialAnswer() {
       doneLabel: "发送回答 / 让 AI 提问",
       title: "AI 编辑",
       errorLabel: "编辑会",
+      requireReply: true,
       rethrow: true,
       confirmation: /[A-Za-z]:\\|(?:^|\s)\//.test(answer) ? "local-project-read" : "",
       onDone: async (data) => {

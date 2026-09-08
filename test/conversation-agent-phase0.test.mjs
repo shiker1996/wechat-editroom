@@ -84,3 +84,8 @@ test('Phase 5 收口后无旧私有协议、旧执行器或 provider 隐式搜�
   assert.doesNotMatch(candidate,/runTutorialChatStream|runCustomSocialChatStream/);
   assert.doesNotMatch(customChat,/webSearch:\s*true/);
 });
+
+test('编辑室流式异常返回结构化错误事件，前端可以展示具体失败原因',()=>{
+  const article=fs.readFileSync(new URL('../server/platform/http/routes/article-routes.mjs',import.meta.url),'utf8');
+  assert.match(article,/send\(\{type:'error',code:error\?\.code\|\|'EDITORIAL_AGENT_FAILED',message,error:message\}\)/);
+});

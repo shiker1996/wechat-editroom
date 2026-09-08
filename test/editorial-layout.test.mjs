@@ -77,9 +77,13 @@ test("编辑室发送回答前立即清空输入并阻止重复发送", () => {
 test("流式对话在布局完成后补滚外层与思考过程内层，避免底部内容被截住", () => {
   assert.match(streamSource, /scrollToLatest\(messages\)/);
   assert.match(streamSource, /await onDone\?\.\(done === true \? \{\} : done\);[\s\S]*scrollMessagesToLatest\(\)/);
+  assert.match(streamSource, /requireReply/);
+  assert.match(streamSource, /className = "stream-error"/);
+  assert.match(streamSource, /scrollMessagesToLatest\(\);[\s\S]*if \(rethrow\) throw error/);
   assert.match(agentEventsSource, /export function scrollToLatest/);
   assert.match(agentEventsSource, /requestAnimationFrame\(\(\) => \{[\s\S]*requestAnimationFrame\(apply\)/);
   assert.match(styles, /\.editorial-messages\s*\{\s*scroll-behavior:auto;\s*\}/);
+  assert.match(styles, /\.editorial-message\.failed \.stream-error/);
 });
 
 test("候选题以横向顶部 Tab 栏展示", () => {

@@ -116,7 +116,13 @@ export async function runEditorialAgentTurn({ gateway, store, registry, candidat
       lastModelResult = nativeTools && providerSupportsToolCallStreaming(gateway, provider) && typeof gateway.streamComplete === 'function' ? await runGateway.streamComplete(input, () => {}, (text) => emit('assistant.thinking', { text })) : await runGateway.complete(input);
       return { nativeTools: true, content: lastModelResult.content || '', toolCalls: lastModelResult.toolCalls };
     } });
-  if (agent.type !== 'final') return { ...agent, reply: '本轮已达到资料读取上限，请继续对话以完成编辑决策。', limited: true };
+  if (agent.type !== 'final') {
+    const reply = '本轮已达到资料读取上限，请继续对话以完成编辑决策。';
+    // 限额不是正常 final，但它仍然是本轮需要让用户看到、并保留到下一轮上下文的结果。
+    // 否则流式端收到 done 后刷新候选，会把临时提示气泡清掉，表现为“什么也没返回”。
+    store.addEditorialMessage(candidateId, 'assistant', reply);
+    return { ...agent, reply, limited: true };
+  }
   if (!String(agent.assistantReply || '').trim()) throw new Error('编辑室未通过结束工具提交有效回复，请重发上一条回答');
   return { ...finalizeEditorialResult({ store, candidateId, current, reply: agent.assistantReply, result: { ...resultMeta(lastModelResult, provider), usage: lastModelResult?.usage, model: lastModelResult?.model } }), agentRunId: agent.agentRunId, toolCalls: agent.toolCalls };
 }
