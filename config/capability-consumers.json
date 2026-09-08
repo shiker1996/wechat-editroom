@@ -170,6 +170,9 @@
           {"source": "candidateUrls"},
           {"source": "project"}
         ],
+        "resultHandlers": {
+          "cap_content_url_fetch": "resource-content-backfill"
+        },
         "defaultResultHandler": "sanitize-only"
       },
       "dependencies": [

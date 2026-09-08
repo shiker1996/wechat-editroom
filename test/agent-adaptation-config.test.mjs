@@ -21,7 +21,7 @@ function makeRoot(t,mutate){
 
 test('loadAgentAdaptation：真实 config 三个 agent 条目均有合法 adaptation 声明',()=>{
   const editorial=loadAgentAdaptation(projectRoot,'agent.editorial');
-  assert.deepEqual(editorial,{resourceSources:[{source:'hotspotSources'},{source:'candidateUrls'},{source:'project'}],resultHandlers:{},defaultResultHandler:'sanitize-only',handlerOptions:{}});
+  assert.deepEqual(editorial,{resourceSources:[{source:'hotspotSources'},{source:'candidateUrls'},{source:'project'}],resultHandlers:{'cap_content_url_fetch':'resource-content-backfill'},defaultResultHandler:'sanitize-only',handlerOptions:{}});
   const tutorial=loadAgentAdaptation(projectRoot,'agent.independent-writing');
   assert.deepEqual(tutorial,{resourceSources:[{source:'materials',limit:5},{source:'documentRoots'},{source:'project'}],resultHandlers:{'cap_filesystem_project_read':'project-fact-attachment'},defaultResultHandler:'fact-attachment',handlerOptions:{}});
   const social=loadAgentAdaptation(projectRoot,'agent.custom-social');

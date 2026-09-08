@@ -281,6 +281,17 @@ export function buildAdaptation({adaptation={},inputs={},workspaceRoot,store,bat
   };
 }
 
+function backfillResourceContent(result,request,resources) {
+  if(result?.status!=='ok')return result;
+  const trimmed=sanitizeCapabilityResult(result,request);
+  if(request.capability==='cap_content_url_fetch'){
+    const resource=resources?.get(String(request.arguments?.resourceId||''));
+    const content=String(trimmed.data?.content||trimmed.data?.text||trimmed.data?.excerpt||'');
+    if(resource&&!resource.content&&content)resource.content=content;
+  }
+  return trimmed;
+}
+
 // 结果处理器注册表（阶段 1 代码内注册表）。
 // ctx 形态：{store, batchId, agentRunId, state, options, inputs, resources}；state 为 buildAdaptation 提供的可变对象
 // （projectContext、externalSources 副作用写在这里），inputs 为调用方运行时输入值。
@@ -289,6 +300,9 @@ export function buildAdaptation({adaptation={},inputs={},workspaceRoot,store,bat
 // 非 ok 结果一律直接返回不处理。
 export const RESULT_HANDLERS=Object.freeze({
   'sanitize-only':(result,request)=>sanitizeCapabilityResult(result,request),
+  // 仅回填本轮内存资源，不写入事实附件；供编辑室这类只读会话串联
+  // url.fetch → passage.retrieve。
+  'resource-content-backfill':(result,request,{resources}={})=>backfillResourceContent(result,request,resources),
   'fact-attachment':(result,request,{store,batchId,agentRunId,state,options={},resources}={})=>{
     if(result?.status!=='ok')return result;
     const trimmed=sanitizeCapabilityResult(result,request),data={...trimmed.data,_agentQuery:String(request.arguments?.query||'')};

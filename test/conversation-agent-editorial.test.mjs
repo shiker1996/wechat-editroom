@@ -37,6 +37,18 @@ function registry() {
     },
     adapter: { async execute(input) { return { status: 'ok', data: { url: input.targetUrl, title: input.title, content: '原文证据：产品实测数据为 42。' }, artifacts: [], warnings: [], provenance: { requestedUrl: input.targetUrl, finalUrl: input.targetUrl } }; } },
   });
+  value.register({
+    manifest: {
+      id: 'mock-passage', name: '段落检索', version: '1.0.0', capabilities: ['cap_content_passage_retrieve'], riskLevel: 'read-only',
+      inputSchema: { type: 'object', required: ['documents', 'query'], properties: { documents: { type: 'array' }, query: { type: 'string' }, k: { type: 'integer' } } },
+      outputSchema: { type: 'object', required: ['selections'], properties: { selections: { type: 'array' } } },
+    },
+    adapter: { async execute(input) {
+      assert.equal(input.documents[0].id, 'source:1');
+      assert.match(input.documents[0].content, /产品实测数据为 42/);
+      return { status: 'ok', data: { selections: [{ id: 'source:1', excerpt: input.documents[0].content, chunks: 1, totalChunks: 1 }] }, artifacts: [], warnings: [], provenance: { plugin: 'mock-passage' } };
+    } },
+  });
   return value;
 }
 
@@ -125,6 +137,27 @@ test('编辑室通过原生工具读取资料、更新底稿，并用结束工�
   assert.match(result.editorial.research_basis, /反常主线/);
   assert.equal(store.getAgentRun(result.agentRunId).status, 'completed');
   assert.ok(eventsSeen.some((event) => event.type === 'tool.completed' && event.capability === 'cap_agent_conversation_finish'));
+});
+
+test('编辑室网页抓取成功后可用同一资源 ID 做段落检索', async (t) => {
+  const { root, store, hotspot, candidate } = fixture(t);
+  const events = [{ event_id: 'E001', title: '测试事件', hotspots: [{ ...hotspot, sourceDoc: null }] }];
+  const result = await runEditorialAgentTurn({
+    gateway: gateway([
+      native('fetch', [call('cap_content_url_fetch', { resourceId: `source:${hotspot.id}` }, 'fetch')]),
+      ({ messages }) => {
+        assert.ok(messages.some((item) => item.role === 'tool' && item.content.includes('产品实测数据为 42')));
+        return native('retrieve', [call('cap_content_passage_retrieve', { resourceIds: [`source:${hotspot.id}`], query: '实测数据', k: 1 }, 'retrieve')]);
+      },
+      ({ messages }) => {
+        assert.ok(messages.some((item) => item.role === 'tool' && item.content.includes('产品实测数据为 42')));
+        return native('finish', [call('cap_agent_conversation_finish', { assistantReply: '已完成网页抓取和段落提取。' }, 'finish')]);
+      },
+    ]),
+    store, registry: registry(), candidateId: candidate.id, provider: 'mock', events, workspaceRoot: root,
+  });
+  assert.equal(result.reply, '已完成网页抓取和段落提取。');
+  assert.equal(result.toolCalls, 3);
 });
 
 test('编辑室业务工具可选择有效研判拓展点，结束工具不需要再提交 JSON', async (t) => {
