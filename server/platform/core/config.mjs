@@ -109,9 +109,10 @@ const defaults = {
   // AI 后台任务并发：候选级任务（文章 / 图文 / 排版 / 自主写作）按候选并行，
   // 批次级任务（打标 / 研判 / 自动流程）同批次互斥；超出上限的任务排队等待。
   aiJobs: { maxConcurrent: 2 },
+  // 用户交互型 Agent 允许完成“读取资料 → 检索/搜索 → 更新底稿 → 回复”的完整回合。
   conversationAgent: {
-    maxModelSteps: 3, maxToolCalls: 5, maxParallelToolCalls: 3,
-    maxToolResultChars: 8000, maxTotalToolResultChars: 24000, timeoutMs: 90000,
+    maxModelSteps: 6, maxToolCalls: 10, maxParallelToolCalls: 3,
+    maxToolResultChars: 12000, maxTotalToolResultChars: 64000, timeoutMs: 180000,
   },
   // 成稿字数门禁（可见字符，口径见 server/shared/domain/markdown-visible-chars.mjs）：
   // 成稿 / 早报 / 自主写作三条链路与编辑器终稿保存统一从这里读取；

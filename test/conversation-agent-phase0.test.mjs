@@ -25,9 +25,9 @@ test('Phase 0 固定 Agent 入口、错误码、流事件和安全预算',()=>{
   for(const key of Object.keys(CONVERSATION_AGENT_BUDGET_DEFAULTS)){
     assert.ok(CONVERSATION_AGENT_BUDGET_DEFAULTS[key]<=CONVERSATION_AGENT_BUDGET_LIMITS[key],`${key} 默认值不得超过硬上限`);
   }
-  assert.equal(CONVERSATION_AGENT_BUDGET_DEFAULTS.maxModelSteps,3);
-  assert.equal(CONVERSATION_AGENT_BUDGET_DEFAULTS.maxToolCalls,5);
-  assert.equal(CONVERSATION_AGENT_BUDGET_DEFAULTS.timeoutMs,90000);
+  assert.equal(CONVERSATION_AGENT_BUDGET_DEFAULTS.maxModelSteps,6);
+  assert.equal(CONVERSATION_AGENT_BUDGET_DEFAULTS.maxToolCalls,10);
+  assert.equal(CONVERSATION_AGENT_BUDGET_DEFAULTS.timeoutMs,180000);
 });
 
 test('Phase 0 三份 JSON Schema 禁止未知字段并区分工具请求、成功结果、错误结果和最终输出',()=>{

@@ -54,12 +54,12 @@
   },
   "aiJobs": { "maxConcurrent": 2 },
   "conversationAgent": {
-    "maxModelSteps": 3,
-    "maxToolCalls": 5,
+    "maxModelSteps": 6,
+    "maxToolCalls": 10,
     "maxParallelToolCalls": 3,
-    "maxToolResultChars": 8000,
-    "maxTotalToolResultChars": 24000,
-    "timeoutMs": 90000
+    "maxToolResultChars": 12000,
+    "maxTotalToolResultChars": 64000,
+    "timeoutMs": 180000
   },
   "articleLength": {
     "minVisibleChars": 1300,

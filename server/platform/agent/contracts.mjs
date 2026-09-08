@@ -46,13 +46,13 @@ export const CONVERSATION_AGENT_STREAM_EVENTS = Object.freeze([
 ]);
 
 export const CONVERSATION_AGENT_BUDGET_DEFAULTS = Object.freeze({
-  maxModelSteps: 3,
-  maxToolCalls: 5,
+  maxModelSteps: 6,
+  maxToolCalls: 10,
   maxParallelToolCalls: 3,
-  maxToolResultChars: 8000,
-  maxTotalToolResultChars: 24000,
+  maxToolResultChars: 12000,
+  maxTotalToolResultChars: 64000,
   maxHistoryChars: 120000,
-  timeoutMs: 90000,
+  timeoutMs: 180000,
   maxDuplicateCalls: 1,
 });
 

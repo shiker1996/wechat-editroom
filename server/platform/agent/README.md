@@ -15,7 +15,7 @@ await runSkill({
   skillId: 'editorial-room-chat',
   entryPoint: 'editorial',
   context: { gateway, modelStep, messages, registry, catalog, store, toolContext, onEvent },
-  budget: { maxModelSteps: 3, maxToolCalls: 5 },
+  budget: { maxModelSteps: 6, maxToolCalls: 10 },
 });
 ```
 
