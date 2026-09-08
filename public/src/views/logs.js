@@ -20,6 +20,34 @@ let traceWaterfallExpanded = new Set();
 let traceWaterfallFilterId = "";
 const TRACE_OVERVIEW_MIN_HEIGHT = 0;
 const TRACE_OVERVIEW_HEIGHT_KEY = "write-assistant.run-trace-overview-height";
+const RETRYABLE_RUN_STATUSES = new Set(["failed", "aborted", "interrupted", "limit"]);
+
+function traceFailedToolRunIds(trace = {}) {
+  const ids = new Set();
+  const failedStatus = (value) => ["failed", "error"].includes(String(value || "").toLowerCase());
+  for (const call of [...(trace.toolCalls || []), ...(trace.toolExecutions || [])]) {
+    if ((failedStatus(call.status) || Boolean(call.error_code || call.errorCode)) && (call.agent_run_id || call.agentRunId)) {
+      ids.add(String(call.agent_run_id || call.agentRunId));
+    }
+  }
+  for (const item of trace.events || []) {
+    const event = item?.event || item || {};
+    const failed = String(event.type || "").toLowerCase() === "tool.failed" ||
+      (String(event.type || "").toLowerCase().startsWith("tool.") && (failedStatus(event.status) || Boolean(event.error)));
+    if (failed && (event.agentRunId || event.agent_run_id)) ids.add(String(event.agentRunId || event.agent_run_id));
+  }
+  return ids;
+}
+
+function traceStatus(trace = {}) {
+  const runs = Array.isArray(trace.runs) ? trace.runs : trace.run ? [trace.run] : [];
+  const statuses = new Set(["failed", "aborted", "interrupted", "limit", "cancelled"]);
+  if (runs.some((run) => ["running", "testing"].includes(String(run.status || "").toLowerCase()))) return "running";
+  const sourceRuns = [...(trace.sourceRuns || []), ...(trace.subscriptionRuns || [])];
+  if (String(trace.status || "").toLowerCase() === "failed" || runs.some((run) => statuses.has(String(run.status || "").toLowerCase())) || traceFailedToolRunIds(trace).size || sourceRuns.some((run) => ["failed", "error", "partial"].includes(String(run.status || "").toLowerCase()) || run.error)) return "failed";
+  if (runs.length && runs.every((run) => String(run.status || "").toLowerCase() === "completed")) return "completed";
+  return String(trace.status || runs[0]?.status || "idle").toLowerCase();
+}
 
 function traceOverviewHeightBounds() {
   const viewportHeight = Number(window.innerHeight || 720);
@@ -575,7 +603,6 @@ function bindLogs() {
     traceWaterfallExpanded = new Set();
     traceWaterfallFilterId = "";
     document.body.classList.remove("run-trace-open");
-    document.getElementById("run-trace-actions")?.replaceChildren();
     closeTraceDetail();
     clearTraceSegmentFilter();
   });
@@ -671,8 +698,7 @@ function renderTraceOverview(trace, metrics, runs, replayFixture = null) {
   const prompts = promptRowsFromTrace(trace, replayFixture);
   const tools = traceToolEntries(trace);
   const entries = traceWaterfallEntries(trace, runs, replayFixture);
-  const firstRun = runs[0] || {};
-  const status = String(firstRun.status || trace.status || "idle");
+  const status = traceStatus(trace);
   const statusLabel = status === "completed" ? "COMPLETED" : status === "running" || status === "testing" ? "RUNNING" : status.toUpperCase();
   const markerClass = (kind) => kind === "model" ? "model" : kind === "tool" ? "tool" : kind === "checkpoint" ? "checkpoint" : kind === "prompt" || kind === "context" ? "prompt" : "system";
   const rows = entries.map((entry) => {
@@ -800,23 +826,22 @@ function renderRunTrace(trace, metrics, rootRunId, replayFixture = null, runInpu
   document.getElementById("run-trace-subtitle").textContent = collectionTrace ? "以调用树展示采集任务、来源执行、模型调用与质量过滤；时间条保留真实起止与并行关系。" : "以调用树展示任务、输入、Model、Tool 与 Checkpoint；时间条保留真实起止与并行关系。";
   content.innerHTML = renderTraceTimeline(trace, replayFixture, runInput);
   syncTraceWaterfallRows();
-  const actions = document.getElementById("run-trace-actions");
-  if (actions) {
-    const supportsActions = !collectionTrace;
-    const active = supportsActions && (trace.runs || []).some((run) => ["running", "testing"].includes(run.status));
-    const resumable = supportsActions && Boolean(trace.resumable);
-    const retryable = supportsActions && (trace.runs || []).some((run) => ["failed", "aborted", "interrupted", "limit"].includes(run.status));
-    const actionsMarkup = `${active ? `<button type="button" class="ghost-button" data-run-action="cancel" data-run-id="${escapeHtml(rootRunId)}">取消运行</button>` : ""}${resumable ? `<button type="button" class="outline-button" data-run-action="resume" data-run-id="${escapeHtml(rootRunId)}">从 checkpoint 恢复</button>` : ""}${retryable ? `<button type="button" class="outline-button" data-run-action="retry" data-run-id="${escapeHtml(rootRunId)}">重试失败阶段</button>` : ""}`;
-    actions.hidden = !actionsMarkup;
-    actions.innerHTML = actionsMarkup ? `${actionsMarkup}<span class="run-trace-action-note">恢复和重试会再次校验能力、权限与快照。</span>` : "";
-    actions.querySelectorAll("[data-run-action]").forEach((button) => button.addEventListener("click", () => runTraceAction(button.dataset.runAction, button.dataset.runId).catch((error) => toast(error.message, "error"))));
-  }
+  const supportsActions = !collectionTrace;
+  const active = supportsActions && (trace.runs || []).some((run) => ["running", "testing"].includes(run.status));
+  const resumable = supportsActions && Boolean(trace.resumable);
+  // 工具失败可能被 Agent 吸收为下一轮上下文，最终 Run 不一定是 failed；
+  // 只看 Run 状态会把仍可恢复/重试的 Trace 渲染成无操作状态。
+  const failedToolRuns = traceFailedToolRunIds(trace);
+  const retryable = supportsActions && ((trace.runs || []).some((run) => RETRYABLE_RUN_STATUSES.has(String(run.status || "").toLowerCase())) || (trace.runs || []).some((run) => failedToolRuns.has(String(run.id)) && !["running", "testing"].includes(String(run.status || "").toLowerCase())));
+  const actionsMarkup = `${active ? `<button type="button" class="ghost-button" data-run-action="cancel" data-run-id="${escapeHtml(rootRunId)}">取消运行</button>` : ""}${resumable ? `<button type="button" class="outline-button" data-run-action="resume" data-run-id="${escapeHtml(rootRunId)}">从 checkpoint 恢复</button>` : ""}${retryable ? `<button type="button" class="outline-button" data-run-action="retry" data-run-id="${escapeHtml(rootRunId)}">重试失败阶段</button>` : ""}`;
+  summary.insertAdjacentHTML("beforeend", actionsMarkup ? `<span class="run-trace-summary-actions"><span class="run-trace-action-buttons">${actionsMarkup}</span><span class="run-trace-action-note">恢复和重试会再次校验能力、权限与快照。</span></span>` : "");
+  summary.querySelectorAll("[data-run-action]").forEach((button) => button.addEventListener("click", () => runTraceAction(button.dataset.runAction, button.dataset.runId).catch((error) => toast(error.message, "error"))));
 }
 
 async function runTraceAction(action, rootRunId) {
   if (action === "cancel" && !window.confirm("确认取消当前运行？已完成的步骤不会回滚。")) return;
-  const actions = document.getElementById("run-trace-actions");
-  actions?.querySelectorAll("button").forEach((button) => { button.disabled = true; });
+  const actions = document.getElementById("run-trace-summary");
+  actions?.querySelectorAll("[data-run-action]").forEach((button) => { button.disabled = true; });
   try {
     const result = await request(`/api/runs/${encodeURIComponent(rootRunId)}/${action}`, { method: "POST", body: "{}" });
     if (result?.code === "RUN_ENTRY_CONTEXT_REQUIRED") toast(`请从「${result.entryPoint || "原业务入口"}」提交恢复请求（resumeFrom=${result.resumeFrom}）`, "error");
@@ -828,7 +853,7 @@ async function runTraceAction(action, rootRunId) {
   } catch (error) {
     if (error.data?.code === "RUN_ENTRY_CONTEXT_REQUIRED") toast(`请从「${error.data.entryPoint || "原业务入口"}」提交恢复请求（resumeFrom=${error.data.resumeFrom}）`, "error");
     else throw error;
-  } finally { actions?.querySelectorAll("button").forEach((button) => { button.disabled = false; }); }
+  } finally { actions?.querySelectorAll("[data-run-action]").forEach((button) => { button.disabled = false; }); }
 }
 
 async function fetchTraceSnapshot(id, includeReplay = false) {
@@ -875,7 +900,8 @@ async function refreshOpenRunTrace(id, { initial = false } = {}) {
     if (content) content.scrollTop = followContentTail ? content.scrollHeight : contentScrollTop;
     if (waterfall) waterfall.scrollTop = followWaterfallTail ? waterfall.scrollHeight : waterfallScrollTop;
   });
-  setTraceLiveStatus(active ? `LIVE CAPTURE · ${new Date().toLocaleTimeString()}` : `已${snapshot.trace.status === "failed" ? "失败" : "完成"} · ${new Date().toLocaleTimeString()}`);
+  const status = traceStatus(snapshot.trace);
+  setTraceLiveStatus(active ? `LIVE CAPTURE · ${new Date().toLocaleTimeString()}` : `已${status === "failed" ? "失败" : "完成"} · ${new Date().toLocaleTimeString()}`);
   return { changed: true, active };
 }
 
@@ -914,7 +940,6 @@ async function openRunTrace(rootRunId) {
   document.getElementById("run-trace-overview")?.replaceChildren();
   document.getElementById("run-trace-summary").replaceChildren();
   document.getElementById("run-trace-input")?.replaceChildren();
-  document.getElementById("run-trace-actions")?.replaceChildren();
   traceDetailRecords = new Map(); traceReplayFixture = null; closeTraceDetail();
   document.getElementById("run-trace-content").innerHTML = '<div class="empty-state">正在加载运行链路、提示词与执行记录…</div>';
   if (!dialog.open) { document.body.classList.add("run-trace-open"); dialog.showModal(); }

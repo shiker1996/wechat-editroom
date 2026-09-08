@@ -1,3 +1,29 @@
+const ACTIVE_RUN_STATUSES = new Set(['running', 'testing']);
+const FAILED_RUN_STATUSES = new Set(['failed', 'aborted', 'interrupted', 'limit', 'cancelled']);
+
+function workflowTraceStatus({ runs = [], events = [], toolCalls = [], toolExecutions = [], sourceRuns = [], subscriptionRuns = [] } = {}) {
+  const normalized = (value) => String(value || '').toLowerCase();
+  const active = runs.some((run) => ACTIVE_RUN_STATUSES.has(normalized(run.status)));
+  if (active) return 'running';
+  const failedRun = runs.some((run) => FAILED_RUN_STATUSES.has(normalized(run.status)));
+  const failedEvent = events.some((item) => {
+    const type = normalized(item?.event?.type || item?.type);
+    return type === 'tool.failed' || type === 'run.failed' || type === 'run.limited'
+      || type === 'source.failed' || type === 'test.blocked' || type.endsWith('.failed');
+  });
+  const failedTool = [...toolCalls, ...toolExecutions].some((call) => {
+    const status = normalized(call.status);
+    return status === 'failed' || status === 'error' || Boolean(call.error_code || call.errorCode);
+  });
+  const failedSource = [...sourceRuns, ...subscriptionRuns].some((run) => {
+    const status = normalized(run.status);
+    return ['failed', 'error', 'partial'].includes(status) || Boolean(run.error);
+  });
+  if (failedRun || failedEvent || failedTool || failedSource) return 'failed';
+  if (runs.length && runs.every((run) => normalized(run.status) === 'completed')) return 'completed';
+  return normalized(runs[0]?.status) || 'idle';
+}
+
 export class AgentRunRepository{
   constructor(db){this.db=db;}
   // allowedCapabilities：run 启动时冻结的能力授权快照（阶段 4a），后续配置变更不影响历史 run
@@ -29,7 +55,8 @@ export class AgentRunRepository{
     const latestCheckpoint=this.latestCheckpoint(agentRunId);
     const modelCalls=runtimeAudit?.listModelCallsForAgentRun?.(agentRunId,modelCallLimit)||[];
     const toolExecutions=runtimeAudit?.listToolExecutionsForAgentRun?.(agentRunId,eventLimit)||[];
-    return {schemaVersion:1,run,events:this.listEvents(agentRunId,{afterSequence,limit:eventLimit}),steps:this.listSteps(agentRunId),modelCalls,toolCalls:this.listToolCalls(agentRunId),toolExecutions,latestCheckpoint,
+    const events=this.listEvents(agentRunId,{afterSequence,limit:eventLimit}),toolCalls=this.listToolCalls(agentRunId);
+    return {schemaVersion:1,run,status:workflowTraceStatus({runs:[run],events,toolCalls,toolExecutions}),events,steps:this.listSteps(agentRunId),modelCalls,toolCalls,toolExecutions,latestCheckpoint,
       resumable:Boolean(latestCheckpoint?.state?.resumable&&run.status!=='completed')};
   }
   listByRoot(rootRunId, limit = 500) {
@@ -69,7 +96,7 @@ export class AgentRunRepository{
       WHERE root_run_id=? OR workflow_run_id=? ORDER BY started_at,id`).all(String(rootRunId), String(rootRunId));
     const subscriptionRuns = this.db.prepare(`SELECT * FROM subscription_runs
       WHERE root_run_id=? OR workflow_run_id=? ORDER BY started_at,id`).all(String(rootRunId), String(rootRunId));
-    return { schemaVersion: 3, rootRunId: String(rootRunId), runs, events, steps, modelCalls, toolCalls, toolExecutions, checkpoints, artifacts, sourceRuns, subscriptionRuns,
+    return { schemaVersion: 3, rootRunId: String(rootRunId), status: workflowTraceStatus({ runs, events, toolCalls, toolExecutions, sourceRuns, subscriptionRuns }), runs, events, steps, modelCalls, toolCalls, toolExecutions, checkpoints, artifacts, sourceRuns, subscriptionRuns,
       resumable: runs.some((run) => run.status !== 'completed' && checkpoints.some((checkpoint) => checkpoint.agent_run_id === run.id && checkpoint.state?.resumable)) };
   }
   claimResume(agentRunId, claimToken, leaseMs=120000){

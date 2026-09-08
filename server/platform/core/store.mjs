@@ -70,6 +70,7 @@ export class Store {
         getCandidate: (id) => this.getCandidate(id),
         candidateHotspots: (id) => this.candidateHotspots(id),
         latestActiveBatch: () => this.latestActiveBatch(),
+        getWorkflowRunTrace: (rootRunId, options = {}) => this.getWorkflowRunTrace(rootRunId, options),
       }),
     });
     this.services = Object.freeze({

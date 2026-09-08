@@ -40,3 +40,19 @@ test('采集任务日志关联 Workflow Trace 和来源执行明细', (t) => {
   assert.equal(trace.subscriptionRuns.length, 1);
   assert.equal(trace.subscriptionRuns[0].source_name, '测试来源');
 });
+
+test('Workflow Trace 链路存在失败时优先标记失败，不被根 Run 的 completed 覆盖', (t) => {
+  const store = workspace(t);
+  const batch = store.createBatch({ date: '2026-09-06', title: '失败优先级 Trace' });
+  const rootRunId = 'job:failed-trace';
+  const stageRunId = 'stage:failed-trace';
+  store.startAgentRun({ id: rootRunId, entryPoint: 'collection', batchId: batch.id, provider: 'test', rootRunId, workflowRunId: rootRunId, stageId: 'collect' });
+  store.startAgentRun({ id: stageRunId, entryPoint: 'collection', batchId: batch.id, provider: 'test', rootRunId, workflowRunId: rootRunId, stageId: 'source:reddit', parentRunId: rootRunId });
+  store.finishAgentRun(stageRunId, { status: 'failed', error: '来源执行失败' });
+  store.finishAgentRun(rootRunId, { status: 'completed' });
+
+  const trace = store.getWorkflowRunTrace(rootRunId);
+  assert.equal(trace.status, 'failed');
+  assert.equal(store.listLogs({ logType: 'collection' })[0].status, 'failed');
+  assert.equal(store.listLogs({ logType: 'collection' })[0].workflow_status, 'failed');
+});

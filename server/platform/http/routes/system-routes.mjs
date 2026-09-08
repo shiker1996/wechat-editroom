@@ -75,6 +75,21 @@ function requirePluginAdmin(request){
   if(!request.localSecurity?.consume(request,'plugin-admin'))throw new Error('缺少有效的本地管理员操作确认');
 }
 
+function failedToolRunIds(trace = {}) {
+  const ids = new Set();
+  const failedStatus = (value) => ['failed', 'error'].includes(String(value || '').toLowerCase());
+  for (const call of [...(trace.toolCalls || []), ...(trace.toolExecutions || [])]) {
+    if (!(failedStatus(call.status) || call.error_code || call.errorCode)) continue;
+    if (call.agent_run_id || call.agentRunId) ids.add(String(call.agent_run_id || call.agentRunId));
+  }
+  for (const item of trace.events || []) {
+    const event = item?.event || item || {};
+    if (String(event.type || '').toLowerCase() !== 'tool.failed' && !(String(event.type || '').toLowerCase().startsWith('tool.') && (failedStatus(event.status) || event.error))) continue;
+    if (event.agentRunId || event.agent_run_id) ids.add(String(event.agentRunId || event.agent_run_id));
+  }
+  return ids;
+}
+
 export async function handleSystemRoutes(context) {
   const {
     request, response, pathname, searchParams, root, config, store, batchWorkdir,
@@ -241,10 +256,11 @@ export async function handleSystemRoutes(context) {
       json(response, activeRuns.length ? 202 : 409, { rootRunId, action, cancelled: activeRuns.length, status: activeRuns.length ? 'cancelling' : 'not-active' });
       return true;
     }
-    const candidates = (trace.runs || []).filter((run) => run.status !== 'completed');
+    const failedToolRuns = failedToolRunIds(trace);
+    const candidates = (trace.runs || []).filter((run) => run.status !== 'completed' || (action === 'retry' && failedToolRuns.has(String(run.id)) && !['running', 'testing'].includes(String(run.status || '').toLowerCase())));
     const target = action === 'resume'
       ? candidates.find((run) => (trace.checkpoints || []).some((checkpoint) => checkpoint.agent_run_id === run.id && checkpoint.state?.resumable))
-      : candidates.find((run) => run.status === 'failed' || run.status === 'aborted' || run.status === 'interrupted' || run.status === 'limit');
+      : candidates.find((run) => ['failed', 'aborted', 'interrupted', 'limit'].includes(run.status) || failedToolRuns.has(String(run.id)));
     if (!target) { json(response, 409, { error: action === 'resume' ? '没有可恢复的 checkpoint' : '没有可重试的失败阶段', code: action === 'resume' ? 'RESUME_NOT_AVAILABLE' : 'RETRY_NOT_AVAILABLE' }); return true; }
     // Job 根 Run 保留了原批次/候选和任务类型，可以安全地重新入队。
     // 恢复时把选中的 Agent Run 作为 resumeFrom 传回原任务处理器；重试则

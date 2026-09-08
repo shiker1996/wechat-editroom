@@ -89,6 +89,30 @@ test('Batch Job Run Trace 可直接重新入队失败任务', async (t) => {
   assert.equal(started.styleBrief, '重试视觉');
 });
 
+test('Run Trace 工具失败即使 Run 已完成也允许重试', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-tool-failure-retry-'));
+  const store = new Store(path.join(root, 'test.db'));
+  t.after(() => { store.close(); fs.rmSync(root, { recursive: true, force: true }); });
+  const batch = store.createBatch({ date: '2026-08-14', title: 'Tool failure retry' });
+  const rootRunId = 'job:tool-failure';
+  store.startAgentRun({ id: rootRunId, entryPoint: 'batch-job:editorial', skillId: 'batch-editorial', batchId: batch.id, provider: 'mock', rootRunId, workflowRunId: rootRunId, stageId: 'job' });
+  const request = { requestId: 'tool-failure-1', capability: 'cap_agent_form_update', arguments: { operations: [] }, reason: '测试' };
+  store.startAgentToolCall({ agentRunId: rootRunId, request, rootRunId, workflowRunId: rootRunId, stageId: 'job' });
+  store.finishAgentToolCall({ agentRunId: rootRunId, request, result: { status: 'error', error: { code: 'INVALID_TOOL_ARGUMENTS', message: '字段不支持 set 操作' } } });
+  store.finishAgentRun(rootRunId, { status: 'completed', modelSteps: 1, toolCalls: 1 });
+  let started = null;
+  const aiJobs = {
+    get: () => ({ requestedProvider: 'mock', provider: 'mock', runOptions: {} }),
+    start: (input) => { started = input; return { id: 'tool-failure-retry-job', ...input, status: 'queued' }; },
+  };
+  let response;
+  const handled = await handleSystemRoutes({ request: { method: 'POST' }, response: {}, pathname: `/api/runs/${encodeURIComponent(rootRunId)}/retry`, searchParams: new URLSearchParams(), root, config: {}, store, aiJobs, json: (_response, status, data) => { response = { status, data }; }, body: async () => ({}) });
+  assert.equal(handled, true);
+  assert.equal(response.status, 202);
+  assert.equal(response.data.requeued, true);
+  assert.equal(started.type, 'editorial');
+});
+
 test('Batch Job Run Trace 可从子 Agent checkpoint 重新入队恢复任务', async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-job-resume-'));
   const store = new Store(path.join(root, 'test.db'));

@@ -14,7 +14,7 @@ const viewModules = {
   hotspots: "./views/hotspots.js", artifacts: "./views/artifacts.js",
   system: "./views/system.js", skills: "./views/skills.js", sources: "./views/subscriptions.js",
   themes: "./views/theme-manager.js",
-  logs: "./views/logs.js?v=20260906-run-input6",
+  logs: "./views/logs.js?v=20260908-run-trace-status1",
   calendar: "./views/calendar.js",
   "material-inbox": "./views/material-inbox.js", "wechat-review-prep": "./views/wechat-review-prep.js", "wechat-review": "./views/wechat-review.js", "content-feedback": "./views/content-feedback.js",
 };

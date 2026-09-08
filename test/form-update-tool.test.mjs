@@ -37,6 +37,14 @@ test('统一表单工具对单值字段只接受明确替换，并校验 URL 与
   assert.equal(badUrl.ok, false);
 });
 
+test('编辑底稿素材字段允许 set，与工具协议对单值字段的约定一致', () => {
+  const result = applyFormUpdateOperations({ evidence_boundary: '旧边界' }, [
+    { field: 'evidence_boundary', op: 'set', value: '新边界' },
+  ], { evidence_boundary: { kind: 'text', operations: ['append', 'replace', 'set', 'remove', 'clear'] } });
+  assert.equal(result.ok, true);
+  assert.equal(result.state.evidence_boundary, '新边界');
+});
+
 test('应用表单工具返回当前 formState，并拒绝未知字段', async () => {
   let state = { points: ['已有'] };
   const handler = createFormUpdateHandler({ fields, getState: () => state, setState: (next) => { state = next; } });

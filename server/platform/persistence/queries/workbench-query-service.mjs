@@ -18,6 +18,7 @@ export class WorkbenchQueryService {
     this.getCandidate = collaborators.getCandidate || (() => null);
     this.candidateHotspots = collaborators.candidateHotspots || (() => []);
     this.latestActiveBatch = collaborators.latestActiveBatch || (() => null);
+    this.getWorkflowRunTrace = collaborators.getWorkflowRunTrace || (() => null);
   }
 
   listFinalArticles({ week, month, limit = 200 } = {}) {
@@ -392,7 +393,19 @@ export class WorkbenchQueryService {
     if (!logType || logType === 'model') queries.push(`SELECT 'model' AS log_type, CAST(id AS TEXT) AS id, COALESCE(batch_id,'') AS batch_id, purpose AS subtype, provider, status, COALESCE(error,'') AS message, created_at AS ts, ${modelDetailCols} FROM model_calls`);
     if (!queries.length) return [];
     const rows=this.db.prepare(`${queries.join(' UNION ALL ')} ORDER BY ts DESC LIMIT ?`).all(limit);
-    if(!rows.some((row)=>row.log_type==='model'))return rows;
+    const traceStatuses = new Map();
+    const withWorkflowStatus = (row) => {
+      const rootRunId = String(row.root_run_id || '').trim();
+      if (!rootRunId) return row;
+      if (!traceStatuses.has(rootRunId)) {
+        let status = null;
+        try { status = this.getWorkflowRunTrace(rootRunId)?.status || null; } catch { status = null; }
+        traceStatuses.set(rootRunId, status);
+      }
+      const workflowStatus = traceStatuses.get(rootRunId);
+      return workflowStatus ? { ...row, status: workflowStatus, workflow_status: workflowStatus } : row;
+    };
+    if(!rows.some((row)=>row.log_type==='model'))return rows.map(withWorkflowStatus);
     const connections=new Map();
     for(const row of this.db.prepare(`SELECT extension_id,value_json FROM extension_settings WHERE extension_type='model-connection' AND scope='workspace'`).all()){
       try{const value=JSON.parse(row.value_json||'{}');connections.set(row.extension_id,value);}catch{}
@@ -406,9 +419,10 @@ export class WorkbenchQueryService {
       }catch{}
     }
     return rows.map((row)=>{
-      if(row.log_type!=='model')return row;
-      const supplier=modelProviders.get(row.provider)||row.provider;
-      return {...row,provider_display:[supplier,row.model].filter(Boolean).join(' · ')};
+      const statusRow = withWorkflowStatus(row);
+      if(statusRow.log_type!=='model')return statusRow;
+      const supplier=modelProviders.get(statusRow.provider)||statusRow.provider;
+      return {...statusRow,provider_display:[supplier,statusRow.model].filter(Boolean).join(' · ')};
     });
   }
 }
