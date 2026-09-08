@@ -1,5 +1,7 @@
 # 文档索引
 
+当前代码版本：`0.8.0`。现行文档以代码、测试和 `CHANGELOG.md` 的 `[Unreleased]` 记录为准。
+
 本目录只保留**项目使用**与**开发接入**相关的现行文档，随代码改动同步更新（CI 有校验的优先相信测试）：
 
 - 设计方案统一收在 [design/](./design/)；
@@ -12,7 +14,7 @@
 
 | 文档 | 内容 |
 |---|---|
-| [user-guide.md](./user-guide.md) | 面向使用者的完整手册：安装、配置、采集、选题、成稿、图文、自主写作、备份与排障 |
+| [user-guide.md](./user-guide.md) | 面向使用者的完整手册：安装、配置、采集、选题、成稿、图文、自主写作、对话 Agent 失败提示、备份与排障 |
 | [configuration.md](./configuration.md) | 配置项参考：`.env`、`config.local.json`、`account-context.json`（含选题评分）、技能覆盖层 |
 | [release.md](./release.md) | 发布、升级、降级、备份恢复流程 |
 | [data-flow.md](./data-flow.md) | 第三方服务数据流：发送什么、何时发送、保存多久、如何删除 |
@@ -24,7 +26,7 @@
 | [architecture.md](./architecture.md) | 架构总览：HTTP 路由、Store、后台任务、LLM 网关、技能运行时、工具注册中心、素材简报、两条流水线；[功能架构图](./diagrams/architecture.png)、[Agent Harness 内核](./diagrams/harnessDetail.png)、[runSkill 时序](./diagrams/runSkillFlow.png)、[主流程时序图](./diagrams/mainWorkflow.png)、[素材简报贯穿链](./diagrams/materialBriefFlow.png)、[持久化层与 Run Store](./diagrams/platformDetail.png)、[批次管线](./diagrams/batchPipeline.png) |
 | [plugin-development.md](./plugin-development.md) | 插件开发指南：新增能力（目录定义与消费者接入）与新增插件（Manifest、Adapter、安全与发布）两个环节 |
 | [extending.md](./extending.md) | 扩展开发：技能包 / 本地插件 / 远程插件的示例、权限说明、失败语义与版本兼容规则 |
-| [safety-defaults.md](./safety-defaults.md) | 模型与信息工具的超时、重试、并发与预算安全默认值 |
+| [safety-defaults.md](./safety-defaults.md) | 模型、对话 Agent 与信息工具的超时、重试、并发与预算安全默认值 |
 | [threat-model.md](./threat-model.md) | 威胁建模：安全边界假设、入口防护、已接受风险 |
 | [examples/](./examples/) | 技能包、工具插件、采集器插件的可校验示例（CI 使用） |
 

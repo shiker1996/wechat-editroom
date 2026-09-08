@@ -65,6 +65,7 @@
 - **事件无实体表**：由 `clusterItems`（`server/features/research/application/research-pipeline.mjs`）按热点的 `eventKey` 标签在读取时实时聚类派生；`event_id = 'E' + sha1(eventKey)[:10]`，由指纹哈希决定，与输入顺序、成员增减无关，重算稳定。事件的持久化产物是事件卡文件（`topics/<批次>/sources/event-cards.json`，按 `event_id` 关联）与突发批次的 `breaking_analyses` 表。
 - **选题（`candidates`）**：普通选题经 `candidates.hotspot_id` 单指一个热点；综合（composite）选题经 `candidate_hotspots` 关联多个热点（成员关系，决定选题归属哪些事件）。选题的"关联事件" = 其成员热点聚类落到的事件（`eventGroupsForCandidate`）。
 - **候选级补充来源（`candidate_sources`）**：编辑会中作者粘贴的外部报道链接，抓取快照按 `(candidate_row_id, url)` 覆盖存储；不属于任何热点/事件，由 `eventGroupsForCandidate` 以"用户补充来源"合成分组注入事实基座（与 `hotspot_sources` 的热点级快照并列）。
+- **对话资源目录**：`url.fetch` 成功后将正文回填到资源目录；`cap_content_passage_retrieve` 根据 `resourceIds` 解析同一资源的正文，不再要求模型把抓取结果重新拼成另一种资源。资源解析失败属于确定性工具错误，会通过 Agent 错误事件返回。
 
 ## 后台任务
 
@@ -178,12 +179,12 @@ Agent Harness 改造把运行时概念收敛为四种对象分工：**Skill**（
           每阶段产物落候选工作目录，门禁不过自动返工一次）
        → 排版（typeset-pipeline：rendered → design → images → draft → normalized → gate；
           确定性 markdownToHtml + 主题 tokens，只输出内联样式，含 CDN 上传开关）
-       → 封面图（cover-image-generator：默认由 cover.spec 确定性渲染；
-          可选 AI 视觉模式由单 Agent 生成 HTML/CSS，程序注入真实文字后截图；
-          AI 失败自动回退标准封面，最终统一输出 900×383 cover.png）
+       → 封面图（cover-image-generator：界面默认 AI 视觉模式，由单 Agent 生成 HTML/CSS 后截图；
+          也可切换标准模式由 cover.spec 确定性渲染，AI 视觉生成或截图失败时任务直接失败，
+          不自动回退，最终统一输出 900×383 cover.png）
 ```
 
-封面 AI 视觉模式位于 `server/features/articles/application/`：`ai-visual-cover-generator.mjs` 负责冻结主题与文章输入并调用通用视觉文档 Agent，`ai-visual-cover-composer.mjs` 负责构建输入和最小 HTML 起始文档，`ai-visual-cover-pipeline.mjs` 负责阶段记录、截图和图片交付检查。它只开放项目文件读取与当前封面目录内的分块写入，不调用文生图、网络搜索或文章写入能力；标准模式仍是默认路径。
+封面 AI 视觉模式位于 `server/features/articles/application/`：`ai-visual-cover-generator.mjs` 负责冻结主题与文章输入并调用通用视觉文档 Agent，`ai-visual-cover-composer.mjs` 负责构建输入和最小 HTML 起始文档，`ai-visual-cover-pipeline.mjs` 负责阶段记录、截图和图片交付检查。它只开放项目文件读取与当前封面目录内的分块写入，不调用文生图、网络搜索或文章写入能力；HTTP API 未指定模式时仍以 `standard` 作为兼容默认，当前封面页面默认选择 `ai-visual`。
 
 ### 图文链
 

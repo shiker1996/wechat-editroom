@@ -18,6 +18,22 @@
 
 未配置任何 API Key 时界面与 AI 功能明确降级，不会静默失败或隐式试用未授权服务商。
 
+## 用户交互 Agent（server/platform/agent/）
+
+编辑室、自主写作和自定义图文对话共用以下回合预算。它覆盖“读取资料 → 段落检索 / 联网搜索 → 更新表单 → 回复”的常见链路，同时保留防止异常循环的硬上限。
+
+| 护栏 | 默认值 | 覆盖方式 |
+|---|---:|---|
+| 模型步骤 | `maxModelSteps: 6` | `config.local.json` 的 `conversationAgent`；运行启动后冻结到 generation snapshot |
+| 工具调用 | `maxToolCalls: 10` | 同上 |
+| 并行工具调用 | `maxParallelToolCalls: 3` | 同上，硬上限为 4 |
+| 单次工具结果 | `maxToolResultChars: 12000` | 同上 |
+| 工具结果总量 | `maxTotalToolResultChars: 64000` | 同上 |
+| 对话超时 | `timeoutMs: 180000`（3 分钟） | 同上 |
+| 重复工具调用 | `maxDuplicateCalls: 1` | 固定护栏，不提供关闭入口 |
+
+达到步骤、调用或结果字符预算时，Agent 返回 `limit`；路由会把失败 / 限制事件传给页面，编辑室保留可见提示。checkpoint 可用于后续恢复，但恢复仍继承原运行快照，不会自动套用修改后的默认值。视觉文档 Agent 使用独立预算，不适用本表。
+
 ## 信息工具（server/platform/tools/、plugins/、collectors/）
 
 | 护栏 | 默认值 | 覆盖方式 |

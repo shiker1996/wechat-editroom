@@ -57,6 +57,12 @@ outputSchema 和 pathInputs。默认外部写入拒绝执行并发送 tool.needs
 等内部事件；`onEvent` 继续输出旧页面协议。model-events 统一原生、Chat Completions
 和 Responses function call 参数，非法 JSON 在工具执行前失败。
 
+交互式 Agent 的默认回合预算由 `config.conversationAgent` 注入：6 个模型步骤、10 次工具调用、
+3 路并行、单次工具结果 12,000 字符、总工具结果 64,000 字符和 180 秒超时。编辑室路由会将
+`agent.limit` / `run.failed` 转为页面可见的错误事件；业务 adapter 对非最终结束保留提示，避免
+流式请求失败后刷新页面只剩空白。`url.fetch` 成功结果会回填资源目录，段落检索通过 `resourceIds`
+解析资源正文。
+
 generation snapshot 的 skills[].definition 保存运行类型、输入输出契约、能力、预算
 和门禁名称；历史快照优先恢复该定义。prepareSkillRun 在保存快照前检查必需能力。
 通过 gateHandlers 注册 {version, phase, check} 门禁；phase 为 input 或 output。
