@@ -68,6 +68,9 @@
 button.preflight-item{cursor:pointer}.preflight-item:hover{background:var(--white)}
 .preflight-item>i{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:#eee2d2;color:#8e541c;font:normal 800 11px var(--body)}
 .preflight-item.pass>i{background:#dcece6;color:#287257}.preflight-item b{display:block;margin-bottom:4px;font-size:12px}.preflight-item small{display:block;color:var(--muted);font-size: 11px;line-height:1.5}.preflight-item em{color:var(--red);font:normal 800 11px var(--body)}
+.preflight-issue-list{display:grid;gap:7px;margin-top:10px;padding-top:9px;border-top:1px dashed var(--line)}
+.preflight-issue{display:grid;grid-template-columns:auto 1fr;gap:3px 7px;align-items:baseline;padding:7px 8px;background:rgba(255,255,255,.64);border-left:3px solid var(--red)}
+.preflight-issue>i{color:var(--red);font-style:normal;font-size:10px;font-weight:800;white-space:nowrap}.preflight-issue>b{margin:0;font-size:11px;line-height:1.45}.preflight-issue>small{grid-column:2;font-size:10px}
 @media(max-width:620px){.preflight-list{grid-template-columns:1fr}.preflight-hero{align-items:flex-start;flex-direction:column}.preflight-hero span{text-align:left}}
 .writing-desk{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 210px}
 .document-outline{overflow:auto;border-left:1px solid var(--line);background:var(--paper-deep);padding:20px 14px}
