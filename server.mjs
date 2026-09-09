@@ -7,7 +7,7 @@ import zlib from 'node:zlib';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
-import { backup as backupSqlite } from 'node:sqlite';
+import { backup as backupSqlite, DatabaseSync } from 'node:sqlite';
 import { Store } from './server/platform/core/store.mjs';
 import { loadConfig } from './server/platform/core/config.mjs';
 import { isInsideRoots } from './server/platform/artifacts/artifact-indexer.mjs';
@@ -53,8 +53,27 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 const config = loadConfig(root);
 // --demo / WORKBENCH_DEMO=1：无模型服务商时也能预览各视图，使用独立演示库，不污染真实数据。
 const demo = process.argv.includes('--demo') || process.env.WORKBENCH_DEMO === '1';
-const instanceLock=acquireInstanceLock(root,{name:demo?'demo':'workbench'});
-const store = new Store(path.join(root, 'data', demo ? 'demo.db' : 'workbench.db'));
+const demoProduction = demo && (process.argv.includes('--demo-production') || process.env.WORKBENCH_DEMO_PRODUCTION === '1');
+
+async function refreshProductionDemoSnapshot(sourcePath, snapshotPath) {
+  if (!fs.existsSync(sourcePath)) throw new Error(`生产数据库不存在：${sourcePath}`);
+  const tempPath = `${snapshotPath}.tmp-${process.pid}`;
+  for (const file of [snapshotPath, `${snapshotPath}-wal`, `${snapshotPath}-shm`, tempPath]) fs.rmSync(file, { force: true });
+  const source = new DatabaseSync(sourcePath, { readOnly: true });
+  try {
+    source.exec('PRAGMA busy_timeout = 5000;');
+    await backupSqlite(source, tempPath);
+  } finally {
+    source.close();
+  }
+  fs.renameSync(tempPath, snapshotPath);
+}
+
+const dataRoot = path.join(root, 'data');
+const productionSnapshotPath = path.join(dataRoot, 'demo-production.db');
+if (demoProduction) await refreshProductionDemoSnapshot(path.join(dataRoot, 'workbench.db'), productionSnapshotPath);
+const instanceLock=acquireInstanceLock(root,{name:demoProduction?'demo-production':demo?'demo':'workbench'});
+const store = new Store(path.join(dataRoot, demoProduction ? 'demo-production.db' : demo ? 'demo.db' : 'workbench.db'));
 // 模型提供商以数据库为唯一持久化来源；首次启动时从旧 config.local.json/.env 迁移。
 syncModelProvidersToDatabase({root,config,repository:store.repositories.extensionSettings,cleanupLegacy:!demo});
 const extensionConfigurationService=new ExtensionConfigurationService({root,repository:store.repositories.extensionSettings});
@@ -62,7 +81,7 @@ setToolConfigurationResolver((manifest)=>{
   return extensionConfigurationService.resolve({extensionType:'tool',extensionId:manifest.id,manifest});
 });
 setSkillConfigurationResolver((manifest)=>extensionConfigurationService.resolve({extensionType:'skill',extensionId:manifest.id,manifest}));
-if (demo) {
+if (demo && !demoProduction) {
   const seedResult = seedDemoData(store, { root });
   if (seedResult.seeded) console.log(`演示模式：已写入演示批次（${seedResult.todayBatchId} / ${seedResult.yesterdayBatchId}）`);
 }
@@ -355,6 +374,9 @@ async function api(request, response, url) {
     try { return json(response, 201, { token: localSecurity.issue(input.action), expiresInMs: 60_000 }); }
     catch { return json(response, 400, { code: 'CONFIRMATION_ACTION_INVALID', error: '敏感操作类型无效' }); }
   }
+  if (demoProduction && !['GET', 'HEAD', 'OPTIONS'].includes(request.method)) {
+    return json(response, 403, { code: 'DEMO_PRODUCTION_READ_ONLY', error: '生产数据预览为只读模式；请退出 --demo-production 后再执行写入操作' });
+  }
   if (request.method === 'GET' && pathname === '/api/overview') {
     return json(response, 200, store.overview());
   }
@@ -435,7 +457,8 @@ server.on('error', async (error) => {
 
 server.listen(config.port, '127.0.0.1', () => {
   console.log(`公众号工作台已启动：http://127.0.0.1:${config.port}`);
-  if (demo) console.log('演示模式：使用独立演示库 data/demo.db，无模型服务商也可浏览各视图。');
+  if (demoProduction) console.log('生产数据预览：已复制 workbench.db 到独立快照 data/demo-production.db，HTTP 接口为只读。');
+  else if (demo) console.log('演示模式：使用独立演示库 data/demo.db，无模型服务商也可浏览各视图。');
 });
 
 let shuttingDown=false;

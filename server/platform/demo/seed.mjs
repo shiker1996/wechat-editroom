@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { candidateArticleDir } from '../core/workspace-paths.mjs';
 
 const CATEGORIES = ['🤖 AI/技术动态', '📰 综合资讯', '🏢 大厂战略', '📈 行业趋势', '💼 职场生态'];
 
@@ -230,6 +231,71 @@ export function seedDemoData(store, { root }) {
 
   const taggingRun = store.createAiRun({ id: `demo-today-${Date.now()}`, batchId: todayBatch.id, type: 'auto', provider: 'deepseek' });
   store.updateAiRun(taggingRun.id, { status: 'completed', progress: '已完成事件研判与打标（演示数据）', result_json: '{}' });
+
+  // 给演示模式准备一条贯穿写作、排版和封面的已完成文章，避免 README 截图停在空状态。
+  const showcaseCandidate = store.listCandidates(todayBatch.id, 'article')[0];
+  if (showcaseCandidate) {
+    store.updateCandidate(showcaseCandidate.id, {
+      status: 'locked',
+      angle: '从成本下降、生态扩张与内容合规的交汇处看开源模型的新一轮普及',
+      thesis: '模型能力之外，成本、工具生态和平台规则正在共同决定内容生产方式。',
+    });
+    store.saveEditorial(showcaseCandidate.id, {
+      editor_question: '开源模型的变化，为什么会影响内容创作者的日常工作？',
+      confirmed_facts: '演示数据：Qwen 新版本、MCP 工具生态和 AI 内容标识均作为文章素材示例。',
+      research_basis: '演示数据：用于展示从热点到编辑决策的完整链路。',
+      author_opinions: '真正的变化不只是模型更强，而是内容生产的成本、工具和规则同时在变。',
+      confirmed_experiences: '',
+      rejected_angles: '不把演示数据当作真实新闻，不延伸为具体厂商的商业判断。',
+      open_questions: '',
+      forbidden_claims: '不得把演示数据写成已核实事实，不得虚构真实测试结果。',
+      next_action: 'WRITE_NOW',
+      experience_required: false,
+      brief_status: 'LOCKED',
+    });
+    const showcaseDir = candidateArticleDir(root, todayBatch, showcaseCandidate);
+    const showcaseImagesDir = path.join(showcaseDir, 'images');
+    fs.mkdirSync(showcaseImagesDir, { recursive: true });
+    const draftContent = [
+      '# 开源大模型这一周：成本、生态与内容合规',
+      '',
+      '> 演示文章：用于展示从选题、编辑决策到排版交付的完整工作流。',
+      '',
+      '## 成本进入下降通道',
+      '',
+      '过去一周，开源大模型的节奏明显加快。新一代模型继续压低推理成本，多个工具开始支持本地模型调用。',
+      '',
+      '## 工具生态正在变厚',
+      '',
+      'MCP 等协议让编辑器、数据库和浏览器更容易接入同一套本地工作流。对创作者来说，选择工具不再只是选择一个聊天窗口。',
+      '',
+      '## 内容合规成为生产流程的一部分',
+      '',
+      'AI 生成内容标识正在成为平台规范的一部分。长期输出原创内容的账号，需要把来源、判断和发布边界一起保留下来。',
+    ].join('\n');
+    const finalContent = `${draftContent}\n\n> 以上内容为演示数据，不代表真实新闻或平台规则。`;
+    const draftPath = path.join(showcaseDir, '04-draft.md');
+    const finalPath = path.join(showcaseDir, '09-FINAL.md');
+    const htmlPath = path.join(showcaseDir, 'article.ai.html');
+    fs.writeFileSync(draftPath, draftContent, 'utf8');
+    fs.writeFileSync(finalPath, finalContent, 'utf8');
+    fs.writeFileSync(htmlPath, demoTodayHtml(), 'utf8');
+    const saveShowcaseArtifact = (kind, name, filePath, status = 'ready') => {
+      const stat = fs.statSync(filePath);
+      store.upsertArtifact({ batchId: todayBatch.id, candidateId: showcaseCandidate.id, kind, name, path: filePath, size: stat.size, modifiedAt: stat.mtime.toISOString(), status });
+    };
+    store.saveDocument({ batchId: todayBatch.id, candidateId: showcaseCandidate.id, kind: 'draft', title: showcaseCandidate.hotspot_title, content: draftContent, filePath: draftPath, status: 'draft' });
+    store.saveDocument({ batchId: todayBatch.id, candidateId: showcaseCandidate.id, kind: 'final', title: '开源大模型这一周：成本、生态与内容合规', content: finalContent, filePath: finalPath, status: 'finalized' });
+    saveShowcaseArtifact('文章初稿', '04-draft.md', draftPath);
+    saveShowcaseArtifact('文章终稿', '09-FINAL.md', finalPath);
+    saveShowcaseArtifact('排版 HTML', 'article.ai.html', htmlPath);
+    const coverSource = path.join(root, 'docs', 'screenshots', 'ui-demo-cover.png');
+    const coverPath = path.join(showcaseImagesDir, 'cover.png');
+    if (fs.existsSync(coverSource)) {
+      fs.copyFileSync(coverSource, coverPath);
+      saveShowcaseArtifact('封面图', 'cover.png', coverPath);
+    }
+  }
 
   const demoArticleDir = path.join(root, 'articles', 'demo');
   fs.mkdirSync(demoArticleDir, { recursive: true });

@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
 # scripts/runtime/start-workbench.ps1 的 Linux/macOS 对应版本。
-# 用法: scripts/runtime/start-workbench.sh [--port 4317] [--no-browser]
+# 用法: scripts/runtime/start-workbench.sh [--port 4317] [--no-browser] [--demo] [--demo-production]
 set -e
 cd "$(dirname "$0")/../.."
 PORT=4317
 NO_BROWSER=0
+DEMO=0
+DEMO_PRODUCTION=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --port|-p) PORT="$2"; shift 2 ;;
     --no-browser) NO_BROWSER=1; shift ;;
+    --demo) DEMO=1; shift ;;
+    --demo-production) DEMO=1; DEMO_PRODUCTION=1; shift ;;
     *) echo "未知参数: $1" >&2; exit 2 ;;
   esac
 done
@@ -29,7 +33,10 @@ if ! health_ok; then
     exit 1
   fi
   mkdir -p logs
-  nohup node --disable-warning=ExperimentalWarning server.mjs >>logs/workbench.log 2>>logs/workbench.error.log &
+  NODE_ARGS=(--disable-warning=ExperimentalWarning server.mjs)
+  if [ "$DEMO" -eq 1 ]; then NODE_ARGS+=(--demo); fi
+  if [ "$DEMO_PRODUCTION" -eq 1 ]; then NODE_ARGS+=(--demo-production); fi
+  nohup node "${NODE_ARGS[@]}" >>logs/workbench.log 2>>logs/workbench.error.log &
   echo "$!" > logs/workbench.pid
   deadline=$((SECONDS + 45))
   while [ $SECONDS -lt $deadline ] && ! health_ok; do sleep 0.5; done

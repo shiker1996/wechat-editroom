@@ -162,6 +162,16 @@ function connectionFromRecord(id,record,declared={}) {
   return Object.fromEntries(['apiKeyEnv',...MODEL_CONNECTION_FIELDS].flatMap((key)=>merged[key]===undefined?[]:[[key,merged[key]]]));
 }
 
+// 新增模型可能发生在供应商配置刚保存、但运行时连接缓存尚未同步的窗口内。
+// 此时以数据库中的连接记录为准，避免把空 Base URL 传给模型校验。
+function inheritedConnection(config,repository,id) {
+  if(!id)return {};
+  const runtime=config.llm?.connections?.[id]||{};
+  if(runtime.baseUrl)return runtime;
+  const record=repository?.get?.(MODEL_CONNECTION_EXTENSION_TYPE,id);
+  return record?connectionFromRecord(id,record,runtime):runtime;
+}
+
 function connectionRuntimeValues(connection={}) {
   return Object.fromEntries(['baseUrl','protocol'].flatMap((key)=>connection[key]===undefined?[]:[[key,connection[key]]]));
 }
@@ -348,7 +358,7 @@ export function createModelConnection(root,config,input={},options={}) {
 
 export function createModelProvider(root,config,input={},options={}) {
   const requestedConnection=connectionIdFor(input);
-  const inherited=requestedConnection&&config.llm?.connections?.[requestedConnection] ? config.llm.connections[requestedConnection] : {};
+  const inherited=inheritedConnection(config,options.repository,requestedConnection);
   const generatedId=String(input.id||'').trim()
     ||modelProviderIdFor({supplier:inherited.label||input.supplier||requestedConnection,supplierId:requestedConnection,model:input.model,existingIds:Object.keys(config.llm?.providers||{})});
   const {id,provider}=normalizeProviderInput({...input,id:generatedId,baseUrl:input.baseUrl||inherited.baseUrl,protocol:input.protocol||inherited.protocol});
@@ -386,7 +396,7 @@ export function saveModelProvider(root,config,input={},options={}) {
   const previous=config.llm.providers[existingId];
   const requestedConnection=connectionIdFor(input,previous?.connectionId||'');
   if(previous?.connectionId&&requestedConnection!==previous.connectionId)throw new Error('模型所属供应商创建后不可修改，请新增模型');
-  const inherited=requestedConnection&&config.llm?.connections?.[requestedConnection] ? config.llm.connections[requestedConnection] : {};
+  const inherited=inheritedConnection(config,options.repository,requestedConnection);
   const {id,provider}=normalizeProviderInput({...input,baseUrl:input.baseUrl||inherited.baseUrl,protocol:input.protocol||inherited.protocol},existingId);
   provider.connectionId=requestedConnection||config.llm.providers[existingId||id]?.connectionId||id;
   provider.apiKeyEnv=inherited.apiKeyEnv||config.llm.providers[existingId||id]?.apiKeyEnv||apiKeyEnvForProvider(provider.connectionId);

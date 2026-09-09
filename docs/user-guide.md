@@ -36,6 +36,14 @@ npm start -- --demo
 
 演示模式写入独立数据库，适合先了解页面和内容链路。它不模拟真实模型调用。
 
+如果需要在本机查看生产库最近的真实批次，可使用明确的只读快照模式：
+
+```powershell
+npm start -- --demo --demo-production
+```
+
+启动时会将 `data/workbench.db` 复制到独立的 `data/demo-production.db`，所有 HTTP 写入接口都会被拒绝，不会改动生产库。生产内容仅用于本机检查，不应带入公开截图、GIF 或演示链接。
+
 ## 2. 首次配置
 
 ### 2.1 模型接入

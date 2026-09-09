@@ -1,17 +1,95 @@
 # 见字 · 公众号编辑工作台
 
+[中文](./README.md) · [English](./README.en.md)
+
+> **一个真正从选题开始，而不是从输入框开始的本地 AI 公众号工作台。**
+>
+> 找热点 → 研判事件 → 做编辑决策 → 写稿 → 审稿 → 排版 → 封面 / 图文，把一篇内容从素材推进到可交付产物。
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![CI](https://github.com/shiker1996/wechat-newsroom-workbench/actions/workflows/ci.yml/badge.svg)](https://github.com/shiker1996/wechat-newsroom-workbench/actions/workflows/ci.yml)
 [![Node.js ≥ 24](https://img.shields.io/badge/Node.js-%E2%89%A5%2024-339933?logo=nodedotjs&logoColor=white)](./package.json)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6?logo=windows&logoColor=white)](./docs/user-guide.md#1-安装与启动)
 
-「见字」是一套本地优先、面向中文内容创作者的编辑与生产工作台。它把信息采集、事件研判、选题决策、文章成稿、公众号排版、封面图和社交图文放在同一个可追溯流程中。
+「见字」把信息采集、事件研判、选题决策、文章成稿、公众号排版、封面图和社交图文放进同一条可追溯流程。你可以从 RSS / 网页 / Reddit / GitHub 热点开始，也可以直接导入自己的素材。
 
-项目适合个人公众号作者、自媒体编辑和希望研究“技能 + 工具 + AI 流水线”架构的 Node.js 开发者。它不是 SaaS 或多人协作系统：服务只监听 `127.0.0.1`，没有登录、租户隔离或公网 API 鉴权，请勿暴露到局域网或互联网。
+它不是 SaaS，也不是“输入一个主题就生成文章”的聊天框：工作区和运行记录默认留在本机，服务只监听 `127.0.0.1`；你配置的模型或采集服务仍只会接收完成对应任务所需的内容。
 
 <p align="center">
-  <a href="https://img.shiker.tech/project/export-1785841213192.mp4"><img src="docs/screenshots/ui-demo-cover.png" alt="点击播放见字工作台演示" width="760"></a>
+  <img src="docs/screenshots/ui-demo.gif" alt="见字工作台演示：从总览到选题和产物" width="760">
 </p>
+
+<p align="center">⭐ 如果这个工作流对你有用，欢迎 Star，或告诉我你最想接入的内容来源。</p>
+
+<p align="center">
+  <img src="docs/screenshots/ui-dashboard.png" alt="工作台总览" width="32%">
+  <img src="docs/screenshots/ui-topics.png" alt="文章选题池" width="32%">
+  <img src="docs/screenshots/ui-social-topics.png" alt="图文选题池" width="32%">
+</p>
+<p align="center">
+  <img src="docs/screenshots/ui-atlas.png" alt="热点全景" width="32%">
+  <img src="docs/screenshots/ui-editorial.png" alt="AI 编辑会" width="32%">
+  <img src="docs/screenshots/ui-editor.png" alt="文章编辑器" width="32%">
+</p>
+<p align="center">
+  <img src="docs/screenshots/ui-preview.png" alt="公众号排版预览" width="32%">
+  <img src="docs/screenshots/ui-cover.png" alt="文章封面图" width="32%">
+</p>
+
+> 演示 GIF 和截图都来自演示模式；启动工作台后，可用 `node scripts/media/render-demo-gif.mjs` 重新生成 GIF。
+
+## 先看效果
+
+不想先配置模型？直接用演示模式打开完整界面，查看热点、选题池和演示产物：
+
+```bash
+git clone https://github.com/shiker1996/wechat-newsroom-workbench.git
+cd wechat-newsroom-workbench
+npm install
+npm start -- --demo
+```
+
+演示模式使用独立的 `data/demo.db`，不会污染正式数据；需要模型的操作仍会明确提示配置服务商。
+
+如果已经下载仓库，也可以直接运行 `start-workbench.cmd --demo`（Windows），或使用 `npm ci` 进行锁文件安装。
+
+想在本机查看生产库中最近的真实批次，可显式运行：
+
+```powershell
+npm start -- --demo --demo-production
+# Windows 启动器：start-workbench.cmd -DemoProduction -NoBrowser
+```
+
+该模式启动时会把 `data/workbench.db` 复制为独立的 `data/demo-production.db` 快照，并将 HTTP 接口锁为只读；退出后不会写回生产数据库。生产内容只适合本机预览，不要用它生成公开截图或 GIF。
+
+## 它解决什么问题？
+
+传统做法往往是：RSS / 搜索 → 聊天模型 → 手动核事实 → 另一个编辑器排版 → 再做一套小红书图文。内容、来源和判断散落在多个工具里，过几天很难复盘“为什么选这个题、稿子依据了什么”。
+
+见字把这条链路收在一个本地工作台里：
+
+```text
+信息源 → 热点 → 事件与事实 → 候选选题 → 编辑决策 → 文章 / 图文 → 排版与产物
+```
+
+它的核心不是替你按下“生成”，而是把每一步的输入、判断、版本和产物留下来，方便继续写、回头查和复盘。
+
+## 为什么不是 ChatGPT + 秀米？
+
+ChatGPT 和秀米仍然可以是工作流中的工具；见字解决的是它们之间缺少“编辑流程”的那一段：
+
+| | 典型工具组合 | 见字 |
+|---|---|---|
+| 从哪里开始 | 输入一个主题 | 从信息源、热点和素材开始 |
+| 怎么做判断 | 主要靠对话记录和人工记忆 | 事件、事实卡、候选选题和编辑简报分阶段保留 |
+| 怎么交付 | 在多个工具之间复制粘贴 | 文章、公众号 HTML、封面和图文进入同一个产物柜 |
+| 怎么复盘 | 结果散落在聊天记录和文件夹 | 版本、运行记录和失败原因可回溯 |
+
+## 适合谁？
+
+- 个人公众号 / 小红书作者：想把找题、写稿、排版和图文制作串起来。
+- 内容编辑或小团队：需要候选选题、来源、简报、审稿和产物统一留档。
+- Node.js / AI 工具开发者：想研究本地优先、技能包、插件和可追溯 Agent 流水线。
 
 ## 主要能力
 
@@ -34,6 +112,14 @@
 - 至少一个 OpenAI 兼容模型服务；只浏览演示数据时可不配置
 - 可选：Chrome、RSSHub、Python 3、Tavily、GitHub Token、又拍云
 
+### 支持矩阵
+
+| 平台 | 状态 | 说明 |
+|---|---|---|
+| Windows 10/11 | ✅ 完整验证 | 推荐平台，安装脚本和演示模式均已验证 |
+| macOS | 🧪 实验性 | 提供启动脚本，尚未作为维护者验收平台 |
+| Linux | ✅ 完整验证 | 提供启动脚本，尚未作为维护者验收平台 |
+
 ### 安装与启动
 
 最简单的方式是双击：
@@ -47,14 +133,6 @@
 npm run setup
 npm start
 ```
-
-只想查看界面和示例数据：
-
-```powershell
-npm start -- --demo
-```
-
-演示模式使用独立的 `data/demo.db`，不会污染正式数据；需要模型的操作仍会提示配置服务商。
 
 ## 推荐的首次使用顺序
 
@@ -146,7 +224,7 @@ npm run plugin:validate -- docs/examples/tool-plugin
 
 ## 当前边界
 
-- 仅 Windows 10/11 完整验证；macOS / Linux 尚未作为受支持平台验收。
+- Windows 10/11 是当前完整验证平台；macOS / Linux 处于实验性支持阶段，启动脚本已提供，但尚未作为维护者验收平台。
 - 仅面向本机可信用户，不具备公网部署所需的认证、CSRF 防护和多用户授权。
 - 网页自动采集面向新闻、公告、博客和榜单等重复列表页；验证码、复杂登录、多步骤交互和任意脚本不在自动配置范围内。
 - 本地项目读取结果只证明文件中存在相关材料，不证明命令已经真实执行成功。

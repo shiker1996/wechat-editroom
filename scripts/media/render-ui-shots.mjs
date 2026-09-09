@@ -42,6 +42,10 @@ const shots = [
   { view: 'overview', file: 'ui-atlas.png', needBatch: true, settleMs: 3500 },
   { view: 'topics', file: 'ui-topics.png', needBatch: true, settleMs: 2500 },
   { view: 'social-topics', file: 'ui-social-topics.png', needBatch: true, settleMs: 2500 },
+  { view: 'editorial', file: 'ui-editorial.png', needBatch: true, settleMs: 2500 },
+  { view: 'editor', file: 'ui-editor.png', needBatch: true, settleMs: 2500 },
+  { view: 'preview', file: 'ui-preview.png', needBatch: true, settleMs: 2500 },
+  { view: 'cover', file: 'ui-cover.png', needBatch: true, settleMs: 2500 },
   { view: 'artifacts', file: 'ui-artifacts.png', needBatch: false, settleMs: 2000 },
 ];
 
