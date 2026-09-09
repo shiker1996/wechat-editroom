@@ -9,8 +9,9 @@ const TEXT_EXTENSIONS = new Set([
   '.md', '.txt', '.json', '.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx',
   '.vue', '.py', '.go', '.rs', '.java', '.kt', '.cs', '.php', '.rb',
   '.sh', '.ps1', '.yaml', '.yml', '.toml', '.ini', '.conf', '.html',
-  '.css', '.scss', '.sql', '.xml', '.graphql', '.proto',
+  '.markdown', '.css', '.scss', '.sql', '.xml', '.graphql', '.proto',
 ]);
+const SINGLE_DOCUMENT_EXTENSIONS = new Set(['.txt', '.md', '.markdown']);
 const SPECIAL_TEXT_FILES = /^(readme(?:\..+)?|dockerfile|makefile|package\.json|pyproject\.toml|cargo\.toml|go\.mod)$/i;
 const SECRET_FILE = /(^|[._-])(env|secret|secrets|credential|credentials|token|tokens)([._-]|$)|\.pem$|\.key$|^id_rsa/i;
 
@@ -30,12 +31,34 @@ export function readLocalProjectImplementation(inputPath, options = {}) {
   const root = path.resolve(String(inputPath || '').trim());
   if (!String(inputPath || '').trim()) throw new Error('请提供本地项目目录');
   const stat = fs.statSync(root, { throwIfNoEntry: false });
-  if (!stat?.isDirectory()) throw new Error('本地项目目录不存在或不是文件夹');
 
   const maxFiles = Math.min(Number(options.maxFiles) || 80, 200);
   const maxFileBytes = Math.min(Number(options.maxFileBytes) || 256 * 1024, 1024 * 1024);
   const maxCharsPerFile = Math.min(Number(options.maxCharsPerFile) || 5000, 100000);
   const maxTotalChars = Math.min(Number(options.maxTotalChars) || 60000, 200000);
+
+  if (stat?.isFile()) {
+    const fileName = path.basename(root);
+    if (!SINGLE_DOCUMENT_EXTENSIONS.has(path.extname(fileName).toLowerCase())) {
+      throw new Error('单文件读取仅支持 .txt、.md 或 .markdown 文件');
+    }
+    if (SECRET_FILE.test(fileName)) throw new Error('不允许读取疑似密钥文件');
+    if (stat.size > maxFileBytes) throw new Error(`单文件超过 ${maxFileBytes} 字节上限`);
+    const content = fs.readFileSync(root, 'utf8').replace(/\u0000/g, '');
+    const excerpt = content.slice(0, maxCharsPerFile);
+    const skipped = { directories: 0, secrets: 0, binaryOrUnsupported: 0, oversized: 0, symlinks: 0 };
+    return {
+      root,
+      files: [{ path: fileName, size: stat.size, excerpt, truncated: excerpt.length < content.length }],
+      totalFiles: 1,
+      totalChars: excerpt.length,
+      truncated: excerpt.length < content.length,
+      skipped,
+      summary: `读取单个文本文件，共 ${excerpt.length} 字符`,
+    };
+  }
+  if (!stat?.isDirectory()) throw new Error('本地项目或文本文件不存在');
+
   const includePaths = new Set((Array.isArray(options.includePaths) ? options.includePaths : [])
     .map((item) => path.normalize(String(item || '').trim()))
     .filter(Boolean));
@@ -93,7 +116,8 @@ export function extractLocalProjectPath(value) {
   const wholeWindowsLine = text.trim().match(/^([A-Za-z]:\\[^\r\n"'<>|?*]+)[，。；、]?$/);
   if (wholeWindowsLine) {
     const candidate = wholeWindowsLine[1].trim().replace(/[，。；、]+$/, '');
-    if (fs.statSync(candidate, { throwIfNoEntry: false })?.isDirectory()) return candidate;
+    const stat = fs.statSync(candidate, { throwIfNoEntry: false });
+    if (stat?.isDirectory() || (stat?.isFile() && SINGLE_DOCUMENT_EXTENSIONS.has(path.extname(candidate).toLowerCase()))) return candidate;
   }
   const windows = text.match(/[A-Za-z]:\\[^\s"'<>|?*，。；、]+/);
   if (windows) return windows[0].trim().replace(/[，。；、]+$/, '');
@@ -102,7 +126,8 @@ export function extractLocalProjectPath(value) {
   const wholePosixLine = text.trim().match(/^(\/[^\r\n"']+)[，。；、]?$/);
   if (wholePosixLine) {
     const candidate = wholePosixLine[1].trim().replace(/[，。；、]+$/, '');
-    if (fs.statSync(candidate, { throwIfNoEntry: false })?.isDirectory()) return candidate;
+    const stat = fs.statSync(candidate, { throwIfNoEntry: false });
+    if (stat?.isDirectory() || (stat?.isFile() && SINGLE_DOCUMENT_EXTENSIONS.has(path.extname(candidate).toLowerCase()))) return candidate;
   }
   const posix = text.match(/(?:^|\s)(\/(?:[^/\s]+\/)*[^/\s，。；、]+)/);
   return posix?.[1]?.trim().replace(/[，。；、]+$/, '') || '';

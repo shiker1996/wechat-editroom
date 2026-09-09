@@ -301,8 +301,8 @@ async function sendChat() {
 
 async function inspectProject() {
   const projectPath = field("localProjectPath").value.trim();
-  if (!projectPath) { setProjectStatus("请先填写项目文件夹的绝对路径。", "error"); field("localProjectPath").focus(); return; }
-  setProjectStatus("正在读取项目结构与支持的文本文件…", "loading");
+  if (!projectPath) { setProjectStatus("请先填写项目文件夹或 TXT/Markdown 文件的绝对路径。", "error"); field("localProjectPath").focus(); return; }
+  setProjectStatus("正在读取项目结构或文本文件…", "loading");
   try {
     const result = await request("/api/tools/local-project/read", { method: "POST", confirmation: "local-project-read", body: JSON.stringify({ path: projectPath }) });
     setProjectStatus(`${result.summary}${result.truncated ? "（内容较多，已截断）" : ""}`, "success");

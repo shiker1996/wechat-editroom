@@ -860,8 +860,8 @@ GET 返回脱敏后的当前运行设置；PUT 更新受支持的 `.env` 字段�
 
 ## 自主写作
 
-- `POST /api/batches/:id/tutorial-chat/stream`：以 NDJSON 流式返回自主写作策划回复和表单更新；`articleMode` 支持 `experience`（心得经验）和 `tutorial`（使用教程）。教程请求可包含 `draft.localProjectPath`，或在本轮回答中提供绝对目录。路径只在服务端映射为临时项目资源，流中返回 `assistant.delta`、`tool.requested`、`tool.running`、`tool.completed`、`tool.failed` 与 `agent.limit`；`done.data` 包含 `agentRunId` 和 `toolCalls`。
-- `POST /api/tools/local-project/read`：预检用户明确指定的本地项目目录。只读受支持的文本文件，跳过依赖/构建目录、密钥文件、二进制和符号链接，并受文件数、单文件与总字符数限制。
+- `POST /api/batches/:id/tutorial-chat/stream`：以 NDJSON 流式返回自主写作策划回复和表单更新；`articleMode` 支持 `experience`（心得经验）和 `tutorial`（使用教程）。请求可包含 `draft.localProjectPath`，或在本轮回答中提供绝对项目目录或单个 `.txt`、`.md`、`.markdown` 文件。路径只在服务端映射为临时项目资源，流中返回 `assistant.delta`、`tool.requested`、`tool.running`、`tool.completed`、`tool.failed` 与 `agent.limit`；`done.data` 包含 `agentRunId` 和 `toolCalls`。
+- `POST /api/tools/local-project/read`：预检用户明确指定的本地项目目录或单个 `.txt`、`.md`、`.markdown` 文件。目录模式只读受支持的文本文件，跳过依赖/构建目录、密钥文件、二进制和符号链接；单文件模式只读取该文件；两种模式均受单文件与总字符数限制。
 - `POST /api/batches/:id/custom-articles`：根据对话填好的事实表单创建自主写作项目并启动成稿；旧的 `/tutorials` 路径保留兼容。
 - `GET /api/batches/:id/custom-articles`：列出本批自主写作项目及草稿 / 任务状态；旧的 `/tutorials` 路径保留兼容。
 - `POST /api/candidates/:id/custom-article-runs`：重新执行已有自主写作项目，可沿用上次生成快照或显式改用最新技能。

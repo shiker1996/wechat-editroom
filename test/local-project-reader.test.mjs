@@ -35,3 +35,24 @@ test('可识别单独一行中真实存在且包含空格的本地目录', (t) =
   t.after(() => fs.rmSync(parent, { recursive: true, force: true }));
   assert.equal(extractLocalProjectPath(root), root);
 });
+
+test('读取单个 txt、md 和 markdown 文件，并拒绝其他单文件类型', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tutorial-document-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  for (const extension of ['.txt', '.md', '.markdown']) {
+    const file = path.join(root, `article${extension}`);
+    fs.writeFileSync(file, '# 标题\n\n这是文章内容。', 'utf8');
+    const result = readLocalProject(file);
+    assert.equal(result.totalFiles, 1);
+    assert.deepEqual(result.files.map((item) => item.path), [path.basename(file)]);
+    assert.match(result.files[0].excerpt, /文章内容/);
+    assert.equal(extractLocalProjectPath(file), file);
+  }
+  const unsupported = path.join(root, 'article.json');
+  fs.writeFileSync(unsupported, '{}', 'utf8');
+  assert.throws(() => readLocalProject(unsupported), /单文件读取仅支持/);
+
+  const spacedFile = path.join(root, '想写公众号爆款，第一步不是让 AI 写文章.md');
+  fs.writeFileSync(spacedFile, '正文', 'utf8');
+  assert.equal(extractLocalProjectPath(spacedFile), spacedFile);
+});
