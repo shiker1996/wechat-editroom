@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="见字：从热点到文章交付的本地 AI 公众号编辑工作台。在线教程与只读产品导览。">
+    <meta name="theme-color" content="#101b2d">
+    <title>见字｜从热点开始写一篇文章</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&family=Noto+Serif+SC:wght@500;600;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <div class="grain" aria-hidden="true"></div>
+    <header class="topbar">
+      <a class="brand" href="#top" aria-label="见字首页">
+        <span class="brand-mark">见</span>
+        <span><b>见字</b><small>WECHAT EDITROOM</small></span>
+      </a>
+      <nav class="nav" aria-label="主导航">
+        <a href="#how">怎么工作</a>
+        <a href="#demo">在线导览</a>
+        <a href="#tutorial">快速上手</a>
+      </nav>
+      <a class="top-cta" href="https://github.com/shiker1996/wechat-newsroom-workbench" target="_blank" rel="noreferrer">查看 GitHub <span>↗</span></a>
+    </header>
+
+    <main id="top">
+      <section class="hero section-wrap">
+        <div class="hero-copy reveal">
+          <p class="eyebrow"><span class="eyebrow-dot"></span> LOCAL-FIRST CONTENT WORKBENCH</p>
+          <h1>一篇文章，<em>从热点开始。</em></h1>
+          <p class="hero-lede">见字把“找题、研判、写稿、审稿、排版、交付”收进一条可以回头检查的本地 AI 工作流。</p>
+          <div class="hero-actions">
+            <a class="button button-dark" href="#demo">进入只读导览 <span>↓</span></a>
+            <a class="text-link" href="#tutorial">先看 5 分钟教程 <span>→</span></a>
+          </div>
+          <div class="hero-note"><span class="note-line"></span> 不是“输入主题就生成”的聊天框，而是一张编辑桌。</div>
+        </div>
+        <div class="hero-visual reveal reveal-delay-1" aria-label="内容生产流水线示意图">
+          <div class="orb orb-one"></div><div class="orb orb-two"></div>
+          <div class="hero-card card-back"><span>04</span><b>交付</b><small>ARTICLE / SOCIAL / VISUAL</small></div>
+          <div class="hero-card card-mid"><span>03</span><b>成稿</b><small>FACTS → DRAFT → REVIEW</small></div>
+          <div class="hero-card card-front">
+            <div class="card-top"><span class="live-dot"></span><span>EDITORIAL LOOP</span><span class="card-time">09:42</span></div>
+            <div class="signal-title">今天，什么值得写？</div>
+            <div class="signal-row"><i>01</i><b>热点</b><span>芯片 / AI / 产业</span><strong>98</strong></div>
+            <div class="signal-row"><i>02</i><b>事实</b><span>来源与证据卡</span><strong>12</strong></div>
+            <div class="signal-row"><i>03</i><b>判断</b><span>编辑简报与角度</span><strong>06</strong></div>
+            <div class="card-footer"><span>选题进入工作区</span><span>↗</span></div>
+          </div>
+          <div class="float-label label-a">INPUT / SIGNALS</div>
+          <div class="float-label label-b">OUTPUT / DELIVERY</div>
+        </div>
+      </section>
+
+      <section class="ticker" aria-label="产品定位">
+        <div class="ticker-track"><span>从信息源开始</span><i>✦</i><span>保留编辑判断</span><i>✦</i><span>每一步都可追溯</span><i>✦</i><span>从信息源开始</span><i>✦</i><span>保留编辑判断</span><i>✦</i><span>每一步都可追溯</span></div>
+      </section>
+
+      <section class="section-wrap how" id="how">
+        <div class="section-intro reveal"><p class="eyebrow">01 / THE EDITORIAL LOOP</p><h2>不是多一个工具，<br><span>是少一点来回复制。</span></h2></div>
+        <div class="flow-grid">
+          <article class="flow-card reveal"><span class="flow-index">01</span><div class="flow-icon">⌁</div><h3>采集与聚类</h3><p>RSS、网页、Reddit、GitHub 热点进入同一张工作台，重复消息先合并成事件。</p><small>COLLECT → RESOLVE</small></article>
+          <article class="flow-card featured reveal reveal-delay-1"><span class="flow-index">02</span><div class="flow-icon">◒</div><h3>研判与选题</h3><p>把事实、受众、风险和写作角度拆开，形成可比较、可复盘的候选选题。</p><small>EVENT → BRIEF</small></article>
+          <article class="flow-card reveal reveal-delay-2"><span class="flow-index">03</span><div class="flow-icon">↗</div><h3>写作与交付</h3><p>文章、公众号 HTML、封面和社交图文进入产物柜，版本和运行记录一起留下。</p><small>DRAFT → DELIVERY</small></article>
+        </div>
+      </section>
+
+      <section class="demo-section" id="demo">
+        <div class="section-wrap">
+          <div class="demo-heading reveal"><div><p class="eyebrow eyebrow-light">02 / READ-ONLY PRODUCT TOUR</p><h2>打开一批真实工作，<br><span>看看“热点全景”如何变成选题。</span></h2></div><div class="demo-status"><span class="status-pulse"></span><span id="snapshot-label">正在加载生产快照…</span></div></div>
+          <div class="demo-shell reveal reveal-delay-1">
+            <aside class="demo-sidebar">
+              <div class="sidebar-title"><span class="mini-mark">见</span><span>见字工作台</span></div>
+              <div class="sidebar-caption">READ-ONLY TOUR</div>
+              <button class="side-tab active" data-view="overview"><span>◈</span> 总览</button>
+              <button class="side-tab" data-view="hotspots"><span>⌁</span> 热点全景 <b id="side-hotspot-count">—</b></button>
+              <button class="side-tab" data-view="events"><span>◌</span> 事件研判 <b id="side-event-count">—</b></button>
+              <button class="side-tab" data-view="topics"><span>✦</span> 选题池 <b id="side-candidate-count">—</b></button>
+              <div class="sidebar-bottom"><span class="lock">⌑</span><span>演示模式<br><b>只读快照</b></span></div>
+            </aside>
+            <div class="demo-main">
+              <div class="demo-toolbar"><div><span class="crumb">工作区 / </span><strong id="view-title">生产批次总览</strong></div><div class="toolbar-date" id="batch-date">—</div></div>
+              <div id="demo-content" class="demo-content"><div class="loading-state"><span class="spinner"></span>正在读取可公开的脱敏数据…</div></div>
+            </div>
+          </div>
+          <p class="demo-disclaimer">在线导览仅展示脱敏后的生产批次摘要，不连接模型、不采集、不写入。完整工作台请在本地运行。</p>
+        </div>
+      </section>
+
+      <section class="section-wrap tutorial" id="tutorial">
+        <div class="section-intro reveal"><p class="eyebrow">03 / QUICK START</p><h2>五分钟，走完第一条<br><span>从热点到文章的路径。</span></h2></div>
+        <div class="tutorial-layout">
+          <div class="steps reveal">
+            <article class="step active"><span>01</span><div><h3>先用演示模式认识界面</h3><p>不配置模型也能查看总览、热点全景、选题池和演示产物。</p><code>npm start -- --demo</code></div></article>
+            <article class="step"><span>02</span><div><h3>接入一个模型服务</h3><p>在“运行与配置”中添加 OpenAI 兼容服务，先完成连接测试。</p></div></article>
+            <article class="step"><span>03</span><div><h3>从一个批次开始写作</h3><p>采集 → 研判 → 编辑决策 → 成稿 → 排版，把第一篇文章跑通。</p></div></article>
+          </div>
+          <div class="tutorial-aside reveal reveal-delay-1"><div class="aside-number">5<small>MIN</small></div><p>先看清工作流，再决定哪些环节值得自动化。</p><a href="https://github.com/shiker1996/wechat-newsroom-workbench#先看效果" target="_blank" rel="noreferrer">打开完整安装说明 ↗</a></div>
+        </div>
+      </section>
+
+      <section class="closing section-wrap reveal"><div class="closing-mark">见</div><div><p class="eyebrow">BUILT FOR PEOPLE WHO WRITE</p><h2>把判断留下，<br><em>把文章交出去。</em></h2></div><a class="button button-dark" href="https://github.com/shiker1996/wechat-newsroom-workbench" target="_blank" rel="noreferrer">开始使用 <span>↗</span></a></section>
+    </main>
+
+    <footer class="footer section-wrap"><span>见字 · WeChat EditRoom</span><span>Local-first / Open source / MIT</span><a href="#top">回到顶部 ↑</a></footer>
+    <script src="./app.js" defer></script>
+  </body>
+</html>
