@@ -69,6 +69,23 @@ function asArray(value,{emptyWords=false}={}) {
   return [value];
 }
 function issueList(value) { return asArray(value).map((item)=>typeof item==='string'?item:(item?.message||JSON.stringify(item))); }
+function issueMessage(issue) { return typeof issue === 'string' ? issue : String(issue?.message || ''); }
+function issueType(issue) { return typeof issue === 'string' ? '' : String(issue?.type || '').trim().toLowerCase(); }
+
+// 文章内容问题与“模型没有产出文章”分开处理：前者可以把终稿交给编辑器修订，
+// 后者说明当前阶段没有可供编辑的文章，仍然需要终止流水线。
+const ARTICLE_OUTPUT_BLOCKER_PATTERN = /模型返回空内容|工具操作说明|未返回.*(?:文章|Markdown)|输出无效|无法生成|模型调用失败/i;
+export function articleGateBlockingIssues(gate = {}) {
+  return (Array.isArray(gate?.issues) ? gate.issues : []).filter((issue) => {
+    const type = issueType(issue);
+    return type === 'output' || ARTICLE_OUTPUT_BLOCKER_PATTERN.test(issueMessage(issue));
+  });
+}
+
+export function articleGateNeedsEditorialReview(gate = {}) {
+  return gate?.pass === false || (Array.isArray(gate?.issues) && gate.issues.length > 0);
+}
+
 function parseJsonResult(result,store) {
   return parseModelJson(result,{store,label:'文章流水线'});
 }
@@ -507,11 +524,12 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
     draft=draftRepair.article;draftQuality={pass:false,issues:[]};
    }
   if(!draftQuality.pass)draftQuality=await aiQualityGate({gateway,store,provider,batchId,candidateId,article:draft,factBase,sourceText:brief.sourceText||'',researchPoints:brief.adoptedResearchPoints,rejectedAngles:brief.rejectedAngles,publicationClaimRegister,publicationScan:scanPublicationRisk({article:draft,factBase}),systemPrompt:draftGateSystem,stage:'draft-recheck',maxOutputTokens:Math.min(3500,providerConfig.maxOutputTokens)});
-  if(!draftQuality.pass)throw new Error(`AI 成稿质量门禁未通过：${issueList(draftQuality.issues).join('；')}`);
+  const draftBlockers=articleGateBlockingIssues(draftQuality);
+  if(draftBlockers.length)throw new Error(`AI 成稿输出门禁未通过：${issueList(draftBlockers).join('；')}`);
   const draftGatePath=path.join(workdir,'04-quality-gate.json');writeFile(draftGatePath,JSON.stringify(draftQuality,null,2));
   const p04=path.join(workdir,'04-draft.md');writeFile(p04,draft);
   recordStage('drafting',writerSkillBundle,['01-personal-materials.md','02-outline.md','03-titles.md','02-fact-base.json'],'04-draft.md');
-  recordStage('draft-quality-gate',stageSkills['article-reviewer'],['04-draft.md','02-fact-base.json'],'04-quality-gate.json');
+  recordStage('draft-quality-gate',stageSkills['article-reviewer'],['04-draft.md','02-fact-base.json'],'04-quality-gate.json',draftQuality.pass?'passed':'needs_review');
   onProgress('Step 4.5 根据初稿正文生成标题');
   const titleGenSystem = buildArticleStageSystem(orchestratorSkill,'title-generation',stageSkills['title-generator']);
   const titlePurpose='article-title-generation';
@@ -533,8 +551,8 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   selectedTitleRisk.generatedTitle=finalSelectedTitle;
   const selectedTitleRiskPath=path.join(workdir,'03-title-risk.json');
   writeFile(selectedTitleRiskPath,JSON.stringify(selectedTitleRisk,null,2));
-  recordStage('title-generation',stageSkills['title-generator'],['04-draft.md','02-fact-base.json'],['03-titles.md','03-title-risk.json'],selectedTitleRisk.titleBlockers.length?'failed':'passed');
-  if(selectedTitleRisk.titleBlockers.length)throw new Error(`标题发布合规门禁未通过：${selectedTitleRisk.titleBlockers.join('；')}`);
+  recordStage('title-generation',stageSkills['title-generator'],['04-draft.md','02-fact-base.json'],['03-titles.md','03-title-risk.json'],selectedTitleRisk.titleBlockers.length?'needs_review':'passed');
+  // 标题风险先保留到终稿编辑器处理；它不再阻断文章正文的生成。
   const humanSystem=buildArticleStageSystem(orchestratorSkill,'humanize',stageSkills['humanizer-zh']);
   let humanResult=await textCall(gateway,{provider,purpose:'article-humanize',batchId,candidateId},humanSystem,`作者采用的研判拓展点：${JSON.stringify(brief.adoptedResearchPoints)}\n\n作者明确不采用的方向：${JSON.stringify(brief.rejectedAngles)}\n\n请在不改动事实和作者立场的前提下保留采用点在文章中的论证位置，不要重新引入明确舍弃的方向。\n\n待自然化文章：\n${draft}`,Math.min(5000,providerConfig.maxOutputTokens));
   let human=cleanMarkdown(humanResult.content); let humanIssue=articleStageOutputIssue(human,{requireArticle:true});
@@ -573,15 +591,17 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
     finalReviewResult=repairResult;reviewLog+=`\n\n# 定向修订复审响应\n\n${reviewed}`;writeFile(reviewLogPath,reviewLog);reviewIssue=articleStageOutputIssue(reviewed,{requireArticle:true});
     if(!reviewIssue)reviewDecision=await aiReviewGate({gateway,store,provider,batchId,candidateId,article:reviewed,factBase,outline,researchPoints:brief.adoptedResearchPoints,rejectedAngles:brief.rejectedAngles,publicationClaimRegister,publicationScan:scanPublicationRisk({article:reviewed,factBase}),systemPrompt:reviewSystem,maxOutputTokens:Math.min(3500,providerConfig.maxOutputTokens)});
   }
-  if(reviewIssue||!reviewDecision.pass){
+  const reviewBlockers=reviewIssue ? [{type:'output',message:reviewIssue}] : articleGateBlockingIssues(reviewDecision);
+  if(reviewBlockers.length){
     const reason=reviewIssue
       ? `审稿响应不符合输出契约：${reviewIssue}；原始响应已保存到 06-review-gate.md；返回摘要：${outputExcerpt(reviewed)}`
-      : `审稿复审仍未通过：${issueList(reviewDecision.issues).join('；')||'模型判定需要返工'}；原始响应已保存到 06-review-gate.md；返回摘要：${outputExcerpt(reviewed)}`;
+      : `审稿复审未返回可供编辑的文章：${issueList(reviewBlockers).join('；')||'模型判定需要返工'}；原始响应已保存到 06-review-gate.md；返回摘要：${outputExcerpt(reviewed)}`;
     store.updateModelCall(finalReviewResult.callId,{status:'invalid_output',error:reason});
     throw new Error(reason);
   }
   const p06=path.join(workdir,'06-reviewed.md');writeFile(p06,reviewed);
-  recordStage('review',stageSkills['article-reviewer'],['05-humanized.md','02-fact-base.json'],'06-reviewed.md');
+  const reviewGatePath=path.join(workdir,'06-review-quality-gate.json');writeFile(reviewGatePath,JSON.stringify(reviewDecision,null,2));
+  recordStage('review',stageSkills['article-reviewer'],['05-humanized.md','02-fact-base.json'],'06-reviewed.md',reviewDecision.pass?'passed':'needs_review');
   onProgress('Step 6.1 SEO 关键词评分（百度+360 搜索联想）');
   const coreKw=plan.coreKeywords||[];
   let seoScores=[]; let keywordsMarkdown;
@@ -623,12 +643,13 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
     finalQuality=await aiQualityGate({gateway,store,provider,batchId,candidateId,article:final,factBase,sourceText:brief.sourceText||'',researchPoints:brief.adoptedResearchPoints,rejectedAngles:brief.rejectedAngles,publicationClaimRegister,publicationScan:finalPublicationScan,systemPrompt:finalGateSystem,stage:'final-recheck',maxOutputTokens:Math.min(3500,providerConfig.maxOutputTokens)});
   }
   if(visibleChars(final)<articleLengthRange.min||visibleChars(final)>articleLengthRange.max)onProgress(`字数警告：终稿有 ${visibleChars(final)} 个可见字符，不在 ${articleLengthRange.min}–${articleLengthRange.max} 字区间，可稍后在编辑器手动删减，流程继续`);
-  if(!finalQuality.pass)throw new Error(`AI 终稿质量门禁未通过：${issueList(finalQuality.issues).join('；')}`);
+  const finalQualityBlockers=articleGateBlockingIssues(finalQuality);
+  if(finalQualityBlockers.length)throw new Error(`AI 终稿输出门禁未通过：${issueList(finalQualityBlockers).join('；')}`);
   const finalGatePath=path.join(workdir,'08-quality-gate.json');writeFile(finalGatePath,JSON.stringify(finalQuality,null,2));
   const seoFinal=final;
   const p08=path.join(workdir,'08-seo-optimized.md'),p09=path.join(workdir,'09-FINAL.md');writeFile(p08,seoFinal);
   recordStage('seo-optimization',stageSkills['seo-content-optimizer'],['06-reviewed.md','07-seo-keywords.md'],'08-seo-optimized.md');
-  recordStage('final-quality-gate',stageSkills['article-reviewer'],['08-seo-optimized.md','02-fact-base.json'],'08-quality-gate.json');
+  recordStage('final-quality-gate',stageSkills['article-reviewer'],['08-seo-optimized.md','02-fact-base.json'],'08-quality-gate.json',finalQuality.pass?'passed':'needs_review');
   onProgress('Step 6.4 检查终稿是否兑现作者采用的研判拓展点');
   let researchCoverage;
   if (brief.adoptedResearchPoints.length) {
@@ -647,12 +668,10 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   }
   const researchCoveragePath=path.join(workdir,'research-coverage-review.json');
   writeFile(researchCoveragePath,JSON.stringify(researchCoverage,null,2));
-  // 贴合度门禁失败时流水线会提前退出，先登记产物，确保编辑室仍能查看返工依据。
+  // 贴合度报告始终登记，失败时由终稿状态提示编辑器处理。
   artifact(store,batchId,'研判贴合度检查','research-coverage-review.json',researchCoveragePath,{rootRunId,workflowRunId,stageId:'research-coverage'});
   recordStage('research-coverage',stageSkills['article-reviewer'],['08-seo-optimized.md','editorial-research-selection.json'],'research-coverage-review.json',researchCoverage.status);
-  if (researchCoverageNeedsRevision(researchCoverage)) {
-    throw new Error(`研判贴合度门禁未通过：${researchCoverage.summary || '终稿未充分兑现作者采用的研判拓展点'}${researchCoverage.repair_suggestions?.length ? `；${researchCoverage.repair_suggestions.join('；')}` : ''}`);
-  }
+  // 研判贴合度是可在编辑器中补齐的内容问题；保留报告并把终稿标为待审核。
   onProgress('Step 7 自动配图：先插入 Mermaid/ECharts 图表，再规划手动供图占位');
   const illustration=await illustrateArticle({
     gateway,store,provider,batchId,candidateId,markdown:final,factBase:JSON.stringify(factBase),
@@ -683,16 +702,26 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   }
   const publicationCompliancePath=path.join(workdir,'10-publication-compliance.json');
   writeFile(publicationCompliancePath,JSON.stringify({generatedAt:new Date().toISOString(),scan:publicationScan,gate:publicationQuality},null,2));
-  recordStage('publication-safety-gate',stageSkills['article-reviewer'],['09-FINAL.md','02-fact-base.json','02-publication-claim-register.json'],'10-publication-compliance.json',publicationQuality.pass?'passed':'failed');
-  if(!publicationQuality.pass)throw new Error(`发布合规门禁未通过：${issueList(publicationQuality.issues).join('；')}`);
+  recordStage('publication-safety-gate',stageSkills['article-reviewer'],['09-FINAL.md','02-fact-base.json','02-publication-claim-register.json'],'10-publication-compliance.json',publicationQuality.pass?'passed':'needs_review');
+  const publicationBlockers=articleGateBlockingIssues(publicationQuality);
+  if(publicationBlockers.length)throw new Error(`发布合规输出门禁未通过：${issueList(publicationBlockers).join('；')}`);
   if(stageExecutions.length!==ARTICLE_STAGE_CONTRACT.length)throw new Error('成稿契约未完整执行');
   const stageManifestPath=path.join(workdir,'00-stage-executions.json');writeFile(stageManifestPath,JSON.stringify({generatedAt:new Date().toISOString(),stages:stageExecutions},null,2));
   // title 字段以正文 H1 为准（与 daily/tutorial 链路口径一致）：规划阶段 SELECTED_TITLE 仅供参考，写手实际定的 H1 才是发布标题
   const draftTitle=draft.match(/^#\s+(.+)$/m)?.[1]?.trim()||selectedTitle;
   const finalTitle=extractArticleTitle(final)||finalSelectedTitle;
   store.saveDocument({batchId,candidateId,kind:'draft',title:draftTitle,content:draft,filePath:p04,status:'draft'});
-  store.saveDocument({batchId,candidateId,kind:'final',title:finalTitle,content:final,filePath:p09,status:'finalized'});
-  for(const [kind,name,file] of [['技能清单','00-skill-manifest.json',skillManifestPath],['阶段执行清单','00-stage-executions.json',stageManifestPath],['锁定简报','00-article-brief.md',briefPath],['研判采用清单','editorial-research-selection.json',researchSelectionPath],['事实基座','02-fact-base.json',factBasePath],['发布主张登记','02-publication-claim-register.json',publicationClaimRegisterPath],['作者素材','01-personal-materials.md',p01],['文章大纲','02-outline.md',p02],['标题候选','03-titles.md',p03],['标题风险扫描','03-title-risk.json',selectedTitleRiskPath],['文章初稿','04-draft.md',p04],['初稿AI门禁','04-quality-gate.json',draftGatePath],['去AI稿','05-humanized.md',p05],['审稿门禁原始响应','06-review-gate.md',reviewLogPath],['审稿稿','06-reviewed.md',p06],['SEO关键词','07-seo-keywords.md',p07],['SEO优化稿','08-seo-optimized.md',p08],['终稿AI门禁','08-quality-gate.json',finalGatePath],['研判贴合度检查','research-coverage-review.json',researchCoveragePath],['图表规划','09-visual-plan.json',visualPlanPath],['文章终稿','09-FINAL.md',p09],['发布合规门禁','10-publication-compliance.json',publicationCompliancePath]])artifact(store,batchId,kind,name,file,{rootRunId,workflowRunId,stageId:'article-pipeline'});
+  const finalTitleRisk=scanPublicationRisk({article:final,factBase});
+  const needsEditorialReview = Boolean(
+    finalTitleRisk.titleBlockers.length
+      || articleGateNeedsEditorialReview(draftQuality)
+      || articleGateNeedsEditorialReview(reviewDecision)
+      || articleGateNeedsEditorialReview(finalQuality)
+      || articleGateNeedsEditorialReview(publicationQuality)
+      || researchCoverageNeedsRevision(researchCoverage)
+  );
+  store.saveDocument({batchId,candidateId,kind:'final',title:finalTitle,content:final,filePath:p09,status:needsEditorialReview?'needs_review':'finalized'});
+  for(const [kind,name,file] of [['技能清单','00-skill-manifest.json',skillManifestPath],['阶段执行清单','00-stage-executions.json',stageManifestPath],['锁定简报','00-article-brief.md',briefPath],['研判采用清单','editorial-research-selection.json',researchSelectionPath],['事实基座','02-fact-base.json',factBasePath],['发布主张登记','02-publication-claim-register.json',publicationClaimRegisterPath],['作者素材','01-personal-materials.md',p01],['文章大纲','02-outline.md',p02],['标题候选','03-titles.md',p03],['标题风险扫描','03-title-risk.json',selectedTitleRiskPath],['文章初稿','04-draft.md',p04],['初稿AI门禁','04-quality-gate.json',draftGatePath],['去AI稿','05-humanized.md',p05],['审稿门禁原始响应','06-review-gate.md',reviewLogPath],['审稿质量门禁','06-review-quality-gate.json',reviewGatePath],['审稿稿','06-reviewed.md',p06],['SEO关键词','07-seo-keywords.md',p07],['SEO优化稿','08-seo-optimized.md',p08],['终稿AI门禁','08-quality-gate.json',finalGatePath],['研判贴合度检查','research-coverage-review.json',researchCoveragePath],['图表规划','09-visual-plan.json',visualPlanPath],['文章终稿','09-FINAL.md',p09],['发布合规门禁','10-publication-compliance.json',publicationCompliancePath]])artifact(store,batchId,kind,name,file,{rootRunId,workflowRunId,stageId:'article-pipeline'});
   store.updateBatch(batchId,{stage:'typeset',status:'review'}); onProgress(`成稿完成:${visibleChars(final)} 个可见字符`);
-  return {workdir,finalPath:p09,visibleChars:visibleChars(final),writerSkill:chosenWriterSkill,skillHash:skillBundle.hash,skillFallback:skillBundle.fallback,title:finalTitle};
+  return {workdir,finalPath:p09,visibleChars:visibleChars(final),writerSkill:chosenWriterSkill,skillHash:skillBundle.hash,skillFallback:skillBundle.fallback,title:finalTitle,needsEditorialReview,publicationReady:!needsEditorialReview};
 }

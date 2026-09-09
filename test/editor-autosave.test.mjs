@@ -141,6 +141,8 @@ test('发布前检查统一汇总保存、目标、质量与终稿门禁',()=>{
   assert.match(editor,/label:"写作目标"/);
   assert.match(editor,/label:"内容质量"/);
   assert.match(editor,/label:"终稿门禁"/);
+  assert.match(editor,/review-issues/);
+  assert.match(editor,/preflight-issue-list/);
   assert.match(editor,/data-preflight-action/);
 });
 

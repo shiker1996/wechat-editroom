@@ -9,6 +9,7 @@ import { createNdjsonSession } from '../route-helpers.mjs';
 import { runWithThinkingSink } from '../../llm/gateway.mjs';
 import { readDiscussionResearchContext } from '../../../features/research/index.mjs';
 import { buildMaterialBrief } from '../../../shared/domain/material-brief.mjs';
+import { buildArticleReviewIssueReport, reviewArtifactFileNames } from '../../../features/articles/application/article-review-issues.mjs';
 
 // capability-call: cap_content_passage_retrieve
 
@@ -74,6 +75,20 @@ export async function handleArticleRoutes(context) {
       "cache-control": "no-store",
     });
     return response.end(doc.content || doc.title || "");
+  }
+
+  const reviewIssuesMatch = pathname.match(/^\/api\/documents\/(\d+)\/review-issues$/);
+  if (reviewIssuesMatch && request.method === 'GET') {
+    const document = store.getDocumentById(Number(reviewIssuesMatch[1]));
+    if (!document) return json(response, 404, { error: '文稿不存在' });
+    const artifactNames = new Set(reviewArtifactFileNames());
+    const artifacts = store.listArtifacts({ batchId: document.batch_id }).filter((artifact) => {
+      const sameCandidate = document.candidate_row_id == null
+        ? artifact.candidate_row_id == null
+        : Number(artifact.candidate_row_id) === Number(document.candidate_row_id);
+      return sameCandidate && artifactNames.has(String(artifact.name || ''));
+    });
+    return json(response, 200, buildArticleReviewIssueReport({ document, artifacts }));
   }
 
 

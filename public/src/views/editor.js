@@ -16,6 +16,8 @@ let autoSaveTimer = null;
 let saveSequence = 0;
 let editGeneration = 0;
 let visualPlan = null;
+let reviewIssueReport = { documentId: null, status: "unknown", needsReview: false, issueCount: 0, issues: [], groups: [], loading: false };
+let reviewIssueRequest = 0;
 
 // 自定义撤销/重做栈：替代已废弃的 document.execCommand。
 // 输入事件按时间窗合并快照（每 800ms 至多入栈一次），工具栏/替换等程序化修改在改动前入栈。
@@ -261,6 +263,24 @@ const renderMarkdownDebounced = debounce(renderMarkdown, 160);
 
 function qualityIssues(markdown) { return documentQualityIssues(markdown); }
 
+async function loadReviewIssues(documentId, requestId) {
+  if (!documentId) {
+    reviewIssueReport = { documentId: null, status: "unknown", needsReview: false, issueCount: 0, issues: [], groups: [], loading: false };
+    return;
+  }
+  reviewIssueReport = { documentId, status: currentDocument?.status || "unknown", needsReview: currentDocument?.status === "needs_review", issueCount: 0, issues: [], groups: [], loading: true };
+  renderPreflightSummary(document.getElementById("markdown-editor")?.value || "");
+  try {
+    const report = await request(`/api/documents/${documentId}/review-issues`);
+    if (requestId !== reviewIssueRequest) return;
+    reviewIssueReport = { ...report, loading: false };
+  } catch (error) {
+    if (requestId !== reviewIssueRequest) return;
+    reviewIssueReport = { documentId, status: currentDocument?.status || "unknown", needsReview: currentDocument?.status === "needs_review", issueCount: 0, issues: [], groups: [], loading: false, error: error.message };
+  }
+  renderPreflightSummary(document.getElementById("markdown-editor")?.value || "");
+}
+
 function renderQualitySummary(markdown) {
   const issues=qualityIssues(markdown),count=document.getElementById("quality-issue-count");
   if(count){count.textContent=String(issues.length);count.classList.toggle("clear",issues.length===0);}
@@ -272,8 +292,14 @@ function preflightChecks(markdown=document.getElementById("markdown-editor")?.va
   const stats=writingStatistics(markdown),goal=currentWritingGoal(),issues=qualityIssues(markdown);
   const title=document.getElementById("article-title")?.value.trim()||"";
   const kind=selectedDocKind();
+  const reviewPending=currentDocument?.status==="needs_review";
+  const reviewIssues=reviewIssueReport?.issues||[];
+  const reviewDetail=reviewPending
+    ? reviewIssues.length ? `发现 ${reviewIssues.length} 项待修订问题：${reviewIssueReport.groups.map((item)=>`${item.label} ${item.count} 项`).join("、")}` : reviewIssueReport.loading ? "正在读取门禁问题明细…" : "成稿已生成，但仍有待编辑处理的问题"
+    : "未有待处理的自动审核问题";
   return [
     {id:"save",label:"保存状态",pass:!editorDirty&&Boolean(currentDocument),detail:!currentDocument?"当前文稿尚未保存":editorDirty?"仍有修改等待保存":"当前内容已安全保存",action:"保存"},
+    {id:"review",label:"自动审核",pass:!reviewPending,detail:reviewDetail,issues:reviewIssues,action:"编辑"},
     {id:"goal",label:"写作目标",pass:stats.chars>=goal,detail:`${stats.chars.toLocaleString("zh-CN")} / ${goal.toLocaleString("zh-CN")} 字`,action:"设置目标"},
     {id:"quality",label:"内容质量",pass:issues.length===0,detail:issues.length?`有 ${issues.length} 项结构或可读性建议`:"未发现明显质量问题",action:"查看问题"},
     {id:"final",label:"终稿门禁",pass:kind==="final"&&Boolean(title)&&stats.chars>=articleLengthLimit.min&&stats.chars<=articleLengthLimit.max,detail:kind!=="final"?"当前仍是草稿":!title?"缺少文章标题":stats.chars===0?"正文为空":stats.chars>articleLengthLimit.max?`超过 ${articleLengthLimit.max} 字上限（当前 ${stats.chars} 字）`:stats.chars<articleLengthLimit.min?`不足 ${articleLengthLimit.min} 字下限（当前 ${stats.chars} 字）`:"终稿格式与字数符合要求",action:"检查终稿"},
@@ -292,7 +318,10 @@ function renderPreflight() {
   const checks=preflightChecks(),pending=checks.filter((item)=>!item.pass);
   document.getElementById("preflight-title").textContent=pending.length?"发布前还有待处理项":"当前文稿已准备就绪";
   document.getElementById("preflight-summary").textContent=pending.length?`${checks.length-pending.length} 项通过 · ${pending.length} 项待处理`:`${checks.length} 项检查全部通过`;
-  document.getElementById("preflight-list").innerHTML=checks.map((item)=>`<button type="button" class="preflight-item ${item.pass?"pass":"pending"}" data-preflight-action="${item.id}" ${item.pass?"disabled":""}><i>${item.pass?"✓":"!"}</i><span><b>${escapeHtml(item.label)}</b><small>${escapeHtml(item.detail)}</small></span>${item.pass?"":`<em>${escapeHtml(item.action)} →</em>`}</button>`).join("");
+  document.getElementById("preflight-list").innerHTML=checks.map((item)=>{
+    const issueDetails=item.issues?.length?`<span class="preflight-issue-list">${item.issues.map((issue)=>`<span class="preflight-issue"><i>${escapeHtml(issue.label||issue.type||"待处理")}</i><b>${escapeHtml(issue.message)}</b>${issue.repair?`<small>建议：${escapeHtml(issue.repair)}</small>`:""}</span>`).join("")}</span>`:"";
+    return `<button type="button" class="preflight-item ${item.pass?"pass":"pending"}" data-preflight-action="${item.id}" ${item.pass?"disabled":""}><i>${item.pass?"✓":"!"}</i><span><b>${escapeHtml(item.label)}</b><small>${escapeHtml(item.detail)}</small>${issueDetails}</span>${item.pass?"":`<em>${escapeHtml(item.action)} →</em>`}</button>`;
+  }).join("");
   const primary=document.getElementById("preflight-primary");
   primary.textContent=pending.length?"处理第一项":"完成检查";
   primary.dataset.preflightAction=pending[0]?.id||"close";
@@ -308,6 +337,7 @@ function handlePreflightAction(action) {
   if(action==="close"){dialog.close();return;}
   dialog.close();
   if(action==="save"){saveDocument().catch((error)=>toast(error.message, "error"));return;}
+  if(action==="review"){document.getElementById("markdown-editor")?.focus();return;}
   if(action==="goal"){openWritingGoal();return;}
   if(action==="quality"){openQualityCheck();return;}
   if(action==="final"){
@@ -493,6 +523,7 @@ async function loadWritingDesk() {
 }
 
 async function loadSelectedDocument() {
+  const requestId=++reviewIssueRequest;
   visualPlan=null;
   renderVisualPlan();
   const candidateValue=document.getElementById("writing-candidate")?.value;
@@ -501,6 +532,7 @@ async function loadSelectedDocument() {
   const kind = selectedDocKind();
   if (!candidateId&&!daily) {
     currentDocument = null;
+    reviewIssueReport = { documentId: null, status: "unknown", needsReview: false, issueCount: 0, issues: [], groups: [], loading: false };
     editorDirty = false;
     clearAutoSave();
     const titleEl = document.getElementById("article-title");
@@ -523,6 +555,7 @@ async function loadSelectedDocument() {
     return;
   }
   currentDocument = docResult?.id ? docResult : null;
+  reviewIssueReport = { documentId: currentDocument?.id || null, status: currentDocument?.status || "unknown", needsReview: currentDocument?.status === "needs_review", issueCount: 0, issues: [], groups: [], loading: Boolean(currentDocument?.id) };
   const candidate = daily?null:state.candidates.find((item) => item.id === candidateId);
   const titleEl = document.getElementById("article-title");
   const editor = document.getElementById("markdown-editor");
@@ -537,6 +570,7 @@ async function loadSelectedDocument() {
   clearAutoSave();
   setSaveState("saved",docResult?.updated_at?`已保存 · ${new Date(docResult.updated_at).toLocaleTimeString("zh-CN",{hour:"2-digit",minute:"2-digit"})}`:"尚未保存");
   renderPreflightSummary(editor?.value||"");
+  await loadReviewIssues(currentDocument?.id, requestId);
   lastCandidateValue = daily?"daily":String(candidateId || "");
   lastDocKind = kind;
 }
@@ -679,6 +713,8 @@ async function saveDocument({automatic=false}={}) {
     });
     if(sequence!==saveSequence)return docResult;
     currentDocument=docResult;
+    reviewIssueRequest+=1;
+    reviewIssueReport={documentId:docResult.id||null,status:docResult.status||"finalized",needsReview:false,issueCount:0,issues:[],groups:[],loading:false};
     if(savingGeneration===editGeneration){
       editorDirty=false;
       setSaveState("saved",`${automatic?"已自动保存":"已保存"} · ${new Date(docResult.updated_at).toLocaleTimeString("zh-CN",{hour:"2-digit",minute:"2-digit"})}`);

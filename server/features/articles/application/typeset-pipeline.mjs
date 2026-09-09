@@ -116,6 +116,8 @@ export async function runTypesetPipeline({ gateway, store, batchId, candidateId,
   const workdir = daily?path.join(batchArticlesDir(workspaceRoot,batch),'daily'):candidateArticleDir(workspaceRoot, batch, candidate);
   const finalPath = daily?path.join(workdir,'03-FINAL.md'):path.join(workdir, '09-FINAL.md');
   if (!fs.existsSync(finalPath)) throw new Error(`缺少 ${path.basename(finalPath)}，请先保存终稿`);
+  const finalDocument=store.getDocument?.(batchId,candidateId,daily?'daily-final':'final');
+  if(finalDocument?.status==='needs_review')throw new Error('终稿已生成但仍有待编辑问题，请先在文章编辑器修改并保存后再排版');
   const themeSnapshotPath=path.join(workdir,'article-theme-snapshot.json');
   writeFile(themeSnapshotPath,JSON.stringify({schemaVersion:1,id:themeDefinition.id,label:themeDefinition.label,version:themeDefinition.version,source:themeDefinition.source,hash:themeDefinition.hash,autoRouting:themeRouting},null,2));
   const skills = loadTypesetSkills(skillsWorkspaceRoot);

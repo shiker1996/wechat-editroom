@@ -485,6 +485,10 @@ AI 起草（单步）{ provider, instructions, existingDraft }
 保存文档 { candidateId, kind, title, content, status }
 → 文章编辑器（保存按钮）
 
+### GET /api/documents/:id/review-issues
+读取终稿待修订问题明细，按标题、引用、事实、表达、发布合规和研判贴合度返回问题、修订建议及对应门禁产物；文档已保存为 finalized 时返回空问题列表。
+→ 文章编辑器（发布前检查）
+
 ### GET /api/documents/:id/revisions
 列出文档版本。
 

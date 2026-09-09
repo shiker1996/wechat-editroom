@@ -119,7 +119,6 @@ export async function runTutorialPipeline({gateway,store,batchId,candidateId,pro
     const repair=await textCall(gateway,{provider,purpose:'tutorial-repair',batchId,candidateId},skill.prompt,`只修复问题，不新增事实或实践。当前字符数 ${count}，目标 ${minChars}–${maxChars}。\n问题:${JSON.stringify(quality.issues||[])}\n事实基座:${JSON.stringify(fact)}\n\n教程:\n${final}`,maxTokens);
     final=applyTitle(clean(repair.content),selectedTitle);quality=await gate('recheck');count=tutorialVisibleChars(final);
   }
-  if(!quality.pass)throw new Error(`${label}质量门禁未通过：${(quality.issues||[]).map((item)=>item.message||item).join('；')}`);
   if(count<minChars||count>maxChars)onProgress(`字数警告：${label}有 ${count} 个可见字符，不在 ${minChars}–${maxChars} 字区间，可稍后在编辑器手动删减，流程继续`);
   const configuredGate=evaluateConfiguredGates(runtime.config,{factBase:fact,output:final,visibleChars:count});
   if(!configuredGate.pass)throw new Error(`${label}配置门禁未通过：${configuredGate.issues.map((item)=>item.message).join('；')}`);
@@ -137,11 +136,11 @@ export async function runTutorialPipeline({gateway,store,batchId,candidateId,pro
   writeFile(finalPath,final);writeFile(gatePath,JSON.stringify(quality,null,2));
   const title=final.match(/^#\s+(.+)$/m)?.[1]?.trim()||fact.topic;
   store.saveDocument({batchId,candidateId,kind:'draft',title,content:draft,filePath:draftPath,status:'draft'});
-  store.saveDocument({batchId,candidateId,kind:'final',title,content:final,filePath:finalPath,status:'finalized'});
+  store.saveDocument({batchId,candidateId,kind:'final',title,content:final,filePath:finalPath,status:quality.pass?'finalized':'needs_review'});
   const trace={rootRunId,workflowRunId,stageId:'tutorial-pipeline'};
   artifact(store,batchId,candidateId,'自主写作初稿','04-draft.md',draftPath,trace);artifact(store,batchId,candidateId,'自主写作质量门禁','08-quality-gate.json',gatePath,trace);artifact(store,batchId,candidateId,'图表规划','09-visual-plan.json',visualPlanPath,trace);artifact(store,batchId,candidateId,'文章终稿','09-FINAL.md',finalPath,trace);
   artifact(store,batchId,candidateId,'标题候选','03-titles.md',titlePath,trace);artifact(store,batchId,candidateId,'自然化稿','05-humanized.md',humanPath,trace);
   artifact(store,batchId,candidateId,'审阅修订稿','06-reviewed.md',reviewedPath,trace);artifact(store,batchId,candidateId,'SEO 优化稿','08-seo-optimized.md',seoPath,trace);
   store.updateBatch(batchId,{stage:'typeset',status:'review'});onProgress(`${label}成稿完成：${count} 个可见字符`);
-  return {candidateId,workdir,finalPath,title,visibleChars:count};
+  return {candidateId,workdir,finalPath,title,visibleChars:count,needsEditorialReview:!quality.pass,publicationReady:quality.pass};
 }

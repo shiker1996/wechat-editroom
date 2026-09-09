@@ -218,7 +218,6 @@ export async function runDailyPipeline({ gateway, store, batchId, provider, work
     quality = normalizeDailyQuality(await gate(final, 'recheck'),dailyVisibleChars(final),maxChars);
   }
   const count = dailyVisibleChars(final);
-  if (!quality.pass) throw new Error(`早报质量门禁未通过：${(quality.issues || []).map((item) => item.message || item).join('；')}`);
   if (count<minChars||count>maxChars) onProgress(`字数警告：早报有 ${count} 个可见字符，不在 ${minChars}–${maxChars} 字区间，可稍后在编辑器手动删减，流程继续`);
   const configuredGate=evaluateConfiguredGates(runtime.config,{factBase:{items:newsItems},output:final,visibleChars:count});
   if(!configuredGate.pass)throw new Error(`早报配置门禁未通过：${configuredGate.issues.map((item)=>item.message).join('；')}`);
@@ -239,7 +238,7 @@ export async function runDailyPipeline({ gateway, store, batchId, provider, work
   writeFile(gatePath, JSON.stringify(quality, null, 2));
   const title = final.match(/^#\s+(.+)$/m)?.[1]?.trim() || `${batch.batch_date} 大厂早报`;
   store.saveDocument({ batchId, kind: 'daily-draft', title, content: draft, filePath: draftPath, status: 'draft' });
-  store.saveDocument({ batchId, kind: 'daily-final', title, content: final, filePath: finalPath, status: 'finalized' });
+  store.saveDocument({ batchId, kind: 'daily-final', title, content: final, filePath: finalPath, status: quality.pass ? 'finalized' : 'needs_review' });
   const trace={rootRunId,workflowRunId,stageId:'daily-pipeline'};
   artifact(store, batchId, '早报事实清单', '01-news-items.json', factPath, trace);
   artifact(store, batchId, '早报初稿', '02-draft.md', draftPath, trace);
@@ -251,5 +250,5 @@ export async function runDailyPipeline({ gateway, store, batchId, provider, work
   artifact(store, batchId, '图表规划', '07-visual-plan.json', visualPlanPath, trace);
   artifact(store, batchId, '早报终稿', '03-FINAL.md', finalPath, trace);
   onProgress(`批次早报完成：${selectedFocuses.length} 个关系 · ${newsItems.length} 个关联事件 · ${count} 个可见字符`);
-  return { workdir, finalPath, title, visibleChars: count, eventCount: newsItems.length, focuses:selectedFocuses };
+  return { workdir, finalPath, title, visibleChars: count, eventCount: newsItems.length, focuses:selectedFocuses, needsEditorialReview:!quality.pass, publicationReady:quality.pass };
 }
