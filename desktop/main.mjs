@@ -231,6 +231,9 @@ function startServer({ port, workspaceRoot, logDirectory }) {
     WORKBENCH_PORT: String(port),
     WORKBENCH_DESKTOP: '1',
     WORKBENCH_NODE_PATH: nodePath,
+    WORKBENCH_RSSHUB_SOURCE_ROOT: fs.existsSync(path.join(process.resourcesPath || '', 'rsshub-source'))
+      ? path.join(process.resourcesPath, 'rsshub-source')
+      : path.join(appRoot, 'RSSHub'),
   };
   serverProcess = spawn(nodePath, ['--disable-warning=ExperimentalWarning', serverEntry], {
     cwd: appRoot,

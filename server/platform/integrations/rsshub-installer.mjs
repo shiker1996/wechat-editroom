@@ -7,8 +7,8 @@ import unzipper from 'unzipper';
 // RSSHub does not publish desktop binaries. Keep the source revision explicit so
 // a later installer run does not silently turn into a different dependency tree.
 export const RSSHUB_INSTALL_MANIFEST = Object.freeze({
-  revision: '6a265e9d86e66d584157052b38fc5d31526c34a0',
-  archiveUrl: 'https://github.com/DIYgod/RSSHub/archive/6a265e9d86e66d584157052b38fc5d31526c34a0.zip',
+  revision: '49b3eb74531c6312e9eb11f8244e82ed0532de28',
+  archiveUrl: 'https://github.com/DIYgod/RSSHub/archive/49b3eb74531c6312e9eb11f8244e82ed0532de28.zip',
   license: 'AGPL-3.0',
 });
 
@@ -40,9 +40,47 @@ function npmCommand(nodePath) {
   return { command: path.join(runtimeRoot, 'bin', 'npm'), args: [] };
 }
 
+function pnpmCommand(nodePath) {
+  const resourceRoot = path.resolve(process.env.WORKBENCH_RESOURCE_ROOT || process.cwd());
+  const pnpmCli = path.join(resourceRoot, 'node_modules', 'pnpm', 'bin', 'pnpm.cjs');
+  if (!fs.existsSync(pnpmCli)) return null;
+  return { command: nodePath, args: [pnpmCli] };
+}
+
 function hasRsshubSource(rootDir) {
   return fs.existsSync(path.join(rootDir, 'package.json'))
     && fs.existsSync(path.join(rootDir, 'lib', 'index.ts'));
+}
+
+function bundledRsshubSourceRoot() {
+  const resourceRoot = path.resolve(process.env.WORKBENCH_RESOURCE_ROOT || process.cwd());
+  const explicit = String(process.env.WORKBENCH_RSSHUB_SOURCE_ROOT || '').trim();
+  const candidates = [
+    explicit,
+    path.join(resourceRoot, 'rsshub-source'),
+    path.join(resourceRoot, 'RSSHub'),
+    path.resolve(process.cwd(), 'RSSHub'),
+  ].filter(Boolean).map(normalizePath);
+  return [...new Set(candidates)].find(hasRsshubSource) || null;
+}
+
+function copyRsshubSource(sourceRoot, targetRoot) {
+  if (normalizePath(sourceRoot) === normalizePath(targetRoot)) return;
+  const ignoredTopLevel = new Set(['node_modules', '.git', 'logs']);
+  const shouldCopy = (sourcePath) => {
+    const relative = path.relative(sourceRoot, sourcePath);
+    if (!relative) return true;
+    const parts = relative.split(path.sep);
+    if (ignoredTopLevel.has(parts[0])) return false;
+    return !parts.some((part) => part === '.env' || part.startsWith('.env.'));
+  };
+  fs.mkdirSync(targetRoot, { recursive: true });
+  for (const entry of fs.readdirSync(sourceRoot, { withFileTypes: true })) {
+    const sourcePath = path.join(sourceRoot, entry.name);
+    const targetPath = path.join(targetRoot, entry.name);
+    if (!shouldCopy(sourcePath)) continue;
+    fs.cpSync(sourcePath, targetPath, { recursive: true, force: true, filter: shouldCopy });
+  }
 }
 
 function hasRsshubDependencies(rootDir) {
@@ -152,29 +190,45 @@ export async function installRsshub(config = {}, options = {}) {
   if (!isInside(workspaceRoot, rootDir)) throw new Error('RSSHub 安装目录必须位于工作区内');
   if (fs.existsSync(rootDir) && !hasRsshubSource(rootDir)) throw new Error('RSSHub 目录已存在但不是有效安装，未覆盖现有文件');
 
-  const dataRoot = path.join(workspaceRoot, 'data', 'runtime');
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'jianzhi-rsshub-'));
   const archivePath = path.join(tempRoot, 'rsshub.zip');
   const extractionRoot = path.join(tempRoot, 'extract');
   const onProgress = options.onProgress || (() => {});
   try {
-    fs.mkdirSync(dataRoot, { recursive: true });
-    await downloadArchive(archivePath, onProgress);
-    const extractedRoot = await extractArchive(archivePath, extractionRoot, onProgress);
-    if (!fs.existsSync(rootDir)) {
-      fs.mkdirSync(path.dirname(rootDir), { recursive: true });
-      fs.cpSync(extractedRoot, rootDir, { recursive: true, errorOnExist: true });
+    const bundledSourceRoot = bundledRsshubSourceRoot();
+    if (bundledSourceRoot) {
+      onProgress?.('正在准备随应用提供的 RSSHub 源码');
+      copyRsshubSource(bundledSourceRoot, rootDir);
+    } else {
+      await downloadArchive(archivePath, onProgress);
+      const extractedRoot = await extractArchive(archivePath, extractionRoot, onProgress);
+      if (!fs.existsSync(rootDir)) {
+        fs.mkdirSync(path.dirname(rootDir), { recursive: true });
+        fs.cpSync(extractedRoot, rootDir, { recursive: true, errorOnExist: true });
+      }
+    }
+    if (fs.existsSync(path.join(rootDir, 'pnpm-lock.yaml'))) {
+      fs.rmSync(path.join(rootDir, 'package-lock.json'), { force: true });
     }
     const nodePath = bundledNodePath();
-    const npm = npmCommand(nodePath);
+    const pnpm = fs.existsSync(path.join(rootDir, 'pnpm-lock.yaml')) ? pnpmCommand(nodePath) : null;
+    const npm = pnpm ? null : npmCommand(nodePath);
+    if (fs.existsSync(path.join(rootDir, 'pnpm-lock.yaml')) && !pnpm) {
+      throw new Error('RSSHub 需要 pnpm，但应用内未找到 pnpm 运行时');
+    }
     onProgress?.('正在安装 RSSHub 依赖，这一步可能需要几分钟');
-    await runProcess(npm.command, [...npm.args, 'install', '--legacy-peer-deps', '--no-audit', '--no-fund'], {
+    const manager = pnpm || npm;
+    const installArgs = pnpm
+      ? ['install', '--frozen-lockfile', '--ignore-scripts', '--config.package-manager-strict=false']
+      : [fs.existsSync(path.join(rootDir, 'package-lock.json')) ? 'ci' : 'install', '--ignore-scripts', '--legacy-peer-deps', '--no-audit', '--no-fund'];
+    await runProcess(manager.command, [...manager.args, ...installArgs], {
       cwd: rootDir,
       timeoutMs: 30 * 60 * 1000,
       label: '安装 RSSHub 依赖',
       env: {
         PATH: `${nodeRuntimeRoot(nodePath)}${path.delimiter}${process.env.PATH || ''}`,
         PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1',
+        HUSKY: '0',
       },
     });
     fs.writeFileSync(path.join(rootDir, '.workbench-rsshub.json'), JSON.stringify({
@@ -186,6 +240,5 @@ export async function installRsshub(config = {}, options = {}) {
     return inspectRsshubEnvironment(config);
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });
-    fs.rmSync(path.join(dataRoot, 'rsshub-download.zip'), { force: true });
   }
 }

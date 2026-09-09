@@ -70,7 +70,7 @@ function renderBody() {
       if (item.id === "rsshub") {
         if (!rsshubStatus.installed) {
           detail = "尚未安装 RSSHub";
-          rsshubAction = `<button type="button" class="outline-button first-run-install-rsshub" data-first-run-rsshub-action="install">安装 RSSHub</button>`;
+          rsshubAction = `<button type="button" class="outline-button first-run-install-rsshub" data-first-run-rsshub-action="install">启用 RSSHub</button>`;
         } else if (!rsshubStatus.dependenciesInstalled) {
           detail = "RSSHub 依赖尚未安装";
           rsshubAction = `<button type="button" class="outline-button first-run-install-rsshub" data-first-run-rsshub-action="install">安装依赖</button>`;

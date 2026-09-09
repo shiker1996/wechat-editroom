@@ -47,6 +47,7 @@
         "@aws-sdk/client-s3": "3.1109.0",
         "markdown-it": "^14.1.0",
         "npm": "11.6.2",
+        "pnpm": "10.34.5",
         "unzipper": "0.12.5"
     },
     "devDependencies": {
@@ -91,6 +92,19 @@
             {
                 "from": ".node-runtime/node-v24.12.0/node.exe",
                 "to": "node-runtime/node.exe"
+            },
+            {
+                "from": "RSSHub",
+                "to": "rsshub-source",
+                "filter": [
+                    "**/*",
+                    "!node_modules/**/*",
+                    "!.git/**/*",
+                    "!logs/**/*",
+                    "!.env",
+                    "!.env.*",
+                    "!package-lock.json"
+                ]
             }
         ],
         "win": {
