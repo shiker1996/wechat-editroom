@@ -1,5 +1,5 @@
 // 渲染工作台主要视图的整页截图，用于 README / 渠道物料。
-// 用法：node scripts/media/render-ui-shots.mjs [baseUrl] [输出目录]
+// 用法：node scripts/media/render-ui-shots.mjs [baseUrl] [输出目录] [batchId]
 // 依赖：演示模式服务（npm start -- --demo）与 puppeteer（从 html-pages-to-images 技能目录解析）。
 import fs from 'node:fs';
 import path from 'node:path';
@@ -9,6 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const baseUrl = (process.argv[2] || 'http://127.0.0.1:4400').replace(/\/$/, '');
 const outDir = path.resolve(process.argv[3] || path.join(root, 'docs', 'screenshots'));
+const requestedBatchId = process.argv[4] || process.env.WORKBENCH_RENDER_BATCH || '';
 fs.mkdirSync(outDir, { recursive: true });
 
 async function loadPuppeteer() {
@@ -54,12 +55,16 @@ try {
   await page.goto(`${baseUrl}/#dashboard`, { waitUntil: 'networkidle0', timeout: 60000 });
   await page.evaluate(async () => { if (document.fonts?.ready) await document.fonts.ready; });
   await sleep(2000);
-  const batchId = await activeBatchId();
+  const batchId = requestedBatchId || await activeBatchId();
   console.log(`batch: ${batchId}`);
 
   for (const shot of shots) {
-    if (shot.needBatch && batchId) {
-      try { await page.select('#batch-switcher', batchId); } catch { /* 切换器未就绪时忽略 */ }
+    if ((requestedBatchId || shot.needBatch) && batchId) {
+      try {
+        await page.select('#batch-switcher', batchId);
+        await page.evaluate(() => document.querySelector('#batch-switcher')?.dispatchEvent(new Event('change', { bubbles: true })));
+        await page.waitForFunction((id) => document.querySelector('#batch-switcher')?.value === id, { timeout: 10000 }, batchId);
+      } catch { /* 切换器未就绪时忽略 */ }
     }
     await page.evaluate((view) => { if (window.go) window.go(view); else location.hash = `#${view}`; }, shot.view);
     await sleep(shot.settleMs);

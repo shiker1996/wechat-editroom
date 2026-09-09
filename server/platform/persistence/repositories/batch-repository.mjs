@@ -19,7 +19,14 @@ export class BatchRepository {
       FROM batches b ORDER BY batch_date DESC, created_at DESC LIMIT ?`).all(limit);
   }
 
-  latestActive() {
+  latestActive(preferredId = null) {
+    if (preferredId) {
+      const preferred = this.db.prepare(`SELECT b.*,
+        (SELECT COUNT(*) FROM hotspots h WHERE h.batch_id=b.id) AS hotspot_count,
+        (SELECT COUNT(*) FROM artifacts a WHERE a.batch_id=b.id) AS artifact_count
+        FROM batches b WHERE b.id=? AND b.lifecycle_status='active'`).get(preferredId);
+      if (preferred) return preferred;
+    }
     return this.db.prepare(`SELECT b.*,
       (SELECT COUNT(*) FROM hotspots h WHERE h.batch_id=b.id) AS hotspot_count,
       (SELECT COUNT(*) FROM artifacts a WHERE a.batch_id=b.id) AS artifact_count

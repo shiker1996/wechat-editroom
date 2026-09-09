@@ -33,7 +33,9 @@ import { DatabaseRestoreService } from '../persistence/database-restore-service.
 
 
 export class Store {
-  constructor(dbPath) {
+  constructor(dbPath, options = {}) {
+    this.preferredBatchId = options.preferredBatchId || null;
+    this.referenceDate = options.referenceDate || null;
     this.db = openWorkbenchDatabase(dbPath);
     runDatabaseMigrations(this.db);
     this.repositories = Object.freeze({
@@ -70,6 +72,8 @@ export class Store {
         getCandidate: (id) => this.getCandidate(id),
         candidateHotspots: (id) => this.candidateHotspots(id),
         latestActiveBatch: () => this.latestActiveBatch(),
+        currentDate: () => this.referenceDate,
+        preferredBatchId: () => this.preferredBatchId,
         getWorkflowRunTrace: (rootRunId, options = {}) => this.getWorkflowRunTrace(rootRunId, options),
       }),
     });
@@ -179,7 +183,7 @@ export class Store {
   }
 
   latestActiveBatch() {
-    return this.repositories.batches.latestActive();
+    return this.repositories.batches.latestActive(this.preferredBatchId);
   }
 
   getBatch(id) {

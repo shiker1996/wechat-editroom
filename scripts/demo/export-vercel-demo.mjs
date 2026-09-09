@@ -7,6 +7,13 @@ const root = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.ur
 const databasePath = path.join(root, 'data', 'demo-production.db');
 const outputDirectory = path.join(root, 'site');
 const outputPath = path.join(outputDirectory, 'demo-data.json');
+const publicBatchManifestPath = path.join(outputDirectory, 'public-demo-batch.json');
+
+function argumentValue(name) {
+  const prefix = `${name}=`;
+  const match = process.argv.slice(2).find((value) => value.startsWith(prefix));
+  return match ? match.slice(prefix.length).trim() : '';
+}
 
 function safeExternalUrl(value) {
   try {
@@ -42,16 +49,27 @@ if (!fs.existsSync(databasePath)) {
   throw new Error(`找不到生产预览快照：${databasePath}`);
 }
 
+if (!fs.existsSync(publicBatchManifestPath)) {
+  throw new Error(`找不到公开批次清单：${publicBatchManifestPath}`);
+}
+
+const publicBatchManifest = JSON.parse(fs.readFileSync(publicBatchManifestPath, 'utf8'));
+const requestedBatchId = String(process.env.WORKBENCH_DEMO_BATCH_ID || argumentValue('--batch-id')).trim();
+const batchId = requestedBatchId || String(publicBatchManifest.batchId || '').trim();
+if (!batchId) throw new Error('公开批次清单缺少 batchId；请先人工确认要发布的已完成批次');
+if (!requestedBatchId && publicBatchManifest.reviewStatus !== 'approved') {
+  throw new Error('公开批次清单尚未通过人工审核；请确认脱敏后将 reviewStatus 设置为 approved');
+}
+
 const db = new DatabaseSync(databasePath, { readOnly: true });
 const batch = db.prepare(`
   SELECT b.*
   FROM batches b
-  WHERE EXISTS (SELECT 1 FROM hotspots h WHERE h.batch_id = b.id)
-  ORDER BY b.batch_date DESC, b.updated_at DESC
-  LIMIT 1
-`).get();
+  WHERE b.id = ?
+    AND EXISTS (SELECT 1 FROM hotspots h WHERE h.batch_id = b.id)
+`).get(batchId);
 
-if (!batch) throw new Error('生产预览快照中没有可展示的批次');
+if (!batch) throw new Error(`生产预览快照中没有可展示的指定批次：${batchId}`);
 
 const hotspots = db.prepare(`
   SELECT id, title, category, market_scope, score, published_at, source_name, url

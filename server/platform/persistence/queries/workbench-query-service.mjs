@@ -18,6 +18,8 @@ export class WorkbenchQueryService {
     this.getCandidate = collaborators.getCandidate || (() => null);
     this.candidateHotspots = collaborators.candidateHotspots || (() => []);
     this.latestActiveBatch = collaborators.latestActiveBatch || (() => null);
+    this.currentDate = collaborators.currentDate || (() => null);
+    this.preferredBatchId = collaborators.preferredBatchId || (() => null);
     this.getWorkflowRunTrace = collaborators.getWorkflowRunTrace || (() => null);
   }
 
@@ -286,7 +288,7 @@ export class WorkbenchQueryService {
       SUM(CASE WHEN track='social_cards' THEN 1 ELSE 0 END) AS social_candidates
       FROM candidate_tracks`).get();
     const latest = this.latestActiveBatch();
-    const today = localDateKey();
+    const today = this.currentDate() || localDateKey();
     const todayTrackCounts = this.db.prepare(`SELECT
       COUNT(DISTINCT CASE WHEN ct.track='article' AND ct.status IN ('locked','drafting','review','preview') THEN c.id END) AS article_in_progress,
       COUNT(DISTINCT CASE WHEN (ct.track='social_cards' AND ct.status NOT IN ('pooled','published','removed')
@@ -375,9 +377,12 @@ export class WorkbenchQueryService {
       current,
       efficiency,
       efficiencyBaseline,
-      sourceHealth: this.db.prepare(`SELECT source, status, item_count, error, ended_at
-        FROM source_runs WHERE id IN (SELECT MAX(id) FROM source_runs GROUP BY source)
-        ORDER BY source`).all(),
+      sourceHealth: this.preferredBatchId()
+        ? this.db.prepare(`SELECT source, status, item_count, error, ended_at
+          FROM source_runs WHERE batch_id=? ORDER BY source, id DESC`).all(this.preferredBatchId())
+        : this.db.prepare(`SELECT source, status, item_count, error, ended_at
+          FROM source_runs WHERE id IN (SELECT MAX(id) FROM source_runs GROUP BY source)
+          ORDER BY source`).all(),
     };
   }
 

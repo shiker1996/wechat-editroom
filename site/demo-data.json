@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "exportedAt": "2026-09-09T02:30:23.564Z",
+  "exportedAt": "2026-09-09T05:13:27.807Z",
   "source": {
     "batchId": "2026-09-08-2f09d45bb9",
     "date": "2026-09-08",
@@ -448,7 +448,7 @@
       "action": "发布",
       "status": "active",
       "confidence": "medium",
-      "state": "new_event",
+      "state": "new_update",
       "hotspotCount": 4,
       "articleEligible": true,
       "socialEligible": true

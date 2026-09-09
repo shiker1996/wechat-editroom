@@ -54,6 +54,7 @@ const config = loadConfig(root);
 // --demo / WORKBENCH_DEMO=1：无模型服务商时也能预览各视图，使用独立演示库，不污染真实数据。
 const demo = process.argv.includes('--demo') || process.env.WORKBENCH_DEMO === '1';
 const demoProduction = demo && (process.argv.includes('--demo-production') || process.env.WORKBENCH_DEMO_PRODUCTION === '1');
+const demoProductionBatchId = demoProduction ? (process.env.WORKBENCH_DEMO_BATCH_ID || null) : null;
 
 async function refreshProductionDemoSnapshot(sourcePath, snapshotPath) {
   if (!fs.existsSync(sourcePath)) throw new Error(`生产数据库不存在：${sourcePath}`);
@@ -73,7 +74,10 @@ const dataRoot = path.join(root, 'data');
 const productionSnapshotPath = path.join(dataRoot, 'demo-production.db');
 if (demoProduction) await refreshProductionDemoSnapshot(path.join(dataRoot, 'workbench.db'), productionSnapshotPath);
 const instanceLock=acquireInstanceLock(root,{name:demoProduction?'demo-production':demo?'demo':'workbench'});
-const store = new Store(path.join(dataRoot, demoProduction ? 'demo-production.db' : demo ? 'demo.db' : 'workbench.db'));
+const store = new Store(path.join(dataRoot, demoProduction ? 'demo-production.db' : demo ? 'demo.db' : 'workbench.db'), {
+  preferredBatchId: demoProductionBatchId,
+  referenceDate: demoProductionBatchId?.slice(0, 10) || null,
+});
 // 模型提供商以数据库为唯一持久化来源；首次启动时从旧 config.local.json/.env 迁移。
 syncModelProvidersToDatabase({root,config,repository:store.repositories.extensionSettings,cleanupLegacy:!demo});
 const extensionConfigurationService=new ExtensionConfigurationService({root,repository:store.repositories.extensionSettings});

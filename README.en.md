@@ -7,11 +7,11 @@
 > Start with a source or a story, then move from research to an editorial decision, a reviewed draft, WeChat-ready HTML, a cover, and social cards.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![CI](https://github.com/shiker1996/wechat-newsroom-workbench/actions/workflows/ci.yml/badge.svg)](https://github.com/shiker1996/wechat-newsroom-workbench/actions/workflows/ci.yml)
+[![CI](https://github.com/shiker1996/wechat-editroom/actions/workflows/ci.yml/badge.svg)](https://github.com/shiker1996/wechat-editroom/actions/workflows/ci.yml)
 [![Node.js ≥ 24](https://img.shields.io/badge/Node.js-%E2%89%A5%2024-339933?logo=nodedotjs&logoColor=white)](./package.json)
 
 <p align="center">
-  <img src="docs/screenshots/ui-demo.gif" alt="见字 demo: from research to topics and deliverables" width="760">
+  <img src="docs/screenshots/ui-demo.gif" alt="见字 read-only production snapshot: from research to topics and deliverables" width="760">
 </p>
 
 <p align="center">⭐ If this workflow is useful to you, please Star the project or tell us which source you want to connect next.</p>
@@ -31,11 +31,17 @@
   <img src="docs/screenshots/ui-social-topics.png" alt="Social topic pool" width="32%">
 </p>
 
-The GIF and screenshots are generated from demo mode. Regenerate the GIF with:
+The GIF and screenshots come from local demo data or a read-only production snapshot. Regenerate the GIF with:
 
 ```bash
 node scripts/media/render-demo-gif.mjs
 ```
+
+## Online tutorial and read-only tour
+
+Open the [online tutorial and read-only tour](https://wechat-newsroom-guide.vercel.app/) before installing anything. It explains the “hotspots → topics → articles / social cards” workflow and uses a reviewed, de-identified production batch for the interface tour.
+
+The static site lives in [`site/`](./site/) and can be deployed independently to Vercel with `site` as the Root Directory. Its public data is pinned by [`site/public-demo-batch.json`](./site/public-demo-batch.json); the export script never picks the newest production batch implicitly. Only change that manifest after the replacement batch has been completed, de-identified, and manually reviewed.
 
 ## What problem does it solve?
 
@@ -73,8 +79,8 @@ ChatGPT and other editors can still be part of your workflow. 见字 focuses on 
 ### Run the demo in under a minute
 
 ```bash
-git clone https://github.com/shiker1996/wechat-newsroom-workbench.git
-cd wechat-newsroom-workbench
+git clone https://github.com/shiker1996/wechat-editroom.git
+cd wechat-editroom
 npm install
 npm start -- --demo
 ```
@@ -88,7 +94,7 @@ npm start -- --demo --demo-production
 # Windows launcher: start-workbench.cmd -DemoProduction -NoBrowser
 ```
 
-This creates an independent `data/demo-production.db` snapshot from `data/workbench.db` and makes the HTTP API read-only. It never writes back to the production database. Production content is for local inspection only; do not use this mode to create public screenshots or GIFs.
+This creates an independent `data/demo-production.db` snapshot from `data/workbench.db` and makes the HTTP API read-only. It never writes back to the production database. Production content is intended for local inspection by default; manually review titles, sources, and internal details before publishing screenshots or GIFs.
 
 ### Start a real workspace
 
@@ -98,6 +104,12 @@ npm start
 ```
 
 The setup wizard helps configure the local workspace and model providers. On Windows, you can also run `setup-workbench.cmd` and then `start-workbench.cmd`.
+
+### GitHub Actions deployment
+
+The repository includes `.github/workflows/vercel-deploy.yml`, which deploys the `site/` directory to production after pushes to `master`. Add these repository secrets before enabling it: `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID`.
+
+See the [launch kit](./docs/launch/star-launch-kit.md) for a release note, screenshot / GIF post copy, feedback template, and a first-week outreach plan.
 
 ## Main capabilities
 

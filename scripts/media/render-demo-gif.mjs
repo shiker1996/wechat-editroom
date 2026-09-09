@@ -1,6 +1,6 @@
-// 录制 README 用的工作台演示 GIF：从热点研判依次走过选题、编辑、排版视图。
-// 用法：node scripts/media/render-demo-gif.mjs [baseUrl] [输出 gif]
-// 依赖：演示模式服务与 puppeteer。
+// 录制 README 用的工作台 GIF：从热点研判依次走过选题、编辑、排版视图。
+// 用法：node scripts/media/render-demo-gif.mjs [baseUrl] [输出 gif] [batchId]
+// 依赖：演示模式或生产只读预览服务与 puppeteer。
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -11,6 +11,7 @@ import { spawn } from 'node:child_process';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const baseUrl = (process.argv[2] || 'http://127.0.0.1:4317').replace(/\/$/, '');
 const outPath = path.resolve(process.argv[3] || path.join(root, 'docs', 'screenshots', 'ui-demo.gif'));
+const batchId = process.argv[4] || process.env.WORKBENCH_RENDER_BATCH || '';
 const frameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wechat-editroom-demo-'));
 
 async function loadPuppeteer() {
@@ -51,6 +52,13 @@ try {
   await page.setViewport({ width: 1280, height: 760, deviceScaleFactor: 1 });
   await page.goto(`${baseUrl}/#dashboard`, { waitUntil: 'networkidle0', timeout: 60000 });
   await page.evaluate(async () => { if (document.fonts?.ready) await document.fonts.ready; });
+  if (batchId) {
+    await page.select('#batch-switcher', batchId);
+    await page.evaluate(() => document.querySelector('#batch-switcher')?.dispatchEvent(new Event('change', { bubbles: true })));
+    await page.waitForFunction((id) => document.querySelector('#batch-switcher')?.value === id, { timeout: 10000 }, batchId);
+    await sleep(1200);
+    console.log(`batch: ${batchId}`);
+  }
 
   for (const [view, label] of scenes) {
     if (view !== 'dashboard') await page.evaluate((nextView) => window.go(nextView), view);

@@ -71,7 +71,7 @@
 
       <section class="demo-section" id="demo">
         <div class="section-wrap">
-          <div class="demo-heading reveal"><div><p class="eyebrow eyebrow-light">02 / READ-ONLY FLOW TOUR</p><h2>打开一批真实工作，<br><span>看看“热点全景”如何变成选题。</span></h2><p class="demo-heading-note">这是为了理解工作流制作的结构化导览，不是实际工作台的逐像素复刻。下方可以查看真实界面截图与完整演示 GIF。</p></div><div class="demo-status"><span class="status-pulse"></span><span id="snapshot-label">正在加载生产快照…</span></div></div>
+          <div class="demo-heading reveal"><div><p class="eyebrow eyebrow-light">02 / READ-ONLY FLOW TOUR</p><h2>打开一批真实工作，<br><span>看看“热点全景”如何变成选题。</span></h2><p class="demo-heading-note">这是为了理解工作流制作的结构化导览，不是实际工作台的逐像素复刻。下方可以查看真实界面截图与生产批次只读预览 GIF。</p></div><div class="demo-status"><span class="status-pulse"></span><span id="snapshot-label">正在加载生产快照…</span></div></div>
           <div class="demo-shell reveal reveal-delay-1">
             <aside class="demo-sidebar">
               <div class="sidebar-title"><span class="mini-mark">见</span><span>见字工作台</span></div>
@@ -92,15 +92,21 @@
       </section>
 
       <section class="screenshots-section section-wrap" id="screenshots">
-        <div class="section-intro reveal"><div><p class="eyebrow">03 / THE REAL INTERFACE</p><h2>这才是实际工作台。<br><span>截图来自演示模式。</span></h2></div><p class="section-side-note">先用 GIF 看一条完整链路，再打开具体页面，认识见字真正的工作表面。</p></div>
-        <figure class="gif-feature reveal"><img src="./assets/ui-demo.gif" alt="见字演示模式 GIF：从总览到热点、选题、编辑和公众号预览"><figcaption><span>FULL WORKFLOW / 21 SEC</span><b>从总览到交付，完整跑一遍</b></figcaption></figure>
-        <div class="screen-grid reveal reveal-delay-1">
-          <figure class="screen-card screen-wide"><img src="./assets/ui-dashboard.png" alt="见字工作台总览界面"><figcaption><b>总览 Dashboard</b><span>批次、任务与产物一眼回到工作现场</span></figcaption></figure>
-          <figure class="screen-card"><img src="./assets/ui-atlas.png" alt="见字热点全景界面"><figcaption><b>热点全景</b><span>从信息源进入事件与候选选题</span></figcaption></figure>
-          <figure class="screen-card"><img src="./assets/ui-editorial.png" alt="见字 AI 编辑会界面"><figcaption><b>AI 编辑会</b><span>把角度、事实和风险放在同一张桌上</span></figcaption></figure>
-          <figure class="screen-card"><img src="./assets/ui-editor.png" alt="见字文章编辑器界面"><figcaption><b>文章编辑器</b><span>成稿、审阅和版本修订</span></figcaption></figure>
-          <figure class="screen-card"><img src="./assets/ui-preview.png" alt="见字公众号预览界面"><figcaption><b>公众号预览</b><span>把文章推进到可交付 HTML</span></figcaption></figure>
-          <figure class="screen-card screen-tall"><img src="./assets/ui-cover.png" alt="见字封面生成界面"><figcaption><b>视觉交付</b><span>封面、配图和社交图文</span></figcaption></figure>
+        <div class="section-intro reveal"><div><p class="eyebrow">03 / THE REAL INTERFACE</p><h2>这才是实际工作台。<br><span>画面来自生产批次只读预览。</span></h2></div><p class="section-side-note">先看一条真实链路，再打开具体页面，认识见字真正的工作表面。轮播第 1 张是 GIF，后面是静态截图。</p></div>
+        <div class="interface-carousel reveal reveal-delay-1" data-carousel aria-roledescription="carousel" aria-label="见字完整工作流与实际工作台界面">
+          <div class="carousel-stage">
+            <button class="carousel-arrow carousel-prev" type="button" aria-label="上一张截图">←</button>
+            <figure class="carousel-slide" aria-live="polite">
+              <div class="carousel-image-wrap"><img id="carousel-image" src="./assets/ui-demo.gif" alt="见字生产批次只读预览 GIF：从总览到热点、选题、编辑和公众号预览"></div>
+              <figcaption class="carousel-caption"><div><span class="carousel-kicker" id="carousel-kicker">01 / FULL WORKFLOW</span><b id="carousel-title">完整工作流 GIF</b><p id="carousel-description">从总览到热点、选题、编辑和公众号排版，21 秒看完一条真实链路</p></div><span class="carousel-hint">← / → 切换页面</span></figcaption>
+            </figure>
+            <button class="carousel-arrow carousel-next" type="button" aria-label="下一张截图">→</button>
+          </div>
+          <div class="carousel-controls">
+            <div class="carousel-dots" role="tablist" aria-label="截图页码"></div>
+            <div class="carousel-counter"><span id="carousel-current">01</span><i></i><span id="carousel-total">06</span></div>
+          </div>
+          <div class="carousel-thumbs" role="tablist" aria-label="选择截图页面"></div>
         </div>
       </section>
 

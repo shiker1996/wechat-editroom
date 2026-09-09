@@ -7,7 +7,7 @@
 > 找热点 → 研判事件 → 做编辑决策 → 写稿 → 审稿 → 排版 → 封面 / 图文，把一篇内容从素材推进到可交付产物。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![CI](https://github.com/shiker1996/wechat-newsroom-workbench/actions/workflows/ci.yml/badge.svg)](https://github.com/shiker1996/wechat-newsroom-workbench/actions/workflows/ci.yml)
+[![CI](https://github.com/shiker1996/wechat-editroom/actions/workflows/ci.yml/badge.svg)](https://github.com/shiker1996/wechat-editroom/actions/workflows/ci.yml)
 [![Node.js ≥ 24](https://img.shields.io/badge/Node.js-%E2%89%A5%2024-339933?logo=nodedotjs&logoColor=white)](./package.json)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6?logo=windows&logoColor=white)](./docs/user-guide.md#1-安装与启动)
 
@@ -16,7 +16,7 @@
 它不是 SaaS，也不是“输入一个主题就生成文章”的聊天框：工作区和运行记录默认留在本机，服务只监听 `127.0.0.1`；你配置的模型或采集服务仍只会接收完成对应任务所需的内容。
 
 <p align="center">
-  <img src="docs/screenshots/ui-demo.gif" alt="见字工作台演示：从总览到选题和产物" width="760">
+  <img src="docs/screenshots/ui-demo.gif" alt="见字工作台真实批次只读预览：从总览到选题和产物" width="760">
 </p>
 
 <p align="center">⭐ 如果这个工作流对你有用，欢迎 Star，或告诉我你最想接入的内容来源。</p>
@@ -36,15 +36,17 @@
   <img src="docs/screenshots/ui-cover.png" alt="文章封面图" width="32%">
 </p>
 
-> 演示 GIF 和截图都来自演示模式；启动工作台后，可用 `node scripts/media/render-demo-gif.mjs` 重新生成 GIF。
+> GIF 和截图来自本机演示数据或生产批次只读预览；启动对应工作台后，可用 `node scripts/media/render-demo-gif.mjs <baseUrl> <output.gif>` 重新生成。公开前请人工检查画面中的标题、来源和内部信息。
 
 ## 先看效果
+
+不想先读安装说明？先打开[在线教程与只读导览](https://wechat-newsroom-guide.vercel.app/)，用一批已完成的真实生产数据了解“热点 → 选题 → 文章 / 图文”的完整链路。
 
 不想先配置模型？直接用演示模式打开完整界面，查看热点、选题池和演示产物：
 
 ```bash
-git clone https://github.com/shiker1996/wechat-newsroom-workbench.git
-cd wechat-newsroom-workbench
+git clone https://github.com/shiker1996/wechat-editroom.git
+cd wechat-editroom
 npm install
 npm start -- --demo
 ```
@@ -60,17 +62,23 @@ npm start -- --demo --demo-production
 # Windows 启动器：start-workbench.cmd -DemoProduction -NoBrowser
 ```
 
-该模式启动时会把 `data/workbench.db` 复制为独立的 `data/demo-production.db` 快照，并将 HTTP 接口锁为只读；退出后不会写回生产数据库。生产内容只适合本机预览，不要用它生成公开截图或 GIF。
+该模式启动时会把 `data/workbench.db` 复制为独立的 `data/demo-production.db` 快照，并将 HTTP 接口锁为只读；退出后不会写回生产数据库。生产内容默认只适合本机预览；如需制作公开截图或 GIF，请先人工检查并确认脱敏范围。
 
 ### 在线教程与只读导览
 
-仓库内的 [`site/`](./site/) 是一个可独立部署到 Vercel 的静态教程网站，包含产品定位、五分钟上手路径和脱敏生产批次导览。生成或刷新网站数据：
+仓库内的 [`site/`](./site/) 是一个可独立部署到 Vercel 的静态教程网站，包含产品定位、五分钟上手路径和脱敏生产批次导览。也可以直接访问线上版本：<https://wechat-newsroom-guide.vercel.app/>。
+
+生成或刷新网站数据：
 
 ```bash
 npm run site:export
 ```
 
-在 Vercel 创建新 Project 后，将 Root Directory 设置为 `site`；完整工作台仍建议按上面的方式在本地运行。
+导出脚本默认只读取 [`site/public-demo-batch.json`](./site/public-demo-batch.json) 中审核通过的批次，不会自动选择最新批次。更换公开批次前，应先确认它已经完成、脱敏并通过人工检查，再修改该清单并运行导出。
+
+在 Vercel 创建新 Project 后，将 Root Directory 设置为 `site`；完整工作台仍建议按上面的方式在本地运行。仓库已提供 GitHub Actions 自动部署配置；启用它需要在 GitHub 仓库 Secrets 中设置 `VERCEL_TOKEN`、`VERCEL_ORG_ID` 和 `VERCEL_PROJECT_ID`。
+
+首轮公开展示可直接使用[发布与推广素材包](./docs/launch/star-launch-kit.md)，其中包含发布说明、截图 / GIF 文案、Issue 模板和首轮传播计划。
 
 ## 它解决什么问题？
 
