@@ -20,8 +20,8 @@
       </a>
       <nav class="nav" aria-label="主导航">
         <a href="#how">怎么工作</a>
-        <a href="#screenshots">真实界面</a>
         <a href="#demo">只读导览</a>
+        <a href="#screenshots">真实界面</a>
         <a href="#tutorial">快速上手</a>
       </nav>
       <a class="top-cta" href="https://github.com/shiker1996/wechat-editroom" target="_blank" rel="noreferrer">查看 GitHub <span>↗</span></a>
@@ -92,7 +92,7 @@
       </section>
 
       <section class="screenshots-section section-wrap" id="screenshots">
-        <div class="section-intro reveal"><div><p class="eyebrow">03 / THE REAL INTERFACE</p><h2>这才是实际工作台。<br><span>画面来自生产批次只读预览。</span></h2></div><p class="section-side-note">先看一条真实链路，再打开具体页面，认识见字真正的工作表面。轮播第 1 张是 GIF，后面是静态截图。</p></div>
+        <div class="section-intro reveal"><div><p class="eyebrow">03 / THE REAL INTERFACE</p><h2>这才是实际工作台。<br><span>画面来自生产批次只读预览。</span></h2></div><div class="section-side-note"><p>先看一条真实链路，再打开具体页面，认识见字真正的工作表面。轮播第 1 张是 GIF，后面是静态截图。</p><small>公开批次：2026-09-08 · 界面录制：2026-09-09<br>录制日期是画面时钟，不代表公开数据批次。</small><button class="text-link carousel-static-link" type="button" data-carousel-target="1">查看静态截图 <span>→</span></button></div></div>
         <div class="interface-carousel reveal reveal-delay-1" data-carousel aria-roledescription="carousel" aria-label="见字完整工作流与实际工作台界面">
           <div class="carousel-stage">
             <button class="carousel-arrow carousel-prev" type="button" aria-label="上一张截图">←</button>
@@ -114,9 +114,11 @@
         <div class="section-intro reveal"><p class="eyebrow">04 / QUICK START</p><h2>五分钟，走完第一条<br><span>从热点到文章的路径。</span></h2></div>
         <div class="tutorial-layout">
           <div class="steps reveal">
-            <article class="step active"><span>01</span><div><h3>先用演示模式认识界面</h3><p>不配置模型也能查看总览、热点全景、选题池和演示产物。</p><code>npm start -- --demo</code></div></article>
-            <article class="step"><span>02</span><div><h3>接入一个模型服务</h3><p>在“运行与配置”中添加 OpenAI 兼容服务，先完成连接测试。</p></div></article>
-            <article class="step"><span>03</span><div><h3>从一个批次开始写作</h3><p>采集 → 研判 → 编辑决策 → 成稿 → 排版，把第一篇文章跑通。</p></div></article>
+            <div class="tutorial-prereq"><span>环境要求</span><strong>Node.js 24+</strong><span>Windows 10/11 已验证</span></div>
+            <article class="step active"><span>01</span><div><h3>下载并安装</h3><p>打开 PowerShell，克隆项目后安装依赖；首次安装可能需要等待技能级依赖完成。</p><div class="command-stack"><div class="command-row"><code>git clone https://github.com/shiker1996/wechat-editroom.git</code><button class="copy-command" type="button" data-copy-command="git clone https://github.com/shiker1996/wechat-editroom.git" aria-label="复制克隆命令">复制</button></div><div class="command-row"><code>cd wechat-editroom</code><button class="copy-command" type="button" data-copy-command="cd wechat-editroom" aria-label="复制进入项目命令">复制</button></div><div class="command-row"><code>npm install</code><button class="copy-command" type="button" data-copy-command="npm install" aria-label="复制安装命令">复制</button></div></div></div></article>
+            <article class="step"><span>02</span><div><h3>不用模型，先打开演示</h3><p>演示模式使用独立数据，不会污染正式工作区；打开后访问 <code>http://127.0.0.1:4317</code>。</p><div class="command-row"><code>npm start -- --demo</code><button class="copy-command" type="button" data-copy-command="npm start -- --demo" aria-label="复制演示启动命令">复制</button></div></div></article>
+            <article class="step"><span>03</span><div><h3>接入一个模型服务</h3><p>在“运行与配置 → 模型接入”添加 OpenAI 兼容服务，填写 Base URL、模型名和 API Key，先完成连接测试。只看演示不需要 API Key。</p><div class="config-path"><span>配置路径</span><code>运行与配置 → 模型接入 → 添加模型</code></div></div></article>
+            <article class="step"><span>04</span><div><h3>从一个批次跑到交付</h3><p>依次完成采集 → 研判 → 编辑决策 → 成稿 → 审稿 → 排版，再从产物柜查看公众号 HTML、封面和社交图文。</p></div></article>
           </div>
           <div class="tutorial-aside reveal reveal-delay-1"><div class="aside-number">5<small>MIN</small></div><p>先看清工作流，再决定哪些环节值得自动化。</p><a href="https://github.com/shiker1996/wechat-editroom#5-%E5%88%86%E9%92%9F%E5%BC%80%E5%A7%8B" target="_blank" rel="noreferrer">打开完整安装说明 ↗</a></div>
         </div>

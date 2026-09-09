@@ -28,7 +28,7 @@ function initCarousel() {
   const total = $('#carousel-total');
   const dots = $('.carousel-dots');
   const thumbs = $('.carousel-thumbs');
-  let index = 0;
+  let index = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 1 : 0;
 
   total.textContent = String(carouselSlides.length).padStart(2, '0');
   carouselSlides.forEach((slide, slideIndex) => {
@@ -75,6 +75,7 @@ function initCarousel() {
     }, 120);
   }
 
+  document.querySelectorAll('[data-carousel-target]').forEach((button) => button.addEventListener('click', () => show(Number(button.dataset.carouselTarget) || 0)));
   $('.carousel-prev').addEventListener('click', () => show(index - 1));
   $('.carousel-next').addEventListener('click', () => show(index + 1));
   root.addEventListener('keydown', (event) => {
@@ -82,7 +83,43 @@ function initCarousel() {
     if (event.key === 'ArrowRight') { event.preventDefault(); show(index + 1); }
   });
   root.tabIndex = 0;
-  show(0);
+  show(index);
+}
+
+async function copyText(value) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+  const textarea = document.createElement('textarea');
+  textarea.value = value;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.append(textarea);
+  textarea.select();
+  const copied = document.execCommand('copy');
+  textarea.remove();
+  if (!copied) throw new Error('clipboard unavailable');
+}
+
+function initCopyCommands() {
+  document.querySelectorAll('[data-copy-command]').forEach((button) => {
+    const originalLabel = button.textContent;
+    button.addEventListener('click', async () => {
+      try {
+        await copyText(button.dataset.copyCommand || '');
+        button.textContent = '已复制';
+        button.classList.add('copied');
+      } catch {
+        button.textContent = '请手动复制';
+      }
+      window.setTimeout(() => {
+        button.textContent = originalLabel;
+        button.classList.remove('copied');
+      }, 1600);
+    });
+  });
 }
 
 function setMeta() {
@@ -130,5 +167,6 @@ function render() {
 
 document.querySelectorAll('.side-tab').forEach((button) => button.addEventListener('click', () => { state.view = button.dataset.view; state.query = ''; state.category = 'all'; render(); }));
 initCarousel();
+initCopyCommands();
 
 fetch('./demo-data.json', { cache: 'no-cache' }).then((response) => { if (!response.ok) throw new Error('demo-data.json not found'); return response.json(); }).then((data) => { state.data = data; setMeta(); render(); }).catch((error) => { $('#snapshot-label').textContent = '数据快照暂未生成'; $('#demo-content').innerHTML = `<div class="empty-state">无法读取演示数据。请先运行 <code>node scripts/demo/export-vercel-demo.mjs</code>。<br><small>${escapeHtml(error.message)}</small></div>`; });

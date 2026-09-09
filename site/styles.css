@@ -116,3 +116,20 @@ h1 em, h2 em { color: var(--orange-dark); font-style: normal; }
 .carousel-thumb:hover img, .carousel-thumb:focus-visible img, .carousel-thumb.active img { filter: saturate(1); }
 .carousel-thumb span { font: 10px/1.4 var(--mono); }
 @media (max-width: 850px) { .section-side-note { margin-top: 20px; }.screenshots-section { padding: 90px 0; }.gif-feature figcaption { align-items: flex-start; flex-direction: column; gap: 8px; }.interface-carousel { margin-top: 28px; }.carousel-stage { grid-template-columns: 38px minmax(0, 1fr) 38px; box-shadow: 9px 9px 0 var(--mint); }.carousel-arrow { width: 30px; height: 30px; margin: 0 4px; font-size: 14px; }.carousel-image-wrap { min-height: 300px; padding: 14px 8px 0; }.carousel-image-wrap img { max-height: 430px; }.carousel-caption { align-items: flex-start; flex-direction: column; gap: 14px; padding: 17px 15px 19px; }.carousel-caption b { font-size: 18px; }.carousel-hint { display: none; }.carousel-controls { margin-top: 20px; }.carousel-dots { gap: 5px; }.carousel-dot { width: 16px; }.carousel-dot.active, .carousel-dot:hover, .carousel-dot:focus-visible { width: 27px; }.carousel-thumbs { grid-template-columns: repeat(3, 1fr); gap: 12px 8px; }.carousel-thumb img { height: 54px; }.carousel-thumb span { font-size: 9px; } }
+.section-side-note { display: grid; gap: 12px; }
+.section-side-note p { margin: 0; }
+.section-side-note small { color: #9aa3ae; font: 9px/1.7 var(--mono); }
+.carousel-static-link { width: max-content; padding: 0 0 5px; border: 0; border-bottom: 1px solid var(--ink); color: var(--ink); background: transparent; cursor: pointer; font: 700 12px var(--sans); }
+.carousel-static-link span { margin-left: 6px; color: var(--orange-dark); font-size: 17px; }
+.carousel-static-link:hover, .carousel-static-link:focus-visible { color: var(--orange-dark); }
+.tutorial-prereq { display: flex; align-items: baseline; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--line); color: #748092; font-size: 11px; }
+.tutorial-prereq span:first-child { color: var(--orange-dark); font: 10px var(--mono); letter-spacing: .08em; }
+.tutorial-prereq strong { color: var(--ink); font: 700 15px var(--serif); }
+.command-stack { display: grid; gap: 8px; margin-top: 14px; }
+.command-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.command-row code { flex: 1; min-width: 0; margin-top: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.copy-command { flex: 0 0 auto; min-width: 52px; padding: 7px 9px; border: 1px solid var(--line); color: var(--ink); background: #fffdf8; cursor: pointer; font: 10px var(--mono); transition: color .2s, background .2s, border-color .2s; }
+.copy-command:hover, .copy-command:focus-visible, .copy-command.copied { color: var(--paper); border-color: var(--ink); background: var(--ink); }
+.config-path { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 14px; color: #8b96a2; font: 9px var(--mono); }
+.config-path code { margin-top: 0; color: #687687; }
+@media (max-width: 850px) { .tutorial-prereq { flex-wrap: wrap; gap: 7px 10px; }.tutorial-prereq span:last-child { flex-basis: 100%; }.command-row code { font-size: 9px; }.copy-command { min-width: 48px; padding-inline: 7px; } }
