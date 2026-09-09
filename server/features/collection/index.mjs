@@ -6,4 +6,5 @@ export { CollectionRunner } from './application/collection-runner.mjs';
 export { createStoreCollectionRunner } from './application/store-collection-runner.mjs';
 export { analyzeStaticPage, assistStaticPage } from './application/static-page-assistant.mjs';
 export { addSubscription, listSubscriptions, removeSubscription, subscriptionTestInput, updateSubscription } from './application/subscriptions.mjs';
+export { INITIAL_COLLECTION_SOURCES, seedInitialCollectionSources } from './application/initial-source-seed.mjs';
 export { CollectionJobManager } from './application/collection-job-manager.mjs';

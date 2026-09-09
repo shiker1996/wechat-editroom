@@ -45,6 +45,7 @@ import { ExtensionConfigurationService } from './server/platform/extensions/conf
 import { modelConnectionManifest, modelProviderModelManifest } from './server/platform/extensions/model-provider-configuration.mjs';
 import { syncModelProvidersToDatabase } from './server/platform/integrations/model-provider-settings.mjs';
 import { seedDemoData } from './server/platform/demo/seed.mjs';
+import { seedInitialCollectionSources } from './server/features/collection/index.mjs';
 import { createLocalSecurity } from './server/platform/http/local-security.mjs';
 import { APP_VERSION } from './server/platform/version.mjs';
 import { acquireInstanceLock } from './server/platform/core/instance-lock.mjs';
@@ -78,6 +79,8 @@ const store = new Store(path.join(dataRoot, demoProduction ? 'demo-production.db
   preferredBatchId: demoProductionBatchId,
   referenceDate: demoProductionBatchId?.slice(0, 10) || null,
 });
+const initialSourceSeed = seedInitialCollectionSources(store);
+if (initialSourceSeed.seeded) console.log(`首次启动：已写入 ${initialSourceSeed.count} 个参考采集源（默认暂停）`);
 // 模型提供商以数据库为唯一持久化来源；首次启动时从旧 config.local.json/.env 迁移。
 syncModelProvidersToDatabase({root,config,repository:store.repositories.extensionSettings,cleanupLegacy:!demo});
 const extensionConfigurationService=new ExtensionConfigurationService({root,repository:store.repositories.extensionSettings});
