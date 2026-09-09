@@ -12,18 +12,18 @@
 
 双击 `setup-workbench.cmd/sh`。向导会检查 Node.js、安装依赖、创建本地配置并引导模型设置。步骤失败后可以重复运行，不会重复破坏已完成配置。
 
-命令行等价操作：
+如果不想双击，也可以在项目根目录运行引导脚本：
 
 ```powershell
-npm run setup
+setup-workbench.cmd
 ```
 
 ### 1.3 启动与停止
 
-双击 `start-workbench.cmd`/sh，或运行：
+配置完成后，双击 `start-workbench.cmd`/`start-workbench.sh`，或在项目根目录运行对应脚本：
 
 ```powershell
-npm start
+start-workbench.cmd
 ```
 
 服务默认位于 `http://127.0.0.1:4317`。重复启动会检测已有实例。停止时关闭启动脚本对应的终端窗口，或按 `Ctrl+C`。
@@ -31,7 +31,7 @@ npm start
 ### 1.4 演示模式
 
 ```powershell
-npm start -- --demo
+start-workbench.cmd -Demo
 ```
 
 演示模式写入独立数据库，适合先了解页面和内容链路。它不模拟真实模型调用。
@@ -39,7 +39,7 @@ npm start -- --demo
 如果需要在本机查看生产库最近的真实批次，可使用明确的只读快照模式：
 
 ```powershell
-npm start -- --demo --demo-production
+start-workbench.cmd -DemoProduction -NoBrowser
 ```
 
 启动时会将 `data/workbench.db` 复制到独立的 `data/demo-production.db`，所有 HTTP 写入接口都会被拒绝，不会改动生产库。生产内容仅用于本机检查，不应带入公开截图、GIF 或演示链接。
@@ -219,7 +219,7 @@ powershell -File .\plugins\reddit\scripts\start-chrome.ps1
 
 ### RSSHub 无法启动
 
-检查 `RSSHub/` 是否存在、1200 端口是否占用以及依赖是否安装。可以重新运行 `npm run setup`，或在 RSSHub 目录执行 `npm install --legacy-peer-deps`。
+检查 `RSSHub/` 是否存在、1200 端口是否占用以及依赖是否安装。可以重新运行 `setup-workbench.cmd`；RSSHub 的额外依赖仍按向导提示处理。
 
 ### 任务一直显示运行中
 

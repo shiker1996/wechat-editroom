@@ -47,19 +47,18 @@
 ```bash
 git clone https://github.com/shiker1996/wechat-editroom.git
 cd wechat-editroom
-npm install
-npm start -- --demo
+setup-workbench.cmd
+start-workbench.cmd -Demo
 ```
 
 演示模式使用独立的 `data/demo.db`，不会污染正式数据；需要模型的操作仍会明确提示配置服务商。
 
-如果已经下载仓库，也可以直接运行 `start-workbench.cmd --demo`（Windows），或使用 `npm ci` 进行锁文件安装。
+`setup-workbench.cmd` 会自动准备本地 Node.js、安装依赖并启动首次配置向导；配置完成后，日常启动使用 `start-workbench.cmd`。如果已经下载仓库，直接双击这两个脚本即可。
 
 想在本机查看生产库中最近的真实批次，可显式运行：
 
 ```powershell
-npm start -- --demo --demo-production
-# Windows 启动器：start-workbench.cmd -DemoProduction -NoBrowser
+start-workbench.cmd -DemoProduction -NoBrowser
 ```
 
 该模式启动时会把 `data/workbench.db` 复制为独立的 `data/demo-production.db` 快照，并将 HTTP 接口锁为只读；退出后不会写回生产数据库。生产内容默认只适合本机预览；如需制作公开截图或 GIF，请先人工检查并确认脱敏范围。
@@ -145,11 +144,11 @@ ChatGPT 和秀米仍然可以是工作流中的工具；见字解决的是它们
 1. `setup-workbench.cmd`：安装依赖并启动配置向导。
 2. `start-workbench.cmd`：启动后自动打开 `http://127.0.0.1:4317`。
 
-也可以在 PowerShell 中运行：
+也可以在 PowerShell 中运行同样的引导脚本：
 
 ```powershell
-npm run setup
-npm start
+setup-workbench.cmd
+start-workbench.cmd
 ```
 
 ## 推荐的首次使用顺序

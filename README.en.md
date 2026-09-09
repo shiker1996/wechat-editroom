@@ -72,7 +72,7 @@ ChatGPT and other editors can still be part of your workflow. 见字 focuses on 
 
 ### Prerequisites
 
-- Node.js 24 or newer
+- Windows 10/11 is the primary validated platform; `setup-workbench.cmd` can prepare a local Node.js 24 runtime when needed
 - An OpenAI-compatible model service for AI actions; demo mode can be explored without one
 - Windows 10/11 is the primary validated platform
 
@@ -81,17 +81,16 @@ ChatGPT and other editors can still be part of your workflow. 见字 focuses on 
 ```bash
 git clone https://github.com/shiker1996/wechat-editroom.git
 cd wechat-editroom
-npm install
-npm start -- --demo
+setup-workbench.cmd
+start-workbench.cmd -Demo
 ```
 
-Then open `http://127.0.0.1:4317`. Demo mode uses a separate `data/demo.db` and does not change your normal workspace data. For a reproducible lockfile install, use `npm ci` instead of `npm install`.
+`setup-workbench.cmd` prepares the local runtime, installs dependencies, and opens the first-run setup wizard. After setup, use `start-workbench.cmd` for the normal workspace or `start-workbench.cmd -Demo` to explore without configuring a model. The scripts open `http://127.0.0.1:4317`; demo mode uses a separate `data/demo.db` and does not change your normal workspace data. You can also double-click the scripts in Windows Explorer.
 
 To inspect the latest real production batch locally, opt in explicitly:
 
 ```powershell
-npm start -- --demo --demo-production
-# Windows launcher: start-workbench.cmd -DemoProduction -NoBrowser
+start-workbench.cmd -DemoProduction -NoBrowser
 ```
 
 This creates an independent `data/demo-production.db` snapshot from `data/workbench.db` and makes the HTTP API read-only. It never writes back to the production database. Production content is intended for local inspection by default; manually review titles, sources, and internal details before publishing screenshots or GIFs.
@@ -99,11 +98,11 @@ This creates an independent `data/demo-production.db` snapshot from `data/workbe
 ### Start a real workspace
 
 ```bash
-npm run setup
-npm start
+setup-workbench.cmd
+start-workbench.cmd
 ```
 
-The setup wizard helps configure the local workspace and model providers. On Windows, you can also run `setup-workbench.cmd` and then `start-workbench.cmd`.
+The setup wizard helps configure the local workspace and model providers. The bundled Windows scripts are the recommended path because they prepare the runtime and guide the first-run configuration. npm commands remain available for contributors who already manage the project runtime themselves.
 
 ### GitHub Actions deployment
 
