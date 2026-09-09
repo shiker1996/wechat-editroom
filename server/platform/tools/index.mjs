@@ -30,9 +30,9 @@ export const PHASE_B_PLUGINS = Object.freeze(BUILTIN_PLUGINS.filter((id)=>!PHASE
 let registryPromise;
 let configurationResolver=(manifest)=>({configured:true,status:'defaults',values:{},snapshot:{extensionType:'tool',extensionId:manifest.id,status:'defaults',configured:true,schemaVersion:1}});
 export function setToolConfigurationResolver(resolver){configurationResolver=typeof resolver==='function'?resolver:null;registryPromise=undefined;}
-async function loadInstalledPlugins(){
-  const installedRoot=installedToolPluginsRoot(root);
-  const catalog=readToolPluginCatalog(root);
+async function loadInstalledPlugins(workspaceRoot = root){
+  const installedRoot=installedToolPluginsRoot(workspaceRoot);
+  const catalog=readToolPluginCatalog(workspaceRoot);
   const items=Object.values(catalog.plugins).filter((item)=>item.status==='enabled');
   const loaded=[];
   const appliedIds=Object.values(catalog.plugins).filter((item)=>item.status==='disabled').map((item)=>item.id);
@@ -46,25 +46,26 @@ async function loadInstalledPlugins(){
       console.warn(`[tool-plugin] 隔离 ${item.id}: ${error.message}`);
     }
   }
-  acknowledgeToolPluginRestarts(root,{pluginIds:appliedIds,processStartedAt});
+  acknowledgeToolPluginRestarts(workspaceRoot,{pluginIds:appliedIds,processStartedAt});
   return loaded;
 }
-function loadRemotePlugins(){
-  return Object.values(readRemotePluginCatalog(root).plugins).filter((item)=>item.status==='enabled')
-    .map((item)=>({manifest:Object.freeze(item.manifest),adapter:createRemoteAdapter({root,manifest:item.manifest})}));
+function loadRemotePlugins(workspaceRoot = root){
+  return Object.values(readRemotePluginCatalog(workspaceRoot).plugins).filter((item)=>item.status==='enabled')
+    .map((item)=>({manifest:Object.freeze(item.manifest),adapter:createRemoteAdapter({root:workspaceRoot,manifest:item.manifest})}));
 }
-export function getToolRegistry() {
+export function getToolRegistry(workspaceRoot = process.env.WORKBENCH_WORKSPACE_ROOT || root) {
+  const settings = workspaceRoot === root ? readToolPluginSettings(root) : readToolPluginSettings(workspaceRoot);
   registryPromise ||= Promise.all([
     loadPluginManifests({ pluginsRoot:path.join(root, 'plugins'), allowlist:BUILTIN_PLUGINS }),
-    loadInstalledPlugins(),
-    Promise.resolve(loadRemotePlugins()),
+    loadInstalledPlugins(workspaceRoot),
+    Promise.resolve(loadRemotePlugins(workspaceRoot)),
   ]).then(([builtins,installed,remote]) => [...builtins,...installed,...remote].reduce((registry, plugin) => registry.register(plugin),
-      new ToolRegistry({settings:readToolPluginSettings(root),configurationResolver})));
+      new ToolRegistry({settings,configurationResolver})));
   return registryPromise;
 }
 
-export function reloadToolRegistry() {
+export function reloadToolRegistry(workspaceRoot = process.env.WORKBENCH_WORKSPACE_ROOT || root) {
   registryPromise=undefined;
   invalidateCapabilityHealthCache();
-  return getToolRegistry();
+  return getToolRegistry(workspaceRoot);
 }

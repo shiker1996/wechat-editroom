@@ -170,6 +170,7 @@ function buildInlineStyles(tokens, themeName = 'magazine-warm') {
     li: 'margin:7px 0',
     a: `color:${accent};text-decoration:none;border-bottom:1px solid ${accent}`,
     img: `display:block;max-width:100%;height:auto;margin:26px auto${variants.image === 'rounded' ? `;border-radius:${radiusPx || 10}px` : ''}${variants.image === 'framed' ? `;border:1px solid ${hexToRgba(ink, 0.2)};padding:3px;box-sizing:border-box` : ''}`,
+    imagePlaceholder: `display:block;box-sizing:border-box;width:100%;margin:26px auto;padding:28px 16px;border:1px dashed ${hexToRgba(accent, 0.65)};background:${hexToRgba(accent, 0.045)};color:${muted};text-align:center;font-size:${captionPx}px;line-height:1.6;letter-spacing:.04em`,
     hr: `text-align:center;color:${muted};letter-spacing:.6em;margin:${sectionPx}px 0;font-size:${bodyPx}px`,
     hairline: `border-top:${Math.max(1,borderWidthPx)}px solid ${line};margin:${sectionPx}px 0;font-size:0;line-height:0`,
     thickBar: `border-top:4px solid ${ink};margin:${sectionPx}px 0;font-size:0;line-height:0`,
@@ -199,6 +200,11 @@ function inline(text, styles) {
   const codeSpans=[];
   value=value.replace(/`([^`]+)`/g,(_,code)=>{const token=`\u0000CODE${codeSpans.length}\u0000`;codeSpans.push(`<code style="${styles.code}">${code}</code>`);return token;});
   const safeUrl=(url,image=false)=>{const normalized=String(url||'').trim();if(/^(?:https?:|\/|#)/i.test(normalized))return normalized;if(image&&/^data:image\/(?:png|jpeg|gif|webp);base64,[a-z0-9+/=]+$/i.test(normalized))return normalized;return '#';};
+  value = value.replace(/!\[([^\]]*)\]\(image-placeholder:([^\s)]+)\)/gi, (_, alt, encodedId) => {
+    let id = encodedId;
+    try { id = decodeURIComponent(encodedId); } catch { /* 坏的占位符仍保留可见提示 */ }
+    return `<span role="img" aria-label="${alt}" data-image-placeholder="${escapeHtml(id)}" style="${styles.imagePlaceholder}">${alt}</span>`;
+  });
   value = value.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g,(_,alt,url)=>{const src=safeUrl(url,true);return styles.imageCaption?`<span><img src="${src}" alt="${alt}" style="${styles.img}"><small style="${styles.imageCaption}">${alt}</small></span>`:`<img src="${src}" alt="${alt}" style="${styles.img}">`;});
   value = value.replace(/\[([^\]]+)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g,(_,label,url)=>`<a href="${safeUrl(url)}" style="${styles.a}">${label}</a>`);
   value = value.replace(/\[\^([^\]]+)\]/g, `<sup style="${styles.sup}">[$1]</sup>`);

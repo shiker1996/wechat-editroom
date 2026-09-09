@@ -290,6 +290,29 @@ test('Mermaid 转图后必须上传 CDN 才能继续排版', { timeout: 180000 }
   assert.equal(manifest.items['生成图:mermaid-1'].localPath, path.join(workdir, 'images', 'mermaid-1.png'));
 });
 
+test('仅本地排版不上传 Mermaid 图片并在 HTML 中输出占位符', { timeout: 180000 }, async (t) => {
+  const { root, artifacts, store, gateway } = createTypesetFixture(t,
+    '# 测试文章\n\n## 流程\n\n```mermaid\ngraph TD\n  A[采集] --> B[成稿]\n```\n\n正文。\n');
+  const result = await runTypesetPipeline({
+    gateway, store, batchId:'batch-1', candidateId:1, provider:'fake', workspaceRoot:root,
+    skillsWorkspaceRoot:process.cwd(), imageDeliveryMode:'local',
+    uploadImageToCdnFn: async () => { throw new Error('仅本地模式不应上传图片'); },
+  });
+  const html = fs.readFileSync(result.finalHtml, 'utf8');
+  assert.match(html, /data-image-placeholder="生成图:mermaid-1"/);
+  assert.doesNotMatch(html, /images[\\/]mermaid-1\.png/);
+  assert.ok(artifacts.some((item) => item.name === 'article.ai.html'));
+});
+
+test('仅本地图片占位符可进入公众号 HTML 且保留图片结构', () => {
+  const markdown = '# 标题\n\n正文。\n\n![图片占位 · 来源:01：官方截图](image-placeholder:%E6%9D%A5%E6%BA%90%3A01)';
+  const html = markdownToHtml(markdown);
+  assert.match(html, /data-image-placeholder="来源:01"/);
+  assert.match(html, /图片占位 · 来源:01：官方截图/);
+  assert.doesNotMatch(html, /<img\b[^>]*src="#"/i);
+  assert.equal(htmlPreservesStructure(markdown, html), true);
+});
+
 test('统计卡在排版阶段自动生成，不需要工作台逐张点击', async (t) => {
   const markdown = '# 测试文章\n\n正文。\n\n<!-- IMG:资料:01 | 内容:四周统计 | 建议位置:“正文。”段后 | 比例:16:9 | 出处:工作台自动生成 | 版权:无需授权 -->\n<!-- IMG-DATA:资料:01 {"kind":"datacard","title":"四周统计","items":[{"label":"周期","value":"4 周"},{"label":"任务","value":"86 项"}]} -->\n';
   const { root, store, gateway } = createTypesetFixture(t, markdown);

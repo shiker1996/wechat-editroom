@@ -44,6 +44,7 @@ test('RSSHub 启停脚本不依赖 OpenClaw 或机器绝对路径', () => {
   const projectRoot=path.resolve(path.dirname(new URL(import.meta.url).pathname.slice(1)),'..');
   const start=fs.readFileSync(path.join(projectRoot,'scripts','runtime','rsshub-start.ps1'),'utf8');
   const stop=fs.readFileSync(path.join(projectRoot,'scripts','runtime','rsshub-stop.ps1'),'utf8');
+  const installer=fs.readFileSync(path.join(projectRoot,'server','platform','integrations','rsshub-installer.mjs'),'utf8');
   assert.doesNotMatch(start+stop,/openclaw/i);
   assert.doesNotMatch(start+stop,/[A-Z]:\\Documents\\write-assistant/i);
   assert.match(start,/\$PSScriptRoot/);
@@ -55,4 +56,8 @@ test('RSSHub 启停脚本不依赖 OpenClaw 或机器绝对路径', () => {
   assert.match(stop,/\[System\.IO\.Path\]::GetFullPath/);
   assert.doesNotMatch(start,/npx\.cmd/i);
   assert.doesNotMatch(start,/Verifying routes|huxiu\/article/);
+  assert.match(installer, /from ['"]unzipper['"]/);
+  assert.match(installer, /unzipper\.Extract/);
+  assert.doesNotMatch(installer, /Expand-Archive|powershell\.exe/);
+  assert.match(installer, /ComSpec \|\| 'cmd\.exe'/);
 });

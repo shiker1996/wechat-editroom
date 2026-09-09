@@ -19,6 +19,7 @@ function skillRoots(workspaceRoot) {
     process.env.CODEX_SKILLS_ROOT,
     path.join(workspaceRoot, 'skills'),
     installedSkillsRoot(workspaceRoot),
+    path.join(process.env.WORKBENCH_RESOURCE_ROOT || process.cwd(), 'skills'),
     // 仓库自身技能目录：嵌入式/测试工作区（workspaceRoot 指向临时目录）下兜底；
     // 该目录也找不到时 loadSkillBundle 返回 fallback:true，由调用方决定回退或报错。
     path.join(process.cwd(), 'skills'),

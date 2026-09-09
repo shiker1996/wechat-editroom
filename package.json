@@ -1,12 +1,18 @@
 {
     "name": "wechat-newsroom-workbench",
     "version": "0.8.0",
+    "main": "desktop/main.mjs",
     "private": true,
     "license": "MIT",
     "type": "module",
     "description": "本地优先的公众号热点、成稿与排版工作台",
     "scripts": {
         "start": "node --disable-warning=ExperimentalWarning server.mjs",
+        "desktop": "electron .",
+        "desktop:dev": "npm run build && electron .",
+        "desktop:dir": "npm run build && electron-builder --dir --config.npmRebuild=false",
+        "desktop:win": "npm run desktop:dir && npm run desktop:win:from-dir",
+        "desktop:win:from-dir": "electron-builder --win --prepackaged dist\\win-unpacked --config.npmRebuild=false",
         "setup": "node scripts/runtime/setup.mjs",
         "dev": "node --disable-warning=ExperimentalWarning --watch --watch-path=server.mjs --watch-path=server server.mjs",
         "test": "node --disable-warning=ExperimentalWarning --test test/**/*.test.mjs",
@@ -39,9 +45,81 @@
     },
     "dependencies": {
         "@aws-sdk/client-s3": "3.1109.0",
-        "markdown-it": "^14.1.0"
+        "markdown-it": "^14.1.0",
+        "npm": "11.6.2",
+        "unzipper": "0.12.5"
     },
     "devDependencies": {
-        "@mermaid-js/mermaid-cli": "^11.16.0"
+        "@mermaid-js/mermaid-cli": "^11.16.0",
+        "electron": "^44.3.0",
+        "electron-builder": "^26.15.3"
+    },
+    "build": {
+        "appId": "com.shiker.wechat-newsroom-workbench",
+        "productName": "见字",
+        "asar": false,
+        "files": [
+            "desktop/**/*",
+            "server.mjs",
+            "server/**/*",
+            "public/**/*",
+            "plugins/**/*",
+            "skills/**/*",
+            "writing-skills/**/*",
+            "themes/**/*",
+            "config/**/*",
+            "scripts/runtime/**/*",
+            "package.json",
+            "account-context.example.json",
+            "!RSSHub/**/*",
+            "!data/**/*",
+            "!articles/**/*",
+            "!topics/**/*",
+            "!social-cards/**/*",
+            "!logs/**/*",
+            "!output/**/*",
+            "!dist/**/*",
+            "!.node-runtime/**/*",
+            "!skills/**/node_modules/**/*",
+            "!node_modules/electron/**/*",
+            "!node_modules/electron-builder/**/*",
+            "!node_modules/@electron/**/*",
+            "!node_modules/@mermaid-js/**/*",
+            "!node_modules/puppeteer/**/*"
+        ],
+        "extraResources": [
+            {
+                "from": ".node-runtime/node-v24.12.0/node.exe",
+                "to": "node-runtime/node.exe"
+            }
+        ],
+        "win": {
+            "target": [
+                {
+                    "target": "nsis",
+                    "arch": [
+                        "x64"
+                    ]
+                }
+            ],
+            "artifactName": "jianzhi-${version}-win-${arch}.${ext}"
+        },
+        "nsis": {
+            "oneClick": false,
+            "perMachine": false,
+            "allowToChangeInstallationDirectory": true,
+            "runAfterFinish": true,
+            "installerLanguages": [
+                "zh_CN"
+            ],
+            "language": "2052",
+            "include": "build/installer.nsh",
+            "menuCategory": "见字",
+            "uninstallDisplayName": "见字工作台",
+            "deleteAppDataOnUninstall": false,
+            "createDesktopShortcut": true,
+            "createStartMenuShortcut": true,
+            "shortcutName": "见字"
+        }
     }
 }

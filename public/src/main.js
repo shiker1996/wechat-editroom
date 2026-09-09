@@ -6,6 +6,7 @@ import { bindBatchDrawer } from "./views/batch-drawer.js";
 import loadOverview from "./views/dashboard.js";
 import { hydrateThemePickers } from "./core/theme-catalog.js";
 import { bindQuickMaterialCapture } from "./core/quick-material.js";
+import { bindFirstRunWizard, openFirstRunWizard, shouldOpenFirstRunWizard } from "./core/first-run.js";
 
 const viewModules = {
   dashboard: "./views/dashboard.js", batches: "./views/batches.js", overview: "./views/atlas.js",
@@ -57,6 +58,7 @@ const viewStyles = {
   sources: ["system"],
 };
 const loadedStyles = new Map();
+let navigationSequence = 0;
 
 function waitForBaseStyle() {
   const link = document.querySelector('link[data-base-style="common"]');
@@ -116,6 +118,8 @@ async function go(route) {
   const view = rawView === "models" ? "logs" : rawView;
   const normalizedRoute = rawView === "models" ? "logs" : rawRoute;
   if (!(view in titles)) return;
+  const navigationId = ++navigationSequence;
+  window.desktopBridge?.trace?.({ stage: "route-start", id: navigationId, route: normalizedRoute, view });
   try {
     await loadViewStyles(view);
   } catch (error) {
@@ -169,6 +173,7 @@ async function go(route) {
       toast(`视图「${titles[view]}」加载失败，请刷新后重试`, "error");
     }
   }
+  window.desktopBridge?.trace?.({ stage: "route-complete", id: navigationId, route: normalizedRoute, view });
 }
 
 async function init() {
@@ -213,6 +218,51 @@ function exitImmersiveChats() {
   syncImmersiveMode();
 }
 
+function setRailCollapsed(collapsed) {
+  document.body.classList.toggle("rail-collapsed", collapsed);
+  const toggle = document.getElementById("rail-toggle");
+  if (toggle) {
+    toggle.setAttribute("aria-pressed", String(collapsed));
+    toggle.setAttribute("aria-label", collapsed ? "展开侧栏" : "收起侧栏");
+    toggle.title = `${collapsed ? "展开" : "收起"}侧栏（Ctrl+B）`;
+  }
+  try { localStorage.setItem("jianzhi.rail-collapsed", collapsed ? "1" : "0"); } catch { /* 隐私模式下不持久化布局偏好 */ }
+}
+
+function toggleRail() {
+  setRailCollapsed(!document.body.classList.contains("rail-collapsed"));
+}
+
+function showDesktopShortcuts() {
+  const dialog = document.getElementById("desktop-shortcuts-dialog");
+  if (dialog && !dialog.open) dialog.showModal();
+}
+
+async function runDesktopCommand(command) {
+  const routes = { dashboard: "dashboard", batches: "batches", sources: "sources", editor: "editor", logs: "logs", system: "system" };
+  if (routes[command]) return go(routes[command]);
+  if (command === "toggle-rail") return toggleRail();
+  if (command === "shortcuts") return showDesktopShortcuts();
+  if (command === "onboarding") return openFirstRunWizard({ force: true });
+  if (command === "new-batch") return document.getElementById("new-batch-button")?.click();
+  if (command === "quick-material") return document.getElementById("quick-material-button")?.click();
+}
+
+function dispatchDesktopCommand(command) {
+  const message = command && typeof command === "object" ? command : { command: String(command) };
+  const name = message.command;
+  window.desktopBridge?.trace?.({ stage: "renderer-dispatch", id: message.id, command: name });
+  // 每次原生菜单命令都独立执行，不能等待上一次 go() 的网络请求。
+  // 否则某个视图加载卡住时，后续所有菜单点击都会被队列永久堵住。
+  void runDesktopCommand(name).then(() => {
+    window.desktopBridge?.trace?.({ stage: "renderer-complete", id: message.id, command: name });
+  }).catch((error) => {
+    console.error("桌面菜单命令执行失败:", name, error);
+    window.desktopBridge?.trace?.({ stage: "renderer-error", id: message.id, command: name, error: error?.message || "unknown" });
+    toast(`菜单操作失败：${error?.message || "请重试"}`, "error");
+  });
+}
+
 // 全局骨架绑定（原 app-bind.js 中与具体视图无关的部分）
 function bindGlobal() {
   bindTablistKeyboardNavigation();
@@ -251,6 +301,13 @@ function bindGlobal() {
     const current = document.querySelector(".nav-item.active")?.dataset.view || "dashboard";
     go(current);
   });
+  document.getElementById("rail-toggle")?.addEventListener("click", toggleRail);
+  document.getElementById("desktop-shortcuts-button")?.addEventListener("click", showDesktopShortcuts);
+  document.addEventListener("click", (event) => {
+    if (event.target.closest("[data-close-shortcuts]")) document.getElementById("desktop-shortcuts-dialog")?.close();
+  });
+  try { setRailCollapsed(localStorage.getItem("jianzhi.rail-collapsed") === "1"); } catch { setRailCollapsed(false); }
+  window.desktopBridge?.onCommand(dispatchDesktopCommand);
   window.addEventListener("hashchange", () => {
     const route = location.hash.slice(1);
     const view = route.split("/")[0];
@@ -260,6 +317,16 @@ function bindGlobal() {
     }
   });
   window.addEventListener("keydown", (event) => {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "b") {
+      event.preventDefault();
+      toggleRail();
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && event.key === "/") {
+      event.preventDefault();
+      showDesktopShortcuts();
+      return;
+    }
     if (event.key !== "Escape") return;
     exitImmersiveChats();
   });
@@ -298,6 +365,17 @@ async function pollJobNotifications() {
 }
 
 async function onReady() {
+  // 原生菜单和全局按钮必须先于任何网络/模型初始化完成绑定。
+  // 否则初始化接口较慢或失败时，菜单点击会在渲染器尚未注册监听器的
+  // 窗口期丢失，表现为 Electron 原生菜单完全没有反应。
+  window.go = go;
+  bindGlobal();
+  bindQuickMaterialCapture();
+  bindFirstRunWizard();
+  bindBatchDrawer();
+  // preload 已经建立 IPC 监听、全局 DOM 事件也已绑定，此时即可接收原生菜单命令。
+  // 不等待模型、批次和首屏视图接口，避免菜单命令被暂存到下一次页面重载。
+  window.desktopBridge?.ready?.();
   try {
     await waitForBaseStyle();
   } catch (error) {
@@ -305,9 +383,6 @@ async function onReady() {
     toast("基础样式加载失败，请刷新后重试", "error");
   }
   await init();
-  bindGlobal();
-  bindQuickMaterialCapture();
-  bindBatchDrawer();
   startClock();
   pollJobNotifications();
   // 首屏视图激活：切导航/视图样式、设置标题、加载 ESM 视图（go 内部已处理 batch-switcher 显隐）
@@ -319,6 +394,7 @@ async function onReady() {
     try { await loadOverview(); } catch (error) { toast("工作台加载失败：" + error.message, "error"); }
   }
   await go(current);
+  if (shouldOpenFirstRunWizard()) setTimeout(() => openFirstRunWizard(), 260);
 }
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", onReady);

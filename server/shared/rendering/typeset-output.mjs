@@ -22,7 +22,7 @@ export function htmlPreservesStructure(markdown, html) {
   const escape = (text) => String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   return count(/<h[1-3]\b/gi) === source.headings.length
     && count(/<a\b[^>]*href=/gi) >= source.links
-    && count(/<img\b[^>]*src=/gi) >= source.images
+    && count(/<img\b[^>]*src=/gi) + count(/data-image-placeholder=/gi) >= source.images
     && count(/<pre\b/gi) >= source.codeBlocks
     && count(/<table\b/gi) >= source.tables
     && source.headings.every((heading) => visible.includes(escape(heading)));

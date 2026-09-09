@@ -69,11 +69,10 @@
         </div>
       </details>
       <details class="nav-group" data-nav-group="governance">
-        <summary><span>06</span><b>资产与运行</b><small>产物 · 审计 · 模型 · 配置</small></summary>
+        <summary><span>06</span><b>资产与审计</b><small>产物 · 任务 · 日志</small></summary>
         <div class="nav-group-items">
           <button class="nav-item" data-view="artifacts">产物中心</button>
           <button class="nav-item" data-view="logs">任务日志</button>
-          <button class="nav-item" data-view="system"><span>运行与配置</span><i id="nav-runtime-indicator" aria-hidden="true">●</i></button>
         </div>
       </details>
     </nav>
@@ -81,6 +80,7 @@
       <div class="rail-utility-label"><span>EXTEND</span><b>扩展与定制</b></div>
       <button class="nav-utility" data-view="skills"><span class="nav-utility-mark">S</span><span><b>技能与工具</b><small>能力 · 插件 · 连接</small></span></button>
       <button class="nav-utility" data-view="themes"><span class="nav-utility-mark">T</span><span><b>主题中心</b><small>选择 · 预览 · 管理</small></span></button>
+      <button class="nav-utility" data-view="system"><span class="nav-utility-mark">⚙</span><span><b>运行与配置</b><small>模型 · 采集 · 系统</small></span></button>
     </div>
     <div class="rail-foot">
       <span class="pulse-dot"></span>
@@ -90,10 +90,11 @@
 
   <main class="shell" id="main-content" tabindex="-1">
     <header class="topbar">
-      <div><span class="eyebrow">编辑工作台</span><h1 id="page-title">工作台总览</h1></div>
+      <div class="topbar-heading"><button type="button" class="chrome-toggle" id="rail-toggle" aria-label="收起侧栏" aria-pressed="false" title="收起 / 展开侧栏（Ctrl+B）">☰</button><div><span class="eyebrow">编辑工作台</span><h1 id="page-title">工作台总览</h1><span class="desktop-context"><i></i> 本机工作区</span></div></div>
       <div class="top-actions">
         <select id="batch-switcher" class="batch-switcher" aria-label="当前批次"><option value="">选择批次</option></select>
         <time id="clock"></time>
+        <button class="ghost-button desktop-shortcuts-button" id="desktop-shortcuts-button" type="button" title="查看快捷键（Ctrl+/）">快捷键</button>
         <button class="ghost-button" id="quick-material-button">＋ 快速记素材</button>
         <button class="ghost-button" id="new-breaking-button">⚡ 突发热点</button>
         <button class="primary-button" id="new-batch-button">＋ 新建今日批次</button>
@@ -712,7 +713,7 @@
         <button type="button" class="theme-picker-trigger" id="typeset-theme-trigger" data-theme-picker="article"><span>排版主题</span><b>自动匹配</b></button>
         <div id="typeset-theme-preview" class="theme-catalog-preview" hidden></div><small id="typeset-theme-meta" class="theme-catalog-meta" aria-live="polite">正在读取主题目录</small>
         <button class="outline-button" id="run-local-typeset">生成 / 更新排版 HTML</button>
-        <small class="muted action-hint">默认本地确定性渲染（不计费）；选用模型初稿时按服务商计费，图片上传 CDN 属于外部写入。</small>
+        <small class="muted action-hint">默认按 CDN 配置自动选择排版模式；未配置 CDN 时仅本地生成并输出图片占位符，图片上传 CDN 属于外部写入。</small>
         <button class="primary-button" id="copy-typeset-html" disabled>复制公众号富文本</button>
         <button class="outline-button" id="goto-cover" disabled>生成文章封面图</button>
         <small id="typeset-status">排版结果保留在本机；生成后可直接复制富文本并粘贴到公众号编辑器。</small>
@@ -720,7 +721,7 @@
       <section class="image-stage" id="image-stage">
         <div class="image-stage-head"><div><span class="kicker">IMAGE DESK</span><h3>配图工作台</h3><p id="image-stage-status">正在读取当前文章的配图计划…</p></div><button class="outline-button" id="plan-article-images">AI 规划必要配图</button></div>
         <div class="image-slot-list" id="image-slot-list"></div>
-        <small class="image-stage-note">人工素材本地保存不会上传，只有点击某张素材的“上传 CDN”才会产生外部写入；统计卡、时间线等自动生成图会在排版时按当前主题生成并自动上传 CDN。</small>
+        <small class="image-stage-note">人工素材本地保存不会上传；配置 CDN 后点击“上传 CDN”才会产生外部写入。未配置 CDN 时排版不做 CDN 校验，图片位置会输出空占位符，请粘贴到公众号后台后逐个替换。</small>
       </section>
       <div class="proof-layout">
         <aside class="production-checklist" id="production-checklist"></aside>
@@ -968,33 +969,7 @@
     </section>
 
     <section class="view" id="view-system">
-      <div class="section-intro system-intro"><div><span class="kicker">LOCAL OPERATIONS</span></div><p>先确认采集依赖是否在线，再处理凭据和本机参数。敏感值只在服务端保存，页面不会读取密钥原文。<small class="system-last-checked" id="system-last-checked">尚未检查</small></p></div>
-      <div class="runtime-commandbar"><div><span class="pulse-dot"></span><b>本机运行台</b><small>服务状态、配置和备份都留在当前设备</small></div><button class="ink-button" id="system-health">检查全部服务</button></div>
-      <div class="control-grid">
-        <article class="control-card reddit-card">
-          <div class="control-index">R/</div><span class="status-pill unknown" id="reddit-status">未检查</span>
-          <h3>Reddit · 专用 Chrome</h3>
-          <p>工作台通过 CDP 连接一个独立 Chrome 配置。首次登录后复用 Cookie，不读取你的日常浏览器资料。</p>
-          <ol><li>点击启动专用 Chrome</li><li>在新窗口登录 Reddit</li><li>以后复用独立登录状态</li></ol>
-          <div class="runtime-actions"><button class="outline-button" data-runtime-service="reddit" data-runtime-action="start">启动</button><button class="text-button" data-runtime-service="reddit" data-runtime-action="stop">停止</button></div>
-          <button class="text-button control-retry" data-health-target="reddit">重新检查 Reddit</button>
-        </article>
-        <article class="control-card rss-card">
-          <div class="control-index">RSS</div><span class="status-pill unknown" id="rsshub-status">未检查</span>
-          <h3>RSSHub · 按需生命周期</h3>
-          <p>Worker 先探测 1200 端口；未就绪才运行启动脚本。目标路由通过后采集，最终只停止本次由它启动的实例。</p>
-          <ol><li>根地址健康检查</li><li>启动脚本最多等待 180 秒</li><li>路由自动附加 <code>limit=30</code></li></ol>
-          <div class="runtime-actions"><button class="outline-button" data-runtime-service="rsshub" data-runtime-action="start">启动</button><button class="text-button" data-runtime-service="rsshub" data-runtime-action="restart">重启</button><button class="text-button" data-runtime-service="rsshub" data-runtime-action="stop">停止</button></div>
-          <button class="text-button control-retry" data-health-target="rsshub">只重试 RSSHub</button>
-        </article>
-        <article class="control-card github-card">
-          <div class="control-index">GH</div><span class="status-pill unknown" id="github-status">尚未请求</span>
-          <h3>GitHub · 发现与事实增强</h3>
-          <p>Trending 由 RSSHub 提供日榜、周榜和月榜；README、License 与 Release 使用带 ETag 缓存的 GitHub REST API。</p>
-          <div class="github-quota" id="github-quota">配额将在首次仓库核验后显示。</div>
-          <button class="text-button control-retry" data-health-target="github">刷新 GitHub 状态</button>
-        </article>
-      </div>
+      <div class="section-intro system-intro"><div><span class="kicker">LOCAL CONFIGURATION</span></div><p>统一管理模型、采集器、技能、工具和本机参数。采集源的连通性测试已收回“采集源”页面，敏感值只在服务端保存。</p></div>
       <div class="system-workspace">
         <section class="runtime-config-panel configuration-console">
           <div class="runtime-config-head configuration-console-head"><div><span class="kicker">LOCAL CONFIGURATION REGISTRY</span><h3>本机能力配置</h3><p>统一管理模型、工具、采集器与工作台参数。密钥仅显示状态，不在页面回读。</p></div><div class="configuration-readiness" id="configuration-readiness"><strong>—</strong><span>正在扫描能力状态</span></div></div>
@@ -1282,6 +1257,8 @@
   <dialog id="preflight-dialog" class="modal preflight-dialog"><div class="preflight-dialog-body"><div class="modal-head"><div><span class="kicker">PUBLISH READINESS</span><h2>发布前检查</h2></div><button type="button" class="close-button" data-close-preflight aria-label="关闭">×</button></div><div class="preflight-hero"><b id="preflight-title">正在检查当前文稿</b><span id="preflight-summary"></span></div><div id="preflight-list" class="preflight-list"></div><p class="fine-print">检查结果仅用于发布前确认，不会自动修改正文，也不会影响草稿自动保存。</p><div class="modal-actions"><button type="button" class="ghost-button" data-close-preflight>稍后处理</button><button type="button" class="ink-button" id="preflight-primary">查看待处理项</button></div></div></dialog>
   <dialog id="quality-dialog" class="modal quality-dialog"><div class="quality-dialog-body"><div class="modal-head"><div><span class="kicker">QUALITY REVIEW</span><h2>文稿质量检查</h2></div><button type="button" class="close-button" data-close-quality aria-label="关闭">×</button></div><p id="quality-summary" class="quality-summary"></p><div id="quality-issue-list" class="quality-issue-list"></div><div class="modal-actions"><button type="button" class="ink-button" data-close-quality>完成检查</button></div></div></dialog>
   <dialog id="theme-picker-dialog" class="theme-picker-dialog"><div class="theme-picker-shell"><div class="theme-picker-head"><div><span class="kicker">VISUAL THEME</span><h2 id="theme-picker-title">选择主题</h2><p>颜色只是第一眼，版式语气与内容类型同样重要。</p></div><button type="button" class="close-button" id="close-theme-picker" aria-label="关闭主题选择">×</button></div><div class="theme-picker-tabs" role="tablist"><button type="button" class="active" data-theme-filter="all">全部</button><button type="button" data-theme-filter="builtin">内置主题</button><button type="button" data-theme-filter="user">我的主题</button><select id="theme-picker-scene" aria-label="按内容场景筛选"><option value="all">全部场景</option></select></div><div id="theme-picker-grid" class="theme-picker-grid"></div><div class="theme-picker-foot"><span id="theme-picker-selection">请选择一个主题</span><button type="button" class="primary-button" id="confirm-theme-picker">使用此主题</button></div></div></dialog>
+  <dialog id="first-run-dialog" class="modal first-run-dialog"><div class="first-run-shell"><aside class="first-run-rail"><div class="first-run-brand"><span class="run-mark">字</span><div><b>见字工作台</b><small>FIRST RUN GUIDE</small></div></div><p class="first-run-rail-intro">用几分钟完成本机配置，然后交付第一篇文章和第一组图文。</p><div id="first-run-steps" class="first-run-steps"></div><div class="first-run-rail-foot"><span>本地优先</span><span>可随时重开</span></div></aside><section class="first-run-content"><div class="first-run-head"><div><span class="kicker">WELCOME TO JIANZI</span><h2>第一次使用，从这里开始</h2></div><button type="button" class="close-button" data-first-run-later aria-label="稍后处理">×</button></div><div id="first-run-body" class="first-run-body"></div><div class="first-run-foot"><button type="button" class="ghost-button" data-first-run-later>稍后处理</button><div><button type="button" class="outline-button" data-first-run-back hidden>上一步</button><button type="button" class="primary-button" id="first-run-next" data-first-run-next>下一步</button></div></div></section></div></dialog>
+  <dialog id="desktop-shortcuts-dialog" class="modal desktop-shortcuts-dialog"><div class="desktop-shortcuts-body"><div class="modal-head"><div><span class="kicker">DESKTOP WORKFLOW</span><h2>桌面快捷操作</h2><p class="modal-form-intro">常用动作可以直接通过键盘或窗口菜单完成。</p></div><button type="button" class="close-button" data-close-shortcuts aria-label="关闭快捷键说明">×</button></div><div class="shortcut-list"><div><span>工作台总览</span><kbd>Ctrl</kbd><b>＋</b><kbd>1</kbd></div><div><span>批次管理</span><kbd>Ctrl</kbd><b>＋</b><kbd>2</kbd></div><div><span>采集源</span><kbd>Ctrl</kbd><b>＋</b><kbd>3</kbd></div><div><span>文章编辑器</span><kbd>Ctrl</kbd><b>＋</b><kbd>4</kbd></div><div><span>新建今日批次</span><kbd>Ctrl</kbd><b>＋</b><kbd>N</kbd></div><div><span>快速记素材</span><kbd>Ctrl</kbd><b>＋</b><kbd>Shift</kbd><b>＋</b><kbd>M</kbd></div><div><span>收起 / 展开侧栏</span><kbd>Ctrl</kbd><b>＋</b><kbd>B</kbd></div><div><span>显示本说明</span><kbd>Ctrl</kbd><b>＋</b><kbd>/</kbd></div></div></div></dialog>
   <div class="adjustment-code-popover" id="feedback-adjustment-code-dialog" role="dialog" aria-hidden="true" hidden>
     <div class="adjustment-code-popover-head"><div><span class="material-mark">EDIT DRAFT LINE</span><strong id="feedback-adjustment-code-title">编辑草案代码行</strong></div><button type="button" class="ghost-button" data-feedback-adjustment-editor-close aria-label="关闭">✕</button></div>
     <label class="adjustment-code-editor-label">代码行内容<textarea id="feedback-adjustment-code-editor" rows="3" spellcheck="false" wrap="soft"></textarea></label>

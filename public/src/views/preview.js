@@ -33,7 +33,7 @@ function bindPreview() {
   document.getElementById("run-local-typeset").addEventListener("click", (event) => {
     const blocked = typesetBlockReason();
     if (blocked) { toast(blocked); return; }
-    withLoading(event.currentTarget, "正在排版…", () => runTypeset("local").catch((error) => toast(error.message, "error")));
+    withLoading(event.currentTarget, "正在排版…", () => runTypeset("auto").catch((error) => toast(error.message, "error")));
   });
   document.getElementById("copy-typeset-html").addEventListener("click", (event) => withLoading(event.currentTarget, "正在复制…", () => copyTypesetHtml().catch((error) => toast(error.message, "error"))));
   document.addEventListener("click", (event) => {
@@ -103,7 +103,8 @@ function imageCard(item) {
   const encoded = encodeURIComponent(item.id);
   const generatable = Boolean(item.generate);
   const hasImage = !!item.localPath;
-  const statusLabel = item.status === "cdn" ? "CDN 已就绪" : item.generated ? "排版时自动上传" : generatable ? "排版时自动生成" : hasImage ? "本地待上传" : "等待供图";
+  const localOnly = state.imageWorkspace?.deliveryMode === 'local' || state.imageWorkspace?.cdnConfigured === false;
+  const statusLabel = localOnly && item.status !== "missing" ? "仅本地排版 · 输出占位" : item.status === "cdn" ? "CDN 已就绪" : item.generated ? "排版时自动上传" : generatable ? "排版时自动生成" : hasImage ? "本地待上传" : "等待供图";
   const fileInput = item.generated || generatable ? '' : '<input class="image-slot-file" data-image-file type="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden>';
   let preview;
   if (hasImage) {
@@ -118,9 +119,14 @@ function imageCard(item) {
   } else {
     preview = `<span>${escapeHtml(item.ratio)}<br>点击选择图片</span>`;
   }
-  const cdnAllowed = !item.generated && !generatable;
+  const cdnAction = !item.generated && !generatable && ['local', 'cdn'].includes(item.status);
+  const cdnAvailable = state.imageWorkspace?.uploaderAvailable === true;
+  const cdnDisabledReason = state.imageWorkspace?.cdnConfigured === false ? 'CDN 未配置，暂不可上传' : `CDN 当前不可用${state.imageWorkspace?.cdnReason ? `：${state.imageWorkspace.cdnReason}` : ''}`;
   const uploadTarget = item.generated || generatable ? '' : ` data-upload-image="${escapeHtml(item.id)}"`;
   const cardClass = item.status === "cdn" ? "ready" : hasImage ? "local" : generatable ? "generatable" : "";
+  const uploadAction = cdnAction
+    ? `<button class="ghost-button" data-upload-cdn="${escapeHtml(item.id)}"${cdnAvailable ? '' : ' disabled'} title="${cdnAvailable ? '上传这张图片到 CDN' : escapeHtml(cdnDisabledReason)}">${item.status === 'cdn' ? '重新上传 CDN' : '上传 CDN'}</button>`
+    : '';
   return `<article class="image-slot ${cardClass}" data-image-id="${escapeHtml(item.id)}">
     <div class="image-slot-top"><span class="image-slot-tags"><span class="image-slot-id">${escapeHtml(item.id)} · ${escapeHtml(item.type)}</span>${generatable ? '<span class="image-slot-kind">✦ 排版自动生成</span>' : ""}</span><span class="image-slot-status">${statusLabel}</span></div>
     <h4>${escapeHtml(item.content)}</h4>
@@ -128,7 +134,7 @@ function imageCard(item) {
       ${fileInput}
     </div></div>
     <div class="image-slot-meta"><span>位置：${escapeHtml(item.position)}</span><span>比例：${escapeHtml(item.ratio)}</span><span>建议来源：${escapeHtml(item.suggestedSource)}</span></div>
-    <div class="image-slot-actions">${hasImage ? `<span class="muted">${item.generated ? "排版任务将按当前主题生成并上传" : "本地已保存"}</span>` : ""}${cdnAllowed && item.status === "local" ? `<button class="ghost-button" data-upload-cdn="${escapeHtml(item.id)}">上传 CDN</button>` : ""}${cdnAllowed && item.status === "cdn" ? `<button class="ghost-button" data-upload-cdn="${escapeHtml(item.id)}">重新上传 CDN</button>` : ""}</div>
+    <div class="image-slot-actions">${hasImage ? `<span class="muted">${item.generated ? "排版时按当前主题处理" : "本地已保存"}</span>` : ""}${uploadAction}</div>
     ${item.url ? `<a class="image-cdn-url" href="${escapeHtml(item.url)}" target="_blank">${escapeHtml(item.url)}</a>` : ""}
   </article>`;
 }
@@ -159,12 +165,13 @@ function openImageZoom(src, alt) {
   overlay.querySelector(".image-zoom-close").focus();
 }
 
-// 排版前预检：返回空字符串表示可排版，否则为阻断原因（配图必须全部上传 CDN，公众号要求图片可公开访问）
+// 排版前预检：未配置 CDN 时允许仅本地占位排版；已配置 CDN 时沿用原有公开地址门禁。
 function typesetBlockReason() {
   const data = state.imageWorkspace;
   const hasCandidate = Boolean(state.productionPreview?.candidates?.length);
   if (!hasCandidate) return "请先运行完整成稿链";
   if (!data?.planned) return "请先点击「AI 规划必要配图」，确认本文需要哪些配图";
+  if (data.deliveryMode === 'local' || data.cdnConfigured === false) return "";
   const manual = data.manualUnresolved || (data.unresolved || []).filter((id) => !(data.generatedPending || []).includes(id));
   if (manual.length) return `还有 ${manual.length} 张人工配图未上传 CDN：${manual.join("、")}，请先在配图工作台处理`;
   return "";
@@ -173,20 +180,23 @@ function typesetBlockReason() {
 function renderImageWorkspace() {
   const data = state.imageWorkspace;
   if (!data) return;
+  const localOnly = data.deliveryMode === 'local' || data.cdnConfigured === false;
   const status = document.getElementById('image-stage-status');
   const button = document.getElementById('plan-article-images');
   if (button) button.hidden = Boolean(data.daily);
   if (button) button.textContent = data.planned ? '重新检查必要配图' : 'AI 规划必要配图';
   if (status) {
-    if (!data.planned) status.textContent = '尚未执行配图规划；正式排版前需要先确认是否存在必要图片。';
+    if (localOnly) status.textContent = data.cdnReason ? `未配置图片 CDN：${data.cdnReason}。将使用仅本地排版，图片位置输出为空占位符，粘贴到公众号后请逐个替换。` : '当前使用仅本地排版，图片位置会输出为空占位符，粘贴到公众号后请逐个替换。';
+    else if (data.cdnStatus === 'unhealthy' || data.cdnStatus === 'unknown') status.textContent = `图片 CDN 当前不可用：${data.cdnReason || '请检查配置'}。已配置时仍按 CDN 流程校验，排版失败会明确提示。`;
+    else if (!data.planned) status.textContent = '尚未执行配图规划；正式排版前需要先确认是否存在必要图片。';
     else if (!data.total) status.textContent = '配图规划完成：本文没有必须人工提供的来源图或资料图。';
     else {
       const manual = data.manualUnresolved || (data.unresolved || []).filter((id) => !(data.generatedPending || []).includes(id));
       const automatic = data.generatedPending || [];
       status.textContent = manual.length
-        ? `人工配图待处理 ${manual.length} 张：${manual.join('、')}`
+        ? localOnly ? `将输出 ${manual.length} 个人工配图占位符：${manual.join('、')}` : `人工配图待处理 ${manual.length} 张：${manual.join('、')}`
         : automatic.length
-          ? `人工配图已就绪；${automatic.length} 张自动生成图片（Mermaid、ECharts、统计卡或时间线）将在排版时按当前主题生成并上传 CDN`
+          ? localOnly ? `${automatic.length} 张自动图片将在排版结果中输出为空占位符` : `人工配图已就绪；${automatic.length} 张自动生成图片（Mermaid、ECharts、统计卡或时间线）将在排版时按当前主题生成并上传 CDN`
           : `配图已就绪 ${data.ready||0} / ${data.total} · 可以进入正式排版`;
     }
   }
@@ -197,12 +207,12 @@ function renderImageWorkspace() {
       : '<div class="image-stage-empty">' + (data.planned ? '没有必要的人工配图，文章可直接排版。' : '点击“AI 规划必要配图”，系统只会为有证据或阅读价值的图片留位。') + '</div>';
   }
   const hasCandidate = Boolean(state.productionPreview?.candidates?.length);
-  const manualPending = data.manualUnresolved || (data.unresolved || []).filter((id) => !(data.generatedPending || []).includes(id));
+  const manualPending = localOnly ? [] : data.manualUnresolved || (data.unresolved || []).filter((id) => !(data.generatedPending || []).includes(id));
   const btn = document.getElementById('run-local-typeset');
   if (btn) {
     // 不再因配图未就绪 disable（禁用按钮点击无任何反馈）；保持可点，由点击预检 toast 说明原因
     btn.disabled = !hasCandidate;
-    btn.title = typesetBlockReason() || '生成公众号排版 HTML；自动图表将在任务中上传';
+    btn.title = typesetBlockReason() || (localOnly ? '仅本地生成公众号排版 HTML；图片输出为空占位符' : '生成公众号排版 HTML；自动图表将在任务中上传');
   }
   const copyButton = document.getElementById('copy-typeset-html');
   if (copyButton) {

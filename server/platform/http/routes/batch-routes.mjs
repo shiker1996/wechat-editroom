@@ -6,6 +6,8 @@ import { buildBatchPipelineStatus } from '../../../features/batches/index.mjs';
 import { getBatchDeleteImpact, deleteBatchPermanently } from '../../../features/batches/index.mjs';
 import { buildEventResolutionOperationsMetrics, readEventResolutionReview } from '../../../features/research/index.mjs';
 import { buildTopicScoreOperationsMetrics } from '../../../features/research/index.mjs';
+import { selectBatchSourceGroups } from '../../../features/collection/application/batch-source-selection.mjs';
+import { inspectRsshubEnvironment } from '../../integrations/rsshub-installer.mjs';
 import { respond, boundedLimit } from '../route-helpers.mjs';
 
 export async function handleBatchRoutes({ request, response, pathname, searchParams, root, store, jobs, body, json,
@@ -80,8 +82,16 @@ export async function handleBatchRoutes({ request, response, pathname, searchPar
   const collectMatch = pathname.match(/^\/api\/batches\/([^/]+)\/collect$/);
   if (collectMatch && request.method === 'POST') {
     const input = await body(request);
-    const sources = [...new Set((input.sources ?? ['reddit', 'rsshub', 'github']).filter((item) => ['reddit', 'rsshub', 'github'].includes(item)))];
-    if (!sources.length) return respond(json, response, 400, { error: '没有可执行的数据源' });
+    // 批次不再拥有第二套来源选择状态；来源台账中的 enabled 才是唯一准入条件。
+    // 保留固定入口集合只是为了兼容旧客户端的响应字段，不采信 input.sources 的子集。
+    const requestedSources = ['reddit', 'rsshub', 'github'];
+    const rsshub = await inspectRsshubEnvironment(config?.rsshub || {});
+    const selection = selectBatchSourceGroups(requestedSources, store.listCollectionSources(), {
+      rsshubReady: rsshub.ready,
+      rsshubReason: rsshub.reason,
+    });
+    if (!selection.selected.length) return respond(json, response, 409, { error: '没有已启用的可采集来源', code: 'NO_ENABLED_COLLECTION_SOURCES', available: selection.available });
+    const sources = selection.selected;
     const batchId = decodeURIComponent(collectMatch[1]);
     let maxAgeHours = null;
     if (input.maxAgeHours != null) {
@@ -89,7 +99,7 @@ export async function handleBatchRoutes({ request, response, pathname, searchPar
       if (![24, 48, 72, 120, 168].includes(maxAgeHours)) return respond(json, response, 400, { error: '时间范围只支持 24、48、72、120、168 小时' });
       store.updateBatch(batchId, { max_age_hours: maxAgeHours });
     }
-    return respond(json, response, 202, jobs.startCollection(batchId, sources, maxAgeHours));
+    return respond(json, response, 202, { ...jobs.startCollection(batchId, sources, maxAgeHours), requestedSources, skippedSources: selection.skipped });
   }
   const overviewMatch = pathname.match(/^\/api\/batches\/([^/]+)\/overview$/);
   const eventHeatMatch = pathname.match(/^\/api\/batches\/([^/]+)\/event-heat-ranking$/);

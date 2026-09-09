@@ -306,6 +306,12 @@ body.chat-immersive .tutorial-writing-workspace { animation: none; transform: no
   .tutorial-actions{align-items:stretch;padding-top:12px}
 }
 
+/* Keep editorial conversations bounded and consistent across writing workflows. */
+.tutorial-form .editorial-chat:not(.immersive),
+.editorial-focus-grid .editorial-chat:not(.immersive){display:flex;flex-direction:column;height:900px;min-height:0}
+.tutorial-form .editorial-chat:not(.immersive) .editorial-messages,
+.editorial-focus-grid .editorial-chat:not(.immersive) .editorial-messages{flex:1 1 auto;min-height:0;max-height:none}
+
 /* Capability Studio */
 .capability-studio{--studio-ink:#17221f;--studio-green:#29463d;--studio-coral:#db6047;--studio-cream:#eee8dc}
 .capability-studio-hero{position:relative;display:flex;align-items:flex-end;justify-content:space-between;gap:28px;overflow:hidden;padding:34px 38px;color:#fff;background:linear-gradient(120deg,#14201d 0%,#29463d 70%,#36584c 100%)}

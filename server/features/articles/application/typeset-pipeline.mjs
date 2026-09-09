@@ -91,7 +91,7 @@ async function runScript(script, args, cwd) {
   }
 }
 
-export async function runTypesetPipeline({ gateway, store, batchId, candidateId, documentKind = null, provider, workspaceRoot, skillsWorkspaceRoot = workspaceRoot, snapshotId=null, draftMode = 'deterministic', theme = 'auto', autoUploadGeneratedImages = true, rootRunId = null, workflowRunId = null, stageId = 'typeset', onProgress = () => {}, generateArticleImageFn = generateArticleImage, uploadImageToCdnFn = uploadImageToCdn }) {
+export async function runTypesetPipeline({ gateway, store, batchId, candidateId, documentKind = null, provider, workspaceRoot, skillsWorkspaceRoot = workspaceRoot, snapshotId=null, draftMode = 'deterministic', theme = 'auto', imageDeliveryMode = 'cdn', autoUploadGeneratedImages = true, rootRunId = null, workflowRunId = null, stageId = 'typeset', onProgress = () => {}, generateArticleImageFn = generateArticleImage, uploadImageToCdnFn = uploadImageToCdn }) {
   const candidate = candidateId==null?null:store.getCandidate(candidateId);
   const daily=documentKind==='daily-final';
   if ((!daily&&(!candidate||candidate.batch_id!==batchId))||(daily&&candidate)) throw new Error('待排版文稿不存在或不属于当前批次');
@@ -193,13 +193,13 @@ export async function runTypesetPipeline({ gateway, store, batchId, candidateId,
     const generatedPaths = new Set((chartReport.images || []).map((item) => String(item).replaceAll('\\', '/')));
     const pendingUploads = generatedWorkspace.items.filter((item) =>
       item.generated && generatedPaths.has(String(item.relativePath || '').replaceAll('\\', '/')) && item.status !== 'cdn');
-    for (const item of autoUploadGeneratedImages ? pendingUploads : []) {
+    for (const item of imageDeliveryMode === 'cdn' && autoUploadGeneratedImages ? pendingUploads : []) {
       onProgress(`排版 3/6：${label} 图片已更新，正在上传 CDN`);
       await uploadImageToCdn(workdir, item.id, { authorizedExternalWrite:true, allowedCapabilities:typesetRuntime.allowedCapabilities,
         store,batchId,candidateId,generationSnapshotId:typesetRuntime.snapshotId,skillId:'wechat-article-typeset',rootRunId,workflowRunId,stageId });
     }
     addArtifact(store, batchId, `${label} 转图文章`, path.basename(chartPath), chartPath, { rootRunId, workflowRunId, stageId: 'images' });
-    chartNotes.push(`${label} ${chartReport.converted} 张${pendingUploads.length ? '（已重新上传 CDN）' : '（内容未变，复用 CDN）'}`);
+    chartNotes.push(`${label} ${chartReport.converted} 张${imageDeliveryMode === 'local' ? '（仅本地占位）' : pendingUploads.length ? '（已重新上传 CDN）' : '（内容未变，复用 CDN）'}`);
   }
   // 统计卡/时间线与 Mermaid/ECharts 走同一条排版期生成链：每次排版都按当前主题
   // 重新截图，随后自动上传 CDN，工作台不再要求逐张点击“生成图片”。
@@ -213,25 +213,27 @@ export async function runTypesetPipeline({ gateway, store, batchId, candidateId,
         theme, tokens:articleRenderTokens,
       });
       registerGeneratedSlotImage(workdir, item.id, generated.localPath);
-      if (autoUploadGeneratedImages) {
+      if (imageDeliveryMode === 'cdn' && autoUploadGeneratedImages) {
         onProgress(`排版 3/6：${label}「${item.content}」图片已更新，正在上传 CDN`);
         await uploadImageToCdnFn(workdir, item.id, { authorizedExternalWrite:true, allowedCapabilities:typesetRuntime.allowedCapabilities,
         store,batchId,candidateId,generationSnapshotId:typesetRuntime.snapshotId,skillId:'wechat-article-typeset',rootRunId,workflowRunId,stageId });
       }
-      chartNotes.push(`${label} 1 张（按 ${theme} 主题生成${autoUploadGeneratedImages ? '并已上传 CDN' : ''}）`);
+      chartNotes.push(`${label} 1 张（按 ${theme} 主题生成${imageDeliveryMode === 'local' ? '，仅本地占位' : autoUploadGeneratedImages ? '并已上传 CDN' : ''}）`);
     } catch (error) {
       record('images', 'wechat-article-typeset', '', 'blocked', `${label} 生成失败：${error.message}`);
       throw new Error(`${label} 图片生成失败，已停止排版以避免使用旧图：${error.message}`);
     }
   }
-  const imageResult = buildImagesMarkdown(workdir, fs.readFileSync(chartReadyPath, 'utf8'));
-  if (imageResult.unresolved.length) throw new Error(`配图尚未就绪：${imageResult.unresolved.join('、')}，请先提供图片并上传 CDN`);
+  const imageResult = buildImagesMarkdown(workdir, fs.readFileSync(chartReadyPath, 'utf8'), { imageDeliveryMode });
+  if (imageDeliveryMode !== 'local' && imageResult.unresolved.length) throw new Error(`配图尚未就绪：${imageResult.unresolved.join('、')}，请先提供图片并上传 CDN`);
   const imagesPath = path.join(workdir, '09-FINAL.images.md');
   writeFile(imagesPath, imageResult.content);
   addArtifact(store, batchId, '图片就绪文章', path.basename(imagesPath), imagesPath, { rootRunId, workflowRunId, stageId: 'images' });
   const manifestPath = imageManifestFile(workdir);
   if (fs.existsSync(manifestPath)) addArtifact(store, batchId, '配图资产清单', path.basename(manifestPath), manifestPath, { rootRunId, workflowRunId, stageId: 'images' });
-  record('images', 'wechat-article-typeset', imagesPath, 'completed', chartNotes.length ? `显式视觉模块已转图并使用 CDN 地址：${chartNotes.join('、')}` : '最终 HTML 图片均已取得可公开访问的 HTTPS 地址');
+  record('images', 'wechat-article-typeset', imagesPath, 'completed', imageDeliveryMode === 'local'
+    ? `仅本地排版：${imageResult.localPlaceholderCount || 0} 个图片位置将由用户在公众号后台替换${chartNotes.length ? `；${chartNotes.join('、')}` : ''}`
+    : chartNotes.length ? `显式视觉模块已转图并使用 CDN 地址：${chartNotes.join('、')}` : '最终 HTML 图片均已取得可公开访问的 HTTPS 地址');
 
   onProgress('排版 4/6：按总契约执行 wechat-md-to-draft');
   const draftHtml = path.join(workdir, 'article.ai.draft.html');

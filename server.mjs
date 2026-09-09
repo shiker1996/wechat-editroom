@@ -40,7 +40,7 @@ import { handleBatchRoutes } from './server/platform/http/routes/batch-routes.mj
 import { handleCandidateRoutes } from './server/platform/http/routes/candidate-routes.mjs';
 import { handleTaskRoutes } from './server/platform/http/routes/task-routes.mjs';
 import { createRouteHelpers, writeUtf8 } from './server/platform/http/route-helpers.mjs';
-import { setToolConfigurationResolver } from './server/platform/tools/index.mjs';
+import { getToolRegistry, setToolConfigurationResolver } from './server/platform/tools/index.mjs';
 import { ExtensionConfigurationService } from './server/platform/extensions/configuration-service.mjs';
 import { modelConnectionManifest, modelProviderModelManifest } from './server/platform/extensions/model-provider-configuration.mjs';
 import { syncModelProvidersToDatabase } from './server/platform/integrations/model-provider-settings.mjs';
@@ -49,9 +49,22 @@ import { seedInitialCollectionSources } from './server/features/collection/index
 import { createLocalSecurity } from './server/platform/http/local-security.mjs';
 import { APP_VERSION } from './server/platform/version.mjs';
 import { acquireInstanceLock } from './server/platform/core/instance-lock.mjs';
+import { resolveRuntimePaths } from './server/platform/core/runtime-paths.mjs';
 
-const root = path.dirname(fileURLToPath(import.meta.url));
-const config = loadConfig(root);
+const appRoot = path.dirname(fileURLToPath(import.meta.url));
+const configPaths = resolveRuntimePaths({
+  appRoot,
+  configRoot: process.env.WORKBENCH_CONFIG_ROOT || appRoot,
+});
+const config = loadConfig(configPaths.appRoot, { configRoot: configPaths.configRoot });
+const runtimePaths = resolveRuntimePaths({
+  appRoot: configPaths.appRoot,
+  configRoot: configPaths.configRoot,
+  workspaceRoot: config.workspaceRoot,
+});
+// Route handlers use root as the writable workspace. Built-in resources stay
+// under appRoot and are resolved by their registries or explicit resourceRoot.
+const root = runtimePaths.workspaceRoot;
 // --demo / WORKBENCH_DEMO=1：无模型服务商时也能预览各视图，使用独立演示库，不污染真实数据。
 const demo = process.argv.includes('--demo') || process.env.WORKBENCH_DEMO === '1';
 const demoProduction = demo && (process.argv.includes('--demo-production') || process.env.WORKBENCH_DEMO_PRODUCTION === '1');
@@ -71,10 +84,10 @@ async function refreshProductionDemoSnapshot(sourcePath, snapshotPath) {
   fs.renameSync(tempPath, snapshotPath);
 }
 
-const dataRoot = path.join(root, 'data');
+const dataRoot = runtimePaths.dataRoot;
 const productionSnapshotPath = path.join(dataRoot, 'demo-production.db');
 if (demoProduction) await refreshProductionDemoSnapshot(path.join(dataRoot, 'workbench.db'), productionSnapshotPath);
-const instanceLock=acquireInstanceLock(root,{name:demoProduction?'demo-production':demo?'demo':'workbench'});
+const instanceLock=acquireInstanceLock(runtimePaths.workspaceRoot,{name:demoProduction?'demo-production':demo?'demo':'workbench'});
 const store = new Store(path.join(dataRoot, demoProduction ? 'demo-production.db' : demo ? 'demo.db' : 'workbench.db'), {
   preferredBatchId: demoProductionBatchId,
   referenceDate: demoProductionBatchId?.slice(0, 10) || null,
@@ -82,14 +95,32 @@ const store = new Store(path.join(dataRoot, demoProduction ? 'demo-production.db
 const initialSourceSeed = seedInitialCollectionSources(store);
 if (initialSourceSeed.seeded) console.log(`首次启动：已写入 ${initialSourceSeed.count} 个参考采集源（默认暂停）`);
 // 模型提供商以数据库为唯一持久化来源；首次启动时从旧 config.local.json/.env 迁移。
-syncModelProvidersToDatabase({root,config,repository:store.repositories.extensionSettings,cleanupLegacy:!demo});
-const extensionConfigurationService=new ExtensionConfigurationService({root,repository:store.repositories.extensionSettings});
+syncModelProvidersToDatabase({root:runtimePaths.configRoot,config,repository:store.repositories.extensionSettings,cleanupLegacy:!demo});
+const extensionConfigurationService=new ExtensionConfigurationService({root:runtimePaths.configRoot,repository:store.repositories.extensionSettings});
 setToolConfigurationResolver((manifest)=>{
   return extensionConfigurationService.resolve({extensionType:'tool',extensionId:manifest.id,manifest});
 });
+
+async function getCdnUploadStatus() {
+  try {
+    const registry = await getToolRegistry(root);
+    const plugin = registry.resolve('cap_image_cdn_upload');
+    if (!plugin) return { uploaderAvailable:false, cdnConfigured:false, cdnStatus:'missing', cdnReason:'未安装图片 CDN 上传能力' };
+    const configuration = plugin.manifest.configuration
+      ? extensionConfigurationService.resolve({ extensionType:'tool', extensionId:plugin.manifest.id, manifest:plugin.manifest })
+      : { configured:true };
+    if (!configuration.configured) return { uploaderAvailable:false, cdnConfigured:false, cdnStatus:'needs_configuration', cdnReason:'图片 CDN 尚未完成配置' };
+    const health = await registry.health('cap_image_cdn_upload');
+    if (health.status === 'ok') return { uploaderAvailable:true, cdnConfigured:true, cdnStatus:'ready', cdnReason:'' };
+    return { uploaderAvailable:false, cdnConfigured:true, cdnStatus:'unhealthy', cdnReason:health.error?.message || '图片 CDN 当前不可用' };
+  } catch (error) {
+    return { uploaderAvailable:false, cdnConfigured:null, cdnStatus:'unknown', cdnReason:`图片 CDN 状态读取失败：${error.message}` };
+  }
+}
+
 setSkillConfigurationResolver((manifest)=>extensionConfigurationService.resolve({extensionType:'skill',extensionId:manifest.id,manifest}));
 if (demo && !demoProduction) {
-  const seedResult = seedDemoData(store, { root });
+  const seedResult = seedDemoData(store, { root: runtimePaths.workspaceRoot, assetRoot: runtimePaths.appRoot });
   if (seedResult.seeded) console.log(`演示模式：已写入演示批次（${seedResult.todayBatchId} / ${seedResult.yesterdayBatchId}）`);
 }
 const recovered = store.recoverInterruptedWork();
@@ -112,7 +143,7 @@ const aiJobs = new AiJobManager(store, models, config, {
   },
 });
 const artifactRoots = [config.workspaceRoot, ...config.contentRoots];
-const publicRoot = path.join(root, 'public');
+const publicRoot = path.join(runtimePaths.appRoot, 'public');
 const execFileAsync = promisify(execFile);
 const localSecurity = createLocalSecurity();
 const CONTENT_SECURITY_POLICY = "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; frame-src 'self'";
@@ -390,9 +421,9 @@ async function api(request, response, url) {
   if (await handleModelRoutes({ request, response, pathname, root, config, store, models, body, json })) return;
   if (await handleThemeRoutes({ request, response, pathname, searchParams, json, store, body, models })) return;
   if (await handleContentRoutes({ request, response, pathname, searchParams, store, artifactRoots, mime, json, body, root, models })) return;
-  if (await handleSystemRoutes({ request, response, pathname, searchParams, root, config, store, batchWorkdir, json, body, aiJobs,
+  if (await handleSystemRoutes({ request, response, pathname, searchParams, root, resourceRoot: runtimePaths.appRoot, config, store, batchWorkdir, json, body, aiJobs,
     binaryBody, createWorkbenchBackup, models, candidateEventGroups })) return;
-  const mediaResult = await handleMediaRoutes({ request, response, pathname, searchParams, store, config, json, body, path, fs, os, mime, root, execFileAsync, isInsideRoots, getImageWorkspace, batchArticlesDir, saveLocalImage, uploadImageToCdn, articleWorkdir, models, planImagePlaceholders, writeUtf8, saveImageMetadata, imageManifestFile, aiJobs, planArticleVisuals, defaultTypesetTheme, TYPESET_THEMES, analyzeVisualComplexity });
+  const mediaResult = await handleMediaRoutes({ request, response, pathname, searchParams, store, config, json, body, path, fs, os, mime, root, execFileAsync, isInsideRoots, getImageWorkspace, getCdnUploadStatus, batchArticlesDir, saveLocalImage, uploadImageToCdn, articleWorkdir, models, planImagePlaceholders, writeUtf8, saveImageMetadata, imageManifestFile, aiJobs, planArticleVisuals, defaultTypesetTheme, TYPESET_THEMES, analyzeVisualComplexity });
   if (mediaResult !== false) return mediaResult;
   const articleResult = await handleArticleRoutes({ request, response, pathname, store, json, body, candidateEventGroups, fetchCandidateSource, config, root, writeUtf8, path, batchWorkdir, lockedBrief, draftArticle, models, aiJobs, localSecurity });
   if (articleResult !== false) return articleResult;

@@ -121,7 +121,7 @@ export async function planImagePlaceholders({ gateway, store, batchId, candidate
   return applyImagePlan(markdown, parsed.placements);
 }
 
-export function getImageWorkspace(workdir) {
+export function getImageWorkspace(workdir, options = {}) {
   const articleFinalPath = path.join(workdir, '09-FINAL.md');
   const dailyFinalPath = path.join(workdir, '03-FINAL.md');
   const finalPath = fs.existsSync(articleFinalPath) ? articleFinalPath : dailyFinalPath;
@@ -154,7 +154,9 @@ export function getImageWorkspace(workdir) {
   ];
   return { planned:placeholders.length > 0 || PLAN_NONE_RE.test(markdown) || generatedItems.length > 0, total:items.length, ready:items.filter((item) => item.status === 'cdn').length,
     unresolved:[...manualUnresolved, ...generatedPending], manualUnresolved, generatedPending, items, existingImages,
-    uploaderAvailable:true };
+    uploaderAvailable:options.uploaderAvailable ?? null,
+    cdnConfigured:options.cdnConfigured ?? null,
+    deliveryMode:options.deliveryMode || null };
 }
 
 export function registerGeneratedImageAssets(workdir, label, relativeImages = []) {
@@ -254,23 +256,49 @@ export async function uploadImageToCdn(workdir, id, options = {}) {
   return getImageWorkspace(workdir).items.find((entry) => entry.id === id);
 }
 
-export function buildImagesMarkdown(workdir, markdown) {
+function localImagePlaceholder(id, label = '') {
+  const safeId = String(id || '图片').trim() || '图片';
+  const safeLabel = String(label || '').replace(/[\r\n]/g, ' ').trim();
+  return `![图片占位 · ${safeId}${safeLabel ? `：${safeLabel}` : ''}](image-placeholder:${encodeURIComponent(safeId)})`;
+}
+
+export function buildImagesMarkdown(workdir, markdown, options = {}) {
   const manifest = readManifest(workdir);
+  const localOnly = options.mode === 'local' || options.imageDeliveryMode === 'local';
   const placeholders = parseImagePlaceholders(markdown);
   const unresolved = [];
+  let localPlaceholderCount = 0;
   let output = String(markdown).replace(SUPPLY_LIST_RE, '').replace(PLAN_NONE_RE, '').trim();
   for (const item of placeholders) {
     const saved = manifest.items[item.id] || {};
+    if (localOnly) {
+      output = output.replace(item.placeholder, localImagePlaceholder(item.id, item.content));
+      localPlaceholderCount += 1;
+      continue;
+    }
     if (!/^https:\/\//i.test(saved.url || '')) { unresolved.push(item.id); continue; }
     output = output.replace(item.placeholder, `![${item.content.replace(/[\[\]]/g, '')}](${saved.url})`);
   }
   for (const [id, saved] of Object.entries(manifest.items)) {
     if (!saved?.generated || !saved.relativePath) continue;
+    if (localOnly) {
+      output = output.replaceAll(`](${saved.relativePath})`, localImagePlaceholder(id, saved.content || id));
+      localPlaceholderCount += 1;
+      continue;
+    }
     if (!/^https:\/\//i.test(saved.url || '')) { unresolved.push(id); continue; }
     output = output.replaceAll(`](${saved.relativePath})`, `](${saved.url})`);
   }
-  const nonHttpsImages = [...output.matchAll(/!\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)].map((match) => match[1]).filter((url) => !/^https:\/\//i.test(url));
-  return { content:`${output.trim()}\n`, unresolved, nonHttpsImages };
+  if (localOnly) {
+    let localIndex = 0;
+    output = output.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, (match, alt, url) => {
+      if (/^image-placeholder:/i.test(url) || /^https:\/\//i.test(url)) return match;
+      localIndex += 1;
+      return localImagePlaceholder(`本地图片:${String(localIndex).padStart(2, '0')}`, alt || url);
+    });
+  }
+  const nonHttpsImages = [...output.matchAll(/!\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)].map((match) => match[1]).filter((url) => !/^https:\/\//i.test(url) && !/^image-placeholder:/i.test(url));
+  return { content:`${output.trim()}\n`, unresolved, nonHttpsImages, localOnly, localPlaceholderCount };
 }
 
 export function imageManifestFile(workdir) { return manifestPath(workdir); }
