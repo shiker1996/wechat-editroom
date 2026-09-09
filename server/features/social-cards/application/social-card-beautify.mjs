@@ -37,6 +37,8 @@ const AI_VISUAL_THEME_LAYOUT_FIELDS = Object.freeze([
 const ENABLE_AI_VISUAL_SCREENSHOTS = true;
 // 只检查交付文件是否真实存在且完整。
 const ENABLE_AI_VISUAL_DELIVERY_GATE = true;
+// 故事板页数是视觉生成的基准；少量拆页或合页不应在截图前直接失败。
+export const AI_VISUAL_PAGE_COUNT_TOLERANCE = 2;
 
 function htmlPageCount(html) {
   return [...String(html || '').matchAll(/class=["']([^"']+)["']/gi)]
@@ -48,14 +50,30 @@ export function createAiVisualDocumentWriteSessionId(batchId, candidateId) {
   return `ai-visual-${String(batchId).replace(/[^A-Za-z0-9._-]/g, '-').slice(0, 54)}-${String(candidateId).replace(/[^A-Za-z0-9._-]/g, '-').slice(0, 24)}-${runToken}`;
 }
 
-export function validateAiVisualGenerationCompletion({ agent = null, generatedPageCount = 0, requiredPageCount = 0 } = {}) {
+export function aiVisualPageCountPolicy(requiredPageCount = 0, tolerance = AI_VISUAL_PAGE_COUNT_TOLERANCE) {
   const expected = Number(requiredPageCount) || 0;
+  const pageCountTolerance = Math.max(0, Number(tolerance) || 0);
+  const minPageCount = expected > 0 ? Math.max(1, expected - pageCountTolerance) : 0;
+  const maxPageCount = expected + pageCountTolerance;
+  return {
+    expectedPageCount: expected,
+    pageCountTolerance,
+    minPageCount,
+    maxPageCount,
+  };
+}
+
+export function validateAiVisualGenerationCompletion({ agent = null, generatedPageCount = 0, requiredPageCount = 0, pageCountTolerance = AI_VISUAL_PAGE_COUNT_TOLERANCE } = {}) {
+  const policy = aiVisualPageCountPolicy(requiredPageCount, pageCountTolerance);
   const actual = Number(generatedPageCount) || 0;
   const issues = [];
   if (agent?.type !== 'final') issues.push(`Agent 未正常完成（${agent?.type || 'unknown'}）`);
   if (agent?.documentFinished !== true) issues.push('文档未成功 finish');
-  if (actual !== expected) issues.push(`页面数不完整（应为 ${expected}，实际 ${actual}）`);
-  return { valid: issues.length === 0, expectedPageCount: expected, pageCount: actual, issues };
+  const pageCountWithinRange = actual >= policy.minPageCount && actual <= policy.maxPageCount;
+  if (!pageCountWithinRange) {
+    issues.push(`页面数超出可接受范围（故事板预估 ${policy.expectedPageCount} 页，允许 ${policy.minPageCount}–${policy.maxPageCount} 页，实际 ${actual} 页）`);
+  }
+  return { valid: issues.length === 0, ...policy, pageCount: actual, pageCountWithinRange, issues };
 }
 
 function readJsonFile(filePath, fallback = null) {
@@ -311,13 +329,15 @@ function buildAiVisualGenerationBrief({ context, workspaceFiles, styleBrief = ''
   const theme = context?.theme || {};
   const fileList = (Array.isArray(workspaceFiles) ? workspaceFiles : []).join('、');
   const pageCount = Number(context?.requiredPageCount) || 0;
+  const pagePolicy = aiVisualPageCountPolicy(pageCount);
   const themeLabel = [theme.id, theme.label, theme.version].filter(Boolean).join(' · ') || '由 social-theme-design-spec.md 确定';
   const brief = String(styleBrief || '').trim().slice(0, 800);
   return `
 
 ## 本次运行参数
 
-- 目标页数：${pageCount}
+- 故事板页数基准：${pageCount}
+- 实际允许页数：${pagePolicy.minPageCount}–${pagePolicy.maxPageCount}（允许上下浮动最多 ${pagePolicy.pageCountTolerance} 页，仅用于确需拆分或合并内容的情况）
 - 冻结输入文件：${fileList}
 - 当前主题：${themeLabel}
 - 额外设计意图：${brief || '无，按主题规范和视觉技能自行决定。'}
@@ -454,6 +474,7 @@ async function runAiVisualScreenshotDeliveryOnly({
 }) {
   const generatedHtml = fs.existsSync(htmlPath) ? fs.readFileSync(htmlPath, 'utf8') : '';
   const pageCount = htmlPageCount(generatedHtml);
+  const pagePolicy = aiVisualPageCountPolicy(context.requiredPageCount);
   const screenshotsStage = stageRecorder.start('screenshots', {
     skill: 'html-pages-to-images',
     inputArtifacts: [SOCIAL_CARD_BEAUTIFY_HTML],
@@ -462,7 +483,7 @@ async function runAiVisualScreenshotDeliveryOnly({
   let imagePaths = [];
   let screenshotCheck = {
     valid: !enableScreenshots,
-    expectedPageCount: context.requiredPageCount,
+    expectedPageCount: pageCount,
     pageCount: 0,
     images: [],
     issues: [],
@@ -485,7 +506,9 @@ async function runAiVisualScreenshotDeliveryOnly({
           onProgress(`截图失败，重试截图阶段（第 ${attempt} 次；不重新调用 AI）…`);
         }
         imagePaths = await renderBeautifiedImages({ workspaceRoot, htmlPath, outputDir });
-        screenshotCheck = validateAiVisualScreenshotSet(imagePaths, context.requiredPageCount);
+        // 生成阶段已经检查故事板基准与实际页数的允许偏差；截图阶段只需核对
+        // HTML 实际有多少页，确保每一页都有对应 PNG。
+        screenshotCheck = validateAiVisualScreenshotSet(imagePaths, pageCount);
         screenshotAttempts.push({ attempt, status: screenshotCheck.valid ? 'passed' : 'blocked', pageCount: screenshotCheck.pageCount, issues: screenshotCheck.issues });
         if (screenshotCheck.valid) {
           screenshotFailure = null;
@@ -521,11 +544,13 @@ async function runAiVisualScreenshotDeliveryOnly({
   }
 
   const htmlCheck = {
-    valid: fs.existsSync(htmlPath) && pageCount === context.requiredPageCount,
+    valid: fs.existsSync(htmlPath) && pagePolicy.minPageCount <= pageCount && pageCount <= pagePolicy.maxPageCount,
     pageCount,
     issues: [
       ...(!fs.existsSync(htmlPath) ? ['AI 视觉 HTML 不存在'] : []),
-      ...(pageCount !== context.requiredPageCount ? [`页面数量不一致（应为 ${context.requiredPageCount}，实际 ${pageCount}）`] : []),
+      ...(!(pagePolicy.minPageCount <= pageCount && pageCount <= pagePolicy.maxPageCount)
+        ? [`页面数量超出可接受范围（故事板预估 ${pagePolicy.expectedPageCount} 页，允许 ${pagePolicy.minPageCount}–${pagePolicy.maxPageCount} 页，实际 ${pageCount} 页）`]
+        : []),
     ],
   };
   const copyCheck = fs.existsSync(copyPath) ? validateSocialCardCopy(fs.readFileSync(copyPath, 'utf8')) : { valid: false, issues: ['copy.txt 不存在'] };
@@ -565,7 +590,7 @@ async function runAiVisualScreenshotDeliveryOnly({
     agentRuns: {
       generation: { agentRunId: generationAgent?.agentRunId || null, modelSteps: generationAgent?.modelSteps || 0, toolCalls: generationAgent?.toolCalls || 0, pageCount: generationAgent?.pageCount || 0 },
     },
-    screenshots: { status: screenshotCheck.status || 'skipped', expectedPageCount: context.requiredPageCount, pageCount: imagePaths.length, attempts: screenshotAttempts, issues: screenshotCheck.issues || [] },
+    screenshots: { status: screenshotCheck.status || 'skipped', expectedPageCount: pageCount, storyboardPageCount: context.requiredPageCount, pageCountTolerance: pagePolicy.pageCountTolerance, pageCount: imagePaths.length, attempts: screenshotAttempts, issues: screenshotCheck.issues || [] },
     deliveryGate: { status: enableDeliveryGate ? (deliveryValid ? 'passed' : 'blocked') : 'skipped', registered: false, path: path.basename(deliveryGatePath) },
     model: { provider: lastModelResult?.provider || provider || '', model: lastModelResult?.model || resolvedModel, callId: lastModelResult?.callId || null },
     skillManifest: path.basename(skillManifest.path),

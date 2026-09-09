@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { buildAiRenderRequest, buildAiVisualCardPlan, buildAiVisualThemeSnapshot, buildBeautifyContext, createAiVisualDocumentWriteSessionId, runSocialCardBeautify, validateAiVisualGenerationCompletion, validateAiVisualScreenshotSet } from '../server/features/social-cards/application/social-card-beautify.mjs';
+import { aiVisualPageCountPolicy, buildAiRenderRequest, buildAiVisualCardPlan, buildAiVisualThemeSnapshot, buildBeautifyContext, createAiVisualDocumentWriteSessionId, runSocialCardBeautify, validateAiVisualGenerationCompletion, validateAiVisualScreenshotSet } from '../server/features/social-cards/application/social-card-beautify.mjs';
 import { buildSocialCardCopyInput, generateSocialCardCopy, validateSocialCardCopy } from '../server/features/social-cards/application/social-card-copy.mjs';
 import { SOCIAL_CARD_AI_VISUAL_STAGE_CONTRACT } from '../server/features/social-cards/application/social-card-ai-visual-pipeline.mjs';
 import { parseModelJson, parseModelJsonWithRepair } from '../server/platform/llm/model-json.mjs';
@@ -251,20 +251,40 @@ test('AI 视觉截图门禁校验两位数页面文件、数量和空文件', ()
   fs.rmSync(workdir, { recursive: true, force: true });
 });
 
-test('AI 视觉生成只有正常 final、文档 finish 且页面完整时才算完成', () => {
+test('AI 视觉生成以故事板页数为基准，允许上下浮动两页', () => {
+  assert.deepEqual(aiVisualPageCountPolicy(5), {
+    expectedPageCount: 5,
+    pageCountTolerance: 2,
+    minPageCount: 3,
+    maxPageCount: 7,
+  });
   assert.equal(validateAiVisualGenerationCompletion({
     agent: { type: 'final', documentFinished: true },
     generatedPageCount: 6,
-    requiredPageCount: 6,
+    requiredPageCount: 5,
   }).valid, true);
+
+  assert.equal(validateAiVisualGenerationCompletion({
+    agent: { type: 'final', documentFinished: true },
+    generatedPageCount: 3,
+    requiredPageCount: 5,
+  }).valid, true);
+
+  const outOfRange = validateAiVisualGenerationCompletion({
+    agent: { type: 'final', documentFinished: true },
+    generatedPageCount: 8,
+    requiredPageCount: 5,
+  });
+  assert.equal(outOfRange.valid, false);
+  assert.match(outOfRange.issues.join('；'), /超出可接受范围/);
 
   const incomplete = validateAiVisualGenerationCompletion({
     agent: { type: 'limit', documentFinished: false },
     generatedPageCount: 0,
-    requiredPageCount: 6,
+    requiredPageCount: 5,
   });
   assert.equal(incomplete.valid, false);
-  assert.match(incomplete.issues.join('；'), /Agent 未正常完成|文档未成功 finish|页面数不完整/);
+  assert.match(incomplete.issues.join('；'), /Agent 未正常完成|文档未成功 finish|超出可接受范围/);
 });
 
 test('AI 视觉重新生成使用新的文档写入会话 ID', () => {

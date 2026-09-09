@@ -24,21 +24,25 @@ function readRequest(requestId, workspaceFiles, reason = '读取 AI 视觉生成
   };
 }
 
-function generationInstruction({ sourceRead, documentStarted, documentFinished, pageCount, maxPages, outputPath, documentLabel }) {
+function generationInstruction({ sourceRead, documentStarted, documentFinished, pageCount, targetPageCount, minPages, maxPages, outputPath, documentLabel }) {
   if (!sourceRead) return '先读取 workspace.files 中的全部本次运行输入；技能内置参考已经随系统提示注入，并据此完成视觉解释；不要先写页面。';
   if (!documentStarted) return `资料已读取。现在开始一次完整的单 Agent ${documentLabel}生成会话：先用 cap_filesystem_project_document_write 的 begin 操作建立文档。不要返回 final。`;
   if (documentFinished) return `文档 ${outputPath} 已完成 finish。现在只返回严格合法的 {"type":"final","assistantReply":"已完成 AI 视觉 HTML 生成"}，不要调用工具，不要输出 HTML/CSS。`;
-  if (pageCount < maxPages) return `当前检测到 ${pageCount}/${maxPages} 页。继续用 cap_filesystem_project_document_write 的 append 原样追加下一段完整 HTML/CSS，单个 content 不超过 ${AI_VISUAL_DOCUMENT_CHUNK_MAX_CHARS} 字符。当前仍未完成 ${documentLabel}，不要返回 final。每个 append 使用新的 requestId，并根据上一次工具结果填写 expectedRevision。服务端会自动注入固定的 resourceId、path 和 sessionId。`;
-  return `当前检测到已达到 ${maxPages} 页。检查 ${outputPath} 是否已经包含完整主题 CSS、所有页面结构、闭合标签和可见主题装饰；如果还没写完，继续 append，每个 content 不超过 ${AI_VISUAL_DOCUMENT_CHUNK_MAX_CHARS} 字符。全部内容写完后，用 cap_filesystem_project_document_write 的 finish 结束会话，随后才能返回 final。`;
+  if (pageCount < minPages) return `当前检测到 ${pageCount} 页，至少需要 ${minPages} 页（故事板基准 ${targetPageCount} 页，允许范围 ${minPages}–${maxPages} 页）。继续用 cap_filesystem_project_document_write 的 append 原样追加下一段完整 HTML/CSS，单个 content 不超过 ${AI_VISUAL_DOCUMENT_CHUNK_MAX_CHARS} 字符。当前仍未完成 ${documentLabel}，不要返回 final。每个 append 使用新的 requestId，并根据上一次工具结果填写 expectedRevision。服务端会自动注入固定的 resourceId、path 和 sessionId。`;
+  return `当前检测到 ${pageCount} 页，已落在允许范围 ${minPages}–${maxPages} 页（故事板基准 ${targetPageCount} 页）。检查 ${outputPath} 是否已经包含完整主题 CSS、所有页面结构、闭合标签和可见主题装饰；如果还没写完，继续 append，每个 content 不超过 ${AI_VISUAL_DOCUMENT_CHUNK_MAX_CHARS} 字符。全部内容写完后，用 cap_filesystem_project_document_write 的 finish 结束会话，随后才能返回 final。不要为了凑页数添加空白页、重复文案或虚构事实。`;
 }
 
-function generationStageOverride({ requiredPageCount, canvas, outputPath, documentLabel, nativeTools = false }) {
+function generationStageOverride({ requiredPageCount, pageCountTolerance, canvas, outputPath, documentLabel, nativeTools = false }) {
   const width = Number(canvas?.width) || 375;
   const height = Number(canvas?.height) || 667;
+  const targetPageCount = Math.max(1, Number(requiredPageCount) || 1);
+  const tolerance = Math.max(0, Number(pageCountTolerance) || 0);
+  const minPages = Math.max(1, targetPageCount - tolerance);
+  const maxPages = targetPageCount + tolerance;
   return `
 ## 当前 Agent 阶段：单一 AI 视觉生成
 
-你是 ${documentLabel}的唯一视觉设计师、HTML/CSS 执行者和文件写入者。需要生成 ${requiredPageCount} 页，画布基准为 ${width}×${height}。不要把任务拆给 CSS Agent、页面 Agent 或任何后续程序。先完整读取 workspace.files 中的全部本次运行输入；布局、结构和组件参考已随技能提示注入；再在同一个会话中完成视觉解释、主题系统、组件 CSS、全部页面和 HTML 闭合。
+你是 ${documentLabel}的唯一视觉设计师、HTML/CSS 执行者和文件写入者。故事板基准为 ${targetPageCount} 页，实际允许生成 ${minPages}–${maxPages} 页；只有确实需要拆分或合并内容时才调整页数，不得添加空白页、重复文案或虚构事实。画布基准为 ${width}×${height}。不要把任务拆给 CSS Agent、页面 Agent 或任何后续程序。先完整读取 workspace.files 中的全部本次运行输入；布局、结构和组件参考已随技能提示注入；再在同一个会话中完成视觉解释、主题系统、组件 CSS、全部页面和 HTML 闭合。
 
 - 当前只允许调用 cap_filesystem_project_read 和 cap_filesystem_project_document_write。
 - 只使用 cap_filesystem_project_document_write 写入文件；不要输出完整 HTML/CSS 到 final 或普通回答。
@@ -47,7 +51,7 @@ function generationStageOverride({ requiredPageCount, canvas, outputPath, docume
 - append 的 content 是原始 HTML/CSS，不要让程序替你拼接、改写、补 CSS、补结构或插入主题装饰。每块不超过 ${AI_VISUAL_DOCUMENT_CHUNK_MAX_CHARS} 字符，并为每块使用唯一 requestId；能填写时使用上一次结果中的 expectedRevision。
 - 不要假设程序会保留预置页面壳，最终文件必须由你的分块内容本身构成完整 HTML。
 - 生成阶段不调用浏览器审计，不调用修复能力，不调用旧的 cap_filesystem_project_write，不返回程序化补丁。
-- 只有在 ${requiredPageCount} 页、主题 CSS、页面正文、闭合标签和主题装饰全部写完并成功 finish 后，才返回严格的 {"type":"final","assistantReply":"简短说明"}；assistantReply 必须是字符串。
+- 只有在 ${minPages}–${maxPages} 页、主题 CSS、页面正文、闭合标签和主题装饰全部写完并成功 finish 后，才返回严格的 {"type":"final","assistantReply":"简短说明"}；assistantReply 必须是字符串。
 ${nativeTools ? '- 工具调用必须使用 API 提供的原生 function tool；不要在普通文本中伪造 tool_requests JSON。' : '- 所有工具请求必须是完整合法 JSON；HTML/CSS 放在 JSON 字符串 content 中，正确转义引号、反斜杠和换行。'}
 `;
 }
@@ -75,6 +79,7 @@ export async function runAiVisualDocumentAgent({
   canvas = { width: 375, height: 667 },
   outputPath = 'ai-visual.html',
   documentLabel = 'AI 视觉文档',
+  pageCountTolerance = 0,
   entryPoint = 'ai-visual-document-generation',
   skillId = 'ai-visual-document-generator',
   purpose = 'ai-visual-document-generation-agent',
@@ -95,7 +100,10 @@ export async function runAiVisualDocumentAgent({
   if (typeof getPageCount !== 'function') throw new TypeError('AI 视觉文档 Agent 缺少 getPageCount');
   if (!documentWriteSessionId) throw new TypeError('AI 视觉文档 Agent 缺少 documentWriteSessionId');
   const pageFiles = [...new Set(Array.isArray(workspaceFiles) ? workspaceFiles : [])];
-  const maxPages = Math.max(1, Number(requiredPageCount) || 1);
+  const targetPageCount = Math.max(1, Number(requiredPageCount) || 1);
+  const tolerance = Math.max(0, Number(pageCountTolerance) || 0);
+  const minPages = Math.max(1, targetPageCount - tolerance);
+  const maxPages = targetPageCount + tolerance;
   const generationCatalog = filterAiVisualGenerationCatalog(catalog, documentWriteCapability);
   const nativeTools = providerSupportsNativeTools(gateway, provider);
   const nativeToolDefinitions = nativeTools ? buildNativeToolDefinitions(generationCatalog) : [];
@@ -197,7 +205,7 @@ export async function runAiVisualDocumentAgent({
     entryPoint,
     registry,
     catalog: generationCatalog,
-    messages: [{ role: 'system', protected: true, content: `${agentSystem}${generationStageOverride({ requiredPageCount: maxPages, canvas, outputPath, documentLabel, nativeTools })}` }, ...baseMessages],
+    messages: [{ role: 'system', protected: true, content: `${agentSystem}${generationStageOverride({ requiredPageCount: targetPageCount, pageCountTolerance: tolerance, canvas, outputPath, documentLabel, nativeTools })}` }, ...baseMessages],
     store,
     ...(resumeFrom ? { resumeFrom: String(resumeFrom) } : {}),
     budget: {
@@ -244,7 +252,7 @@ export async function runAiVisualDocumentAgent({
 
       const usePlanningThinking = shouldUseAiVisualPlanningThinking({ sourceRead, documentStarted, planningThinkingUsed });
       planningThinkingUsed = true;
-      let result = await complete({ history, step, signal, emit, native: nativeTools, thinking: usePlanningThinking, instruction: generationInstruction({ sourceRead, documentStarted, documentFinished, pageCount: Number(getPageCount()) || 0, maxPages, outputPath, documentLabel }) });
+      let result = await complete({ history, step, signal, emit, native: nativeTools, thinking: usePlanningThinking, instruction: generationInstruction({ sourceRead, documentStarted, documentFinished, pageCount: Number(getPageCount()) || 0, targetPageCount, minPages, maxPages, outputPath, documentLabel }) });
       lastModelResult = result;
       if (nativeTools && result?.toolCalls?.length) {
         const call = result.toolCalls[0];
@@ -257,10 +265,11 @@ export async function runAiVisualDocumentAgent({
       let recoveryAttempts = 0;
       while (true) {
         if (parsed?.type === 'final') {
-          if (documentFinished && (Number(getPageCount()) || 0) >= maxPages) return validateAgentEnvelope(parsed, { maxRequests: 1 });
+          const currentPageCount = Number(getPageCount()) || 0;
+          if (documentFinished && currentPageCount >= minPages && currentPageCount <= maxPages) return validateAgentEnvelope(parsed, { maxRequests: 1 });
           if (recoveryAttempts >= 2) throw new AgentContractError('INVALID_AGENT_ENVELOPE', 'AI 视觉 Agent 连续过早返回 final，文档尚未完成，未执行空写入');
           recoveryAttempts += 1;
-          parsed = await recoverToolRequest({ parsed, history, step, signal, label: 'AI 视觉 Agent 完成前恢复', instruction: `${generationInstruction({ sourceRead, documentStarted, documentFinished, pageCount: Number(getPageCount()) || 0, maxPages, outputPath, documentLabel })} 你刚才过早返回了 final。必须继续写入，不能结束。` });
+          parsed = await recoverToolRequest({ parsed, history, step, signal, label: 'AI 视觉 Agent 完成前恢复', instruction: `${generationInstruction({ sourceRead, documentStarted, documentFinished, pageCount: currentPageCount, targetPageCount, minPages, maxPages, outputPath, documentLabel })} 你刚才过早返回了 final。若当前页数已在允许范围内，请先 finish；若不足最小页数，必须继续写入，不能结束。` });
           continue;
         }
         if (parsed?.type !== 'tool_requests') return validateAgentEnvelope({ type: 'final', assistantReply: 'AI 视觉生成阶段结束' }, { maxRequests: 1 });
@@ -298,5 +307,5 @@ export async function runAiVisualDocumentAgent({
     },
   });
   onPhaseChange('idle');
-  return { ...agent, sourceRead, lastModelResult, cssChunkCount: 0, pageCount: Number(getPageCount()) || 0, documentStarted, documentFinished, allowedCapabilities, catalog: generationCatalog, outputPath, canvas: { width: Number(canvas?.width) || 375, height: Number(canvas?.height) || 667 } };
+  return { ...agent, sourceRead, lastModelResult, cssChunkCount: 0, pageCount: Number(getPageCount()) || 0, documentStarted, documentFinished, allowedCapabilities, catalog: generationCatalog, outputPath, pageCountTolerance: tolerance, canvas: { width: Number(canvas?.width) || 375, height: Number(canvas?.height) || 667 } };
 }

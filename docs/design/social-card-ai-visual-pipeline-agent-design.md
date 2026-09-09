@@ -108,7 +108,7 @@ cap_filesystem_project_document_write
 
 已收束为单个全量 AI 视觉 Agent。Agent 读取冻结输入，通过 `document_write` 的 begin/append/finish 分块原样写入 `ai-beautified.html`，不由程序拼接 CSS 或页面。
 
-每次生成使用新的文档写入会话 ID，避免重试复用旧会话；生成只有同时满足 Agent 正常返回 `final`、文档成功 `finish`、实际页面数与故事板一致时才算完成。
+每次生成使用新的文档写入会话 ID，避免重试复用旧会话；故事板页数是生成基准，实际页数允许因内容拆分或合并上下浮动最多 2 页。生成只有同时满足 Agent 正常返回 `final`、文档成功 `finish`、实际页面数落在该范围内时才算完成。
 
 ### AV-3：截图和交付登记（已完成）
 

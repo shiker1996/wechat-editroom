@@ -21,6 +21,9 @@ export {
 export async function runSocialCardAiVisualGenerationAgent(options = {}) {
   return runAiVisualDocumentAgent({
     ...options,
+    // 故事板页数是基准，不是视觉排版必须逐页复刻的硬模板；允许视觉 Agent
+    // 因内容拆分或合并产生少量页数变化，最终仍由交付门禁检查范围。
+    pageCountTolerance: 2,
     entryPoint: 'social-card-ai-visual-generation',
     skillId: 'social-card-ai-visual-generator',
     purpose: 'social-card-ai-visual-generation-agent',
