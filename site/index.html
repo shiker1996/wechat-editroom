@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="见字：从热点到文章交付的本地 AI 公众号编辑工作台。在线教程、真实界面截图与只读流程导览。">
+    <meta name="description" content="见字：从热点到文章交付的本地 AI 公众号编辑工作台。查看真实界面、下载桌面版并开始使用。">
     <meta name="theme-color" content="#101b2d">
     <title>见字｜从热点开始写一篇文章</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -20,7 +20,6 @@
       </a>
       <nav class="nav" aria-label="主导航">
         <a href="#how">怎么工作</a>
-        <a href="#demo">只读导览</a>
         <a href="#screenshots">真实界面</a>
         <a href="#desktop">桌面版</a>
         <a href="#tutorial">快速上手</a>
@@ -35,7 +34,7 @@
           <h1>一篇文章，<em>从热点开始。</em></h1>
           <p class="hero-lede">见字把“找题、研判、写稿、审稿、排版、交付”收进一条可以回头检查的本地 AI 工作流。</p>
           <div class="hero-actions">
-            <a class="button button-dark" href="#demo">进入只读导览 <span>↓</span></a>
+            <a class="button button-dark" href="#screenshots">查看真实界面 <span>↓</span></a>
             <a class="button button-download" href="https://github.com/shiker1996/wechat-newsroom-workbench/releases/latest" target="_blank" rel="noreferrer">下载 Windows 版 <span>↗</span></a>
             <a class="text-link" href="#tutorial">先看 5 分钟教程 <span>→</span></a>
           </div>
@@ -76,35 +75,13 @@
         </div>
       </section>
 
-      <section class="demo-section" id="demo">
-        <div class="section-wrap">
-          <div class="demo-heading reveal"><div><p class="eyebrow eyebrow-light">02 / READ-ONLY FLOW TOUR</p><h2>打开一批真实工作，<br><span>看看“热点全景”如何变成选题。</span></h2><p class="demo-heading-note">这是为了理解工作流制作的结构化导览，不是实际工作台的逐像素复刻。下方可以查看真实界面截图与生产批次只读预览 GIF。</p></div><div class="demo-status"><span class="status-pulse"></span><span id="snapshot-label">正在加载生产快照…</span></div></div>
-          <div class="demo-shell reveal reveal-delay-1">
-            <aside class="demo-sidebar">
-              <div class="sidebar-title"><span class="mini-mark">见</span><span>见字工作台</span></div>
-              <div class="sidebar-caption">READ-ONLY TOUR</div>
-              <button class="side-tab active" data-view="overview"><span>◈</span> 工作台总览</button>
-              <button class="side-tab" data-view="hotspots"><span>⌁</span> 热点全景 <b id="side-hotspot-count">—</b></button>
-              <button class="side-tab" data-view="events"><span>◌</span> 热点事件 <b id="side-event-count">—</b></button>
-              <button class="side-tab" data-view="topics"><span>✦</span> 文章选题池 <b id="side-candidate-count">—</b></button>
-              <div class="sidebar-bottom"><span class="lock">⌑</span><span>演示模式<br><b>只读快照</b></span></div>
-            </aside>
-            <div class="demo-main">
-              <div class="demo-toolbar"><div><span class="crumb">工作区 / </span><strong id="view-title">生产批次总览</strong></div><div class="toolbar-date" id="batch-date">—</div></div>
-              <div id="demo-content" class="demo-content"><div class="loading-state"><span class="spinner"></span>正在读取可公开的脱敏数据…</div></div>
-            </div>
-          </div>
-          <p class="demo-disclaimer">只读流程导览仅展示脱敏后的生产批次摘要，不连接模型、不采集、不写入。真实界面见下方，完整工作台请在本地运行。</p>
-        </div>
-      </section>
-
       <section class="screenshots-section section-wrap" id="screenshots">
-        <div class="section-intro reveal"><div><p class="eyebrow">03 / THE REAL INTERFACE</p><h2>这才是实际工作台。<br><span>画面来自生产批次只读预览。</span></h2></div><div class="section-side-note"><p>先看一条真实链路，再打开具体页面，认识见字真正的工作表面。轮播第 1 张是 GIF，后面是静态截图。</p><small>公开批次：2026-09-08 · 界面录制：2026-09-09<br>录制日期是画面时钟，不代表公开数据批次。</small><button class="text-link carousel-static-link" type="button" data-carousel-target="1">查看静态截图 <span>→</span></button></div></div>
+        <div class="section-intro reveal"><div><p class="eyebrow">02 / THE REAL INTERFACE</p><h2>这就是实际工作台。<br><span>从真实界面开始了解见字。</span></h2></div><div class="section-side-note"><p>先看一条真实工作流，再打开具体页面，认识见字真正的工作表面。轮播第 1 张是 GIF，后面是静态截图。</p><small>界面录制：2026-09-11<br>截图来自当前工作台界面，不是静态样稿。</small><button class="text-link carousel-static-link" type="button" data-carousel-target="1">查看静态截图 <span>→</span></button></div></div>
         <div class="interface-carousel reveal reveal-delay-1" data-carousel aria-roledescription="carousel" aria-label="见字完整工作流与实际工作台界面">
           <div class="carousel-stage">
             <button class="carousel-arrow carousel-prev" type="button" aria-label="上一张截图">←</button>
             <figure class="carousel-slide" aria-live="polite">
-              <div class="carousel-image-wrap"><img id="carousel-image" src="./assets/ui-demo.gif" alt="见字生产批次只读预览 GIF：从总览到热点、选题、编辑和公众号预览"></div>
+              <div class="carousel-image-wrap"><img id="carousel-image" src="./assets/ui-demo.gif" alt="见字工作台真实界面 GIF：从总览到热点、选题、编辑和公众号预览"></div>
               <figcaption class="carousel-caption"><div><span class="carousel-kicker" id="carousel-kicker">01 / FULL WORKFLOW</span><b id="carousel-title">完整工作流 GIF</b><p id="carousel-description">从总览到热点、选题、编辑和公众号排版，21 秒看完一条真实链路</p></div><span class="carousel-hint">← / → 切换页面</span></figcaption>
             </figure>
             <button class="carousel-arrow carousel-next" type="button" aria-label="下一张截图">→</button>

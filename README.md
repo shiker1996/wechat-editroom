@@ -18,7 +18,7 @@
 
 <p align="center">
   <a href="https://github.com/shiker1996/wechat-newsroom-workbench/releases/latest">下载 Windows 桌面版</a> ·
-  <a href="https://wechat-newsroom-guide.vercel.app/">在线体验导览</a> ·
+  <a href="https://wechat-newsroom-guide.vercel.app/">查看真实界面</a> ·
   <a href="https://github.com/shiker1996/wechat-newsroom-workbench/issues">反馈问题</a>
 </p>
 
@@ -71,9 +71,7 @@ ChatGPT 和秀米仍然可以是工作流中的工具，但它们之间缺少一
 
 ## 先看效果
 
-不想先安装？打开[在线教程与只读导览](https://wechat-newsroom-guide.vercel.app/)，先看看热点、选题池、文章编辑器和图文工作区的真实界面。
-
-教程使用经过审核和脱敏的演示数据，不需要配置模型，也不会连接你的本地工作区。
+不想先安装？打开[在线教程与真实界面展示](https://wechat-newsroom-guide.vercel.app/)，先看看热点、选题池、文章编辑器和图文工作区。
 
 ## 本地优先，但不是“完全离线”
 

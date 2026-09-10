@@ -18,11 +18,11 @@
 
 这次公开展示包含：
 
-- 生产批次只读导览与热点全景
+- 真实工作台界面与热点全景截图
 - 选题池、AI 编辑会和文章编辑器
 - 微信排版预览、封面和社交图文入口
 - 一张从总览到交付的真实工作流 GIF
-- 无需配置模型即可浏览的 [在线教程与只读导览](https://wechat-newsroom-guide.vercel.app/)
+- 无需配置模型即可查看的 [在线真实界面展示](https://wechat-newsroom-guide.vercel.app/)
 
 完整工作台仍然在本地运行，数据默认保存在本机。
 
@@ -42,7 +42,7 @@
 找热点 → 研判事件 → 做选题 → 编辑决策 → 写稿 → 审稿 → 排版 → 封面 / 图文
 ```
 
-项目首页有一张真实工作流 GIF，也可以直接打开在线教程看只读导览：
+项目首页有一张真实工作流 GIF，也可以直接打开在线教程查看实际工作台界面：
 
 https://wechat-newsroom-guide.vercel.app/
 
@@ -71,5 +71,5 @@ GitHub：https://github.com/shiker1996/wechat-editroom
 - [ ] README 中的仓库地址为 `shiker1996/wechat-editroom`。
 - [ ] 在线教程链接可访问。
 - [ ] GIF 和截图没有内部路径、敏感标题或未审核批次。
-- [ ] 公开展示批次与 `site/public-demo-batch.json` 一致。
+- [ ] GIF 和截图与当前桌面工作台界面一致。
 - [ ] Issue 能收集到用户的使用场景、系统环境和复现步骤。

@@ -49,7 +49,7 @@ const scenes = [
 let frame = 0;
 
 try {
-  await page.setViewport({ width: 1280, height: 760, deviceScaleFactor: 1 });
+  await page.setViewport({ width: 2560, height: 1440, deviceScaleFactor: 1 });
   await page.goto(`${baseUrl}/#dashboard`, { waitUntil: 'networkidle0', timeout: 60000 });
   await page.evaluate(async () => { if (document.fonts?.ready) await document.fonts.ready; });
   if (batchId) {

@@ -25,7 +25,7 @@ const puppeteer = await loadPuppeteer();
 const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
 const page = await browser.newPage();
 try {
-  await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
+  await page.setViewport({ width: 2560, height: 1440, deviceScaleFactor: 1 });
   await page.goto(`${baseUrl}/#dashboard`, { waitUntil: 'networkidle0', timeout: 60000 });
   await page.evaluate(async () => { if (document.fonts?.ready) await document.fonts.ready; });
   await new Promise((r) => setTimeout(r, 2500));
