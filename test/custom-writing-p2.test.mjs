@@ -38,9 +38,9 @@ test('热点事件创作由服务端过滤自主写作候选',()=>{
 });
 
 test('导航与文章池使用单一职责命名并提供类型筛选',()=>{
-  assert.match(html,/data-view="topics">文章选题池/);
-  assert.match(html,/data-view="editorial">热点事件/);
-  assert.match(html,/data-view="topics">文章选题池[\s\S]*data-view="material-inbox">素材入箱[\s\S]*data-view="editorial">热点事件[\s\S]*data-view="daily">批次早报[\s\S]*data-view="tutorial">自主写作/);
+  assert.match(html,/data-view="topics"[^>]*>[\s\S]*?nav-label">文章选题池/);
+  assert.match(html,/data-view="editorial"[^>]*>[\s\S]*?nav-label">热点事件/);
+  assert.match(html,/data-view="topics"[^>]*>[\s\S]*?nav-label">文章选题池[\s\S]*data-view="material-inbox"[^>]*>[\s\S]*?nav-label">素材入箱[\s\S]*data-view="editorial"[^>]*>[\s\S]*?nav-label">热点事件[\s\S]*data-view="daily"[^>]*>[\s\S]*?nav-label">批次早报[\s\S]*data-view="tutorial"[^>]*>[\s\S]*?nav-label">自主写作/);
   assert.match(html,/data-article-type="hotspot">热点事件/);
   assert.match(html,/data-article-type="independent">自主写作/);
 });
