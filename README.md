@@ -19,7 +19,7 @@
   <img src="docs/screenshots/ui-demo.gif" alt="见字工作台真实批次只读预览：从总览到选题和产物" width="760">
 </p>
 
-<p align="center">⭐ 如果这个工作流对你有用，欢迎 Star，或告诉我你最想接入的内容来源。</p>
+<p align="center">⭐ 如果你也在用 AI 写公众号，Star 一下，我会继续把真实生产工作流开源出来。</p>
 
 <p align="center">
   <img src="docs/screenshots/ui-dashboard.png" alt="工作台总览" width="32%">
