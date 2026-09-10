@@ -982,6 +982,7 @@ export async function handleSystemRoutes(context) {
       writeRsshubInstallLog('install-start', { rootDir: config.rsshub?.rootDir || '' });
       const status = await installRsshub(config.rsshub, {
         workspaceRoot: root,
+        resourceRoot,
         onProgress: (message) => {
           console.log(`[rsshub-install] ${message}`);
           writeRsshubInstallLog('progress', { message });

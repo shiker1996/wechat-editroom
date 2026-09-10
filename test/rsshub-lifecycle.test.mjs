@@ -59,5 +59,6 @@ test('RSSHub 启停脚本不依赖 OpenClaw 或机器绝对路径', () => {
   assert.match(installer, /from ['"]unzipper['"]/);
   assert.match(installer, /unzipper\.Extract/);
   assert.doesNotMatch(installer, /Expand-Archive|powershell\.exe/);
-  assert.match(installer, /ComSpec \|\| 'cmd\.exe'/);
+  assert.doesNotMatch(installer, /ComSpec|cmd\.exe|\/c/);
+  assert.match(installer, /spawn\(command, args/);
 });

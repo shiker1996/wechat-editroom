@@ -22,8 +22,9 @@ function isInside(parent, target) {
 }
 
 function bundledNodePath() {
-  const value = String(process.env.WORKBENCH_NODE_PATH || '').trim();
-  if (value && fs.existsSync(value)) return value;
+  // The installer runs inside the already selected workbench Node runtime.
+  // Do not let an environment variable choose the executable for a child
+  // process; desktop/main.mjs selects and validates the bundled runtime.
   return process.execPath;
 }
 
@@ -31,18 +32,16 @@ function nodeRuntimeRoot(nodePath) {
   return path.dirname(normalizePath(nodePath));
 }
 
-function npmCommand(nodePath) {
-  const resourceRoot = path.resolve(process.env.WORKBENCH_RESOURCE_ROOT || process.cwd());
-  const npmCli = path.join(resourceRoot, 'node_modules', 'npm', 'bin', 'npm-cli.js');
+function npmCommand(nodePath, resourceRoot = process.cwd()) {
+  const resolvedResourceRoot = path.resolve(resourceRoot);
+  const npmCli = path.join(resolvedResourceRoot, 'node_modules', 'npm', 'bin', 'npm-cli.js');
   if (fs.existsSync(npmCli)) return { command: nodePath, args: [npmCli] };
-  const runtimeRoot = nodeRuntimeRoot(nodePath);
-  if (process.platform === 'win32') return { command: path.join(runtimeRoot, 'npm.cmd'), args: [] };
-  return { command: path.join(runtimeRoot, 'bin', 'npm'), args: [] };
+  return null;
 }
 
-function pnpmCommand(nodePath) {
-  const resourceRoot = path.resolve(process.env.WORKBENCH_RESOURCE_ROOT || process.cwd());
-  const pnpmCli = path.join(resourceRoot, 'node_modules', 'pnpm', 'bin', 'pnpm.cjs');
+function pnpmCommand(nodePath, resourceRoot = process.cwd()) {
+  const resolvedResourceRoot = path.resolve(resourceRoot);
+  const pnpmCli = path.join(resolvedResourceRoot, 'node_modules', 'pnpm', 'bin', 'pnpm.cjs');
   if (!fs.existsSync(pnpmCli)) return null;
   return { command: nodePath, args: [pnpmCli] };
 }
@@ -52,15 +51,14 @@ function hasRsshubSource(rootDir) {
     && fs.existsSync(path.join(rootDir, 'lib', 'index.ts'));
 }
 
-function bundledRsshubSourceRoot() {
-  const resourceRoot = path.resolve(process.env.WORKBENCH_RESOURCE_ROOT || process.cwd());
-  const explicit = String(process.env.WORKBENCH_RSSHUB_SOURCE_ROOT || '').trim();
+function bundledRsshubSourceRoot(resourceRoot = process.cwd()) {
+  const resolvedResourceRoot = path.resolve(resourceRoot);
   const candidates = [
-    explicit,
-    path.join(resourceRoot, 'rsshub-source'),
-    path.join(resourceRoot, 'RSSHub'),
+    path.join(resolvedResourceRoot, 'rsshub-source'),
+    path.join(resolvedResourceRoot, 'RSSHub'),
+    path.join(path.dirname(resolvedResourceRoot), 'rsshub-source'),
     path.resolve(process.cwd(), 'RSSHub'),
-  ].filter(Boolean).map(normalizePath);
+  ].map(normalizePath);
   return [...new Set(candidates)].find(hasRsshubSource) || null;
 }
 
@@ -125,18 +123,8 @@ export async function inspectRsshubEnvironment(config = {}) {
 
 function runProcess(command, args, options = {}) {
   const timeoutMs = Number(options.timeoutMs || 600_000);
-  const useWindowsShell = process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(String(command));
-  const quoteCmdArg = (value) => {
-    const text = String(value);
-    if (!/[\s"&|<>^]/.test(text)) return text;
-    return `"${text.replace(/(["^])/g, '^$1')}"`;
-  };
-  const spawnCommand = useWindowsShell ? (process.env.ComSpec || 'cmd.exe') : command;
-  const spawnArgs = useWindowsShell
-    ? ['/d', '/s', '/c', [command, ...args].map(quoteCmdArg).join(' ')]
-    : args;
   return new Promise((resolve, reject) => {
-    const child = spawn(spawnCommand, spawnArgs, {
+    const child = spawn(command, args, {
       cwd: options.cwd,
       env: { ...process.env, ...(options.env || {}) },
       windowsHide: true,
@@ -195,7 +183,7 @@ export async function installRsshub(config = {}, options = {}) {
   const extractionRoot = path.join(tempRoot, 'extract');
   const onProgress = options.onProgress || (() => {});
   try {
-    const bundledSourceRoot = bundledRsshubSourceRoot();
+    const bundledSourceRoot = bundledRsshubSourceRoot(options.resourceRoot || process.cwd());
     if (bundledSourceRoot) {
       onProgress?.('正在准备随应用提供的 RSSHub 源码');
       copyRsshubSource(bundledSourceRoot, rootDir);
@@ -211,11 +199,12 @@ export async function installRsshub(config = {}, options = {}) {
       fs.rmSync(path.join(rootDir, 'package-lock.json'), { force: true });
     }
     const nodePath = bundledNodePath();
-    const pnpm = fs.existsSync(path.join(rootDir, 'pnpm-lock.yaml')) ? pnpmCommand(nodePath) : null;
-    const npm = pnpm ? null : npmCommand(nodePath);
+    const pnpm = fs.existsSync(path.join(rootDir, 'pnpm-lock.yaml')) ? pnpmCommand(nodePath, options.resourceRoot || process.cwd()) : null;
+    const npm = pnpm ? null : npmCommand(nodePath, options.resourceRoot || process.cwd());
     if (fs.existsSync(path.join(rootDir, 'pnpm-lock.yaml')) && !pnpm) {
       throw new Error('RSSHub 需要 pnpm，但应用内未找到 pnpm 运行时');
     }
+    if (!manager) throw new Error('RSSHub 需要 npm，但应用内未找到 npm 运行时');
     onProgress?.('正在安装 RSSHub 依赖，这一步可能需要几分钟');
     const manager = pnpm || npm;
     const installArgs = pnpm
