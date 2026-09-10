@@ -17,7 +17,7 @@ function systemResources(config){
   const enumValues=['',...providers.map(([id])=>id)];
   const providerLabel=([id,provider])=>{
     const connection=connections[provider.connectionId||id];
-    const vendor=connection?.label||provider.label||id;
+    const vendor=connection?.label||provider.connectionId||id;
     const model=provider.model||id;
     return `${vendor} · ${model}`;
   };

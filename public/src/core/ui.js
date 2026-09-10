@@ -44,10 +44,15 @@ export function toast(message, type = "info") {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => node.classList.remove("show"), toastDurations[type] ?? 2600);
 }
+export function modelDisplayLabel(item = {}) {
+  const vendor = item.connectionLabel || item.connectionId || item.label || item.name || "模型供应商";
+  const model = item.model || item.name || "未命名模型";
+  return vendor === model ? vendor : `${vendor} · ${model}`;
+}
 export function providerOptions(selected) {
   const providers = window.__models?.providers ?? [];
   return providers.filter((item)=>item.enabled!==false).map((item) =>
-    `<option value="${escapeHtml(item.name)}" ${item.name === selected ? "selected" : ""}>${escapeHtml(item.label)} · ${escapeHtml(item.model)}${item.configured ? "" : "（未配置）"}</option>`
+    `<option value="${escapeHtml(item.name)}" ${item.name === selected ? "selected" : ""}>${escapeHtml(modelDisplayLabel(item))}${item.configured ? "" : "（未配置）"}</option>`
   ).join("");
 }
 
