@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-export function loadSocialAiDesignSpec({ workspaceRoot = process.cwd(), theme } = {}) {
+export function loadSocialAiDesignSpec({ workspaceRoot = process.cwd(), resourceRoot = process.env.WORKBENCH_RESOURCE_ROOT || process.cwd(), theme } = {}) {
   if (!theme?.id) throw new TypeError('缺少图文主题，无法加载 AI 设计规范');
   // 用户主题以数据库中的当前定义为准，不依赖内置主题目录或复制源的旧配色。
   if (theme.source === 'user') {
@@ -39,7 +39,12 @@ ${JSON.stringify(components, null, 2)}
 `;
     return { text, source: 'theme-definition', path: '', themeId: theme.id };
   }
-  const file = path.join(workspaceRoot, 'themes', 'social', theme.id, 'AI_DESIGN_SPEC.md');
-  if (!fs.existsSync(file)) throw new Error(`AI 视觉生成缺少主题设计规范：${theme.id}/AI_DESIGN_SPEC.md`);
+  const candidates = [
+    theme.file ? path.join(path.dirname(theme.file), 'AI_DESIGN_SPEC.md') : '',
+    path.join(resourceRoot, 'themes', 'social', theme.id, 'AI_DESIGN_SPEC.md'),
+    path.join(workspaceRoot, 'themes', 'social', theme.id, 'AI_DESIGN_SPEC.md'),
+  ].filter(Boolean);
+  const file = candidates.find((candidate) => fs.existsSync(candidate));
+  if (!file) throw new Error(`AI 视觉生成缺少主题设计规范：${theme.id}/AI_DESIGN_SPEC.md`);
   return { text: fs.readFileSync(file, 'utf8'), source: 'file', path: file, themeId: theme.id };
 }

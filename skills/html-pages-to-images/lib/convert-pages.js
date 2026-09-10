@@ -8,6 +8,19 @@ import { readFileSync } from 'fs';
 import { join, resolve } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 
+function chromeExecutable() {
+  const explicit = process.env.PUPPETEER_EXECUTABLE_PATH || '';
+  if (explicit && existsSync(explicit)) return explicit;
+  if (process.platform !== 'win32') return '';
+  const candidates = [
+    join(process.env.PROGRAMFILES || '', 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    join(process.env.LOCALAPPDATA || '', 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    join(process.env.PROGRAMFILES || '', 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+    join(process.env.LOCALAPPDATA || '', 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+  ].filter(Boolean);
+  return candidates.find((candidate) => existsSync(candidate)) || '';
+}
+
 /**
  * 转换页面为图片
  * @param {Object} options - 配置选项
@@ -49,8 +62,10 @@ export async function convertPagesToImages(options = {}) {
     const htmlContent = readFileSync(htmlFile, 'utf-8');
     
     // 启动浏览器
+    const executablePath = chromeExecutable();
     browser = await puppeteer.launch({
       headless: true,
+      ...(executablePath ? { executablePath } : {}),
       args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
     

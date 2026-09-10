@@ -465,7 +465,11 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   writeFile(skillManifestPath,JSON.stringify({orchestrator:{skill:'wechat-mp-topic-to-article',hash:orchestratorSkill.hash,files:orchestratorSkill.files,fallback:orchestratorSkill.fallback},writerSkill:chosenWriterSkill,writerSkillSelection:skillSelection||{requestedSkill:'',selectedSkill:chosenWriterSkill,selectionSource:'builtin-recommendation'},stageSkillSelections:stageSelections||historicalStages,hash:skillBundle.hash,files:skillBundle.files,fallback:skillBundle.fallback,stageSkills:Object.fromEntries(Object.entries(stageSkills).map(([name,bundle])=>[name,{skill:bundle.skillName,hash:bundle.hash,files:bundle.files,fallback:bundle.fallback}])),loadedAt:new Date().toISOString()},null,2));
   recordStage('brief',orchestratorSkill,['editorial','article-brief.md','editorial-research-selection.json'],'00-article-brief.md');
   onProgress('Step 1.5 基于来源建立结构化事实基座');
-  const factBaseResult=await gateway.complete({provider,purpose:'article-fact-base',batchId,candidateId,jsonMode:true,maxOutputTokens:Math.min(5000,providerConfig.maxOutputTokens),messages:[
+  // 事实基座包含逐条主张、证据和来源映射，内容量会随素材增长。
+  // 不要在这里传固定 maxOutputTokens：gateway 的 article-fact-base
+  // profile 需要在 finish=length 时从 5000 自动扩容到 8000，否则
+  // parseModelJson 只能看到半截 JSON，后续大纲和成稿都不会开始。
+  const factBaseResult=await gateway.complete({provider,purpose:'article-fact-base',batchId,candidateId,jsonMode:true,messages:[
     {role:'system',protected:true,content:buildArticleStageSystem(orchestratorSkill,'fact-base')},
     {role:'user',protected:true,content:JSON.stringify({topic:brief.topic,researchBasis:brief.researchBasis,adoptedResearchPoints:brief.adoptedResearchPoints,rejectedAngles:brief.rejectedAngles,confirmedFacts:brief.confirmedFacts,authorOpinions:brief.authorOpinions,forbiddenClaims:brief.forbiddenClaims,materialBrief:brief.materialBrief,sourceUrl:brief.sourceUrl,sourceText:brief.sourceText||''})},
   ]});
@@ -488,7 +492,9 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   if (!factGate.eligible) throw new Error(`文章事实门禁未通过：${factGate.reason}`);
   onProgress('Step 2 建立事实基座、大纲与标题候选');
   const PLAN_SYSTEM = `${buildArticleStageSystem(orchestratorSkill,'planning')}\n\n## 账号上下文\n${formatAccountContext({workspaceRoot})}`;
-  const planningResult=await gateway.complete({provider,purpose:'article-planning',batchId,candidateId,jsonMode:true,maxOutputTokens:Math.min(5000,providerConfig.maxOutputTokens),
+  // 大纲阶段同样使用 output-budget 的 6000 -> 10000 自适应重试，
+  // 由 providerMax 负责兜底，不要用调用方固定上限关闭该机制。
+  const planningResult=await gateway.complete({provider,purpose:'article-planning',batchId,candidateId,jsonMode:true,
     messages:[{role:'system',content:PLAN_SYSTEM,protected:true},{role:'user',content:JSON.stringify(writingBrief),protected:true}]});
   const plan=normalizePlanningResult(parseJsonResult(planningResult,store)); const selectedTitle=String(plan.selectedTitle||candidate.hotspot_title).trim();
   const materials=`# 作者素材\n\n- topic:${brief.topic}\n- angle:${brief.angle}\n- adopted_research_points:${JSON.stringify(brief.adoptedResearchPoints)}\n- rejected_angles:${JSON.stringify(brief.rejectedAngles)}\n- research_basis:${brief.researchBasis||'未提供'}\n- material_brief:${JSON.stringify(brief.materialBrief)}\n- article_brief_path:${briefPath}\n- brief_status:LOCKED\n- distribution_lane:${brief.distributionLane}\n- reader_stake:${brief.readerStake||'待明确'}\n- experience_required:${brief.experienceRequired}\n- experience:${brief.confirmedExperiences||'无;公共资料分析,不得使用第一人称亲测'}\n- author_opinion:${brief.authorOpinions||'未提供'}\n- avoid:${brief.forbiddenClaims||'不得虚构事实与经历'}\n- writer_skill:${chosenWriterSkill}\n- writer_skill_reason:${writerDecision.reason}\n- content_role:${plan.contentRole}\n- expected_action:${(plan.expectedAction||[]).join('、')}\n- practical_increment:${plan.practicalIncrement||'观察框架'}\n\n${plan.materialsMarkdown||''}`;

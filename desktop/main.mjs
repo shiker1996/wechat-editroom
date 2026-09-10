@@ -16,10 +16,27 @@ let applicationMenuBuilt = false;
 let shuttingDown = false;
 let workspaceRootPath = null;
 let logDirectoryPath = null;
+const workspaceLocationFileName = 'workspace-location.txt';
 
 function ensureDirectory(directory) {
   fs.mkdirSync(directory, { recursive: true });
   return directory;
+}
+
+function defaultWorkspaceRoot() {
+  return path.join(app.getPath('userData'), 'workspace');
+}
+
+function configuredWorkspaceRoot() {
+  const locationFile = path.join(app.getPath('userData'), workspaceLocationFileName);
+  try {
+    const configuredPath = fs.readFileSync(locationFile, 'utf8').trim();
+    if (configuredPath && path.isAbsolute(configuredPath)) return path.normalize(configuredPath);
+  } catch {
+    // A missing or unreadable installer marker falls back to the historical
+    // per-user workspace location so upgrades remain safe.
+  }
+  return defaultWorkspaceRoot();
 }
 
 function seedWorkspaceResources(workspaceRoot) {
@@ -329,7 +346,7 @@ ipcMain.on('desktop-command-trace', (event, details = {}) => {
 });
 
 async function boot() {
-  const workspaceRoot = ensureDirectory(path.join(app.getPath('userData'), 'workspace'));
+  const workspaceRoot = ensureDirectory(configuredWorkspaceRoot());
   workspaceRootPath = workspaceRoot;
   seedWorkspaceResources(workspaceRoot);
   const logDirectory = ensureDirectory(path.join(workspaceRoot, 'logs'));

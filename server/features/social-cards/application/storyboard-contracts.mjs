@@ -83,9 +83,12 @@ export const BUILTIN_SOCIAL_CARD_STORYBOARD_SKILLS=Object.freeze({
   custom:'custom-card-storyboard',
 });
 
-function readPromptReference(workspaceRoot, name) {
-  const file=path.join(workspaceRoot,'server','features','social-cards','prompts',name);
-  if(!fs.existsSync(file))throw new Error(`图文故事板提示词引用缺失：${name}`);
+function readPromptReference(workspaceRoot, name, resourceRoot = process.env.WORKBENCH_RESOURCE_ROOT || workspaceRoot) {
+  const candidates=[resourceRoot,workspaceRoot]
+    .filter(Boolean)
+    .map((root)=>path.join(root,'server','features','social-cards','prompts',name));
+  const file=candidates.find((candidate)=>fs.existsSync(candidate));
+  if(!file)throw new Error(`图文故事板提示词引用缺失：${name}`);
   return fs.readFileSync(file,'utf8').trim();
 }
 
@@ -98,6 +101,7 @@ function replaceTokens(text, values) {
 
 export function buildSocialCardStoryboardSystemPrompt({
   workspaceRoot,
+  resourceRoot,
   skillId='',
   skillPrompt,
   contentType,
@@ -121,9 +125,9 @@ export function buildSocialCardStoryboardSystemPrompt({
   const methodPrompt=replaceTokens(skillPrompt,values);
   // 新增的技术/趋势故事板只写方法，不自带旧事件故事板的 JSON 字段契约；
   // 必须注入同一份运行契约，确保三类事件故事板都输出 card_plan/content_blocks。
-  const runtimeContract=embeddedContractSkillIds.has(skillId)?'':replaceTokens(readPromptReference(workspaceRoot,'runtime-contract.md'),values);
-  const channel=readPromptReference(workspaceRoot,xhs?'channel-xiaohongshu.md':'channel-wechat.md');
-  const composition=readPromptReference(workspaceRoot,'composition-contract.md');
+  const runtimeContract=embeddedContractSkillIds.has(skillId)?'':replaceTokens(readPromptReference(workspaceRoot,'runtime-contract.md',resourceRoot),values);
+  const channel=readPromptReference(workspaceRoot,xhs?'channel-xiaohongshu.md':'channel-wechat.md',resourceRoot);
+  const composition=readPromptReference(workspaceRoot,'composition-contract.md',resourceRoot);
   const template=buildSocialCardTemplateCapabilityPrompt(templateCapabilities);
   return [methodPrompt,runtimeContract,channel,composition,template].filter(Boolean).join('\n\n');
 }

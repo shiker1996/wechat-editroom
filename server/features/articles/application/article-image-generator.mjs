@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url';
 import { escapeHtml } from '../../../shared/rendering/html-utils.mjs';
 import { articleThemeDefinition } from '../../../shared/themes/article-theme-compiler.mjs';
 import { fontStack } from '../../../shared/themes/font-utils.mjs';
+import { resolveSkillFile } from '../../../platform/llm/skill-runtime.mjs';
 
 // 文章配图确定性生成（待办「文章配图接入图文确定性生成链」）：
 // 占位标记为可生成（IMG-DATA，kind=timeline|datacard）时，用固定 HTML 模板 + html-pages-to-images
@@ -192,7 +193,7 @@ export async function generateArticleImage({ workspaceRoot, workdir, slotId, gen
     fs.writeFileSync(tempHtmlPath, html, 'utf8');
     let execute = renderHtmlPages;
     if (!execute) {
-      const screenshotModule = path.join(workspaceRoot, 'skills', 'html-pages-to-images', 'index.js');
+      const screenshotModule = resolveSkillFile({ workspaceRoot, skillName: 'html-pages-to-images', relativePath: 'index.js' });
       ({ execute } = await import(`${pathToFileURL(screenshotModule).href}?v=${Date.now()}`));
     }
     const result = await execute({ htmlFile: tempHtmlPath, outputDir: tempDir, selector: '.page', pageWidth: width, pageHeight: height, deviceScaleFactor: 2 });

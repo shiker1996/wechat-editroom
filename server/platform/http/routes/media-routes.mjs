@@ -10,7 +10,7 @@ export async function handleMediaRoutes(context) {
   const { request, response, pathname, searchParams, store, config, json, body, path, fs, os, mime, root, execFileAsync, isInsideRoots, getImageWorkspace, getCdnUploadStatus, batchArticlesDir, saveLocalImage, uploadImageToCdn, articleWorkdir, models, planImagePlaceholders, writeUtf8, saveImageMetadata, imageManifestFile, aiJobs, planArticleVisuals, defaultTypesetTheme, TYPESET_THEMES, analyzeVisualComplexity } = context;
   const imageWorkspaceResponse = async (workdir, extras = {}) => {
     const cdn = getCdnUploadStatus ? await getCdnUploadStatus() : { uploaderAvailable:null, cdnConfigured:null, cdnStatus:'unknown', cdnReason:'' };
-    return { ...getImageWorkspace(workdir), ...cdn, deliveryMode:cdn.cdnConfigured === false ? 'local' : 'cdn', ...extras };
+    return { ...getImageWorkspace(workdir), ...cdn, deliveryMode:cdn.cdnConfigured === true ? 'cdn' : 'local', ...extras };
   };
   const coverStatus = (coverPath) => {
     const imageDir = path.dirname(coverPath);
@@ -265,7 +265,10 @@ export async function handleMediaRoutes(context) {
       batchId,candidateId:candidate?.id??null,purposes:['typeset'],
     }):null;
     const cdnStatus = getCdnUploadStatus ? await getCdnUploadStatus() : { cdnConfigured:true };
-    const imageDeliveryMode = requestedMode === 'local' || (requestedMode === 'auto' && cdnStatus.cdnConfigured === false) ? 'local' : 'cdn';
+    // auto 只有在 CDN 明确配置完成时才走上传；状态未知也按本地占位降级，
+    // 避免“未配置 CDN”把整条排版流水线卡死。明确 requestedMode=cdn 仍保留
+    // 严格上传语义，方便用户主动检查 CDN 配置。
+    const imageDeliveryMode = requestedMode === 'local' || (requestedMode === 'auto' && cdnStatus.cdnConfigured !== true) ? 'local' : 'cdn';
     return json(response, 202, aiJobs.start({ batchId, candidateId: candidate?.id??null,documentKind:daily?'daily-final':null,
       provider:previousSnapshot?null:input.provider,type:'typeset',theme:input.theme,snapshotId:previousSnapshot?.id||null,
       imageDeliveryMode }));

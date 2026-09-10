@@ -29,7 +29,8 @@ function generationInstruction({ sourceRead, documentStarted, documentFinished, 
   if (!documentStarted) return `资料已读取。现在开始一次完整的单 Agent ${documentLabel}生成会话：先用 cap_filesystem_project_document_write 的 begin 操作建立文档。不要返回 final。`;
   if (documentFinished) return `文档 ${outputPath} 已完成 finish。现在只返回严格合法的 {"type":"final","assistantReply":"已完成 AI 视觉 HTML 生成"}，不要调用工具，不要输出 HTML/CSS。`;
   if (pageCount < minPages) return `当前检测到 ${pageCount} 页，至少需要 ${minPages} 页（故事板基准 ${targetPageCount} 页，允许范围 ${minPages}–${maxPages} 页）。继续用 cap_filesystem_project_document_write 的 append 原样追加下一段完整 HTML/CSS，单个 content 不超过 ${AI_VISUAL_DOCUMENT_CHUNK_MAX_CHARS} 字符。当前仍未完成 ${documentLabel}，不要返回 final。每个 append 使用新的 requestId，并根据上一次工具结果填写 expectedRevision。服务端会自动注入固定的 resourceId、path 和 sessionId。`;
-  return `当前检测到 ${pageCount} 页，已落在允许范围 ${minPages}–${maxPages} 页（故事板基准 ${targetPageCount} 页）。检查 ${outputPath} 是否已经包含完整主题 CSS、所有页面结构、闭合标签和可见主题装饰；如果还没写完，继续 append，每个 content 不超过 ${AI_VISUAL_DOCUMENT_CHUNK_MAX_CHARS} 字符。全部内容写完后，用 cap_filesystem_project_document_write 的 finish 结束会话，随后才能返回 final。不要为了凑页数添加空白页、重复文案或虚构事实。`;
+  if (pageCount >= maxPages) return `当前检测到 ${pageCount} 页，已经达到允许上限 ${maxPages} 页（故事板基准 ${targetPageCount} 页）。禁止继续追加新的 .page 页面、重复文案或空白页；只在确有必要时追加非页面的闭合标签或样式收尾，然后立即用 cap_filesystem_project_document_write 的 finish 结束会话，随后返回 final。`;
+  return `当前检测到 ${pageCount} 页，已落在允许范围 ${minPages}–${maxPages} 页（故事板基准 ${targetPageCount} 页）。检查 ${outputPath} 是否已经包含完整主题 CSS、所有页面结构、闭合标签和可见主题装饰；如果还没写完，只能继续 append 尚未完成的内容，并确保不会让页面数超过 ${maxPages}。全部内容写完后，用 cap_filesystem_project_document_write 的 finish 结束会话，随后才能返回 final。不要为了凑页数添加空白页、重复文案或虚构事实。`;
 }
 
 function generationStageOverride({ requiredPageCount, pageCountTolerance, canvas, outputPath, documentLabel, nativeTools = false }) {
@@ -51,7 +52,7 @@ function generationStageOverride({ requiredPageCount, pageCountTolerance, canvas
 - append 的 content 是原始 HTML/CSS，不要让程序替你拼接、改写、补 CSS、补结构或插入主题装饰。每块不超过 ${AI_VISUAL_DOCUMENT_CHUNK_MAX_CHARS} 字符，并为每块使用唯一 requestId；能填写时使用上一次结果中的 expectedRevision。
 - 不要假设程序会保留预置页面壳，最终文件必须由你的分块内容本身构成完整 HTML。
 - 生成阶段不调用浏览器审计，不调用修复能力，不调用旧的 cap_filesystem_project_write，不返回程序化补丁。
-- 只有在 ${minPages}–${maxPages} 页、主题 CSS、页面正文、闭合标签和主题装饰全部写完并成功 finish 后，才返回严格的 {"type":"final","assistantReply":"简短说明"}；assistantReply 必须是字符串。
+- 只有在 ${minPages}–${maxPages} 页、主题 CSS、页面正文、闭合标签和主题装饰全部写完并成功 finish 后，才返回严格的 {"type":"final","assistantReply":"简短说明"}；assistantReply 必须是字符串。达到 ${maxPages} 页后禁止再创建 .page。
 ${nativeTools ? '- 工具调用必须使用 API 提供的原生 function tool；不要在普通文本中伪造 tool_requests JSON。' : '- 所有工具请求必须是完整合法 JSON；HTML/CSS 放在 JSON 字符串 content 中，正确转义引号、反斜杠和换行。'}
 `;
 }
@@ -209,6 +210,8 @@ export async function runAiVisualDocumentAgent({
     store,
     ...(resumeFrom ? { resumeFrom: String(resumeFrom) } : {}),
     budget: {
+      // 视觉文档按分块写入：读取、begin、多个 append 和 finish 都各占一个
+      // Agent step；当前 6–8 页范围使用原有预算即可。
       maxModelSteps: Number(budget.maxModelSteps) || Math.max(18, maxPages + 12),
       maxToolCalls: Number(budget.maxToolCalls) || Math.max(18, maxPages + 12),
       maxParallelToolCalls: 1,
@@ -299,6 +302,23 @@ export async function runAiVisualDocumentAgent({
           recoveryAttempts += 1;
           parsed = await recoverToolRequest({ parsed, history, step, signal, label: 'AI 视觉 Agent 分块大小恢复', instruction: '上一条 append 请求未执行，因为 content 为空。请继续写入尚未写入的 HTML/CSS，只返回一个 content 非空的完整合法 append 工具请求；不要返回空 append、解释或完整 HTML。服务端会补齐资源参数。' });
           continue;
+        }
+        if (operation === 'append') {
+          const appendedPageCount = [...content.matchAll(/class=["'][^"']*\bpage\b/gi)].length;
+          const currentPageCount = Number(getPageCount()) || 0;
+          if (currentPageCount + appendedPageCount > maxPages) {
+            if (recoveryAttempts >= 2) throw new AgentContractError('INVALID_AGENT_ENVELOPE', `AI 视觉 Agent 追加后将超过 ${maxPages} 页上限`);
+            recoveryAttempts += 1;
+            parsed = await recoverToolRequest({
+              parsed,
+              history,
+              step,
+              signal,
+              label: 'AI 视觉 Agent 页面数恢复',
+              instruction: `上一条 append 会让文档超过 ${maxPages} 页上限（当前 ${currentPageCount} 页，新增 ${appendedPageCount} 页）。不要追加新的 .page；只返回一个完整合法的文档写入请求，优先 finish，或只补全非页面的闭合标签和样式。不要返回解释或空 append。`,
+            });
+            continue;
+          }
         }
         request.arguments = { ...(request.arguments || {}), resourceId: 'project:current', path: outputPath, sessionId: documentWriteSessionId };
         pendingOperation = operation;

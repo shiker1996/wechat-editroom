@@ -26,6 +26,16 @@ function skillRoots(workspaceRoot) {
   ].filter(Boolean);
 }
 
+// 工作区只保存用户数据；打包版的内置技能和其可执行脚本位于程序资源目录。
+// 所有需要执行技能附属文件的调用方都应通过这里解析，不能直接拼 workspaceRoot/skills。
+export function resolveSkillFile({ workspaceRoot, skillName, relativePath = 'index.js' } = {}) {
+  const roots = skillRoots(workspaceRoot);
+  return roots
+    .map((root) => path.join(root, skillName, relativePath))
+    .find((filePath) => fs.existsSync(filePath))
+    || path.join(workspaceRoot || process.cwd(), 'skills', skillName, relativePath);
+}
+
 function readSkill(root, name) {
   const filePath = path.join(root, name, 'SKILL.md');
   if (!fs.existsSync(filePath)) return null;

@@ -1,7 +1,8 @@
-import dns from 'node:dns/promises';import fs from 'node:fs';import path from 'node:path';import { privateIp } from './network-safety.mjs';
+import dns from 'node:dns/promises';import fs from 'node:fs';import path from 'node:path';import { createRequire } from 'node:module';import { fileURLToPath, pathToFileURL } from 'node:url';import { privateIp } from './network-safety.mjs';
 function fail(code,message){process.stderr.write(`${JSON.stringify({code,message})}\n`);process.exit(1);}
 let config;try{config=JSON.parse(Buffer.from(process.argv[2]||'','base64url').toString('utf8'));}catch{fail('INVALID_SOURCE_CONFIG','浏览器配置无效');}
-let puppeteer;try{puppeteer=(await import('puppeteer')).default;}catch{fail('DEPENDENCY_MISSING','未安装 Puppeteer 浏览器依赖');}
+async function loadPuppeteer(){try{return (await import('puppeteer')).default;}catch{try{const require=createRequire(import.meta.url);const appRoot=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..','..');const skillRoot=path.join(appRoot,'skills','html-pages-to-images');const entry=require.resolve('puppeteer',{paths:[skillRoot]});const loaded=await import(pathToFileURL(entry).href);return loaded.default??loaded;}catch{fail('DEPENDENCY_MISSING','未安装 Puppeteer 浏览器依赖');}}}
+const puppeteer=await loadPuppeteer();
 const publicHost=async(host)=>{const addresses=await dns.lookup(host,{all:true,verbatim:true});if(!addresses.length||addresses.some((item)=>privateIp(item.address)))throw new Error('浏览器请求解析到内网或保留地址');};
 const chromeCandidates=[process.env.PUPPETEER_EXECUTABLE_PATH,process.env.ProgramFiles&&path.join(process.env.ProgramFiles,'Google','Chrome','Application','chrome.exe'),process.env['ProgramFiles(x86)']&&path.join(process.env['ProgramFiles(x86)'],'Google','Chrome','Application','chrome.exe'),process.env.LOCALAPPDATA&&path.join(process.env.LOCALAPPDATA,'Google','Chrome','Application','chrome.exe')].filter(Boolean);const executablePath=chromeCandidates.find((item)=>fs.existsSync(item));
 if(executablePath)puppeteer.configuration.executablePath=executablePath;

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { buildImagesMarkdown, imageManifestFile, parseImagePlaceholders, registerGeneratedImageAssets, registerGeneratedSlotImage, uploadImageToCdn } from './image-workflow.mjs';
+import { buildImagesMarkdown, imageManifestFile, isCdnConfigurationMissing, parseImagePlaceholders, registerGeneratedImageAssets, registerGeneratedSlotImage, uploadImageToCdn } from './image-workflow.mjs';
 import { generateArticleImage } from './article-image-generator.mjs';
 import { loadSkillBundle } from '../../../platform/llm/skill-runtime.mjs';
 import { batchArticlesDir, candidateArticleDir } from '../../../platform/core/workspace-paths.mjs';
@@ -174,6 +174,19 @@ export async function runTypesetPipeline({ gateway, store, batchId, candidateId,
     [/```\s*echarts\b/i, 'cap_diagram_echarts_render', 'ECharts', '09-FINAL.echarts.md'],
   ];
   const chartNotes = [];
+  let effectiveImageDeliveryMode = imageDeliveryMode === 'cdn' ? 'cdn' : 'local';
+  const uploadIfConfigured = async (workdirPath, itemId, options) => {
+    if (effectiveImageDeliveryMode !== 'cdn' || !autoUploadGeneratedImages) return false;
+    try {
+      await uploadImageToCdnFn(workdirPath, itemId, options);
+      return true;
+    } catch (error) {
+      if (!isCdnConfigurationMissing(error)) throw error;
+      effectiveImageDeliveryMode = 'local';
+      onProgress('未配置 CDN，排版改用本地图片占位，不阻塞后续流程');
+      return false;
+    }
+  };
   let chartReadyPath = renderedPath;
   for (const [pattern, capability, label, fileName] of chartSteps) {
     if (!pattern.test(fs.readFileSync(chartReadyPath, 'utf8'))) continue;
@@ -193,13 +206,14 @@ export async function runTypesetPipeline({ gateway, store, batchId, candidateId,
     const generatedPaths = new Set((chartReport.images || []).map((item) => String(item).replaceAll('\\', '/')));
     const pendingUploads = generatedWorkspace.items.filter((item) =>
       item.generated && generatedPaths.has(String(item.relativePath || '').replaceAll('\\', '/')) && item.status !== 'cdn');
-    for (const item of imageDeliveryMode === 'cdn' && autoUploadGeneratedImages ? pendingUploads : []) {
+    for (const item of effectiveImageDeliveryMode === 'cdn' && autoUploadGeneratedImages ? pendingUploads : []) {
       onProgress(`排版 3/6：${label} 图片已更新，正在上传 CDN`);
-      await uploadImageToCdn(workdir, item.id, { authorizedExternalWrite:true, allowedCapabilities:typesetRuntime.allowedCapabilities,
+      await uploadIfConfigured(workdir, item.id, { authorizedExternalWrite:true, allowedCapabilities:typesetRuntime.allowedCapabilities,
         store,batchId,candidateId,generationSnapshotId:typesetRuntime.snapshotId,skillId:'wechat-article-typeset',rootRunId,workflowRunId,stageId });
+      if (effectiveImageDeliveryMode !== 'cdn') break;
     }
     addArtifact(store, batchId, `${label} 转图文章`, path.basename(chartPath), chartPath, { rootRunId, workflowRunId, stageId: 'images' });
-    chartNotes.push(`${label} ${chartReport.converted} 张${imageDeliveryMode === 'local' ? '（仅本地占位）' : pendingUploads.length ? '（已重新上传 CDN）' : '（内容未变，复用 CDN）'}`);
+    chartNotes.push(`${label} ${chartReport.converted} 张${effectiveImageDeliveryMode === 'local' ? '（仅本地占位）' : pendingUploads.length ? '（已重新上传 CDN）' : '（内容未变，复用 CDN）'}`);
   }
   // 统计卡/时间线与 Mermaid/ECharts 走同一条排版期生成链：每次排版都按当前主题
   // 重新截图，随后自动上传 CDN，工作台不再要求逐张点击“生成图片”。
@@ -213,25 +227,25 @@ export async function runTypesetPipeline({ gateway, store, batchId, candidateId,
         theme, tokens:articleRenderTokens,
       });
       registerGeneratedSlotImage(workdir, item.id, generated.localPath);
-      if (imageDeliveryMode === 'cdn' && autoUploadGeneratedImages) {
+      if (effectiveImageDeliveryMode === 'cdn' && autoUploadGeneratedImages) {
         onProgress(`排版 3/6：${label}「${item.content}」图片已更新，正在上传 CDN`);
-        await uploadImageToCdnFn(workdir, item.id, { authorizedExternalWrite:true, allowedCapabilities:typesetRuntime.allowedCapabilities,
+        await uploadIfConfigured(workdir, item.id, { authorizedExternalWrite:true, allowedCapabilities:typesetRuntime.allowedCapabilities,
         store,batchId,candidateId,generationSnapshotId:typesetRuntime.snapshotId,skillId:'wechat-article-typeset',rootRunId,workflowRunId,stageId });
       }
-      chartNotes.push(`${label} 1 张（按 ${theme} 主题生成${imageDeliveryMode === 'local' ? '，仅本地占位' : autoUploadGeneratedImages ? '并已上传 CDN' : ''}）`);
+      chartNotes.push(`${label} 1 张（按 ${theme} 主题生成${effectiveImageDeliveryMode === 'local' ? '，仅本地占位' : autoUploadGeneratedImages ? '并已上传 CDN' : ''}）`);
     } catch (error) {
       record('images', 'wechat-article-typeset', '', 'blocked', `${label} 生成失败：${error.message}`);
       throw new Error(`${label} 图片生成失败，已停止排版以避免使用旧图：${error.message}`);
     }
   }
-  const imageResult = buildImagesMarkdown(workdir, fs.readFileSync(chartReadyPath, 'utf8'), { imageDeliveryMode });
-  if (imageDeliveryMode !== 'local' && imageResult.unresolved.length) throw new Error(`配图尚未就绪：${imageResult.unresolved.join('、')}，请先提供图片并上传 CDN`);
+  const imageResult = buildImagesMarkdown(workdir, fs.readFileSync(chartReadyPath, 'utf8'), { imageDeliveryMode: effectiveImageDeliveryMode });
+  if (effectiveImageDeliveryMode !== 'local' && imageResult.unresolved.length) throw new Error(`配图尚未就绪：${imageResult.unresolved.join('、')}，请先提供图片并上传 CDN`);
   const imagesPath = path.join(workdir, '09-FINAL.images.md');
   writeFile(imagesPath, imageResult.content);
   addArtifact(store, batchId, '图片就绪文章', path.basename(imagesPath), imagesPath, { rootRunId, workflowRunId, stageId: 'images' });
   const manifestPath = imageManifestFile(workdir);
   if (fs.existsSync(manifestPath)) addArtifact(store, batchId, '配图资产清单', path.basename(manifestPath), manifestPath, { rootRunId, workflowRunId, stageId: 'images' });
-  record('images', 'wechat-article-typeset', imagesPath, 'completed', imageDeliveryMode === 'local'
+  record('images', 'wechat-article-typeset', imagesPath, 'completed', effectiveImageDeliveryMode === 'local'
     ? `仅本地排版：${imageResult.localPlaceholderCount || 0} 个图片位置将由用户在公众号后台替换${chartNotes.length ? `；${chartNotes.join('、')}` : ''}`
     : chartNotes.length ? `显式视觉模块已转图并使用 CDN 地址：${chartNotes.join('、')}` : '最终 HTML 图片均已取得可公开访问的 HTTPS 地址');
 

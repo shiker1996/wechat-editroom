@@ -56,13 +56,14 @@
     },
     "dependencies": {
         "@aws-sdk/client-s3": "3.1109.0",
+        "@mermaid-js/mermaid-cli": "^11.16.0",
         "markdown-it": "^14.1.0",
         "npm": "11.6.2",
         "pnpm": "10.34.5",
+        "puppeteer": "^25.10.0",
         "unzipper": "0.12.5"
     },
     "devDependencies": {
-        "@mermaid-js/mermaid-cli": "^11.16.0",
         "electron": "^44.3.0",
         "electron-builder": "^26.15.3"
     },
@@ -93,11 +94,13 @@
             "!dist/**/*",
             "!.node-runtime/**/*",
             "!skills/**/node_modules/**/*",
+            "skills/html-pages-to-images/node_modules/**/*",
             "!node_modules/electron/**/*",
             "!node_modules/electron-builder/**/*",
             "!node_modules/@electron/**/*",
-            "!node_modules/@mermaid-js/**/*",
-            "!node_modules/puppeteer/**/*"
+            "node_modules/@mermaid-js/**/*",
+            "node_modules/puppeteer/**/*",
+            "node_modules/puppeteer-core/**/*"
         ],
         "extraResources": [
             {

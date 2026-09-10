@@ -7,7 +7,7 @@ import { resolveWorkspaceTheme } from '../../../platform/application/themes/user
 import { resolveAutoTheme } from '../../../platform/application/themes/auto-theme-router.mjs';
 import { analyzeCoverSemantics } from './cover-semantics.mjs';
 import { loadCoverAiDesignSpec, writeCoverAiDesignSpecSnapshot } from '../../../shared/themes/cover-ai-spec.mjs';
-import { loadSkillBundle } from '../../../platform/llm/skill-runtime.mjs';
+import { loadSkillBundle, resolveSkillFile } from '../../../platform/llm/skill-runtime.mjs';
 import { bindGenerationSnapshot, prepareSkillRun } from '../../../platform/skills/pipeline-runtime.mjs';
 import { buildConversationToolCatalog } from '../../../platform/agent/tool-catalog.mjs';
 import { getToolRegistry } from '../../../platform/tools/index.mjs';
@@ -105,7 +105,7 @@ async function renderCover({ workspaceRoot, htmlPath, imageDir, execute: provide
   fs.mkdirSync(outputDir, { recursive: true });
   let completed = false;
   try {
-    const execute = providedExecute || (await import(pathToFileURL(path.join(workspaceRoot, 'skills', AI_VISUAL_SCREENSHOT_SKILL, 'index.js')).href)).execute;
+    const execute = providedExecute || (await import(pathToFileURL(resolveSkillFile({ workspaceRoot, skillName: AI_VISUAL_SCREENSHOT_SKILL, relativePath: 'index.js' })).href)).execute;
     const result = await execute({ htmlFile: htmlPath, outputDir, selector: '.page', pageWidth: AI_VISUAL_COVER_WIDTH, pageHeight: AI_VISUAL_COVER_HEIGHT, deviceScaleFactor: 2 });
     if (!result.success) throw new Error(`封面截图失败：${result.message}`);
     const produced = result.data?.images?.[0];

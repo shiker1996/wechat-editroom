@@ -216,6 +216,13 @@
 #view-sources .source-compose input,
 #view-sources .source-compose select { color: var(--ink); background: var(--surface-subtle); border-color: var(--line-strong); }
 #view-sources .source-compose .outline-button { color: var(--ink); border-color: var(--line-strong); background: var(--surface); }
+#view-sources .source-form-step { color: var(--ink); }
+#view-sources .source-form-step i {
+  border-color: var(--line-strong);
+  color: var(--blue);
+  background: var(--blue-soft);
+}
+#view-sources .source-form-step::after { background: var(--line-strong); }
 #view-system .runtime-commandbar small,
 #view-system .maintenance-panel p { color: var(--muted); }
 #view-system .maintenance-panel .kicker,

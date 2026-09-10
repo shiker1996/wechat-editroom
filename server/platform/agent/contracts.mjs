@@ -57,8 +57,8 @@ export const CONVERSATION_AGENT_BUDGET_DEFAULTS = Object.freeze({
 });
 
 export const CONVERSATION_AGENT_BUDGET_LIMITS = Object.freeze({
-  // 视觉 Agent 需要一次完整读取、整组初审和若干“修复后再审计”轮次；
-  // 24 步仍是异常循环的上限，但不会把正常的整组修复截断在 16 步。
+  // 视觉 Agent 需要一次完整读取、分块写入和 finish；24 步作为异常循环上限，
+  // 对当前 6–8 页的视觉文档范围足够。
   maxModelSteps: 24,
   maxToolCalls: 24,
   maxParallelToolCalls: 4,

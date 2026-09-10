@@ -3,7 +3,7 @@ import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { pathToFileURL } from 'node:url';
-import { loadSkillBundle, selectSkillPromptReferences } from '../../../platform/llm/skill-runtime.mjs';
+import { loadSkillBundle, resolveSkillFile, selectSkillPromptReferences } from '../../../platform/llm/skill-runtime.mjs';
 import { evaluateCardGate, evaluateClassifiedCardGate, evaluateEventCardGate, evaluateCustomCardGate } from '../domain/social-card-gate.mjs';
 import { customFactMarkdown } from './custom-fact-service.mjs';
 import { candidateSocialCardDir } from '../../../platform/core/workspace-paths.mjs';
@@ -516,7 +516,7 @@ export async function runSocialCardPipeline({ gateway, store, batchId, candidate
   writeFile(copyPath, copy); writeFile(htmlPath, html);
   record('generation', generator.skillName, [copyPath, htmlPath]);
 
-  const auditScript = path.join(workspaceRoot, 'skills', 'xiaohongshu-article-generator', 'scripts', 'layout-audit.mjs');
+  const auditScript = resolveSkillFile({ workspaceRoot, skillName: generator.skillName, relativePath: 'scripts/layout-audit.mjs' });
   const reportPath = path.join(workdir, 'layout-report.json');
   let report;
   let repairCount = 0;
@@ -1158,7 +1158,7 @@ export async function runSocialCardPipeline({ gateway, store, batchId, candidate
   for (const file of fs.readdirSync(outputDir).filter((name)=>/\.png$/i.test(name))) {
     fs.unlinkSync(path.join(outputDir, file));
   }
-  const screenshotModule = path.join(workspaceRoot, 'skills', 'html-pages-to-images', 'index.js');
+  const screenshotModule = resolveSkillFile({ workspaceRoot, skillName: screenshotSkill.skillName, relativePath: 'index.js' });
   const { execute } = await import(`${pathToFileURL(screenshotModule).href}?v=${Date.now()}`);
   // 小红书与公众号页型一致：375×667（技能布局契约的固定页型）
   const screenshotResult = await execute({ htmlFile:htmlPath, outputDir, selector:'.page', pageWidth:375, pageHeight:667, deviceScaleFactor:3 });

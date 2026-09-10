@@ -1794,6 +1794,28 @@ select option { color: var(--ink); background: var(--surface); }
 .event-hotlist-item:hover { background: var(--surface-hover); box-shadow: none; }
 .ledger-row.active-batch { background: var(--blue-soft); border-left-color: var(--blue); }
 
+/* Disabled sources should recede through the surface, not through unreadable text. */
+#view-sources .subscription-row.disabled {
+  opacity: 1;
+  filter: none;
+  background: var(--surface-subtle);
+  color: var(--muted);
+}
+#view-sources .subscription-row.disabled .subscription-kind {
+  color: var(--muted);
+  background: var(--paper-deep);
+}
+#view-sources .subscription-row.disabled .subscription-identity b { color: var(--muted); }
+#view-sources .subscription-row.disabled .subscription-identity code,
+#view-sources .subscription-row.disabled .subscription-identity small,
+#view-sources .subscription-row.disabled .source-switch,
+#view-sources .subscription-row.disabled .subscription-actions .text-button { color: var(--muted); }
+#view-sources .subscription-row.disabled .source-remove { color: var(--muted); }
+#view-sources .subscription-test-result { color: var(--muted); }
+#view-sources .subscription-test-result.ok { color: var(--green); }
+#view-sources .subscription-test-result.testing { color: var(--blue); }
+#view-sources .subscription-test-result.bad { color: var(--red); }
+
 /* Dialogs are the only strongly elevated surfaces. */
 .modal, .drawer, .preview-modal {
   border: 1px solid var(--line-strong);

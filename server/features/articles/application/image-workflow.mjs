@@ -233,6 +233,13 @@ export function saveLocalImage(workdir, id, input) {
   return getImageWorkspace(workdir).items.find((entry) => entry.id === id);
 }
 
+export function isCdnConfigurationMissing(error) {
+  const code = String(error?.code || '').toUpperCase();
+  const message = String(error?.message || error || '');
+  return code === 'DEPENDENCY_MISSING'
+    || /插件需要先完成配置|图片 CDN 尚未完成配置|CDN 尚未完成配置/i.test(message);
+}
+
 export async function uploadImageToCdn(workdir, id, options = {}) {
   const workspace = getImageWorkspace(workdir);
   const item = workspace.items.find((entry) => entry.id === id);
@@ -249,7 +256,11 @@ export async function uploadImageToCdn(workdir, id, options = {}) {
       persistExecution?.(record);
     },
   }});
-  if (result.status === 'error') throw new Error(`CDN 上传失败：${result.error.message}`);
+  if (result.status === 'error') {
+    const error = new Error(`CDN 上传失败：${result.error.message}`);
+    error.code = result.error.code || 'CDN_UPLOAD_FAILED';
+    throw error;
+  }
   const manifest = readManifest(workdir);
   manifest.items[id] = { ...(manifest.items[id] || {}), url:result.data.url, key:result.data.key, uploadedAt:new Date().toISOString(), updatedAt:new Date().toISOString() };
   writeJson(manifestPath(workdir), manifest);
