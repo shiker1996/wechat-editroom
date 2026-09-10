@@ -490,6 +490,12 @@ AI 起草（单步）{ provider, instructions, existingDraft }
 读取终稿待修订问题明细，按标题、引用、事实、表达、发布合规和研判贴合度返回问题、修订建议及对应门禁产物；文档已保存为 finalized 时返回空问题列表。
 → 文章编辑器（发布前检查）
 
+### POST /api/documents/:id/review
+启动指定文稿的 AI 审核任务；返回 `202` 与排队任务信息。
+
+### POST /api/documents/:id/review-confirm
+确认当前已保存正文的审核状态，并将 `reviewState` 写为 `confirmed`；正文保存后会重新变为 `unverified`。
+
 ### GET /api/documents/:id/revisions
 列出文档版本。
 

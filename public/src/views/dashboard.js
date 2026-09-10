@@ -49,6 +49,33 @@ function renderSources(sources) {
   }).join("");
 }
 
+function formatDuration(milliseconds) {
+  const seconds = Math.max(0, Math.round(Number(milliseconds || 0) / 1000));
+  if (!seconds) return "—";
+  if (seconds < 60) return `${seconds} 秒`;
+  const minutes = Math.round(seconds / 60);
+  return minutes < 60 ? `${minutes} 分钟` : `${Math.floor(minutes / 60)} 小时 ${minutes % 60} 分`;
+}
+
+function renderEfficiency(overview) {
+  const data = overview.efficiency || {};
+  const baseline = overview.efficiencyBaseline || {};
+  const baselineNote = (value, formatter = (item) => String(item)) => baseline.sampleSize && value != null
+    ? `近 ${baseline.sampleSize} 批均值 ${formatter(value)}`
+    : "暂无历史批次基线";
+  const cards = [
+    { label: "采集到研判耗时", value: data.collectToResearchDurationMs == null ? "—" : formatDuration(data.collectToResearchDurationMs), note: baselineNote(baseline.collectToResearchDurationMs, formatDuration), go: "sources" },
+    { label: "AI 任务成功率", value: data.aiSuccessRate == null ? "—" : `${data.aiSuccessRate}%`, note: baselineNote(baseline.aiSuccessRate, (value) => `${value}%`), go: "logs" },
+    { label: "选题推进率", value: data.candidateConversionRate == null ? "—" : `${data.candidateConversionRate}%`, note: baselineNote(baseline.candidateConversionRate, (value) => `${value}%`), go: "topics" },
+    { label: "产物输出", value: String(data.artifactCount ?? 0), note: baselineNote(baseline.artifactCount), go: "artifacts" },
+  ];
+  const node = $("#dashboard-efficiency");
+  const insight = $("#efficiency-insight");
+  if (!node || !insight) return;
+  node.innerHTML = cards.map((item) => `<button type="button" class="efficiency-card" data-go="${item.go}"><span>${item.label}</span><strong>${escapeHtml(item.value)}</strong><small>${item.note}</small></button>`).join("");
+  insight.innerHTML = `<b>当前瓶颈</b><span>${escapeHtml(data.bottleneck || "暂无反馈")}</span>`;
+}
+
 function renderAttention(overview) {
   const current = overview.current || {};
   const latest = overview.latest;
@@ -138,4 +165,5 @@ export default async function loadOverview() {
   renderRecentActivity(batches, overview);
   renderLatest(overview.latest);
   renderSources(overview.sourceHealth);
+  renderEfficiency(overview);
 }
