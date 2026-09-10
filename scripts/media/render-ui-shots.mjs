@@ -1,4 +1,5 @@
-// 渲染工作台主要视图的整页截图，用于 README / 渠道物料。
+// 渲染工作台主要视图的固定视口截图，用于 README / 渠道物料。
+// 只截取首屏关键信息，避免输出超长整页图。
 // 用法：node scripts/media/render-ui-shots.mjs [baseUrl] [输出目录] [batchId]
 // 依赖：演示模式服务（npm start -- --demo）与 puppeteer（从 html-pages-to-images 技能目录解析）。
 import fs from 'node:fs';
@@ -68,8 +69,9 @@ try {
     }
     await page.evaluate((view) => { if (window.go) window.go(view); else location.hash = `#${view}`; }, shot.view);
     await sleep(shot.settleMs);
+    await page.evaluate(() => window.scrollTo(0, 0));
     const target = path.join(outDir, shot.file);
-    await page.screenshot({ path: target, fullPage: true });
+    await page.screenshot({ path: target });
     const size = fs.statSync(target).size;
     console.log(`${shot.file} (${Math.round(size / 1024)} KB)`);
   }
