@@ -471,6 +471,7 @@ AI 起草（单步）{ provider, instructions, existingDraft }
 排版 { provider, candidateId, mode, theme }
 - `theme` 可选：`auto`、`magazine-warm`（暖纸杂志风）、`gossip-card`（卡片吃瓜风）、`tech-wire`（暗色终端）、`research-report`（财经印刷）、`career-essay`（书信手账）、`news-digest`（黑白快讯）。
 - `auto` 按候选类别和文章形态选择主题；无法识别时回退 `magazine-warm`。
+- 默认按当前模型与阶段路由创建新的运行快照；仅在显式传 `reuseSnapshot:true`（兼容旧参数 `useLatestSkill:false`）时复用该候选最近一次排版快照。
 → 排版预览
 
 ---
@@ -488,6 +489,12 @@ AI 起草（单步）{ provider, instructions, existingDraft }
 ### GET /api/documents/:id/review-issues
 读取终稿待修订问题明细，按标题、引用、事实、表达、发布合规和研判贴合度返回问题、修订建议及对应门禁产物；文档已保存为 finalized 时返回空问题列表。
 → 文章编辑器（发布前检查）
+
+### POST /api/documents/:id/review
+启动指定文稿的 AI 审核任务；返回 `202` 与排队任务信息。
+
+### POST /api/documents/:id/review-confirm
+确认当前已保存正文的审核状态，并将 `reviewState` 写为 `confirmed`；正文保存后会重新变为 `unverified`。
 
 ### GET /api/documents/:id/revisions
 列出文档版本。
@@ -752,6 +759,12 @@ GET 返回脱敏后的当前运行设置；PUT 更新受支持的 `.env` 字段�
 ### POST /api/system/runtime/:service/:action
 控制 `rsshub|reddit` 的 `start|stop|restart`。仅适用于当前 Windows / PowerShell 本机运行方式。
 
+### GET /api/system/runtime/rsshub/status
+读取 RSSHub 源码、依赖和本地服务健康状态。桌面端首次启动向导据此判断 RSSHub 采集能力是否可用。
+
+### POST /api/system/runtime/rsshub/install
+在 Windows 桌面工作区下载固定 RSSHub 源码版本，使用安装包内置 Node.js/npm 安装依赖，并尝试启动本地 RSSHub。需要联网；RSSHub 以 AGPL-3.0 组件安装。
+
 ### GET /api/system/backup
 导出工作台 ZIP 备份。
 
@@ -911,6 +924,10 @@ GET 返回脱敏后的当前运行设置；PUT 更新受支持的 `.env` 字段�
 ### GET /api/collection-sources
 
 返回 `collection_sources` 中的统一来源实例。阶段 0 会先从旧订阅配置幂等同步，旧 `/api/subscriptions` 响应和写入行为保持不变。
+
+### GET /api/collection-capabilities
+
+返回批次采集入口按“采集源台账中已启用来源”聚合后的可执行状态。批次页面不再重复选择 Reddit、RSSHub、GitHub；来源是否参与采集以采集源台账中的启用状态为准。每项包含 `id`、`enabledSourceCount`、`ready` 和 `reason`。
 
 内置 `declarative-web-page` 采集器支持公开静态 HTML 页面。来源配置使用声明式 CSS 子集（标签、类、ID、属性与后代选择器），可配置标题、链接、摘要、作者、时间及有限分页；不执行页面脚本。页面请求逐跳执行公网地址校验，并限制响应类型、大小和重定向次数。
 

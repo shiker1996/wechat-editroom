@@ -16,6 +16,7 @@ import { resolveAutoTheme } from '../../../platform/application/themes/auto-them
 import { getAccountContext } from '../../../shared/domain/account-context.mjs';
 import { candidateArticleDir, batchArticlesDir } from '../../../platform/core/workspace-paths.mjs';
 import { runAiVisualCoverJob } from './ai-visual-cover-generator.mjs';
+import { resolveSkillFile } from '../../../platform/llm/skill-runtime.mjs';
 
 // 生成封面图主流程：主题解析 → 主题构图/兜底规格 → 渲染 → 截图 → 落 workdir/images/cover.png
 export async function generateCoverImage({ workspaceRoot, workdir, store = null, gateway = null, provider = '', batchId = null, candidateId = null, title, summary = '', brand = '', themeId = '', log = () => {} }) {
@@ -53,7 +54,7 @@ export async function generateCoverImage({ workspaceRoot, workdir, store = null,
   const htmlPath = path.join(imageDir, 'cover.html');
   fs.writeFileSync(htmlPath, html, 'utf8');
 
-  const { execute } = await import(pathToFileURL(path.join(workspaceRoot, 'skills', 'html-pages-to-images', 'index.js')).href);
+  const { execute } = await import(pathToFileURL(resolveSkillFile({ workspaceRoot, skillName: 'html-pages-to-images', relativePath: 'index.js' })).href);
   const result = await execute({ htmlFile: htmlPath, outputDir: imageDir, selector: '.page', pageWidth: width, pageHeight: height, deviceScaleFactor: 2 });
   if (!result.success) throw new Error(`封面截图失败：${result.message}`);
   const produced = result.data.images?.[0];

@@ -7,7 +7,11 @@ import { createRequestHarnessGateway } from '../../skills/pipeline-runtime.mjs';
 // capability-call: cap_diagram_mermaid_render, cap_diagram_echarts_render
 
 export async function handleMediaRoutes(context) {
-  const { request, response, pathname, searchParams, store, config, json, body, path, fs, os, mime, root, execFileAsync, isInsideRoots, getImageWorkspace, batchArticlesDir, saveLocalImage, uploadImageToCdn, articleWorkdir, models, planImagePlaceholders, writeUtf8, saveImageMetadata, imageManifestFile, aiJobs, planArticleVisuals, defaultTypesetTheme, TYPESET_THEMES, analyzeVisualComplexity } = context;
+  const { request, response, pathname, searchParams, store, config, json, body, path, fs, os, mime, root, execFileAsync, isInsideRoots, getImageWorkspace, getCdnUploadStatus, batchArticlesDir, saveLocalImage, uploadImageToCdn, articleWorkdir, models, planImagePlaceholders, writeUtf8, saveImageMetadata, imageManifestFile, aiJobs, planArticleVisuals, defaultTypesetTheme, TYPESET_THEMES, analyzeVisualComplexity } = context;
+  const imageWorkspaceResponse = async (workdir, extras = {}) => {
+    const cdn = getCdnUploadStatus ? await getCdnUploadStatus() : { uploaderAvailable:null, cdnConfigured:null, cdnStatus:'unknown', cdnReason:'' };
+    return { ...getImageWorkspace(workdir), ...cdn, deliveryMode:cdn.cdnConfigured === true ? 'cdn' : 'local', ...extras };
+  };
   const coverStatus = (coverPath) => {
     const imageDir = path.dirname(coverPath);
     const reportPath = path.join(imageDir, 'cover-ai-generation.json');
@@ -34,7 +38,7 @@ export async function handleMediaRoutes(context) {
   if (dailyImageMatch && request.method === 'GET') {
     const batch = store.getBatch(decodeURIComponent(dailyImageMatch[1]));
     if (!batch) return json(response, 404, { error:'批次不存在' });
-    return json(response, 200, { ...getImageWorkspace(path.join(batchArticlesDir(config.workspaceRoot, batch), 'daily')), planned:true });
+    return json(response, 200, await imageWorkspaceResponse(path.join(batchArticlesDir(config.workspaceRoot, batch), 'daily'), { planned:true }));
   }
   const dailyImageGenerateMatch = pathname.match(/^\/api\/batches\/([^/]+)\/daily\/images\/([^/]+)\/generate$/);
   if (dailyImageGenerateMatch && request.method === 'POST') {
@@ -127,7 +131,7 @@ export async function handleMediaRoutes(context) {
     const candidate = store.getCandidate(Number(imageWorkspaceMatch[1]));
     if (!candidate) return json(response, 404, { error:'候选不存在' });
     const batch = store.getBatch(candidate.batch_id);
-    return json(response, 200, getImageWorkspace(articleWorkdir(batch, candidate)));
+    return json(response, 200, await imageWorkspaceResponse(articleWorkdir(batch, candidate)));
   }
   const imagePlanMatch = pathname.match(/^\/api\/candidates\/(\d+)\/images\/plan$/);
   if (imagePlanMatch && request.method === 'POST') {
@@ -148,7 +152,7 @@ export async function handleMediaRoutes(context) {
     store.saveDocument({ batchId:batch.id, candidateId:candidate.id, kind:'final', title:existing?.title || candidate.hotspot_title,
       content, filePath:finalPath, status:'finalized' });
     store.upsertArtifact({ batchId:batch.id, kind:'文章终稿', name:'09-FINAL.md', path:finalPath, ...file });
-    return json(response, 200, getImageWorkspace(workdir));
+    return json(response, 200, await imageWorkspaceResponse(workdir));
   }
   const imageLocalMatch = pathname.match(/^\/api\/candidates\/(\d+)\/images\/([^/]+)\/local$/);
   if (imageLocalMatch && request.method === 'GET') {
@@ -248,14 +252,26 @@ export async function handleMediaRoutes(context) {
   if (typesetMatch && request.method === 'POST') {
     const batchId = decodeURIComponent(typesetMatch[1]);
     const input = await body(request);
+    const requestedMode = String(input.imageDeliveryMode || 'auto');
+    if (!['auto', 'cdn', 'local'].includes(requestedMode)) return json(response, 400, { error:'图片排版模式必须是 auto、cdn 或 local' });
     const daily=input.documentKind==='daily-final';
     const candidate = daily?null:store.getCandidate(Number(input.candidateId));
     if ((!daily&&(!candidate||candidate.batch_id!==batchId))||(daily&&!store.getDocument(batchId,null,'daily-final'))) return json(response, 404, { error: '待排版文稿不存在或不属于当前批次' });
-    const previousSnapshot=input.useLatestSkill===true?null:store.findLatestGenerationSnapshot({
+    // 排版是用户主动发起的交付动作，应默认读取当前模型/阶段路由。
+    // 历史快照会冻结当时的 typeset.design 模型；只有明确要求复用时才恢复，
+    // 否则切换模型后再次点击排版仍会被旧模型接管。
+    const reusePreviousSnapshot=input.reuseSnapshot===true||input.useLatestSkill===false;
+    const previousSnapshot=reusePreviousSnapshot?store.findLatestGenerationSnapshot({
       batchId,candidateId:candidate?.id??null,purposes:['typeset'],
-    });
+    }):null;
+    const cdnStatus = getCdnUploadStatus ? await getCdnUploadStatus() : { cdnConfigured:true };
+    // auto 只有在 CDN 明确配置完成时才走上传；状态未知也按本地占位降级，
+    // 避免“未配置 CDN”把整条排版流水线卡死。明确 requestedMode=cdn 仍保留
+    // 严格上传语义，方便用户主动检查 CDN 配置。
+    const imageDeliveryMode = requestedMode === 'local' || (requestedMode === 'auto' && cdnStatus.cdnConfigured !== true) ? 'local' : 'cdn';
     return json(response, 202, aiJobs.start({ batchId, candidateId: candidate?.id??null,documentKind:daily?'daily-final':null,
-      provider:previousSnapshot?null:input.provider,type:'typeset',theme:input.theme,snapshotId:previousSnapshot?.id||null }));
+      provider:previousSnapshot?null:input.provider,type:'typeset',theme:input.theme,snapshotId:previousSnapshot?.id||null,
+      imageDeliveryMode }));
   }
   const documentsMatch = pathname.match(/^\/api\/batches\/([^/]+)\/documents$/);
   if (documentsMatch && request.method === 'GET') {
@@ -349,7 +365,7 @@ export async function handleMediaRoutes(context) {
     const filePath = path.join(targetDir, fileName);
     const file = writeUtf8(filePath, String(input.content ?? ''));
     const document = store.saveDocument({ batchId, candidateId: candidate?.id ?? null, kind: input.kind,
-      title: input.title ?? '', content: String(input.content ?? ''), filePath, status: input.status ?? 'draft' });
+      title: input.title ?? '', content: String(input.content ?? ''), filePath, status: input.status ?? 'draft', reviewState: input.reviewState ?? null });
     store.upsertArtifact({ batchId, kind: input.kind.endsWith('final') ? (daily?'早报终稿':'文章终稿') : (daily?'早报初稿':'文章初稿'), name: fileName, path: filePath, ...file });
     store.updateBatch(batchId, { stage: input.kind.endsWith('final') ? 'review' : 'drafting', status: 'running' });
     return json(response, 200, document);

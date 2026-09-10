@@ -819,6 +819,18 @@ export function runDatabaseMigrations(db, migrateSchema) {
       db.exec('COMMIT');
     } catch (error) { db.exec('ROLLBACK'); throw error; }
   }
+  // 文稿审核状态与正文绑定：手动保存后必须重新审核，避免沿用旧门禁结果。
+  if (arguments.length < 2) {
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      const columns = new Set(db.prepare('PRAGMA table_info(documents)').all().map((column) => column.name));
+      if (!columns.has('review_state')) db.exec("ALTER TABLE documents ADD COLUMN review_state TEXT NOT NULL DEFAULT 'unverified'");
+      if (!columns.has('reviewed_content_hash')) db.exec("ALTER TABLE documents ADD COLUMN reviewed_content_hash TEXT NOT NULL DEFAULT ''");
+      if (!columns.has('reviewed_at')) db.exec('ALTER TABLE documents ADD COLUMN reviewed_at TEXT');
+      db.exec("UPDATE documents SET review_state=CASE WHEN status='needs_review' THEN 'needs_review' WHEN status='finalized' THEN 'passed' ELSE 'unverified' END WHERE review_state='unverified' AND status IN ('needs_review','finalized')");
+      db.exec('COMMIT');
+    } catch (error) { db.exec('ROLLBACK'); throw error; }
+  }
   const violations = db.prepare('PRAGMA foreign_key_check').all();
   if (violations.length) throw new Error(`数据库迁移后存在 ${violations.length} 项外键完整性错误`);
 }

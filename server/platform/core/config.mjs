@@ -145,14 +145,19 @@ function merge(base, override) {
   return result;
 }
 
-export function loadConfig(root = process.cwd()) {
-  const localPath = path.join(root, 'config.local.json');
+export function loadConfig(root = process.cwd(), options = {}) {
+  const configRoot = path.resolve(options.configRoot || process.env.WORKBENCH_CONFIG_ROOT || root);
+  const localPath = path.join(configRoot, 'config.local.json');
   const local = fs.existsSync(localPath)
     ? JSON.parse(fs.readFileSync(localPath, 'utf8'))
     : {};
   const config=merge(defaults, local);
-  if(config.workspaceRoot&&!path.isAbsolute(config.workspaceRoot))config.workspaceRoot=path.resolve(root,config.workspaceRoot);
-  config.contentRoots=(config.contentRoots||[]).map((value)=>path.isAbsolute(value)?value:path.resolve(root,value));
+  const requestedWorkspaceRoot = options.workspaceRoot || process.env.WORKBENCH_WORKSPACE_ROOT || config.workspaceRoot;
+  if(requestedWorkspaceRoot)config.workspaceRoot=path.isAbsolute(requestedWorkspaceRoot)
+    ?path.resolve(requestedWorkspaceRoot)
+    :path.resolve(configRoot,requestedWorkspaceRoot);
+  config.contentRoots=(config.contentRoots||[]).map((value)=>path.isAbsolute(value)?value:path.resolve(configRoot,value));
+  const resourceRoot = path.resolve(process.env.WORKBENCH_RESOURCE_ROOT || root);
   for(const key of ['rootDir','startScript','stopScript','pidFile']){
     const value=config.rsshub?.[key];
     if(!value)continue;
@@ -160,13 +165,16 @@ export function loadConfig(root = process.cwd()) {
     if(key==='startScript'||key==='stopScript'){
       const file=key==='startScript'?'rsshub-start.ps1':'rsshub-stop.ps1';
       const legacyRelative=path.join('scripts',file);
-      const legacyAbsolute=path.join(root,legacyRelative);
+      const legacyAbsolute=path.join(configRoot,legacyRelative);
       if(path.normalize(normalized).toLowerCase()===path.normalize(legacyRelative).toLowerCase()
         ||path.normalize(normalized).toLowerCase()===path.normalize(legacyAbsolute).toLowerCase()){
         normalized=path.join('scripts','runtime',file);
       }
     }
-    config.rsshub[key]=path.isAbsolute(normalized)?normalized:path.resolve(root,normalized);
+    const useResourceRoot = (key === 'startScript' || key === 'stopScript')
+      && process.env.WORKBENCH_DESKTOP === '1'
+      && normalized.toLowerCase().startsWith(path.join('scripts', 'runtime').toLowerCase());
+    config.rsshub[key]=path.isAbsolute(normalized)?normalized:path.resolve(useResourceRoot ? resourceRoot : configRoot,normalized);
   }
   const envPort=Number(process.env.WORKBENCH_PORT);
   if(Number.isInteger(envPort)&&envPort>0&&envPort<65536)config.port=envPort;

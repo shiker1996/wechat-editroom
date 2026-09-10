@@ -49,6 +49,29 @@ function loadEchartsSource() {
 const FENCE_RE = /```echarts\b[^\n]*\r?\n([\s\S]*?)```/gi;
 const MAX_OPTION_CHARS = 200_000;
 
+async function findChromeExecutable(puppeteer) {
+  const explicit = process.env.PUPPETEER_EXECUTABLE_PATH || '';
+  if (explicit && fs.existsSync(explicit)) return explicit;
+  try {
+    const managed = await puppeteer.executablePath();
+    if (managed && fs.existsSync(managed)) return managed;
+  } catch {
+    // 允许独立技能包使用其自身的默认浏览器解析逻辑。
+  }
+  return '';
+}
+
+const BROWSER_ARGS = [
+  '--no-sandbox',
+  '--disable-setuid-sandbox',
+  '--disable-gpu',
+  '--disable-dev-shm-usage',
+  '--disable-extensions',
+  '--no-first-run',
+  '--no-default-browser-check',
+  '--disable-background-networking',
+];
+
 const markdown = fs.readFileSync(input, 'utf8');
 const fences = [...markdown.matchAll(FENCE_RE)];
 const report = { converted: 0, failed: [], images: [] };
@@ -58,13 +81,23 @@ if (fences.length) {
   fs.mkdirSync(imageDir, { recursive: true });
   const puppeteer = await loadPuppeteer();
   const echartsSource = loadEchartsSource();
+  const chrome = await findChromeExecutable(puppeteer);
   // Chrome 启动偶发崩溃（尤其多进程并发时），失败后重试一次
   let browser = null;
   for (let attempt = 0; attempt < 2 && !browser; attempt += 1) {
+    const userDataDir = fs.mkdtempSync(path.join(process.env.TEMP || process.env.TMP || '.', 'wechat-echarts-chrome-'));
     try {
-      browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+      browser = await puppeteer.launch({
+        headless: 'new',
+        ...(chrome ? { executablePath: chrome } : {}),
+        userDataDir,
+        timeout: 45000,
+        args: BROWSER_ARGS,
+      });
     } catch (error) {
-      if (attempt === 1 || !/Failed to launch the browser/i.test(String(error.message))) throw error;
+      fs.rmSync(userDataDir, { recursive: true, force: true });
+      const details = String(error?.stack || error?.message || error);
+      if (attempt === 1 || !/Failed to launch the browser|Timed out after \d+ ms while waiting for the WS endpoint URL|TimeoutError/i.test(details)) throw error;
     }
   }
   try {
@@ -107,6 +140,10 @@ if (fences.length) {
     }
   } finally {
     await browser.close();
+    if (browser?.process()?.spawnargs) {
+      const profileArg = browser.process().spawnargs.find((arg) => arg.startsWith('--user-data-dir='));
+      if (profileArg) fs.rmSync(profileArg.slice('--user-data-dir='.length), { recursive: true, force: true });
+    }
   }
 }
 

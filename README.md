@@ -55,6 +55,14 @@ start-workbench.cmd -Demo
 
 `setup-workbench.cmd` 会自动准备本地 Node.js、安装依赖并启动首次配置向导；配置完成后，日常启动使用 `start-workbench.cmd`。如果已经下载仓库，直接双击这两个脚本即可。
 
+当前也提供 Windows Electron 桌面版开发入口。它会在独立用户工作区启动同一个本地 Node.js 工作台服务：
+
+```powershell
+npm run desktop:dev
+```
+
+桌面版开发与打包说明见 [`docs/desktop.md`](./docs/desktop.md)。
+
 想在本机查看生产库中最近的真实批次，可显式运行：
 
 ```powershell

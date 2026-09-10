@@ -1,0 +1,237 @@
+/*
+ * Desktop office surface.
+ * Keep this as a final common-layer override so the route-specific editorial
+ * styles can still own article/social previews while the application shell
+ * shares one calm, native-feeling interaction language.
+ */
+:root {
+  --surface: var(--white);
+  --surface-subtle: #f8f9fa;
+  --surface-hover: #f3f7fb;
+  --overlay: rgba(32, 38, 45, .24);
+  --shadow-popover: 0 12px 28px rgba(32, 38, 45, .14), 0 2px 6px rgba(32, 38, 45, .08);
+}
+
+html, body { background: var(--paper); }
+.paper-noise { display: none; }
+
+/* The rail remains a stable application chrome, not a decorative poster. */
+.rail { background: var(--chrome-rail); }
+.brand-seal { transform: none; background: var(--red-strong); }
+.nav-group>summary:hover, .nav-group[open]>summary { background: var(--chrome-hover); }
+.nav-group .nav-item.active { background: var(--chrome-selection-strong); }
+.nav-group .nav-item.active::before { background: var(--blue); }
+.nav-item:hover, .nav-item.active { transform: none; }
+.nav-utility:hover, .nav-utility.active { border-color: var(--chrome-focus); background: var(--chrome-selection); }
+.nav-utility.active::before { background: var(--blue); }
+
+.shell { background: var(--paper); }
+.topbar { padding-bottom: 18px; }
+.topbar h1, .panel h3, .workspace-head h3, .drawer h2, .modal h2 { font-family: var(--body); font-weight: 650; }
+.topbar h1 { font-size: 25px; }
+.eyebrow, .kicker { color: var(--muted); letter-spacing: .12em; }
+.desktop-context i { background: var(--green); box-shadow: none; }
+
+/* First-run progress stays available after the guide opens a work area. */
+.first-run-progress { flex: 0 0 auto; }
+.first-run-progress-trigger {
+  display: grid;
+  grid-template-columns: auto minmax(84px, auto) 42px auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 5px 9px 5px 7px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.first-run-progress-trigger:hover,
+.first-run-progress-trigger:focus-visible { border-color: var(--blue); background: var(--blue-soft); }
+.first-run-progress-count { display: grid; place-items: center; min-width: 25px; height: 25px; border-radius: 50%; background: var(--blue-soft); color: var(--blue); font: 800 12px var(--mono); }
+.first-run-progress-count small { font-size: 8px; font-weight: 700; }
+.first-run-progress-copy { display: grid; gap: 1px; min-width: 0; }
+.first-run-progress-copy b { font-size: 10px; line-height: 1.1; }
+.first-run-progress-copy small { color: var(--muted); font-size: 9px; white-space: nowrap; }
+.first-run-progress-bar { display: block; width: 42px; height: 4px; overflow: hidden; background: var(--paper-deep); }
+.first-run-progress-bar i { display: block; height: 100%; background: var(--blue); transition: width .2s ease; }
+.first-run-progress-step { color: var(--muted); font: 700 10px var(--mono); }
+
+/* Office-style controls: flat by default, elevation reserved for overlays. */
+.primary-button, .ink-button, .ghost-button, .outline-button, .text-button,
+.chrome-toggle, .topbar-more > summary {
+  border-radius: 6px;
+  box-shadow: none;
+  transform: none;
+}
+.primary-button { background: var(--blue); color: var(--white); }
+.primary-button:hover { background: var(--blue-dark); box-shadow: none; transform: none; }
+.ink-button { background: var(--ink-strong); }
+.ink-button:hover { background: var(--ink-hover); }
+.ghost-button, .chrome-toggle, .topbar-more > summary { border-color: var(--line); background: var(--surface); }
+.ghost-button:hover { border-color: var(--blue-border-strong); background: var(--blue-soft); }
+.outline-button { border-color: var(--line-strong); background: var(--surface); }
+.outline-button:hover { border-color: var(--blue); background: var(--blue-soft); color: var(--ink); }
+.text-button, .inline-button:hover { color: var(--blue); }
+.primary-button:disabled { background: var(--disabled-surface); color: var(--disabled-ink); }
+
+/* Ordinary work surfaces are quiet and rectangular; no offset poster shadows. */
+.dispatch-card,
+.metric,
+.panel,
+.attention-board,
+.efficiency-board,
+.artifact-card,
+.control-card,
+.source-picker,
+.candidate-board,
+.source-ledger-panel,
+.story-list,
+.atlas-stage-empty,
+.editorial-decision-details,
+.event-card-panel,
+.editorial-research-panel {
+  border: 1px solid var(--line);
+  border-top-width: 1px;
+  background: var(--surface);
+  box-shadow: none;
+}
+.dispatch-card { color: var(--ink); box-shadow: 0 1px 3px var(--shadow-card); }
+.dispatch-card::after { display: none; }
+.dispatch-card .text-button { color: var(--blue); }
+.dispatch-card .ink-button { box-shadow: none; }
+.metric:nth-child(2), .metric:nth-child(3), .metric:nth-child(4) { background: var(--surface); color: var(--ink); }
+.metric strong, .attention-card>strong, .efficiency-card strong { font-family: var(--body); }
+.metric strong { color: var(--ink-strong); }
+.attention-card, .efficiency-card, .artifact-card { background: var(--surface); }
+.attention-card:hover, .artifact-card:hover { transform: none; box-shadow: none; background: var(--surface-hover); }
+.attention-card.bad { background: var(--surface-danger); }
+.efficiency-card:hover { background: var(--surface-hover); }
+.panel-count, .file-tab, .stage-badge, .status-pill { border-radius: 4px; }
+.file-tab { background: var(--blue); }
+.artifact-card h3, .story-row h3, .event-hotlist-main h4 { font-family: var(--body); }
+
+/* Inputs and selected rows use one restrained blue interaction state. */
+.filter-bar input, .filter-bar select, .modal input, .modal textarea,
+.search-field, .source-compose input, .source-compose select {
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+}
+select option { color: var(--ink); background: var(--surface); }
+.filter-bar input:focus, .filter-bar select:focus, .modal input:focus, .modal textarea:focus,
+.search-field:focus-within, .source-compose input:focus, .source-compose select:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 2px var(--focus-ring);
+}
+.ledger-row:hover { padding-left: 10px; background: var(--surface-hover); box-shadow: none; }
+.subscription-row:hover { padding-left: 18px; background: var(--surface-hover); box-shadow: none; }
+.event-hotlist-item:hover { background: var(--surface-hover); box-shadow: none; }
+.ledger-row.active-batch { background: var(--blue-soft); border-left-color: var(--blue); }
+
+/* Disabled sources should recede through the surface, not through unreadable text. */
+#view-sources .subscription-row.disabled {
+  opacity: 1;
+  filter: none;
+  background: var(--surface-subtle);
+  color: var(--muted);
+}
+#view-sources .subscription-row.disabled .subscription-kind {
+  color: var(--muted);
+  background: var(--paper-deep);
+}
+#view-sources .subscription-row.disabled .subscription-identity b { color: var(--muted); }
+#view-sources .subscription-row.disabled .subscription-identity code,
+#view-sources .subscription-row.disabled .subscription-identity small,
+#view-sources .subscription-row.disabled .source-switch,
+#view-sources .subscription-row.disabled .subscription-actions .text-button { color: var(--muted); }
+#view-sources .subscription-row.disabled .source-remove { color: var(--muted); }
+#view-sources .subscription-test-result { color: var(--muted); }
+#view-sources .subscription-test-result.ok { color: var(--green); }
+#view-sources .subscription-test-result.testing { color: var(--blue); }
+#view-sources .subscription-test-result.bad { color: var(--red); }
+
+/* Dialogs are the only strongly elevated surfaces. */
+.modal, .drawer, .preview-modal {
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow-popover);
+}
+.modal::backdrop, .drawer::backdrop, .preview-modal::backdrop,
+.first-run-dialog::backdrop { background: var(--overlay); backdrop-filter: none; }
+.modal-head, .drawer-head { align-items: center; }
+.close-button { border-radius: 6px; color: var(--muted); }
+.close-button:hover { background: var(--surface-hover); color: var(--ink); }
+.drawer { box-shadow: -10px 0 26px var(--shadow-dialog); }
+.drawer-inner { padding: 28px; }
+.modal form { padding: 24px 28px 26px; }
+.modal-head, .drawer-head { gap: 16px; }
+.modal-head { padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.modal h2, .drawer h2 { margin: 4px 0 0; font-size: 24px; line-height: 1.25; }
+.modal-actions { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line); }
+.drawer-head { position: sticky; top: 0; z-index: var(--z-sticky); padding-bottom: 16px; background: var(--surface); }
+.drawer-section { padding: 18px 0; }
+.close-button { min-width: 40px; min-height: 40px; padding: 0; font-family: var(--body); font-size: 24px; line-height: 1; }
+.modal input, .modal select, .modal textarea, .drawer input, .drawer select, .drawer textarea { min-height: 36px; }
+.modal input[type="checkbox"], .modal input[type="radio"], .drawer input[type="checkbox"], .drawer input[type="radio"] { min-height: auto; }
+.modal :is(input, select, textarea):focus-visible, .drawer :is(input, select, textarea):focus-visible,
+button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+/* Custom dialogs use the same outer elevation even when their inner layout differs. */
+.theme-picker-dialog, .material-dialog { border: 0; background: transparent; box-shadow: none; }
+.theme-picker-shell, .material-dialog-shell {
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow-popover);
+}
+.theme-picker-dialog::backdrop, .material-dialog::backdrop { background: var(--overlay); backdrop-filter: none; }
+.theme-picker-head, .material-dialog-head { padding: 20px 24px 16px; border-bottom-color: var(--line); background: var(--surface); }
+.theme-picker-head h2, .material-dialog-head h3 { font-family: var(--body); font-weight: 650; }
+.theme-picker-tabs { padding-inline: 24px; border-bottom-color: var(--line); }
+.theme-picker-tabs button.active { border-color: var(--blue); color: var(--ink); }
+.theme-picker-foot { border-top-color: var(--line); background: var(--surface-subtle); }
+.material-dialog-foot { border-top-color: var(--line); background: var(--surface-subtle); }
+.material-dialog-body details { border-radius: 6px; background: var(--surface-subtle); }
+.theme-choice-card:hover, .theme-choice-card.selected { transform: none; box-shadow: none; }
+.theme-picker-trigger { border-radius: 6px; box-shadow: none; }
+.topbar-menu { border-radius: 8px; background: var(--surface); box-shadow: var(--shadow-popover); }
+.command-palette-dialog { box-shadow: var(--shadow-popover); }
+
+/* Office workspaces stay light; only the rail and run-trace keep dark utility chrome. */
+.runtime-commandbar, .maintenance-panel {
+  background: var(--surface);
+  color: var(--ink);
+  border-color: var(--line);
+}
+.source-compose { background: var(--surface-subtle); box-shadow: none; }
+.source-compose::after { display: none; }
+.source-compose input, .source-compose select { color: var(--ink); background: var(--surface); border-color: var(--line-strong); }
+.source-compose .outline-button { color: var(--ink); border-color: var(--line-strong); background: var(--surface); }
+.source-compose .outline-button:hover { color: var(--ink); border-color: var(--blue); background: var(--blue-soft); }
+.source-ledger-panel { border-top-color: var(--line); }
+.keyword-cloud, .event-rank { background: var(--surface-subtle); color: var(--ink); }
+.keyword-cloud button { color: var(--ink); }
+.keyword-cloud button:nth-child(4n+1) { color: var(--green); }
+.keyword-cloud button:nth-child(5n) { color: var(--blue); }
+.event-rank > span { color: var(--blue); }
+.event-rank > small { color: var(--muted); }
+.event-rank > em { color: var(--green); }
+
+/* Theme generation is a light management form, not a dark hero panel. */
+#view-themes .ai-theme-creator > header {
+  background: var(--surface-subtle);
+  color: var(--ink);
+  border-bottom-color: var(--line);
+}
+#view-themes .ai-theme-creator > header h4,
+#view-themes .ai-theme-creator > header .text-button { color: var(--ink); }
+#view-themes .ai-theme-creator > header p { color: var(--muted); }
+
+@media (max-width: 760px) {
+  .shell { padding-inline: 18px; }
+  .drawer-inner { padding: 22px 18px; }
+  .first-run-progress { display: none; }
+}

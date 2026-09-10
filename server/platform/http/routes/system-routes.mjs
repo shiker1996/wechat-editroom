@@ -15,6 +15,7 @@ import {
 import { validateWorkbenchBackup } from '../../artifacts/backup-archive.mjs';
 import { getGitHubApiHealth } from '../../connectors/github-client.mjs';
 import { getRuntimeSettings, runPowerShellScript, updateRuntimeSettings } from '../../integrations/runtime-settings.mjs';
+import { inspectRsshubEnvironment, installRsshub } from '../../integrations/rsshub-installer.mjs';
 import { createModelConnection, createModelProvider, deleteModelConnection, syncModelConnectionFromDatabase, syncModelProviderFromDatabase } from '../../integrations/model-provider-settings.mjs';
 import { SkillRegistry } from '../../skills/registry.mjs';
 import { BUILTIN_PLUGINS, getToolRegistry, reloadToolRegistry } from '../../tools/index.mjs';
@@ -49,6 +50,7 @@ import { writeCollectorToolSetting } from '../../collectors/settings.mjs';
 import { buildConfigurationCatalog, findConfigurationResource } from '../../extensions/configuration-catalog.mjs';
 import { createBuiltinCollectorRegistry } from '../../collectors/builtin-registry.mjs';
 import { CollectionSourceService, sourceInputForPlugin, assistStaticPage } from '../../../features/collection/index.mjs';
+import { describeBatchSourceGroups } from '../../../features/collection/application/batch-source-selection.mjs';
 import { createCollectorRuntime, listCollectorPluginStates } from '../../collectors/runtime-registry.mjs';
 import { confirmCollectorPluginFirstRun, installCollectorPlugin, listCollectorPluginEvents, listCollectorPluginVersions, readCollectorPluginCatalog, rollbackCollectorPlugin, setCollectorPluginStatus, uninstallCollectorPlugin, validateCollectorPluginDirectory } from '../../collectors/package-manager.mjs';
 import { boundedLimit } from '../route-helpers.mjs';
@@ -92,7 +94,7 @@ function failedToolRunIds(trace = {}) {
 
 export async function handleSystemRoutes(context) {
   const {
-    request, response, pathname, searchParams, root, config, store, batchWorkdir,
+    request, response, pathname, searchParams, root, resourceRoot = root, config, store, batchWorkdir,
     json, body, binaryBody, createWorkbenchBackup, models, aiJobs, candidateEventGroups,
   } = context;
   const extensionSettingRepository=store?.repositories?.extensionSettings||{
@@ -102,6 +104,15 @@ export async function handleSystemRoutes(context) {
   const collectorRuntime=()=>createCollectorRuntime({root,config,configurationResolver:(manifest)=>extensionConfiguration.resolve({extensionType:'collector',extensionId:manifest.id,manifest})});
   const configurationCatalog=()=>buildConfigurationCatalog({root,config});
   const resourceFallback=()=>({});
+  const writeRsshubInstallLog = (event, details = {}) => {
+    try {
+      const logDir = path.join(root, 'logs');
+      fs.mkdirSync(logDir, { recursive: true });
+      fs.appendFileSync(path.join(logDir, 'rsshub-install.log'), `${JSON.stringify({
+        time: new Date().toISOString(), event, ...details,
+      })}\n`, 'utf8');
+    } catch { /* diagnostics must never break the install flow */ }
+  };
   const describeResource=(resource)=>{
     const state=extensionConfiguration.describe({extensionType:resource.type,extensionId:resource.id,manifest:resource.manifest,fallbackValues:resourceFallback(resource)});
     // 模型「默认」是运行时渠道状态，并持久化到 system:llm-runtime。
@@ -962,6 +973,39 @@ export async function handleSystemRoutes(context) {
     return true;
   }
 
+  if (request.method === 'GET' && pathname === '/api/system/runtime/rsshub/status') {
+    json(response, 200, await inspectRsshubEnvironment(config.rsshub));
+    return true;
+  }
+  if (request.method === 'POST' && pathname === '/api/system/runtime/rsshub/install') {
+    try {
+      writeRsshubInstallLog('install-start', { rootDir: config.rsshub?.rootDir || '' });
+      const status = await installRsshub(config.rsshub, {
+        workspaceRoot: root,
+        resourceRoot,
+        onProgress: (message) => {
+          console.log(`[rsshub-install] ${message}`);
+          writeRsshubInstallLog('progress', { message });
+        },
+      });
+      let started = false;
+      let startError = '';
+      try {
+        started = await ensureStarted(config.rsshub, (message) => console.log(`[rsshub-install] ${message}`));
+      } catch (error) {
+        startError = error.message;
+        writeRsshubInstallLog('start-failed', { error: startError });
+      }
+      const result = { ...status, started, healthy: startError ? false : true, warning: startError || '' };
+      writeRsshubInstallLog('install-complete', result);
+      json(response, 200, result);
+    } catch (error) {
+      writeRsshubInstallLog('install-failed', { error: error.message });
+      json(response, 400, { error: error.message, service: 'rsshub' });
+    }
+    return true;
+  }
+
   const runtimeMatch = pathname.match(/^\/api\/system\/runtime\/(rsshub|reddit)\/(start|stop|restart)$/);
   if (request.method === 'POST' && runtimeMatch) {
     const [, service, action] = runtimeMatch;
@@ -975,10 +1019,10 @@ export async function handleSystemRoutes(context) {
     } else {
       const port = String(new URL(config.reddit.cdpUrl).port || 9222);
       if (action === 'stop' || action === 'restart') {
-        result = await runPowerShellScript(path.join(root, 'plugins', 'reddit', 'scripts', 'stop-chrome.ps1'), ['-Port', port]);
+        result = await runPowerShellScript(path.join(resourceRoot, 'plugins', 'reddit', 'scripts', 'stop-chrome.ps1'), ['-Port', port]);
       }
       if (action === 'start' || action === 'restart') {
-        result = await runPowerShellScript(path.join(root, 'plugins', 'reddit', 'scripts', 'start-chrome.ps1'), ['-Port', port]);
+        result = await runPowerShellScript(path.join(resourceRoot, 'plugins', 'reddit', 'scripts', 'start-chrome.ps1'), ['-Port', port]);
       }
     }
     json(response, 200, { ...result, service, action });
@@ -1013,6 +1057,10 @@ export async function handleSystemRoutes(context) {
     if(!store?.repositories?.collectionSources){json(response,200,{items:[]});return true;}
     const healthByKey=new Map(store.listSubscriptionHealth().map((item)=>[item.source_key,item]));
     json(response,200,{items:store.listCollectionSources().map((item)=>({...item,health:healthByKey.get(item.source_key)||null,pluginStatus:'ready'}))});return true;
+  }
+  if(request.method==='GET'&&pathname==='/api/collection-capabilities'){
+    const rsshub = await inspectRsshubEnvironment(config.rsshub);
+    json(response,200,{items:describeBatchSourceGroups(store.listCollectionSources(), { rsshubReady: rsshub.ready, rsshubReason: rsshub.reason }), rsshub});return true;
   }
   if(pathname==='/api/collection-sources'&&request.method==='POST'){
     try{const registry=await collectorRuntime();const service=new CollectionSourceService({repository:store.repositories.collectionSources,registry});json(response,201,service.create(await body(request)));}

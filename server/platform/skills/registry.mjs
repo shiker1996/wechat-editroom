@@ -23,12 +23,17 @@ function metadata(content, fallbackName) {
 }
 
 export class SkillRegistry {
-  constructor({ workspaceRoot }) { this.workspaceRoot = workspaceRoot; }
+  constructor({ workspaceRoot, resourceRoot = '' }) {
+    this.workspaceRoot = workspaceRoot;
+    this.resourceRoot = resourceRoot || process.env.WORKBENCH_RESOURCE_ROOT || '';
+  }
   list() {
-    const root = path.join(this.workspaceRoot, 'skills');
-    const builtIns=fs.existsSync(root) ? fs.readdirSync(root, { withFileTypes:true })
+    const builtinRoots=[path.join(this.workspaceRoot, 'skills'), this.resourceRoot && path.join(this.resourceRoot, 'skills')]
+      .filter((directory,index,all)=>directory&&fs.existsSync(directory)&&all.indexOf(directory)===index);
+    const builtIns=builtinRoots.flatMap((root) => fs.readdirSync(root, { withFileTypes:true })
       .filter((entry) => entry.isDirectory() && fs.existsSync(path.join(root, entry.name, 'SKILL.md')))
-      .map((entry)=>({entry,root,status:'enabled'})) : [];
+      .map((entry)=>({entry,root,status:'enabled'})))
+      .filter((item,index,all)=>all.findIndex((candidate)=>candidate.entry.name===item.entry.name)===index);
     const installedRoot=installedSkillsRoot(this.workspaceRoot);
     const catalog=readSkillPackageCatalog(this.workspaceRoot);
     const installed=Object.values(catalog.packages)

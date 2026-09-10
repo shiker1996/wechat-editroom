@@ -33,15 +33,6 @@ function renderConfigurationList(){
 function bindSystem() {
   if (bound) return;
   bound = true;
-  document.getElementById("system-health").addEventListener("click", () => {
-    loadSystem().catch((error) => toast(error.message, "error"));
-  });
-  document.querySelectorAll("[data-health-target]").forEach((button) => button.addEventListener("click", () => {
-    loadSystem(button.dataset.healthTarget, button).catch((error) => toast(error.message, "error"));
-  }));
-  document.querySelectorAll("[data-runtime-service]").forEach((button) => button.addEventListener("click", () => {
-    controlRuntime(button).catch((error) => toast(error.message, "error"));
-  }));
   document.getElementById("add-rsshub-env")?.addEventListener("click", () => addRsshubKvRow());
   document.getElementById("add-model-connection")?.addEventListener("click", () => addModelConnection().catch((error) => toast(error.message, "error")));
   document.getElementById("add-model-provider")?.addEventListener("click", () => addModelProvider().catch((error) => toast(error.message, "error")));
@@ -345,79 +336,8 @@ function collectRsshubFields() {
   }));
 }
 
-async function controlRuntime(button) {
-  const service = button.dataset.runtimeService;
-  const action = button.dataset.runtimeAction;
-  const labels = { start: "启动中…", stop: "停止中…", restart: "重启中…" };
-  const original = button.textContent;
-  button.disabled = true;
-  button.textContent = labels[action];
-  try {
-    const result = await request(`/api/system/runtime/${service}/${action}`, { method: "POST", body: "{}" });
-    toast(result.message || "操作完成");
-    await loadSystem(service);
-  } finally {
-    button.disabled = false;
-    button.textContent = original;
-  }
-}
-
-async function loadSystem(target = "all", button = null) {
-  const original = button?.textContent;
-  if (button) {
-    button.disabled = true;
-    button.textContent = "检查中…";
-  }
-  // 结果 toast 统一在检查完成后给出，过程不再弹"检查中"
-  let health;
-  try {
-    health = await request(`/api/system/health${target === "all" ? "" : `?target=${encodeURIComponent(target)}`}`);
-  } catch (error) {
-    if (button) {
-      button.disabled = false;
-      button.textContent = original;
-    }
-    throw error;
-  }
-  const reddit = document.getElementById("reddit-status");
-  const rss = document.getElementById("rsshub-status");
-  const github = document.getElementById("github-status");
-  if (reddit && health.reddit) {
-    reddit.textContent = health.reddit.ok ? `已连接 · ${health.reddit.tabs} 个标签页` : "未连接";
-    reddit.className = `status-pill ${health.reddit.ok ? "ok" : "bad"}`;
-  }
-  if (rss && health.rsshub) {
-    rss.textContent = health.rsshub.ok ? "已连接" : "未连接";
-    rss.className = `status-pill ${health.rsshub.ok ? "ok" : "bad"}`;
-  }
-  if (github && health.github) {
-    const gh = health.github;
-    github.textContent = gh.status === "idle" ? "尚未请求" : gh.status === "ok" ? "已连接" : gh.status === "degraded" ? "缓存降级" : "请求失败";
-    github.className = `status-pill ${gh.status === "ok" ? "ok" : gh.status === "idle" ? "unknown" : "bad"}`;
-    const quota = document.getElementById("github-quota");
-    if (quota) {
-      quota.textContent = gh.limit
-        ? `REST ${gh.resource || "core"} · 剩余 ${gh.remaining}/${gh.limit} · 重置 ${gh.resetAt ? new Date(gh.resetAt).toLocaleString() : "未知"} · 缓存命中 ${gh.cacheHits || 0}`
-        : `${gh.tokenConfigured ? "Token 已配置，等待首次请求" : "未配置 Token"} · 缓存命中 ${gh.cacheHits || 0}${gh.lastError ? ` · ${gh.lastError}` : ""}`;
-    }
-  }
-  const checked = document.getElementById("system-last-checked");
-  if (checked) checked.textContent = `最后检查：${new Date(health.now).toLocaleString("zh-CN")}${target === "all" ? "" : ` · ${target.toUpperCase()}`}`;
-  const indicator = document.getElementById("nav-runtime-indicator");
-  if (indicator && target === "all") {
-    const allOk = health.reddit?.ok && health.rsshub?.ok;
-    indicator.className = allOk ? "ok" : "attention";
-    indicator.title = allOk ? "采集依赖运行正常" : "有采集依赖需要处理";
-  }
-  if (button) {
-    button.disabled = false;
-    button.textContent = original;
-  }
-  toast(target === "all" ? "采集环境检查完成" : "当前卡片检查完成");
-}
-
 export default async function loadSystemView() {
   bindSystem();
-  await Promise.all([loadSystem(), loadRuntimeSettings(), loadModelSettings(), loadExtensionConfigurations()]);
+  await Promise.all([loadRuntimeSettings(), loadModelSettings(), loadExtensionConfigurations()]);
   renderConfigurationList();
 }

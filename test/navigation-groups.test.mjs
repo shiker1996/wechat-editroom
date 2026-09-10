@@ -3,17 +3,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-test('侧栏按六个任务阶段组织并自动展开当前阶段', () => {
+test('侧栏按六个工作区组织并自动展开当前工作区', () => {
   const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
   const main = fs.readFileSync(new URL('../public/src/main.js', import.meta.url), 'utf8');
   const publication = fs.readFileSync(new URL('../public/src/views/publication.js', import.meta.url), 'utf8');
   const styles = readStyles();
   const editorCss = fs.readFileSync(new URL('../public/assets/styles/editor.css', import.meta.url), 'utf8');
-  for (const label of ['今日工作', '发现与研判', '文章生产', '图文生产', '发布与复盘', '资产与运行']) {
+  for (const label of ['今日工作', '采集', '文章生产', '图文生产', '发布', '资产']) {
     assert.match(html, new RegExp(label));
   }
   assert.equal((html.match(/class="nav-group"/g) || []).length, 6);
-  assert.equal((html.match(/class="nav-item/g) || []).length, 25);
+  assert.equal((html.match(/class="nav-item/g) || []).length, 24);
   assert.match(html, /data-view="material-inbox">素材入箱/);
   assert.match(html, /data-view="wechat-review-prep">复盘数据台/);
   assert.match(html, /data-view="wechat-review">公众号复盘/);
@@ -54,7 +54,7 @@ test('侧栏按六个任务阶段组织并自动展开当前阶段', () => {
   assert.match(html,/data-view="editorial">热点事件/);
   assert.doesNotMatch(html, /data-view="models">模型运行/);
   assert.match(html, /class="rail-utility-group" aria-label="扩展与定制"/);
-  for (const view of ['skills', 'themes']) assert.match(html, new RegExp(`class="nav-utility" data-view="${view}"`));
+  for (const view of ['skills', 'themes', 'system']) assert.match(html, new RegExp(`class="nav-utility" data-view="${view}"`));
   assert.ok(html.indexOf('data-view="skills"') < html.indexOf('data-view="themes"'));
   assert.match(main, /group\.open = Boolean\(activeNavItem && group\.contains\(activeNavItem\)\)/);
   assert.match(main, /setAttribute\("aria-current", "page"\)/);
@@ -63,7 +63,7 @@ test('侧栏按六个任务阶段组织并自动展开当前阶段', () => {
   assert.match(styles, /\.content-feedback-metrics\{[^}]*grid-template-columns:repeat\(5,minmax\(0,1fr\)\)/);
   assert.match(editorCss, /\.content-feedback-metrics\{[^}]*grid-template-columns:repeat\(5,minmax\(0,1fr\)\)/);
   assert.match(styles, /\.rail nav \{ flex:none;max-height:240px/);
-  assert.ok(html.indexOf('data-view="system"') < html.indexOf('class="rail-foot"'));
+  assert.ok(html.indexOf('data-view="system"') > html.indexOf('class="rail-utility-group"'));
   assert.match(styles,/nav \{ flex:1;min-height:0/);
 });
 

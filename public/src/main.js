@@ -6,6 +6,7 @@ import { bindBatchDrawer } from "./views/batch-drawer.js";
 import loadOverview from "./views/dashboard.js";
 import { hydrateThemePickers } from "./core/theme-catalog.js";
 import { bindQuickMaterialCapture } from "./core/quick-material.js";
+import { bindFirstRunWizard, openFirstRunWizard, shouldOpenFirstRunWizard } from "./core/first-run.js";
 
 const viewModules = {
   dashboard: "./views/dashboard.js", batches: "./views/batches.js", overview: "./views/atlas.js",
@@ -22,14 +23,15 @@ const viewModules = {
 // 三个导航入口共用同一视图 DOM：工具图文 / 自定义图文 / 事件图文都落在 #view-social-editor
 const viewSectionAliases = { "social-custom": "view-social-editor", "social-event": "view-social-editor" };
 
-const styleVersion = "20260907-run-input14";
+const styleVersion = "20260910-review-highlights-7";
 const styleModules = {
   social: "/assets/styles/social.css",
   topics: "/assets/styles/topics.css",
   editor: "/assets/styles/editor.css",
   system: "/assets/styles/system.css",
+  office: "/assets/styles/office.css",
 };
-const styleOrder = ["social", "topics", "editor", "system"];
+const styleOrder = ["social", "topics", "editor", "system", "office"];
 const viewStyles = {
   overview: ["topics"],
   topics: ["topics"],
@@ -57,6 +59,7 @@ const viewStyles = {
   sources: ["system"],
 };
 const loadedStyles = new Map();
+let navigationSequence = 0;
 
 function waitForBaseStyle() {
   const link = document.querySelector('link[data-base-style="common"]');
@@ -92,13 +95,16 @@ async function loadViewStyles(view) {
   const names = [...new Set(viewStyles[view] || [])]
     .sort((a, b) => styleOrder.indexOf(a) - styleOrder.indexOf(b));
   for (const name of names) await loadStyle(name);
+  // Keep the desktop workspace layer last so route-specific legacy styling
+  // cannot reintroduce the editorial card treatment after navigation.
+  await loadStyle("office");
 }
 
 const jobNoticeState = new Map();
 let jobNoticeTimer = null;
 // 浏览器前进/后退触发 go 时不重复压栈
 let navigatingFromHistory = false;
-const moduleVersion = "20260907-run-input13";
+const moduleVersion = "20260910-review-highlights-7";
 
 const titles = {
   dashboard: "工作台总览", batches: "批次管理", overview: "热点全景",
@@ -116,6 +122,8 @@ async function go(route) {
   const view = rawView === "models" ? "logs" : rawView;
   const normalizedRoute = rawView === "models" ? "logs" : rawRoute;
   if (!(view in titles)) return;
+  const navigationId = ++navigationSequence;
+  window.desktopBridge?.trace?.({ stage: "route-start", id: navigationId, route: normalizedRoute, view });
   try {
     await loadViewStyles(view);
   } catch (error) {
@@ -126,7 +134,7 @@ async function go(route) {
   const previousView = document.querySelector(".nav-item.active,.nav-utility.active")?.dataset.view;
   const isViewChange = previousView !== view;
   const bs = document.getElementById("batch-switcher");
-  if (bs) bs.classList.toggle("visible", ["overview","topics","daily","tutorial","social-topics","social-editor","social-custom","social-event","editorial","editor","preview","cover","artifacts"].includes(view));
+  if (bs) bs.classList.toggle("visible", ["dashboard","overview","topics","daily","tutorial","social-topics","social-editor","social-custom","social-event","editorial","editor","preview","cover","artifacts"].includes(view));
   let activeNavItem = null;
   $$(".nav-item").forEach((item) => {
     const active = item.dataset.view === view;
@@ -140,7 +148,7 @@ async function go(route) {
     const active=item.dataset.view===view;item.classList.toggle("active",active);
     if(active){item.setAttribute("aria-current","page");activeNavItem=item;}else item.removeAttribute("aria-current");
   });
-  // 桌面端侧栏是单开任务阶段：当前页面所属阶段始终可见，其余阶段收起。
+  // 桌面端侧栏是单开工作区：当前页面所属工作区始终可见，其余工作区收起。
   $$(".nav-group").forEach((group) => { group.open = Boolean(activeNavItem && group.contains(activeNavItem)); });
   const sectionId = viewSectionAliases[view] ? viewSectionAliases[view] : `view-${view}`;
   $$(".view").forEach((item) => item.classList.toggle("active", item.id === sectionId));
@@ -169,6 +177,7 @@ async function go(route) {
       toast(`视图「${titles[view]}」加载失败，请刷新后重试`, "error");
     }
   }
+  window.desktopBridge?.trace?.({ stage: "route-complete", id: navigationId, route: normalizedRoute, view });
 }
 
 async function init() {
@@ -213,6 +222,136 @@ function exitImmersiveChats() {
   syncImmersiveMode();
 }
 
+function setRailCollapsed(collapsed) {
+  document.body.classList.toggle("rail-collapsed", collapsed);
+  const toggle = document.getElementById("rail-toggle");
+  if (toggle) {
+    toggle.setAttribute("aria-pressed", String(collapsed));
+    toggle.setAttribute("aria-label", collapsed ? "展开侧栏" : "收起侧栏");
+    toggle.title = `${collapsed ? "展开" : "收起"}侧栏（Ctrl+B）`;
+  }
+  try { localStorage.setItem("jianzhi.rail-collapsed", collapsed ? "1" : "0"); } catch { /* 隐私模式下不持久化布局偏好 */ }
+}
+
+function toggleRail() {
+  setRailCollapsed(!document.body.classList.contains("rail-collapsed"));
+}
+
+function showDesktopShortcuts() {
+  const dialog = document.getElementById("desktop-shortcuts-dialog");
+  if (dialog && !dialog.open) dialog.showModal();
+}
+
+const commandPaletteItems = [
+  { id: "dashboard", label: "工作台总览", group: "工作区", shortcut: "Ctrl 1", keywords: "首页 今日工作 总览" },
+  { id: "batches", label: "批次管理", group: "工作区", shortcut: "Ctrl 2", keywords: "批次 任务" },
+  { id: "sources", label: "采集源", group: "工作区", shortcut: "Ctrl 3", keywords: "采集 rsshub reddit github" },
+  { id: "editor", label: "文章编辑器", group: "工作区", shortcut: "Ctrl 4", keywords: "写作 文章 编辑" },
+  { id: "logs", label: "任务日志", group: "工作区", keywords: "运行 日志" },
+  { id: "system", label: "运行与配置", group: "设置", keywords: "模型 配置 环境" },
+  { id: "new-batch", label: "新建今日批次", group: "操作", shortcut: "Ctrl N", keywords: "创建 批次" },
+  { id: "quick-material", label: "快速记素材", group: "操作", shortcut: "Ctrl ⇧ M", keywords: "素材 记录" },
+  { id: "onboarding", label: "首次使用说明", group: "帮助", keywords: "向导 帮助 入门" },
+  { id: "toggle-rail", label: "收起 / 展开侧栏", group: "视图", shortcut: "Ctrl B", keywords: "布局 sidebar" },
+  { id: "shortcuts", label: "查看快捷键", group: "帮助", shortcut: "Ctrl /", keywords: "键盘" },
+];
+let commandPaletteRestoreFocus = null;
+let commandPaletteItemsVisible = [];
+let commandPaletteActiveIndex = 0;
+
+function renderCommandPalette(query = "") {
+  const list = document.getElementById("command-palette-list");
+  if (!list) return;
+  const normalized = query.trim().toLocaleLowerCase("zh-CN");
+  commandPaletteItemsVisible = commandPaletteItems.filter((item) => !normalized || `${item.label} ${item.group} ${item.keywords}`.toLocaleLowerCase("zh-CN").includes(normalized));
+  commandPaletteActiveIndex = Math.min(commandPaletteActiveIndex, Math.max(commandPaletteItemsVisible.length - 1, 0));
+  list.innerHTML = commandPaletteItemsVisible.length
+    ? commandPaletteItemsVisible.map((item, index) => `<button type="button" class="command-palette-item${index === commandPaletteActiveIndex ? " is-active" : ""}" data-command-palette-index="${index}" role="option" aria-selected="${index === commandPaletteActiveIndex}"><span><b>${item.label}</b><small>${item.group}</small></span>${item.shortcut ? `<kbd>${item.shortcut}</kbd>` : ""}</button>`).join("")
+    : '<div class="command-palette-empty">没有匹配的操作</div>';
+}
+
+function closeCommandPalette() {
+  const dialog = document.getElementById("command-palette-dialog");
+  if (dialog?.open) dialog.close();
+}
+
+function showCommandPalette() {
+  const dialog = document.getElementById("command-palette-dialog");
+  const input = document.getElementById("command-palette-input");
+  if (!dialog || !input) return;
+  commandPaletteRestoreFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  commandPaletteActiveIndex = 0;
+  input.value = "";
+  renderCommandPalette();
+  if (!dialog.open) dialog.showModal();
+  requestAnimationFrame(() => { input.focus(); input.select(); });
+}
+
+function executeCommandPaletteItem(item) {
+  closeCommandPalette();
+  return runDesktopCommand(item.id);
+}
+
+function bindCommandPalette() {
+  const dialog = document.getElementById("command-palette-dialog");
+  const input = document.getElementById("command-palette-input");
+  const list = document.getElementById("command-palette-list");
+  if (!dialog || !input || !list || dialog.dataset.bound) return;
+  dialog.dataset.bound = "true";
+  input.addEventListener("input", () => { commandPaletteActiveIndex = 0; renderCommandPalette(input.value); });
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const delta = event.key === "ArrowDown" ? 1 : -1;
+      commandPaletteActiveIndex = commandPaletteItemsVisible.length ? (commandPaletteActiveIndex + delta + commandPaletteItemsVisible.length) % commandPaletteItemsVisible.length : 0;
+      renderCommandPalette(input.value);
+      return;
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const item = commandPaletteItemsVisible[commandPaletteActiveIndex];
+      if (item) executeCommandPaletteItem(item).catch((error) => toast(`操作失败：${error.message}`, "error"));
+    }
+  });
+  list.addEventListener("click", (event) => {
+    const item = event.target.closest("[data-command-palette-index]");
+    if (!item) return;
+    const command = commandPaletteItemsVisible[Number(item.dataset.commandPaletteIndex)];
+    if (command) executeCommandPaletteItem(command).catch((error) => toast(`操作失败：${error.message}`, "error"));
+  });
+  dialog.addEventListener("click", (event) => { if (event.target === dialog) closeCommandPalette(); });
+  dialog.addEventListener("close", () => {
+    const target = commandPaletteRestoreFocus;
+    commandPaletteRestoreFocus = null;
+    if (target instanceof HTMLElement && document.contains(target)) target.focus();
+  });
+}
+
+async function runDesktopCommand(command) {
+  const routes = { dashboard: "dashboard", batches: "batches", sources: "sources", editor: "editor", logs: "logs", system: "system" };
+  if (routes[command]) return go(routes[command]);
+  if (command === "toggle-rail") return toggleRail();
+  if (command === "shortcuts") return showDesktopShortcuts();
+  if (command === "onboarding") return openFirstRunWizard({ force: true });
+  if (command === "new-batch") return document.getElementById("new-batch-button")?.click();
+  if (command === "quick-material") return document.getElementById("quick-material-button")?.click();
+}
+
+function dispatchDesktopCommand(command) {
+  const message = command && typeof command === "object" ? command : { command: String(command) };
+  const name = message.command;
+  window.desktopBridge?.trace?.({ stage: "renderer-dispatch", id: message.id, command: name });
+  // 每次原生菜单命令都独立执行，不能等待上一次 go() 的网络请求。
+  // 否则某个视图加载卡住时，后续所有菜单点击都会被队列永久堵住。
+  void runDesktopCommand(name).then(() => {
+    window.desktopBridge?.trace?.({ stage: "renderer-complete", id: message.id, command: name });
+  }).catch((error) => {
+    console.error("桌面菜单命令执行失败:", name, error);
+    window.desktopBridge?.trace?.({ stage: "renderer-error", id: message.id, command: name, error: error?.message || "unknown" });
+    toast(`菜单操作失败：${error?.message || "请重试"}`, "error");
+  });
+}
+
 // 全局骨架绑定（原 app-bind.js 中与具体视图无关的部分）
 function bindGlobal() {
   bindTablistKeyboardNavigation();
@@ -251,6 +390,13 @@ function bindGlobal() {
     const current = document.querySelector(".nav-item.active")?.dataset.view || "dashboard";
     go(current);
   });
+  document.getElementById("rail-toggle")?.addEventListener("click", toggleRail);
+  document.getElementById("desktop-shortcuts-button")?.addEventListener("click", showDesktopShortcuts);
+  document.addEventListener("click", (event) => {
+    if (event.target.closest("[data-close-shortcuts]")) document.getElementById("desktop-shortcuts-dialog")?.close();
+  });
+  try { setRailCollapsed(localStorage.getItem("jianzhi.rail-collapsed") === "1"); } catch { setRailCollapsed(false); }
+  window.desktopBridge?.onCommand(dispatchDesktopCommand);
   window.addEventListener("hashchange", () => {
     const route = location.hash.slice(1);
     const view = route.split("/")[0];
@@ -260,6 +406,32 @@ function bindGlobal() {
     }
   });
   window.addEventListener("keydown", (event) => {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+      event.preventDefault();
+      showCommandPalette();
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "b") {
+      event.preventDefault();
+      toggleRail();
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && event.key === "/") {
+      event.preventDefault();
+      showDesktopShortcuts();
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && !event.shiftKey && /^[1-4]$/.test(event.key)) {
+      event.preventDefault();
+      const routes = { "1": "dashboard", "2": "batches", "3": "sources", "4": "editor" };
+      void go(routes[event.key]);
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "n") {
+      event.preventDefault();
+      document.getElementById("new-batch-button")?.click();
+      return;
+    }
     if (event.key !== "Escape") return;
     exitImmersiveChats();
   });
@@ -298,6 +470,18 @@ async function pollJobNotifications() {
 }
 
 async function onReady() {
+  // 原生菜单和全局按钮必须先于任何网络/模型初始化完成绑定。
+  // 否则初始化接口较慢或失败时，菜单点击会在渲染器尚未注册监听器的
+  // 窗口期丢失，表现为 Electron 原生菜单完全没有反应。
+  window.go = go;
+  bindGlobal();
+  bindQuickMaterialCapture();
+  bindFirstRunWizard();
+  bindBatchDrawer();
+  bindCommandPalette();
+  // preload 已经建立 IPC 监听、全局 DOM 事件也已绑定，此时即可接收原生菜单命令。
+  // 不等待模型、批次和首屏视图接口，避免菜单命令被暂存到下一次页面重载。
+  window.desktopBridge?.ready?.();
   try {
     await waitForBaseStyle();
   } catch (error) {
@@ -305,9 +489,6 @@ async function onReady() {
     toast("基础样式加载失败，请刷新后重试", "error");
   }
   await init();
-  bindGlobal();
-  bindQuickMaterialCapture();
-  bindBatchDrawer();
   startClock();
   pollJobNotifications();
   // 首屏视图激活：切导航/视图样式、设置标题、加载 ESM 视图（go 内部已处理 batch-switcher 显隐）
@@ -319,6 +500,7 @@ async function onReady() {
     try { await loadOverview(); } catch (error) { toast("工作台加载失败：" + error.message, "error"); }
   }
   await go(current);
+  if (shouldOpenFirstRunWizard()) setTimeout(() => openFirstRunWizard(), 260);
 }
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", onReady);

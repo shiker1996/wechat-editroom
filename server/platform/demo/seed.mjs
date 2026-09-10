@@ -190,7 +190,7 @@ function demoTodayHtml() {
 </html>`;
 }
 
-export function seedDemoData(store, { root }) {
+export function seedDemoData(store, { root, assetRoot = root }) {
   const existing = store.db.prepare('SELECT COUNT(*) AS n FROM batches').get().n;
   if (existing > 0) return { seeded: false };
 
@@ -289,7 +289,7 @@ export function seedDemoData(store, { root }) {
     saveShowcaseArtifact('文章初稿', '04-draft.md', draftPath);
     saveShowcaseArtifact('文章终稿', '09-FINAL.md', finalPath);
     saveShowcaseArtifact('排版 HTML', 'article.ai.html', htmlPath);
-    const coverSource = path.join(root, 'docs', 'screenshots', 'ui-demo-cover.png');
+    const coverSource = path.join(assetRoot, 'docs', 'screenshots', 'ui-demo-cover.png');
     const coverPath = path.join(showcaseImagesDir, 'cover.png');
     if (fs.existsSync(coverSource)) {
       fs.copyFileSync(coverSource, coverPath);

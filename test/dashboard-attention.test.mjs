@@ -29,13 +29,13 @@ test("首页概览返回当前批次异常与待办统计", () => {
 });
 
 test("累计数据退为四项次级指标", () => {
-  assert.match(dashboard, /\["今日文章"[\s\S]*\["累计产物"/);
+  assert.match(dashboard, /\["文章"[\s\S]*\["产物"/);
   assert.doesNotMatch(dashboard, /\["HOTSPOTS"/);
 });
 
-test("工作台展示基于真实记录的内部生产效率反馈",()=>{
-  assert.match(html,/id="dashboard-efficiency"/);
-  assert.match(html,/id="efficiency-insight"/);
-  for(const label of ["采集到研判耗时","AI 任务成功率","选题推进率","产物输出"])assert.match(dashboard,new RegExp(label));
-  assert.match(dashboard,/data\.bottleneck/);
+test("工作台把失败任务与最近批次统一为最近活动",()=>{
+  assert.match(html,/id="dashboard-recent-activity"/);
+  assert.match(dashboard,/function renderRecentActivity/);
+  assert.match(dashboard,/current\.failedRuns/);
+  assert.match(dashboard,/data-batch/);
 });

@@ -71,7 +71,15 @@ export async function createBatch(event) {
 
 export async function openBatch(id, mode) {
   if (!state.models) state.models = await request("/api/models");
-  const batch = await request(`/api/batches/${encodeURIComponent(id)}`);
+  const [batch, collectionCapabilityResponse] = await Promise.all([
+    request(`/api/batches/${encodeURIComponent(id)}`),
+    request("/api/collection-capabilities").catch(() => ({ items: [] })),
+  ]);
+  const collectionCapabilities = Array.isArray(collectionCapabilityResponse.items) ? collectionCapabilityResponse.items : [];
+  const readyCollectionCapabilities = collectionCapabilities.filter((item) => item.ready);
+  const enabledSourceSummary = readyCollectionCapabilities.length
+    ? readyCollectionCapabilities.map((item) => `${item.label} ${item.enabledSourceCount} 个`).join(" · ")
+    : "暂无已启用采集源";
   state.activeBatchId = id;
   renderBatchSwitcher();
   state.currentBatch = batch;
@@ -119,7 +127,7 @@ export async function openBatch(id, mode) {
   const materialLinks = (batch.hotspots || []).flatMap((item) => item.materials || []);
   const intakeSection = isBreaking
     ? `<section class="drawer-section breaking-intake-section"><div class="pipeline-heading"><div><span class="kicker">BREAKING INTAKE</span><h3>突发专题素材</h3></div><span class="composite-badge">独立批次</span></div><p>该事件不参与每日热点的“核心 8 条 + 黑马 2 条”竞争；研判后按创建时选择的方向进入文章池或图文池。</p><div class="breaking-material-list">${materialLinks.map((item, index) => `<a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer"><b>${String(index + 1).padStart(2, "0")}</b><span>${escapeHtml(item.title || item.url)}</span><em class="material-status ${escapeHtml(item.status || "pending")}">${item.status === "ok" ? "已抓取" : item.status === "error" ? "抓取失败" : "待抓取"}</em></a>`).join("")}</div><details class="breaking-add-material"><summary>补充更多素材链接</summary><textarea id="breaking-more-materials" rows="3" placeholder="每行一个链接"></textarea><button class="outline-button" data-breaking-add-material>添加素材</button></details></section>`
-    : `<section class="drawer-section" data-section="intake"><h3>采集今日热点</h3><p>按业务来源独立执行与记账；GitHub 包含 Trending、增长发现及热点提及仓库。采集完成后将自动进入语义打标与事件研判，无需逐节点击。</p><div class="check-row"><label><input type="checkbox" name="source" value="reddit" checked> Reddit</label><label><input type="checkbox" name="source" value="rsshub" checked> RSSHub</label><label><input type="checkbox" name="source" value="github" checked> GitHub</label></div><div class="check-row"><label>时间范围 <select id="collect-max-age">${[24, 48, 72, 120, 168].map((hours) => `<option value="${hours}"${(Number(batch.max_age_hours) || 24) === hours ? " selected" : ""}>${hours / 24} 天</option>`).join("")}</select></label></div><div class="drawer-action-row"><button class="primary-button" data-collect>一键采集并研判</button></div></section>`;
+    : `<section class="drawer-section" data-section="intake"><h3>采集今日热点</h3><p>采集范围由“采集源”台账中的启用状态决定，本次将自动执行全部已启用来源：<strong>${escapeHtml(enabledSourceSummary)}</strong>。采集完成后将自动进入语义打标与事件研判。</p><div class="check-row"><label>时间范围 <select id="collect-max-age">${[24, 48, 72, 120, 168].map((hours) => `<option value="${hours}"${(Number(batch.max_age_hours) || 24) === hours ? " selected" : ""}>${hours / 24} 天</option>`).join("")}</select></label></div><div class="drawer-action-row"><button class="primary-button" data-collect ${readyCollectionCapabilities.length ? "" : "disabled"}>${readyCollectionCapabilities.length ? "一键采集并研判" : "请先启用采集源"}</button></div></section>`;
   const analysis = breakingAnalysis?.analysis;
   const recommendationLabel = { recommend: "建议入池", conditional: "补充材料后可入池", hold: "建议暂缓" };
   const breakingAnalysisSection = isBreaking ? `<section class="drawer-section breaking-analysis-section">
@@ -257,9 +265,7 @@ async function refreshPipelineSteps(job) {
 }
 
 export async function startCollection() {
-  const sources = $$("input[name=source]:checked", $("#batch-detail")).map((item) => item.value);
-  if (!sources.length) return toast("至少选择一个数据源");
-  const job = await request(`/api/batches/${encodeURIComponent(state.currentBatch.id)}/collect`, { method: "POST", body: JSON.stringify({ sources, maxAgeHours: Number($("#collect-max-age")?.value) || undefined }) });
+  const job = await request(`/api/batches/${encodeURIComponent(state.currentBatch.id)}/collect`, { method: "POST", body: JSON.stringify({ maxAgeHours: Number($("#collect-max-age")?.value) || undefined }) });
   showJobConsole("任务已入队…");
   pollJob(job.id);
 }

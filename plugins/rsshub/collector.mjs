@@ -9,8 +9,7 @@ export function normalizeRssHubLifecycleConfig(config = {}) {
     const text = String(value ?? '').trim().replace(/(?:&#x20;|\s)+$/gi, '');
     const file = path.win32.basename(text);
     const directory = path.win32.dirname(text);
-    if (!['rsshub-start.ps1', 'rsshub-stop.ps1'].includes(file.toLowerCase())
-      || path.win32.basename(directory).toLowerCase() !== 'scripts') return text;
+    if (!['rsshub-start.ps1', 'rsshub-stop.ps1'].includes(file.toLowerCase())) return text;
     return path.win32.join(directory, 'runtime', file);
   };
   return {
@@ -162,7 +161,9 @@ export async function ensureStarted(config, onProgress) {
   if (await probe(config.baseUrl)) return false;
   onProgress('RSSHub 未运行，正在启动本地服务');
   const port=String(new URL(config.baseUrl).port||1200);
-  await runPowerShell(config.startScript, ['-RsshubDir',config.rootDir,'-PidFile',config.pidFile,'-Port',port,'-StartupTimeoutSeconds',String(Math.ceil(config.startupTimeoutMs/1000))], config.startupTimeoutMs + 10000);
+  const startArgs = ['-RsshubDir',config.rootDir,'-PidFile',config.pidFile,'-Port',port,'-StartupTimeoutSeconds',String(Math.ceil(config.startupTimeoutMs/1000))];
+  if (process.env.WORKBENCH_NODE_PATH) startArgs.push('-NodePath', process.env.WORKBENCH_NODE_PATH);
+  await runPowerShell(config.startScript, startArgs, config.startupTimeoutMs + 10000);
   onProgress('RSSHub 进程已拉起，正在等待健康检查');
   const deadline = Date.now() + config.startupTimeoutMs;
   while (Date.now() < deadline) {

@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { candidateSocialCardDir } from '../../../platform/core/workspace-paths.mjs';
-import { loadSkillBundle } from '../../../platform/llm/skill-runtime.mjs';
+import { loadSkillBundle, resolveSkillFile } from '../../../platform/llm/skill-runtime.mjs';
 import { bindGenerationSnapshot, prepareSkillRun } from '../../../platform/skills/pipeline-runtime.mjs';
 import { buildConversationToolCatalog } from '../../../platform/agent/tool-catalog.mjs';
 import { getToolRegistry } from '../../../platform/tools/index.mjs';
@@ -404,7 +404,7 @@ function writeFile(filePath, content) {
 }
 
 async function renderBeautifiedImages({ workspaceRoot, htmlPath, outputDir }) {
-  const script = path.join(workspaceRoot, 'skills', 'html-pages-to-images', 'index.js');
+  const script = resolveSkillFile({ workspaceRoot, skillName: 'html-pages-to-images', relativePath: 'index.js' });
   await execFileAsync(process.execPath, [script, '--htmlFile', htmlPath, '--outputDir', outputDir, '--selector', '.page', '--pageWidth', '375', '--pageHeight', '667', '--deviceScaleFactor', '3'], {
     cwd: workspaceRoot, windowsHide: true, timeout: 120_000, maxBuffer: 2_000_000,
   });

@@ -130,6 +130,9 @@
     "timeoutMs": 90000,
     "concurrency": "sequential"
   },
+  "runtimeDependencies": [
+    "puppeteer"
+  ],
   "collector": {
     "sourceTypes": [
       "browser-page"

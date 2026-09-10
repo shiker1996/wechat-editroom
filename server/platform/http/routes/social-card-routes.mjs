@@ -43,7 +43,7 @@ function invalidateSocialCardArtifacts({writeUtf8, workspaceDir, reason}) {
 }
 
 export async function handleSocialCardRoutes(context) {
-  const { request, response, pathname, searchParams, store, json, body, path, fs, root, config, mime, models, aiJobs, socialCardFiles, isInsideRoots, createZip, socialContentType, resolveEventAnalysisFor, socialCardGate, socialChannelMode, describeCardLayouts, SOCIAL_CARD_LAYOUTS, SOCIAL_CARD_COMPOSITION_MODES, normalizeCardComposition, loadSkillBundle, fetchCandidateSource, candidateEventGroups, candidateRepositoryUrl, inspectRepository, socialCardWorkdir, writeUtf8, repositoryFactMarkdown, evaluateCardGate } = context;
+  const { request, response, pathname, searchParams, store, json, body, path, fs, root, resourceRoot, config, mime, models, aiJobs, socialCardFiles, isInsideRoots, createZip, socialContentType, resolveEventAnalysisFor, socialCardGate, socialChannelMode, describeCardLayouts, SOCIAL_CARD_LAYOUTS, SOCIAL_CARD_COMPOSITION_MODES, normalizeCardComposition, loadSkillBundle, fetchCandidateSource, candidateEventGroups, candidateRepositoryUrl, inspectRepository, socialCardWorkdir, writeUtf8, repositoryFactMarkdown, evaluateCardGate } = context;
   const cardEditorialMatch = pathname.match(/^\/api\/candidates\/(\d+)\/card-editorial$/);
   const socialCardStageSkillsMatch=pathname.match(/^\/api\/creation-entry-points\/([^/]+)\/social-card-stage-skills$/);
   if(socialCardStageSkillsMatch&&request.method==='GET'){
@@ -148,7 +148,7 @@ export async function handleSocialCardRoutes(context) {
       const stageSelections=await resolveSocialCardStageSkills({workspaceRoot:root,entryPoint,contentType:routingContentType,recommendedSkillId,requested:input.stageSkills&&typeof input.stageSkills==='object'?input.stageSkills:{}});
       const storyboardSelection=stageSelections.storyboard;harness=createRequestHarnessGateway({gateway:models,store,entryPoint:`social-card-page-regeneration-${contentType}`,skillId:storyboardSelection.selectedSkill||'social-card-page-regeneration',provider:input.provider||models?.config?.defaultProvider,batchId:candidate.batch_id,candidateId:candidate.id,stageId:'social-card-page-regeneration'});const harnessGateway=harness.gateway;const socialSkill=loadSkillBundle({workspaceRoot:root,skillName:storyboardSelection.selectedSkill});
       if(socialSkill.fallback)throw new Error('项目图文生成技能缺失');
-      const storyboardSystem=buildSocialCardStoryboardSystemPrompt({workspaceRoot:root,skillId:storyboardSelection.selectedSkill,skillPrompt:socialSkill.prompt,contentType,channelMode,templateCapabilities:templateContext.capabilities});
+      const storyboardSystem=buildSocialCardStoryboardSystemPrompt({workspaceRoot:root,resourceRoot,skillId:storyboardSelection.selectedSkill,skillPrompt:socialSkill.prompt,contentType,channelMode,templateCapabilities:templateContext.capabilities});
       const skillRuntime=await prepareSkillRun({gateway:harnessGateway,store,batchId:candidate.batch_id,candidateId:candidate.id,purpose:`social-card-page-regeneration-${contentType}`,bundles:[{...socialSkill,prompt:storyboardSystem,hash:''}],provider:input.provider,selection:{requestedSkill:storyboardSelection.requestedSkill,selectedSkill:storyboardSelection.selectedSkill,selectionSource:storyboardSelection.selectionSource,entryPoint,contentType:routingContentType,stages:stageSelections}});
       const workspace=socialCardFiles(store.getBatch(candidate.batch_id),candidate);
       try{const report=JSON.parse(fs.readFileSync(path.join(workspace.dir,'layout-report.json'),'utf8'));layoutPage=(report.pages||[])[pageIndex]||null;}catch{}
@@ -334,7 +334,7 @@ export async function handleSocialCardRoutes(context) {
         : null;
       const templateContext=socialTemplateContext(store,themeRouting?.themeId?{...current,visual_style:themeRouting.themeId}:current,channelMode,contentType);
       const storyboardSystem=buildSocialCardStoryboardSystemPrompt({
-        workspaceRoot:root,skillId:storyboardSelection.selectedSkill,
+        workspaceRoot:root,resourceRoot,skillId:storyboardSelection.selectedSkill,
         skillPrompt:socialSkill.prompt,contentType,channelMode,templateCapabilities:templateContext.capabilities,
       });
       const storyboardBundle={...socialSkill,prompt:storyboardSystem,hash:''};

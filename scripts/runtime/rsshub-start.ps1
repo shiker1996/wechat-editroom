@@ -2,7 +2,8 @@ param(
     [string]$RsshubDir = "",
     [string]$PidFile = "",
     [int]$Port = 1200,
-    [int]$StartupTimeoutSeconds = 90
+    [int]$StartupTimeoutSeconds = 90,
+    [string]$NodePath = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -17,7 +18,10 @@ $entryFile = Join-Path $RsshubDir "lib\index.ts"
 $tsxCli = Join-Path $RsshubDir "node_modules\tsx\dist\cli.mjs"
 if (-not (Test-Path -LiteralPath $entryFile -PathType Leaf)) { throw "RSSHub source entry does not exist: $entryFile" }
 if (-not (Test-Path -LiteralPath $tsxCli -PathType Leaf)) { throw "RSSHub local tsx runtime does not exist: $tsxCli. Run npm install in the RSSHub directory." }
-$node = Get-Command node.exe -ErrorAction Stop
+if ([string]::IsNullOrWhiteSpace($NodePath)) { $NodePath = $env:WORKBENCH_NODE_PATH }
+if ([string]::IsNullOrWhiteSpace($NodePath)) { $NodePath = (Get-Command node.exe -ErrorAction Stop).Source }
+$NodePath = [System.IO.Path]::GetFullPath($NodePath)
+if (-not (Test-Path -LiteralPath $NodePath -PathType Leaf)) { throw "Node runtime does not exist: $NodePath" }
 
 function Test-Rsshub {
     try {
@@ -33,13 +37,14 @@ if (Test-Rsshub) {
 
 $pidDirectory = Split-Path -Parent $PidFile
 if (-not (Test-Path -LiteralPath $pidDirectory)) { New-Item -ItemType Directory -Path $pidDirectory -Force | Out-Null }
-$logDirectory = Join-Path $projectRoot "logs\rsshub"
+$workspaceRoot = Split-Path -Parent (Split-Path -Parent $PidFile)
+$logDirectory = Join-Path $workspaceRoot "logs\rsshub"
 if (-not (Test-Path -LiteralPath $logDirectory)) { New-Item -ItemType Directory -Path $logDirectory -Force | Out-Null }
 $stdout = Join-Path $logDirectory "rsshub.log"
 $stderr = Join-Path $logDirectory "rsshub.error.log"
 
 $arguments = "`"$tsxCli`" `"$entryFile`""
-$process = Start-Process -WindowStyle Hidden -FilePath $node.Source -ArgumentList $arguments -WorkingDirectory $RsshubDir -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+$process = Start-Process -WindowStyle Hidden -FilePath $NodePath -ArgumentList $arguments -WorkingDirectory $RsshubDir -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
 $process.Id | Set-Content -LiteralPath $PidFile -Encoding ascii
 Write-Output "RSSHub process started (PID: $($process.Id)); waiting for port $Port"
 

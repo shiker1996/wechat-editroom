@@ -94,6 +94,24 @@ test('本地图片保留原文件，取得 HTTPS 映射后才替换排版副本'
   } finally { fs.rmSync(root, { recursive:true, force:true }); }
 });
 
+test('仅本地排版将人工和自动图片替换为空图片占位符', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'local-only-image-assets-'));
+  try {
+    const final = applyImagePlan('# 标题\n\n正文需要截图。', [
+      { type:'资料', content:'官方页面截图', afterExact:'正文需要截图。', ratio:'4:3' },
+      { type:'参考', content:'统计卡', afterExact:'正文需要截图。', ratio:'16:9', generate:{ kind:'datacard', title:'数据速览', items:[{ label:'完成', value:'4 周' }, { label:'任务', value:'86 项' }] } },
+    ]);
+    fs.writeFileSync(path.join(root, '09-FINAL.md'), final, 'utf8');
+    const local = buildImagesMarkdown(root, final, { imageDeliveryMode:'local' });
+    assert.deepEqual(local.unresolved, []);
+    assert.equal(local.localOnly, true);
+    assert.equal(local.localPlaceholderCount, 2);
+    assert.match(local.content, /image-placeholder:%E8%B5%84%E6%96%99%3A01/);
+    assert.match(local.content, /image-placeholder:%E5%8F%82%E8%80%83%3A01/);
+    assert.doesNotMatch(local.content, /IMG:|IMAGE-SUPPLY-LIST/);
+  } finally { fs.rmSync(root, { recursive:true, force:true }); }
+});
+
 test('结构化图片重新生成时清空旧 CDN 地址', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'structured-image-regeneration-'));
   try {

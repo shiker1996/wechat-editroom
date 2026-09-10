@@ -49,6 +49,33 @@ function renderSources(sources) {
   }).join("");
 }
 
+function formatDuration(milliseconds) {
+  const seconds = Math.max(0, Math.round(Number(milliseconds || 0) / 1000));
+  if (!seconds) return "—";
+  if (seconds < 60) return `${seconds} 秒`;
+  const minutes = Math.round(seconds / 60);
+  return minutes < 60 ? `${minutes} 分钟` : `${Math.floor(minutes / 60)} 小时 ${minutes % 60} 分`;
+}
+
+function renderEfficiency(overview) {
+  const data = overview.efficiency || {};
+  const baseline = overview.efficiencyBaseline || {};
+  const baselineNote = (value, formatter = (item) => String(item)) => baseline.sampleSize && value != null
+    ? `近 ${baseline.sampleSize} 批均值 ${formatter(value)}`
+    : "暂无历史批次基线";
+  const cards = [
+    { label: "采集到研判耗时", value: data.collectToResearchDurationMs == null ? "—" : formatDuration(data.collectToResearchDurationMs), note: baselineNote(baseline.collectToResearchDurationMs, formatDuration), go: "sources" },
+    { label: "AI 任务成功率", value: data.aiSuccessRate == null ? "—" : `${data.aiSuccessRate}%`, note: baselineNote(baseline.aiSuccessRate, (value) => `${value}%`), go: "logs" },
+    { label: "选题推进率", value: data.candidateConversionRate == null ? "—" : `${data.candidateConversionRate}%`, note: baselineNote(baseline.candidateConversionRate, (value) => `${value}%`), go: "topics" },
+    { label: "产物输出", value: String(data.artifactCount ?? 0), note: baselineNote(baseline.artifactCount), go: "artifacts" },
+  ];
+  const node = $("#dashboard-efficiency");
+  const insight = $("#efficiency-insight");
+  if (!node || !insight) return;
+  node.innerHTML = cards.map((item) => `<button type="button" class="efficiency-card" data-go="${item.go}"><span>${item.label}</span><strong>${escapeHtml(item.value)}</strong><small>${item.note}</small></button>`).join("");
+  insight.innerHTML = `<b>当前瓶颈</b><span>${escapeHtml(data.bottleneck || "暂无反馈")}</span>`;
+}
+
 function renderAttention(overview) {
   const current = overview.current || {};
   const latest = overview.latest;
@@ -78,28 +105,20 @@ function renderAttention(overview) {
   </button>`).join("");
 }
 
-function formatDuration(milliseconds) {
-  const seconds=Math.max(0,Math.round(Number(milliseconds||0)/1000));
-  if(!seconds)return "—";
-  if(seconds<60)return `${seconds} 秒`;
-  const minutes=Math.round(seconds/60);
-  return minutes<60?`${minutes} 分钟`:`${Math.floor(minutes/60)} 小时 ${minutes%60} 分`;
-}
-
-function renderEfficiency(overview) {
-  const data=overview.efficiency||{};
-  const baseline=overview.efficiencyBaseline||{};
-  const baselineNote=(value,formatter=(item)=>String(item))=>baseline.sampleSize&&value!=null
-    ? `近 ${baseline.sampleSize} 批均值 ${formatter(value)}`
-    : "暂无历史批次基线";
-  const cards=[
-    {label:"采集到研判耗时",value:data.collectToResearchDurationMs==null?"—":formatDuration(data.collectToResearchDurationMs),note:baselineNote(baseline.collectToResearchDurationMs,formatDuration),go:"sources"},
-    {label:"AI 任务成功率",value:data.aiSuccessRate==null?"—":`${data.aiSuccessRate}%`,note:baselineNote(baseline.aiSuccessRate,(value)=>`${value}%`),go:"logs"},
-    {label:"选题推进率",value:data.candidateConversionRate==null?"—":`${data.candidateConversionRate}%`,note:baselineNote(baseline.candidateConversionRate,(value)=>`${value}%`),go:"topics"},
-    {label:"产物输出",value:String(data.artifactCount??0),note:baselineNote(baseline.artifactCount),go:"artifacts"},
-  ];
-  $("#dashboard-efficiency").innerHTML=cards.map((item)=>`<button type="button" class="efficiency-card" data-go="${item.go}"><span>${item.label}</span><strong>${escapeHtml(item.value)}</strong><small>${item.note}</small></button>`).join("");
-  $("#efficiency-insight").innerHTML=`<b>当前瓶颈</b><span>${escapeHtml(data.bottleneck||"暂无反馈")}</span>`;
+function renderRecentActivity(batches = [], overview = {}) {
+  const node = $("#dashboard-recent-activity");
+  if (!node) return;
+  const latest = overview.latest;
+  const current = overview.current || {};
+  const items = [];
+  if (current.failedRuns) {
+    items.push(`<button type="button" class="home-activity-row is-alert" data-go="logs"><i></i><span><b>待处理失败</b><small>${current.failedRuns} 个任务需要查看或重试</small></span><em>查看</em></button>`);
+  }
+  for (const batch of batches.filter((item) => item?.id).slice(0, 3)) {
+    const [stageName] = stages[batch.stage] ?? [batch.stage || "未开始"];
+    items.push(`<button type="button" class="home-activity-row" data-batch="${escapeHtml(batch.id)}"><i></i><span><b>${escapeHtml(batch.title || "未命名批次")}</b><small>${escapeHtml(batch.batch_date || "")} · ${escapeHtml(stageName)}</small></span><em>${batch.id === latest?.id ? "当前" : "打开"}</em></button>`);
+  }
+  node.innerHTML = items.length ? items.join("") : '<div class="home-activity-empty">还没有可显示的工作记录。</div>';
 }
 
 export default async function loadOverview() {
@@ -108,8 +127,25 @@ export default async function loadOverview() {
   state.batches = batches;
   if (!state.activeBatchId && batches.length) state.activeBatchId = batches[0].id;
   renderBatchSwitcher();
-  $("#edition-number").textContent = String(overview.hotspots).padStart(3, "0");
   const current = overview.current || {};
+  const latest = overview.latest;
+  const [stageName, progress] = latest ? (stages[latest.stage] ?? [latest.stage, 5]) : ["未开始", 0];
+  const title = $("#dashboard-batch-title");
+  const status = $("#dashboard-status");
+  const statusDot = $("#dashboard-status-dot");
+  const progressValue = $("#dashboard-progress");
+  const progressFill = $("#dashboard-progress-fill");
+  const batchMeta = $("#dashboard-batch-meta");
+  if (title) title.textContent = latest?.title || "今天的编辑任务";
+  if (status) status.textContent = latest ? stageName : "未开始";
+  if (statusDot) statusDot.className = latest ? (current.failedRuns ? "is-warning" : "is-active") : "is-idle";
+  if (progressValue) progressValue.textContent = `${progress}%`;
+  if (progressFill) progressFill.style.width = `${progress}%`;
+  if (batchMeta) batchMeta.textContent = latest
+    ? `${stageName} · ${latest.hotspot_count ?? 0} 条热点 · ${latest.artifact_count ?? 0} 份产物`
+    : "尚未建立批次";
+  const contextLabel = $("#desktop-context-label");
+  if (contextLabel) contextLabel.textContent = latest ? `当前批次 · ${latest.title}` : "本机工作区";
   const dashboardBrief = $("#dashboard-brief");
   if (dashboardBrief) dashboardBrief.textContent = overview.latest
     ? `${overview.latest.title}正在${(stages[overview.latest.stage] ?? [overview.latest.stage])[0]}阶段；${current.failedRuns ? `有 ${current.failedRuns} 个失败任务需要处理。` : "当前没有失败任务。"}`
@@ -120,13 +156,14 @@ export default async function loadOverview() {
     primary.dataset.dashboardAction = overview.latest ? "batch" : "new";
   }
   $("#metrics").innerHTML = [
-    ["今日文章", overview.articleInProgress, "生产中的文章"],
-    ["今日图文", overview.socialInProgress, "生产中的图文"],
-    ["累计热点", overview.hotspots, "已归档"],
-    ["累计产物", overview.artifacts, "可追溯"],
-  ].map(([label, value, note]) => `<article class="metric"><small>${label}</small><strong>${value}</strong><span>${note}</span></article>`).join("");
+    ["文章", overview.articleInProgress, "生产中"],
+    ["图文", overview.socialInProgress, "生产中"],
+    ["热点", overview.hotspots, "已归档"],
+    ["产物", overview.artifacts, "可追溯"],
+  ].map(([label, value, note]) => `<article class="home-summary-item"><span>${label}</span><strong>${value}</strong><small>${note}</small></article>`).join("");
   renderAttention(overview);
-  renderEfficiency(overview);
+  renderRecentActivity(batches, overview);
   renderLatest(overview.latest);
   renderSources(overview.sourceHealth);
+  renderEfficiency(overview);
 }

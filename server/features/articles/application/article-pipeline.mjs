@@ -106,7 +106,7 @@ ${String(review || '').trim()}
 请依据以上实际内容完成定向修订。对 IPO、上市、估值、融资、违法、造假、压榨、骚扰、事故伤亡以及公司/个人负面主张，若事实基座没有直接可靠证据，必须删除、降格并明确归因；不要用免责声明掩盖标题中的强断言。直接输出修订后的完整 Markdown 文章，不要要求读取文件，不要输出审阅过程、审稿报告、文件缺失说明或 REVIEW 注释。`;
 }
 
-function artifact(store,batchId,kind,name,filePath,trace={}) { const stat=fs.statSync(filePath); store.upsertArtifact({batchId,kind,name,path:filePath,size:stat.size,modifiedAt:stat.mtime.toISOString(),rootRunId:trace.rootRunId??null,workflowRunId:trace.workflowRunId??null,stageId:trace.stageId??null}); }
+function artifact(store,batchId,kind,name,filePath,trace={}) { const stat=fs.statSync(filePath); store.upsertArtifact({batchId,candidateId:trace.candidateId??null,kind,name,path:filePath,size:stat.size,modifiedAt:stat.mtime.toISOString(),rootRunId:trace.rootRunId??null,workflowRunId:trace.workflowRunId??null,stageId:trace.stageId??null}); }
 function writerSkill(candidate) {
   return selectWriterSkill(candidate).skill;
 }
@@ -465,7 +465,11 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   writeFile(skillManifestPath,JSON.stringify({orchestrator:{skill:'wechat-mp-topic-to-article',hash:orchestratorSkill.hash,files:orchestratorSkill.files,fallback:orchestratorSkill.fallback},writerSkill:chosenWriterSkill,writerSkillSelection:skillSelection||{requestedSkill:'',selectedSkill:chosenWriterSkill,selectionSource:'builtin-recommendation'},stageSkillSelections:stageSelections||historicalStages,hash:skillBundle.hash,files:skillBundle.files,fallback:skillBundle.fallback,stageSkills:Object.fromEntries(Object.entries(stageSkills).map(([name,bundle])=>[name,{skill:bundle.skillName,hash:bundle.hash,files:bundle.files,fallback:bundle.fallback}])),loadedAt:new Date().toISOString()},null,2));
   recordStage('brief',orchestratorSkill,['editorial','article-brief.md','editorial-research-selection.json'],'00-article-brief.md');
   onProgress('Step 1.5 基于来源建立结构化事实基座');
-  const factBaseResult=await gateway.complete({provider,purpose:'article-fact-base',batchId,candidateId,jsonMode:true,maxOutputTokens:Math.min(5000,providerConfig.maxOutputTokens),messages:[
+  // 事实基座包含逐条主张、证据和来源映射，内容量会随素材增长。
+  // 不要在这里传固定 maxOutputTokens：gateway 的 article-fact-base
+  // profile 需要在 finish=length 时从 5000 自动扩容到 8000，否则
+  // parseModelJson 只能看到半截 JSON，后续大纲和成稿都不会开始。
+  const factBaseResult=await gateway.complete({provider,purpose:'article-fact-base',batchId,candidateId,jsonMode:true,messages:[
     {role:'system',protected:true,content:buildArticleStageSystem(orchestratorSkill,'fact-base')},
     {role:'user',protected:true,content:JSON.stringify({topic:brief.topic,researchBasis:brief.researchBasis,adoptedResearchPoints:brief.adoptedResearchPoints,rejectedAngles:brief.rejectedAngles,confirmedFacts:brief.confirmedFacts,authorOpinions:brief.authorOpinions,forbiddenClaims:brief.forbiddenClaims,materialBrief:brief.materialBrief,sourceUrl:brief.sourceUrl,sourceText:brief.sourceText||''})},
   ]});
@@ -488,7 +492,9 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   if (!factGate.eligible) throw new Error(`文章事实门禁未通过：${factGate.reason}`);
   onProgress('Step 2 建立事实基座、大纲与标题候选');
   const PLAN_SYSTEM = `${buildArticleStageSystem(orchestratorSkill,'planning')}\n\n## 账号上下文\n${formatAccountContext({workspaceRoot})}`;
-  const planningResult=await gateway.complete({provider,purpose:'article-planning',batchId,candidateId,jsonMode:true,maxOutputTokens:Math.min(5000,providerConfig.maxOutputTokens),
+  // 大纲阶段同样使用 output-budget 的 6000 -> 10000 自适应重试，
+  // 由 providerMax 负责兜底，不要用调用方固定上限关闭该机制。
+  const planningResult=await gateway.complete({provider,purpose:'article-planning',batchId,candidateId,jsonMode:true,
     messages:[{role:'system',content:PLAN_SYSTEM,protected:true},{role:'user',content:JSON.stringify(writingBrief),protected:true}]});
   const plan=normalizePlanningResult(parseJsonResult(planningResult,store)); const selectedTitle=String(plan.selectedTitle||candidate.hotspot_title).trim();
   const materials=`# 作者素材\n\n- topic:${brief.topic}\n- angle:${brief.angle}\n- adopted_research_points:${JSON.stringify(brief.adoptedResearchPoints)}\n- rejected_angles:${JSON.stringify(brief.rejectedAngles)}\n- research_basis:${brief.researchBasis||'未提供'}\n- material_brief:${JSON.stringify(brief.materialBrief)}\n- article_brief_path:${briefPath}\n- brief_status:LOCKED\n- distribution_lane:${brief.distributionLane}\n- reader_stake:${brief.readerStake||'待明确'}\n- experience_required:${brief.experienceRequired}\n- experience:${brief.confirmedExperiences||'无;公共资料分析,不得使用第一人称亲测'}\n- author_opinion:${brief.authorOpinions||'未提供'}\n- avoid:${brief.forbiddenClaims||'不得虚构事实与经历'}\n- writer_skill:${chosenWriterSkill}\n- writer_skill_reason:${writerDecision.reason}\n- content_role:${plan.contentRole}\n- expected_action:${(plan.expectedAction||[]).join('、')}\n- practical_increment:${plan.practicalIncrement||'观察框架'}\n\n${plan.materialsMarkdown||''}`;
@@ -669,7 +675,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   const researchCoveragePath=path.join(workdir,'research-coverage-review.json');
   writeFile(researchCoveragePath,JSON.stringify(researchCoverage,null,2));
   // 贴合度报告始终登记，失败时由终稿状态提示编辑器处理。
-  artifact(store,batchId,'研判贴合度检查','research-coverage-review.json',researchCoveragePath,{rootRunId,workflowRunId,stageId:'research-coverage'});
+  artifact(store,batchId,'研判贴合度检查','research-coverage-review.json',researchCoveragePath,{candidateId,rootRunId,workflowRunId,stageId:'research-coverage'});
   recordStage('research-coverage',stageSkills['article-reviewer'],['08-seo-optimized.md','editorial-research-selection.json'],'research-coverage-review.json',researchCoverage.status);
   // 研判贴合度是可在编辑器中补齐的内容问题；保留报告并把终稿标为待审核。
   onProgress('Step 7 自动配图：先插入 Mermaid/ECharts 图表，再规划手动供图占位');
@@ -721,7 +727,93 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
       || researchCoverageNeedsRevision(researchCoverage)
   );
   store.saveDocument({batchId,candidateId,kind:'final',title:finalTitle,content:final,filePath:p09,status:needsEditorialReview?'needs_review':'finalized'});
-  for(const [kind,name,file] of [['技能清单','00-skill-manifest.json',skillManifestPath],['阶段执行清单','00-stage-executions.json',stageManifestPath],['锁定简报','00-article-brief.md',briefPath],['研判采用清单','editorial-research-selection.json',researchSelectionPath],['事实基座','02-fact-base.json',factBasePath],['发布主张登记','02-publication-claim-register.json',publicationClaimRegisterPath],['作者素材','01-personal-materials.md',p01],['文章大纲','02-outline.md',p02],['标题候选','03-titles.md',p03],['标题风险扫描','03-title-risk.json',selectedTitleRiskPath],['文章初稿','04-draft.md',p04],['初稿AI门禁','04-quality-gate.json',draftGatePath],['去AI稿','05-humanized.md',p05],['审稿门禁原始响应','06-review-gate.md',reviewLogPath],['审稿质量门禁','06-review-quality-gate.json',reviewGatePath],['审稿稿','06-reviewed.md',p06],['SEO关键词','07-seo-keywords.md',p07],['SEO优化稿','08-seo-optimized.md',p08],['终稿AI门禁','08-quality-gate.json',finalGatePath],['研判贴合度检查','research-coverage-review.json',researchCoveragePath],['图表规划','09-visual-plan.json',visualPlanPath],['文章终稿','09-FINAL.md',p09],['发布合规门禁','10-publication-compliance.json',publicationCompliancePath]])artifact(store,batchId,kind,name,file,{rootRunId,workflowRunId,stageId:'article-pipeline'});
+  for(const [kind,name,file] of [['技能清单','00-skill-manifest.json',skillManifestPath],['阶段执行清单','00-stage-executions.json',stageManifestPath],['锁定简报','00-article-brief.md',briefPath],['研判采用清单','editorial-research-selection.json',researchSelectionPath],['事实基座','02-fact-base.json',factBasePath],['发布主张登记','02-publication-claim-register.json',publicationClaimRegisterPath],['作者素材','01-personal-materials.md',p01],['文章大纲','02-outline.md',p02],['标题候选','03-titles.md',p03],['标题风险扫描','03-title-risk.json',selectedTitleRiskPath],['文章初稿','04-draft.md',p04],['初稿AI门禁','04-quality-gate.json',draftGatePath],['去AI稿','05-humanized.md',p05],['审稿门禁原始响应','06-review-gate.md',reviewLogPath],['审稿质量门禁','06-review-quality-gate.json',reviewGatePath],['审稿稿','06-reviewed.md',p06],['SEO关键词','07-seo-keywords.md',p07],['SEO优化稿','08-seo-optimized.md',p08],['终稿AI门禁','08-quality-gate.json',finalGatePath],['研判贴合度检查','research-coverage-review.json',researchCoveragePath],['图表规划','09-visual-plan.json',visualPlanPath],['文章终稿','09-FINAL.md',p09],['发布合规门禁','10-publication-compliance.json',publicationCompliancePath]])artifact(store,batchId,kind,name,file,{candidateId,rootRunId,workflowRunId,stageId:'article-pipeline'});
   store.updateBatch(batchId,{stage:'typeset',status:'review'}); onProgress(`成稿完成:${visibleChars(final)} 个可见字符`);
   return {workdir,finalPath:p09,visibleChars:visibleChars(final),writerSkill:chosenWriterSkill,skillHash:skillBundle.hash,skillFallback:skillBundle.fallback,title:finalTitle,needsEditorialReview,publicationReady:!needsEditorialReview};
+}
+
+function readJsonIfPresent(filePath, fallback = {}) {
+  if (!filePath || !fs.existsSync(filePath)) return fallback;
+  try { return JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch { return fallback; }
+}
+
+function readTextIfPresent(filePath, fallback = '') {
+  return filePath && fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : fallback;
+}
+
+// 只重跑当前已保存正文的门禁，不经过写作、改写、SEO 或配图阶段。
+export async function runArticleReview({ gateway, store, batchId, candidateId = null, documentKind = 'final', provider, workspaceRoot, rootRunId = null, workflowRunId = null, onProgress = () => {} }) {
+  const document = store.getDocument(batchId, candidateId, documentKind);
+  if (!document) throw new Error('待审核文稿不存在');
+  const batch = store.getBatch(batchId);
+  if (!batch) throw new Error('批次不存在');
+  const candidate = candidateId == null ? null : store.getCandidate(candidateId);
+  if (candidateId != null && (!candidate || candidate.batch_id !== batchId)) throw new Error('候选不存在或不属于当前批次');
+  const workdir = candidate ? candidateArticleDir(workspaceRoot, batch, candidate) : batchArticlesDir(workspaceRoot, batch);
+  const article = String(document.content || '');
+  if (!article.trim()) throw new Error('当前文稿为空，无法执行自动审核');
+
+  onProgress('读取当前文稿及已有事实基座');
+  const factBase = readJsonIfPresent(path.join(workdir, '02-fact-base.json'), {});
+  const claimRegisterFile = readJsonIfPresent(path.join(workdir, '02-publication-claim-register.json'), {});
+  const researchSelection = readJsonIfPresent(path.join(workdir, 'editorial-research-selection.json'), {});
+  const outline = readTextIfPresent(path.join(workdir, '02-outline.md'));
+  const reviewerSkill = loadSkillBundle({ workspaceRoot, skillName: 'article-reviewer' });
+  const orchestratorSkill = loadSkillBundle({ workspaceRoot, skillName: 'wechat-mp-topic-to-article' });
+  const runtime = await prepareSkillRun({ gateway, store, batchId, candidateId, purpose: 'article-review', bundles: [orchestratorSkill, reviewerSkill], provider });
+  gateway = bindGenerationSnapshot(gateway, runtime.snapshotId);
+  const reviewProvider = runtime.provider;
+  const maxOutputTokens = Math.min(3500, runtime.providerConfig?.maxOutputTokens || 3500);
+  const researchPoints = Array.isArray(researchSelection.selected) ? researchSelection.selected : [];
+  const rejectedAngles = Array.isArray(researchSelection.rejected) ? researchSelection.rejected : [];
+  const publicationClaimRegister = Array.isArray(claimRegisterFile.claims) ? claimRegisterFile.claims : [];
+  const publicationScan = scanPublicationRisk({ article, factBase });
+  const isDraft = documentKind === 'draft' || documentKind === 'daily-draft';
+  const qualityStage = isDraft ? 'draft' : 'final-review';
+  const qualityFileName = documentKind === 'daily-final' || documentKind === 'daily-draft' ? '06-quality-gate.json' : isDraft ? '04-quality-gate.json' : '08-quality-gate.json';
+  const qualityArtifactKind = isDraft ? '初稿AI门禁' : '终稿AI门禁';
+
+  onProgress('执行正文质量门禁');
+  const quality = await aiQualityGate({
+    gateway, store, provider: reviewProvider, batchId, candidateId, article, factBase,
+    sourceText: factBase.sourceText || '', researchPoints, rejectedAngles, publicationClaimRegister,
+    publicationScan, systemPrompt: buildArticleStageSystem(orchestratorSkill, isDraft ? 'draft-quality-gate' : 'final-quality-gate', reviewerSkill),
+    stage: qualityStage, maxOutputTokens,
+  });
+  const qualityPath = path.join(workdir, qualityFileName);
+  writeFile(qualityPath, JSON.stringify({ ...quality, reviewedAt: new Date().toISOString(), reviewMode: 'manual-rerun' }, null, 2));
+  artifact(store, batchId, qualityArtifactKind, qualityFileName, qualityPath, { candidateId, rootRunId, workflowRunId, stageId: 'article-review' });
+
+  onProgress('执行审稿门禁');
+  const reviewDecision = await aiReviewGate({
+    gateway, store, provider: reviewProvider, batchId, candidateId, article, factBase, outline,
+    researchPoints, rejectedAngles, publicationClaimRegister, publicationScan,
+    systemPrompt: buildArticleStageSystem(orchestratorSkill, 'review', reviewerSkill), maxOutputTokens,
+  });
+  const reviewPath = path.join(workdir, '06-review-quality-gate.json');
+  writeFile(reviewPath, JSON.stringify({ ...reviewDecision, reviewedAt: new Date().toISOString(), reviewMode: 'manual-rerun' }, null, 2));
+  artifact(store, batchId, '审稿质量门禁', '06-review-quality-gate.json', reviewPath, { candidateId, rootRunId, workflowRunId, stageId: 'article-review' });
+
+  onProgress('执行发布合规门禁');
+  let publicationQuality = await aiQualityGate({
+    gateway, store, provider: reviewProvider, batchId, candidateId, article, factBase,
+    sourceText: factBase.sourceText || '', researchPoints, rejectedAngles, publicationClaimRegister,
+    publicationScan, systemPrompt: buildArticleStageSystem(orchestratorSkill, 'publication-safety-gate', reviewerSkill),
+    stage: 'publication-safety-review', maxOutputTokens,
+  });
+  const complianceIssues = publicationComplianceIssue({ scan: publicationScan, gate: { pass: true } });
+  if (complianceIssues.length) publicationQuality = {
+    ...publicationQuality,
+    pass: false,
+    issues: [...(Array.isArray(publicationQuality.issues) ? publicationQuality.issues : []), ...complianceIssues.map((message) => ({ type: 'publication_compliance', message, repair: '删除、降格或补充可靠来源；标题和高影响主张需重新审核' }))],
+  };
+  const publicationPath = path.join(workdir, '10-publication-compliance.json');
+  writeFile(publicationPath, JSON.stringify({ generatedAt: new Date().toISOString(), reviewMode: 'manual-rerun', scan: publicationScan, gate: publicationQuality }, null, 2));
+  artifact(store, batchId, '发布合规门禁', '10-publication-compliance.json', publicationPath, { candidateId, rootRunId, workflowRunId, stageId: 'article-review' });
+
+  const needsReview = articleGateNeedsEditorialReview(quality) || articleGateNeedsEditorialReview(reviewDecision) || articleGateNeedsEditorialReview(publicationQuality);
+  const status = isDraft ? 'draft' : needsReview ? 'needs_review' : 'finalized';
+  const saved = store.saveDocument({ batchId, candidateId, kind: documentKind, title: document.title, content: article, filePath: document.file_path, status, reviewState: needsReview ? 'needs_review' : 'passed' });
+  onProgress(needsReview ? '自动审核完成：仍有待编辑处理的问题' : '自动审核完成：当前文稿已通过');
+  return { documentId: saved.id, status: saved.status, reviewState: saved.review_state, needsReview, issueCount: (quality.issues?.length || 0) + (reviewDecision.issues?.length || 0) + (publicationQuality.issues?.length || 0) };
 }

@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import path from 'node:path';
 import { loadSocialAiDesignSpec } from '../server/shared/themes/social-ai-spec.mjs';
 import { getBuiltinThemeRegistry } from '../server/shared/themes/theme-registry.mjs';
 
@@ -18,4 +19,17 @@ test('数据库自定义图文主题无需磁盘规范，使用当前配色和�
 test('内置图文主题读取现有规范，缺失仍明确报错', () => {
   assert.equal(loadSocialAiDesignSpec({ theme: getBuiltinThemeRegistry().require('bone-white') }).source, 'file');
   assert.throws(() => loadSocialAiDesignSpec({ theme: { id: 'missing-builtin', source: 'builtin' } }), /缺少主题设计规范/);
+});
+
+test('打包运行时内置主题从程序资源目录读取规范', () => {
+  const theme = structuredClone(getBuiltinThemeRegistry().require('ice-blue'));
+  delete theme.file;
+  const result = loadSocialAiDesignSpec({
+    workspaceRoot: path.join(process.cwd(), '__missing-workspace__'),
+    resourceRoot: process.cwd(),
+    theme,
+  });
+  assert.equal(result.source, 'file');
+  assert.match(result.text, /ice-blue/);
+  assert.match(result.path, /themes[\\/]social[\\/]ice-blue[\\/]AI_DESIGN_SPEC\.md$/);
 });

@@ -19,10 +19,21 @@ function skillRoots(workspaceRoot) {
     process.env.CODEX_SKILLS_ROOT,
     path.join(workspaceRoot, 'skills'),
     installedSkillsRoot(workspaceRoot),
+    path.join(process.env.WORKBENCH_RESOURCE_ROOT || process.cwd(), 'skills'),
     // 仓库自身技能目录：嵌入式/测试工作区（workspaceRoot 指向临时目录）下兜底；
     // 该目录也找不到时 loadSkillBundle 返回 fallback:true，由调用方决定回退或报错。
     path.join(process.cwd(), 'skills'),
   ].filter(Boolean);
+}
+
+// 工作区只保存用户数据；打包版的内置技能和其可执行脚本位于程序资源目录。
+// 所有需要执行技能附属文件的调用方都应通过这里解析，不能直接拼 workspaceRoot/skills。
+export function resolveSkillFile({ workspaceRoot, skillName, relativePath = 'index.js' } = {}) {
+  const roots = skillRoots(workspaceRoot);
+  return roots
+    .map((root) => path.join(root, skillName, relativePath))
+    .find((filePath) => fs.existsSync(filePath))
+    || path.join(workspaceRoot || process.cwd(), 'skills', skillName, relativePath);
 }
 
 function readSkill(root, name) {

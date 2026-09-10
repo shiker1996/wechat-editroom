@@ -20,7 +20,10 @@ const PLACEHOLDER = /example|placeholder|sample|your[-_]?(key|token)|xxx|\.\.\./
 const MAX_FILE_BYTES = 2_000_000;
 
 const files = execFileSync('git', ['ls-files'], { encoding: 'utf8' })
-  .split(/\r?\n/).filter(Boolean);
+  .split(/\r?\n/)
+  // pnpm 的本地缓存可能包含第三方项目的测试 token 示例，不属于本项目源码。
+  // 排除缓存目录，避免把依赖供应物中的示例误报为应用密钥；项目自身文件仍全部扫描。
+  .filter((file) => file && !file.startsWith('.pnpm-store/'));
 
 const findings = [];
 for (const file of files) {
