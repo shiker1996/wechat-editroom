@@ -59,6 +59,7 @@ test('主界面提供桌面侧栏、快捷键和本机工作区提示', () => {
   assert.match(renderer, /renderer-dispatch/);
   assert.doesNotMatch(html, /class="nav-icon"[^>]*>\s*[^<\s][^<]*<\/span>/);
   assert.doesNotMatch(renderer, /font-size:0/);
+  assert.match(fs.readFileSync(new URL('../public/styles/chrome.css', import.meta.url), 'utf8'), /\.nav-item>\.nav-label[^}]*white-space:nowrap/);
   assert.ok(renderer.indexOf('bindBatchDrawer();') < renderer.indexOf('window.desktopBridge?.ready?.();'));
   assert.ok(renderer.indexOf('window.desktopBridge?.ready?.();') < renderer.indexOf('await init();'));
   assert.match(renderer, /Ctrl\+\/|event\.key === "\/"/);
