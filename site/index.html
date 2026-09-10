@@ -22,9 +22,10 @@
         <a href="#how">怎么工作</a>
         <a href="#demo">只读导览</a>
         <a href="#screenshots">真实界面</a>
+        <a href="#desktop">桌面版</a>
         <a href="#tutorial">快速上手</a>
       </nav>
-      <a class="top-cta" href="https://github.com/shiker1996/wechat-editroom" target="_blank" rel="noreferrer">查看 GitHub <span>↗</span></a>
+      <a class="top-cta" href="https://github.com/shiker1996/wechat-newsroom-workbench" target="_blank" rel="noreferrer">查看 GitHub <span>↗</span></a>
     </header>
 
     <main id="top">
@@ -35,6 +36,7 @@
           <p class="hero-lede">见字把“找题、研判、写稿、审稿、排版、交付”收进一条可以回头检查的本地 AI 工作流。</p>
           <div class="hero-actions">
             <a class="button button-dark" href="#demo">进入只读导览 <span>↓</span></a>
+            <a class="button button-download" href="https://github.com/shiker1996/wechat-newsroom-workbench/releases/latest" target="_blank" rel="noreferrer">下载 Windows 版 <span>↗</span></a>
             <a class="text-link" href="#tutorial">先看 5 分钟教程 <span>→</span></a>
           </div>
           <div class="hero-note"><span class="note-line"></span> 不是“输入主题就生成”的聊天框，而是一张编辑桌。</div>
@@ -58,6 +60,11 @@
 
       <section class="ticker" aria-label="产品定位">
         <div class="ticker-track"><span>从信息源开始</span><i>✦</i><span>保留编辑判断</span><i>✦</i><span>每一步都可追溯</span><i>✦</i><span>从信息源开始</span><i>✦</i><span>保留编辑判断</span><i>✦</i><span>每一步都可追溯</span></div>
+      </section>
+
+      <section class="desktop-section section-wrap" id="desktop">
+        <div class="desktop-copy reveal"><p class="eyebrow">05 / DESKTOP APP</p><h2>现在也可以，<br><span>像一个真正的工作台。</span></h2><p>见字已经提供 Windows 10/11 x64 安装包。它保留本地优先的数据和工作流，同时增加原生菜单、快捷键、可选运行数据目录与独立窗口体验。</p><div class="desktop-actions"><a class="button button-dark" href="https://github.com/shiker1996/wechat-newsroom-workbench/releases/latest" target="_blank" rel="noreferrer">下载最新安装包 <span>↗</span></a><a class="text-link" href="https://github.com/shiker1996/wechat-newsroom-workbench/releases" target="_blank" rel="noreferrer">查看版本记录 <span>→</span></a></div></div>
+        <div class="desktop-panel reveal reveal-delay-1"><div class="desktop-panel-head"><span class="live-dot"></span><b>WINDOWS RELEASE</b><small>GITHUB ACTIONS</small></div><div class="desktop-release-row"><strong>见字工作台</strong><span>Windows 10 / 11 · x64</span><em>可安装</em></div><div class="desktop-feature-grid"><div><b>本地优先</b><span>文章、图片、日志保存在本机</span></div><div><b>数据目录可选</b><span>首次安装可放到非系统盘</span></div><div><b>按需启用</b><span>RSSHub 依赖仅在需要时安装</span></div><div><b>自动发布</b><span>版本通过 GitHub Actions 构建</span></div></div><small class="desktop-panel-note">安装包发布到 GitHub Releases，教程站点只负责提供入口。</small></div>
       </section>
 
       <section class="section-wrap how" id="how">
@@ -114,17 +121,17 @@
         <div class="section-intro reveal"><p class="eyebrow">04 / QUICK START</p><h2>五分钟，走完第一条<br><span>从热点到文章的路径。</span></h2></div>
         <div class="tutorial-layout">
           <div class="steps reveal">
-            <div class="tutorial-prereq"><span>环境要求</span><strong>Windows 10/11</strong><span>Node.js 24+；缺失时 setup 脚本会准备本地运行时</span></div>
-            <article class="step active"><span>01</span><div><h3>下载并运行配置向导</h3><p>下载 ZIP 或克隆项目。Windows 用户运行 setup-workbench.cmd，它会自动准备 Node.js、安装依赖并进入首次配置向导。</p><div class="command-stack"><div class="command-row"><code>git clone https://github.com/shiker1996/wechat-editroom.git</code><button class="copy-command" type="button" data-copy-command="git clone https://github.com/shiker1996/wechat-editroom.git" aria-label="复制克隆命令">复制</button></div><div class="command-row"><code>cd wechat-editroom</code><button class="copy-command" type="button" data-copy-command="cd wechat-editroom" aria-label="复制进入项目命令">复制</button></div><div class="command-row"><code>setup-workbench.cmd</code><button class="copy-command" type="button" data-copy-command="setup-workbench.cmd" aria-label="复制配置向导命令">复制</button></div></div></div></article>
+            <div class="tutorial-prereq"><span>桌面版要求</span><strong>Windows 10/11 · x64</strong><span>推荐直接下载安装包；源码开发才需要 Node.js 24+</span></div>
+            <article class="step active"><span>01</span><div><h3>下载并安装桌面版</h3><p>Windows 用户推荐从 GitHub Releases 下载最新安装包。安装时可以选择应用安装目录和运行数据目录；文章、图片、日志与 RSSHub 依赖会写入运行数据目录。</p><div class="tutorial-download"><a class="button button-download" href="https://github.com/shiker1996/wechat-newsroom-workbench/releases/latest" target="_blank" rel="noreferrer">打开最新 Release <span>↗</span></a><span>安装后首次启动会打开配置向导</span></div></div></article>
             <article class="step"><span>02</span><div><h3>启动工作台或演示</h3><p>配置完成后运行 start-workbench.cmd，脚本会检查环境并自动打开浏览器；不想配置模型时，使用 Demo 参数即可先看完整界面。</p><div class="command-stack"><div class="command-row"><code>start-workbench.cmd</code><button class="copy-command" type="button" data-copy-command="start-workbench.cmd" aria-label="复制工作台启动命令">复制</button></div><div class="command-row"><code>start-workbench.cmd -Demo</code><button class="copy-command" type="button" data-copy-command="start-workbench.cmd -Demo" aria-label="复制演示启动命令">复制</button></div></div><p class="command-note">打开后访问 <code>http://127.0.0.1:4317</code>。演示模式使用独立数据，不会污染正式工作区。</p></div></article>
             <article class="step"><span>03</span><div><h3>接入一个模型服务</h3><p>在“运行与配置 → 模型接入”添加 OpenAI 兼容服务，填写 Base URL、模型名和 API Key，先完成连接测试。只看演示不需要 API Key。</p><div class="config-path"><span>配置路径</span><code>运行与配置 → 模型接入 → 添加模型</code></div></div></article>
             <article class="step"><span>04</span><div><h3>从一个批次跑到交付</h3><p>依次完成采集 → 研判 → 编辑决策 → 成稿 → 审稿 → 排版，再从产物柜查看公众号 HTML、封面和社交图文。</p></div></article>
           </div>
-          <div class="tutorial-aside reveal reveal-delay-1"><div class="aside-number">5<small>MIN</small></div><p>先看清工作流，再决定哪些环节值得自动化。</p><a href="https://github.com/shiker1996/wechat-editroom#5-%E5%88%86%E9%92%9F%E5%BC%80%E5%A7%8B" target="_blank" rel="noreferrer">打开完整安装说明 ↗</a></div>
+          <div class="tutorial-aside reveal reveal-delay-1"><div class="aside-number">5<small>MIN</small></div><p>先看清工作流，再决定哪些环节值得自动化。</p><a href="https://github.com/shiker1996/wechat-newsroom-workbench#5-%E5%88%86%E9%92%9F%E5%BC%80%E5%A7%8B" target="_blank" rel="noreferrer">打开完整安装说明 ↗</a></div>
         </div>
       </section>
 
-      <section class="closing section-wrap reveal"><div class="closing-mark">见</div><div><p class="eyebrow">BUILT FOR PEOPLE WHO WRITE</p><h2>把判断留下，<br><em>把文章交出去。</em></h2></div><a class="button button-dark" href="https://github.com/shiker1996/wechat-editroom" target="_blank" rel="noreferrer">开始使用 <span>↗</span></a></section>
+      <section class="closing section-wrap reveal"><div class="closing-mark">见</div><div><p class="eyebrow">BUILT FOR PEOPLE WHO WRITE</p><h2>把判断留下，<br><em>把文章交出去。</em></h2></div><a class="button button-dark" href="https://github.com/shiker1996/wechat-newsroom-workbench" target="_blank" rel="noreferrer">开始使用 <span>↗</span></a></section>
     </main>
 
     <footer class="footer section-wrap"><span>见字 · WeChat EditRoom</span><span>Local-first / Open source / MIT</span><a href="#top">回到顶部 ↑</a></footer>
