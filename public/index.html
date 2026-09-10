@@ -14,73 +14,72 @@
     <div class="brand">
       <span class="brand-seal">见</span>
       <div><strong>见字</strong><small>NEWSROOM OS</small></div>
-      <button type="button" class="chrome-toggle" id="rail-toggle" aria-label="收起侧栏" aria-pressed="false" title="收起 / 展开侧栏（Ctrl+B）">☰</button>
     </div>
     <nav id="nav">
       <details class="nav-group" data-nav-group="today" open>
-          <summary><span>01</span><b>今日工作</b><small>总览 · 批次 · 日历</small></summary>
+          <summary title="今日工作" aria-label="今日工作"><span class="nav-icon" data-icon="工" aria-hidden="true"></span><b>今日工作</b><small>总览 · 批次 · 日历</small></summary>
         <div class="nav-group-items">
-          <button class="nav-item active" data-view="dashboard" aria-current="page">工作台总览</button>
-          <button class="nav-item" data-view="batches">批次管理</button>
-          <button class="nav-item" data-view="calendar">内容日历</button>
+          <button class="nav-item active" aria-label="工作台总览" data-view="dashboard" aria-current="page"><span class="nav-icon" data-icon="总" aria-hidden="true"></span><span class="nav-label">工作台总览</span></button>
+          <button class="nav-item" aria-label="批次管理" data-view="batches"><span class="nav-icon" data-icon="批" aria-hidden="true"></span><span class="nav-label">批次管理</span></button>
+          <button class="nav-item" aria-label="内容日历" data-view="calendar"><span class="nav-icon" data-icon="历" aria-hidden="true"></span><span class="nav-label">内容日历</span></button>
         </div>
       </details>
       <details class="nav-group" data-nav-group="collection">
-        <summary><span>02</span><b>采集</b><small>来源 · 热点 · 运行</small></summary>
+          <summary title="采集" aria-label="采集"><span class="nav-icon" data-icon="采" aria-hidden="true"></span><b>采集</b><small>来源 · 热点 · 运行</small></summary>
         <div class="nav-group-items">
-          <button class="nav-item" data-view="overview">热点全景</button>
-          <button class="nav-item" data-view="sources">采集源</button>
-          <button class="nav-item" data-view="hotspots">热点档案</button>
+          <button class="nav-item" aria-label="热点全景" data-view="overview"><span class="nav-icon" data-icon="全" aria-hidden="true"></span><span class="nav-label">热点全景</span></button>
+          <button class="nav-item" aria-label="采集源" data-view="sources"><span class="nav-icon" data-icon="源" aria-hidden="true"></span><span class="nav-label">采集源</span></button>
+          <button class="nav-item" aria-label="热点档案" data-view="hotspots"><span class="nav-icon" data-icon="档" aria-hidden="true"></span><span class="nav-label">热点档案</span></button>
         </div>
       </details>
       <details class="nav-group" data-nav-group="article-production">
-        <summary><span>03</span><b>文章生产</b><small>选题 · 素材 · 编辑</small></summary>
+          <summary title="文章生产" aria-label="文章生产"><span class="nav-icon" data-icon="文" aria-hidden="true"></span><b>文章生产</b><small>选题 · 素材 · 编辑</small></summary>
         <div class="nav-group-items">
-          <button class="nav-item" data-view="topics">文章选题池</button>
-          <button class="nav-item" data-view="material-inbox">素材入箱</button>
-          <button class="nav-item" data-view="editorial">热点事件</button>
-          <button class="nav-item" data-view="daily">批次早报</button>
-          <button class="nav-item" data-view="tutorial">自主写作</button>
-          <button class="nav-item" data-view="editor">文章编辑器</button>
-          <button class="nav-item" data-view="preview">公众号排版</button>
-          <button class="nav-item" data-view="cover">文章封面图</button>
+          <button class="nav-item" aria-label="文章选题池" data-view="topics"><span class="nav-icon" data-icon="题" aria-hidden="true"></span><span class="nav-label">文章选题池</span></button>
+          <button class="nav-item" aria-label="素材入箱" data-view="material-inbox"><span class="nav-icon" data-icon="素" aria-hidden="true"></span><span class="nav-label">素材入箱</span></button>
+          <button class="nav-item" aria-label="热点事件" data-view="editorial"><span class="nav-icon" data-icon="事" aria-hidden="true"></span><span class="nav-label">热点事件</span></button>
+          <button class="nav-item" aria-label="批次早报" data-view="daily"><span class="nav-icon" data-icon="早" aria-hidden="true"></span><span class="nav-label">批次早报</span></button>
+          <button class="nav-item" aria-label="自主写作" data-view="tutorial"><span class="nav-icon" data-icon="写" aria-hidden="true"></span><span class="nav-label">自主写作</span></button>
+          <button class="nav-item" aria-label="文章编辑器" data-view="editor"><span class="nav-icon" data-icon="编" aria-hidden="true"></span><span class="nav-label">文章编辑器</span></button>
+          <button class="nav-item" aria-label="公众号排版" data-view="preview"><span class="nav-icon" data-icon="排" aria-hidden="true"></span><span class="nav-label">公众号排版</span></button>
+          <button class="nav-item" aria-label="文章封面图" data-view="cover"><span class="nav-icon" data-icon="封" aria-hidden="true"></span><span class="nav-label">文章封面图</span></button>
         </div>
       </details>
       <details class="nav-group" data-nav-group="social-production">
-        <summary><span>04</span><b>图文生产</b><small>选题 · 故事 · 生成</small></summary>
+          <summary title="图文生产" aria-label="图文生产"><span class="nav-icon" data-icon="图" aria-hidden="true"></span><b>图文生产</b><small>选题 · 故事 · 生成</small></summary>
         <div class="nav-group-items">
-          <button class="nav-item" data-view="social-topics">图文选题池</button>
-          <button class="nav-item" data-view="social-editor">工具图文</button>
-          <button class="nav-item" data-view="social-custom">自定义图文</button>
-          <button class="nav-item" data-view="social-event">事件图文</button>
+          <button class="nav-item" aria-label="图文选题池" data-view="social-topics"><span class="nav-icon" data-icon="题" aria-hidden="true"></span><span class="nav-label">图文选题池</span></button>
+          <button class="nav-item" aria-label="工具图文" data-view="social-editor"><span class="nav-icon" data-icon="工" aria-hidden="true"></span><span class="nav-label">工具图文</span></button>
+          <button class="nav-item" aria-label="自定义图文" data-view="social-custom"><span class="nav-icon" data-icon="自" aria-hidden="true"></span><span class="nav-label">自定义图文</span></button>
+          <button class="nav-item" aria-label="事件图文" data-view="social-event"><span class="nav-icon" data-icon="事" aria-hidden="true"></span><span class="nav-label">事件图文</span></button>
         </div>
       </details>
       <details class="nav-group" data-nav-group="publication">
-          <summary><span>05</span><b>发布</b><small>交付 · 数据 · 反馈</small></summary>
+          <summary title="发布" aria-label="发布"><span class="nav-icon" data-icon="发" aria-hidden="true"></span><b>发布</b><small>交付 · 数据 · 反馈</small></summary>
         <div class="nav-group-items">
-          <button class="nav-item" data-view="publication">发布中心</button>
-          <button class="nav-item" data-view="wechat-review-prep">复盘数据台</button>
-          <button class="nav-item" data-view="wechat-review">公众号复盘</button>
-          <button class="nav-item" data-view="content-feedback">内容反哺</button>
+          <button class="nav-item" aria-label="发布中心" data-view="publication"><span class="nav-icon" data-icon="发" aria-hidden="true"></span><span class="nav-label">发布中心</span></button>
+          <button class="nav-item" aria-label="复盘数据台" data-view="wechat-review-prep"><span class="nav-icon" data-icon="台" aria-hidden="true"></span><span class="nav-label">复盘数据台</span></button>
+          <button class="nav-item" aria-label="公众号复盘" data-view="wechat-review"><span class="nav-icon" data-icon="复" aria-hidden="true"></span><span class="nav-label">公众号复盘</span></button>
+          <button class="nav-item" aria-label="内容反哺" data-view="content-feedback"><span class="nav-icon" data-icon="馈" aria-hidden="true"></span><span class="nav-label">内容反哺</span></button>
         </div>
       </details>
       <details class="nav-group" data-nav-group="assets">
-        <summary><span>06</span><b>资产</b><small>产物 · 记录 · 日志</small></summary>
+          <summary title="资产" aria-label="资产"><span class="nav-icon" data-icon="资" aria-hidden="true"></span><b>资产</b><small>产物 · 记录 · 日志</small></summary>
         <div class="nav-group-items">
-          <button class="nav-item" data-view="artifacts">产物中心</button>
-          <button class="nav-item" data-view="logs">任务日志</button>
+          <button class="nav-item" aria-label="产物中心" data-view="artifacts"><span class="nav-icon" data-icon="产" aria-hidden="true"></span><span class="nav-label">产物中心</span></button>
+          <button class="nav-item" aria-label="任务日志" data-view="logs"><span class="nav-icon" data-icon="志" aria-hidden="true"></span><span class="nav-label">任务日志</span></button>
         </div>
       </details>
     </nav>
     <div class="rail-utility-group" aria-label="扩展与定制">
       <div class="rail-utility-label"><span>EXTEND</span><b>扩展与定制</b></div>
-      <button class="nav-utility" data-view="skills"><span class="nav-utility-mark">S</span><span><b>技能与工具</b><small>能力 · 插件 · 连接</small></span></button>
-      <button class="nav-utility" data-view="themes"><span class="nav-utility-mark">T</span><span><b>主题中心</b><small>选择 · 预览 · 管理</small></span></button>
-      <button class="nav-utility" data-view="system"><span class="nav-utility-mark">⚙</span><span><b>运行与配置</b><small>模型 · 采集 · 系统</small></span></button>
+      <button class="nav-utility" data-view="skills"><span class="nav-icon" data-icon="技" aria-hidden="true"></span><span><b>技能与工具</b><small>能力 · 插件 · 连接</small></span></button>
+      <button class="nav-utility" data-view="themes"><span class="nav-icon" data-icon="主" aria-hidden="true"></span><span><b>主题中心</b><small>选择 · 预览 · 管理</small></span></button>
+      <button class="nav-utility" data-view="system"><span class="nav-icon" data-icon="配" aria-hidden="true"></span><span><b>运行与配置</b><small>模型 · 采集 · 系统</small></span></button>
     </div>
     <div class="rail-foot">
-      <span class="pulse-dot"></span>
       <div><b>LOCAL FIRST</b><small>数据留在本机</small></div>
+      <button type="button" class="chrome-toggle" id="rail-toggle" aria-label="收起侧栏" aria-pressed="false" title="收起 / 展开侧栏（Ctrl+B）"><span class="rail-toggle-icon" aria-hidden="true">&lt;</span></button>
     </div>
   </aside>
 
@@ -91,13 +90,13 @@
         <select id="batch-switcher" class="batch-switcher" aria-label="当前批次"><option value="">选择批次</option></select>
         <time id="clock"></time>
         <div id="first-run-progress" class="first-run-progress" hidden></div>
-        <button class="primary-button" id="new-batch-button">＋ 新建今日批次</button>
+        <button class="primary-button" id="new-batch-button" data-icon="＋">新建今日批次</button>
         <details class="topbar-more">
           <summary aria-label="更多操作">⋯</summary>
           <div class="topbar-menu">
-            <button class="ghost-button desktop-shortcuts-button" id="desktop-shortcuts-button" type="button" title="查看快捷键（Ctrl+/）">快捷键</button>
+            <button class="ghost-button desktop-shortcuts-button" id="desktop-shortcuts-button" data-icon="⌨" type="button" title="查看快捷键（Ctrl+/）">快捷键</button>
             <button class="ghost-button" id="quick-material-button">＋ 快速记素材</button>
-            <button class="ghost-button" id="new-breaking-button">⚡ 突发热点</button>
+            <button class="ghost-button" id="new-breaking-button" data-icon="⚡">突发热点</button>
           </div>
         </details>
       </div>

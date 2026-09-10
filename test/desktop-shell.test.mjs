@@ -51,14 +51,21 @@ test('主界面提供桌面侧栏、快捷键和本机工作区提示', () => {
   assert.match(renderer, /jianzhi\.rail-collapsed/);
   assert.match(renderer, /window\.desktopBridge\?\.onCommand/);
   assert.match(renderer, /bindCommandPalette\(\)/);
+  assert.match(renderer, /bindDrawerScrollLock\(\)/);
+  assert.match(renderer, /dialog\.drawer/);
+  assert.match(renderer, /drawer-open/);
   assert.match(renderer, /commandPaletteItems/);
   assert.doesNotMatch(renderer, /desktopCommandTail/);
   assert.match(renderer, /renderer-dispatch/);
+  assert.doesNotMatch(html, /class="nav-icon"[^>]*>\s*[^<\s][^<]*<\/span>/);
+  assert.doesNotMatch(renderer, /font-size:0/);
   assert.ok(renderer.indexOf('bindBatchDrawer();') < renderer.indexOf('window.desktopBridge?.ready?.();'));
   assert.ok(renderer.indexOf('window.desktopBridge?.ready?.();') < renderer.indexOf('await init();'));
   assert.match(renderer, /Ctrl\+\/|event\.key === "\/"/);
   assert.match(renderer, /event\.key\.toLowerCase\(\) === "k"/);
   assert.match(renderer, /\^\[1-4\]\$/);
+  assert.match(html, /id="rail-toggle"/);
+  assert.doesNotMatch(html, /pulse-dot/);
 });
 
 test('首次启动向导覆盖模型、采集、文章和图文交付路径', () => {

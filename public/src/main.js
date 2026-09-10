@@ -229,6 +229,8 @@ function setRailCollapsed(collapsed) {
     toggle.setAttribute("aria-pressed", String(collapsed));
     toggle.setAttribute("aria-label", collapsed ? "展开侧栏" : "收起侧栏");
     toggle.title = `${collapsed ? "展开" : "收起"}侧栏（Ctrl+B）`;
+    const icon = toggle.querySelector(".rail-toggle-icon");
+    if (icon) icon.textContent = collapsed ? ">" : "<";
   }
   try { localStorage.setItem("jianzhi.rail-collapsed", collapsed ? "1" : "0"); } catch { /* 隐私模式下不持久化布局偏好 */ }
 }
@@ -352,10 +354,33 @@ function dispatchDesktopCommand(command) {
   });
 }
 
+function syncDrawerScrollLock() {
+  const drawerOpen = [...document.querySelectorAll("dialog.drawer")].some((dialog) => dialog.open);
+  document.documentElement.classList.toggle("drawer-open", drawerOpen);
+  document.body.classList.toggle("drawer-open", drawerOpen);
+}
+
+function bindDrawerScrollLock() {
+  const observer = new MutationObserver(syncDrawerScrollLock);
+  observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ["open"] });
+  syncDrawerScrollLock();
+}
+
 // 全局骨架绑定（原 app-bind.js 中与具体视图无关的部分）
 function bindGlobal() {
+  bindDrawerScrollLock();
   bindTablistKeyboardNavigation();
   bindDismissableDetails();
+  // 收起侧栏时分组只承担“打开子菜单”的作用；保持一次只展开一个分组，
+  // 避免多个子菜单同时堆叠在窄栏中。展开后的状态仍由原生 details 管理。
+  document.querySelectorAll(".nav-group").forEach((group) => {
+    group.addEventListener("toggle", () => {
+      if (!group.open) return;
+      document.querySelectorAll(".nav-group[open]").forEach((other) => {
+        if (other !== group) other.open = false;
+      });
+    });
+  });
   document.getElementById("nav").addEventListener("click", (event) => {
     const item = event.target.closest("[data-view]"); if (item) go(item.dataset.view);
   });

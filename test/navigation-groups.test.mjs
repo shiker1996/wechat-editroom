@@ -14,15 +14,15 @@ test('侧栏按六个工作区组织并自动展开当前工作区', () => {
   }
   assert.equal((html.match(/class="nav-group"/g) || []).length, 6);
   assert.equal((html.match(/class="nav-item/g) || []).length, 24);
-  assert.match(html, /data-view="material-inbox">素材入箱/);
-  assert.match(html, /data-view="wechat-review-prep">复盘数据台/);
-  assert.match(html, /data-view="wechat-review">公众号复盘/);
-  assert.match(html, /data-view="content-feedback">内容反哺/);
+  assert.match(html, /data-view="material-inbox"[^>]*>[\s\S]*?nav-label">素材入箱/);
+  assert.match(html, /data-view="wechat-review-prep"[^>]*>[\s\S]*?nav-label">复盘数据台/);
+  assert.match(html, /data-view="wechat-review"[^>]*>[\s\S]*?nav-label">公众号复盘/);
+  assert.match(html, /data-view="content-feedback"[^>]*>[\s\S]*?nav-label">内容反哺/);
   assert.match(main, /"content-feedback": "\.\/views\/content-feedback\.js"/);
   assert.doesNotMatch(html, /class="wechat-review-flow/);
-  assert.match(html, /data-view="artifacts">产物中心/);
-  assert.match(html, /data-view="publication">发布中心/);
-  assert.match(html, /data-view="wechat-review">公众号复盘/);
+  assert.match(html, /data-view="artifacts"[^>]*>[\s\S]*?nav-label">产物中心/);
+  assert.match(html, /data-view="publication"[^>]*>[\s\S]*?nav-label">发布中心/);
+  assert.match(html, /data-view="wechat-review"[^>]*>[\s\S]*?nav-label">公众号复盘/);
   assert.match(html, /id="quick-material-button">＋ 快速记素材/);
   assert.match(html, /id="quick-material-dialog"/);
   assert.match(html, /data-publication-filter="pending"[^>]*>未发布/);
@@ -50,8 +50,8 @@ test('侧栏按六个工作区组织并自动展开当前工作区', () => {
   assert.doesNotMatch(feedback, /renderTargets|content-feedback-targets/);
   assert.doesNotMatch(feedback, /data-feedback-handoff-target/);
   assert.doesNotMatch(fs.readFileSync(new URL('../public/src/views/editor.js', import.meta.url), 'utf8'), /takeFeedbackHandoff/);
-  assert.match(html,/data-view="topics">文章选题池/);
-  assert.match(html,/data-view="editorial">热点事件/);
+  assert.match(html,/data-view="topics"[^>]*>[\s\S]*?nav-label">文章选题池/);
+  assert.match(html,/data-view="editorial"[^>]*>[\s\S]*?nav-label">热点事件/);
   assert.doesNotMatch(html, /data-view="models">模型运行/);
   assert.match(html, /class="rail-utility-group" aria-label="扩展与定制"/);
   for (const view of ['skills', 'themes', 'system']) assert.match(html, new RegExp(`class="nav-utility" data-view="${view}"`));
