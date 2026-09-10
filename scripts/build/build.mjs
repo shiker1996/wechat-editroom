@@ -10,7 +10,8 @@ const cssSourceDir = path.join(publicDir, "styles");
 const generatedStyleDir = path.join(publicDir, "assets", "styles");
 const legacyStylePath = path.join(publicDir, "styles.css");
 const generatedStyles = {
-  "common.css": ["tokens-base.css", "chrome.css", "production.css", "theme-picker.css"],
+  "common.css": ["tokens-base.css", "chrome.css", "production.css", "theme-picker.css", "office-desktop.css"],
+  "office.css": ["office-workspaces.css"],
   "social.css": ["social-card.css"],
   "topics.css": ["topics-accessibility.css"],
   "editor.css": ["editor-themes.css"],

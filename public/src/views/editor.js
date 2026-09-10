@@ -16,8 +16,9 @@ let autoSaveTimer = null;
 let saveSequence = 0;
 let editGeneration = 0;
 let visualPlan = null;
-let reviewIssueReport = { documentId: null, status: "unknown", needsReview: false, issueCount: 0, issues: [], groups: [], loading: false };
+let reviewIssueReport = { documentId: null, status: "unknown", reviewState: "unverified", reviewPending: true, needsReview: false, issueCount: 0, issues: [], groups: [], loading: false };
 let reviewIssueRequest = 0;
+const reviewPasses = (reviewState) => ["passed", "confirmed"].includes(reviewState);
 
 // 自定义撤销/重做栈：替代已废弃的 document.execCommand。
 // 输入事件按时间窗合并快照（每 800ms 至多入栈一次），工具栏/替换等程序化修改在改动前入栈。
@@ -122,6 +123,155 @@ function markdownHtml(text) {
   const renderer = getMarkdownRenderer();
   if (renderer) return renderer.render(text);
   return `<pre><code>${escapeHtml(text)}</code></pre>`;
+}
+
+function uniqueReviewMatchTexts(values) {
+  return [...new Set(values
+    .map((value) => String(value || '').replace(/\s+/gu, ' ').trim())
+    .filter((value) => value.length >= 4))]
+    .sort((left, right) => right.length - left.length);
+}
+
+function quotedReviewMatchTexts(value) {
+  const matches = [];
+  const text = String(value || '');
+  const pattern = /[“「『"]([^”」』"]{4,180})[”」』"]/gu;
+  for (const match of text.matchAll(pattern)) matches.push(match[1]);
+  return matches;
+}
+
+function reviewIssueMatchTexts(issue) {
+  const explicit = [
+    issue?.anchor,
+    issue?.excerpt,
+    issue?.quote,
+    issue?.text,
+    issue?.passage,
+    issue?.location?.text,
+    issue?.location?.excerpt,
+  ];
+  const quoted = [issue?.message, issue?.repair].flatMap(quotedReviewMatchTexts);
+  const sentenceFallback = [issue?.message, issue?.repair]
+    .flatMap((value) => String(value || '').split(/[。！？；\n]/u))
+    .map((value) => value.replace(/^[^：:]{0,16}[：:]/u, '').trim())
+    .filter((value) => value.length >= 8 && value.length <= 180);
+  return uniqueReviewMatchTexts([...explicit, ...quoted, ...sentenceFallback]);
+}
+
+function reviewTextNodes(preview) {
+  const walker = document.createTreeWalker(preview, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  let node;
+  while ((node = walker.nextNode())) {
+    if (node.parentElement?.closest('mark.review-highlight,.document-review-issues')) continue;
+    if (node.nodeValue) nodes.push(node);
+  }
+  return nodes;
+}
+
+function reviewMatchSegments(nodes, needle) {
+  const target = String(needle || '').replace(/\s+/gu, ' ').trim();
+  if (!target) return [];
+  const positions = [];
+  let fullText = '';
+  nodes.forEach((node) => {
+    const value = node.nodeValue || '';
+    let whitespace = null;
+    for (let index = 0; index < value.length; index += 1) {
+      if (/\s/u.test(value[index])) {
+        if (whitespace) whitespace.end = index + 1;
+        else {
+          fullText += ' ';
+          whitespace = { node, start: index, end: index + 1 };
+          positions.push(whitespace);
+        }
+      } else {
+        whitespace = null;
+        fullText += value[index];
+        positions.push({ node, start: index, end: index + 1 });
+      }
+    }
+  });
+  let matchText = fullText;
+  let matchPositions = positions;
+  let start = matchText.indexOf(target);
+  if (start < 0) {
+    matchPositions = [];
+    matchText = '';
+    fullText.split('').forEach((character, index) => {
+      if (character === ' ') return;
+      matchText += character;
+      matchPositions.push(positions[index]);
+    });
+    start = matchText.indexOf(target.replace(/\s+/gu, ''));
+  }
+  if (start < 0) return [];
+  const end = start + (matchText === fullText ? target.length : target.replace(/\s+/gu, '').length);
+  const segments = new Map();
+  matchPositions.slice(start, end).forEach(({ node, start: segmentStart, end: segmentEnd }) => {
+    const previous = segments.get(node);
+    segments.set(node, previous
+      ? { node, start: Math.min(previous.start, segmentStart), end: Math.max(previous.end, segmentEnd) }
+      : { node, start: segmentStart, end: segmentEnd });
+  });
+  return [...segments.values()];
+}
+
+function removeReviewHighlights(preview) {
+  preview.querySelectorAll('mark.review-highlight').forEach((mark) => {
+    const parent = mark.parentNode;
+    if (!parent) return;
+    while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+    mark.remove();
+  });
+}
+
+function renderReviewHighlights(preview = document.getElementById('markdown-preview')) {
+  if (!preview) return;
+  removeReviewHighlights(preview);
+  // 保存后审核状态会暂时回到 unverified，但上一轮建议仍要继续标注；只有明确通过才清除高亮。
+  const issues = reviewIssueReport?.reviewState !== "passed" ? reviewIssueReport.issues || [] : [];
+  let highlighted = 0;
+  issues.forEach((issue, issueIndex) => {
+    const nodes = reviewTextNodes(preview);
+    const matchText = reviewIssueMatchTexts(issue).find((value) => reviewMatchSegments(nodes, value).length);
+    if (!matchText) return;
+    const segments = reviewMatchSegments(nodes, matchText);
+    // 从后往前切分，避免前面的 Range 受同一文本节点切分影响。
+    [...segments].reverse().forEach(({ node, start, end }) => {
+      if (!node.isConnected || start >= end) return;
+      const range = document.createRange();
+      range.setStart(node, start);
+      range.setEnd(node, end);
+      const mark = document.createElement('mark');
+      mark.className = 'review-highlight';
+      mark.dataset.reviewIssue = String(issueIndex + 1);
+      mark.title = `${issue.label || issue.type || '自动审核'}：${issue.message || '待处理问题'}`;
+      mark.tabIndex = 0;
+      mark.setAttribute('aria-label', mark.title);
+      range.surroundContents(mark);
+      highlighted += 1;
+    });
+  });
+  preview.classList.toggle('has-review-highlights', highlighted > 0);
+  preview.dataset.reviewHighlightCount = String(highlighted);
+}
+
+function renderReviewIssuePanel(preview = document.getElementById('markdown-preview')) {
+  const host = document.getElementById('document-review-issues');
+  if (!host) return;
+  host.innerHTML = '';
+  const issues = reviewIssueReport?.issues || [];
+  if (!issues.length) return;
+  const reviewState = reviewIssueReport?.reviewState || 'needs_review';
+  const stale = reviewState === 'unverified';
+  const running = reviewState === 'running';
+  const confirmed = reviewState === 'confirmed';
+  const panel = document.createElement('section');
+  panel.className = `document-review-issue-panel${stale ? ' is-stale' : ''}${running ? ' is-running' : ''}${confirmed ? ' is-confirmed' : ''}`;
+  panel.setAttribute('aria-label', '自动审核问题列表');
+  panel.innerHTML = `<div class="document-review-issues-head"><div><span class="document-review-issues-kicker">AUTOMATIC REVIEW</span><h3>${confirmed ? '已确认的审核建议' : stale ? '上次审核问题' : '审核问题'} <b>${issues.length}</b></h3></div><span class="document-review-issues-state">${confirmed ? '已手动确认 · 不阻塞发布' : stale ? '文稿已修改 · 可重新检查或直接确认' : running ? '正在检查…' : '待编辑处理'}</span></div><div class="document-review-issues-list">${issues.map((issue, index) => `<article class="document-review-issue-card" data-review-issue="${index + 1}"><div><i>${escapeHtml(issue.label || issue.type || '待处理')}</i>${issue.stage ? `<small>${escapeHtml(issue.stage)}</small>` : ''}</div><p>${escapeHtml(issue.message || '待处理问题')}</p>${issue.repair ? `<em>建议：${escapeHtml(issue.repair)}</em>` : ''}</article>`).join('')}</div>${['needs_review','unverified'].includes(reviewState) && !running ? '<div class="document-review-issues-actions"><button type="button" class="outline-button" data-confirm-review>确认建议，允许发布</button></div>' : ''}`;
+  host.append(panel);
 }
 
 function renderVisualPlan() {
@@ -247,6 +397,8 @@ function renderMarkdown() {
   const preview = document.getElementById("markdown-preview");
   if (!editor || !preview) return;
   preview.innerHTML = markdownHtml(editor.value);
+  renderReviewHighlights(preview);
+  renderReviewIssuePanel(preview);
   requestAnimationFrame(() => syncScroll(editor, preview));
   const count = visibleChars(editor.value);
   const cc = document.getElementById("char-count");
@@ -265,10 +417,11 @@ function qualityIssues(markdown) { return documentQualityIssues(markdown); }
 
 async function loadReviewIssues(documentId, requestId) {
   if (!documentId) {
-    reviewIssueReport = { documentId: null, status: "unknown", needsReview: false, issueCount: 0, issues: [], groups: [], loading: false };
+    reviewIssueReport = { documentId: null, status: "unknown", reviewState: "unverified", reviewPending: true, needsReview: false, issueCount: 0, issues: [], groups: [], loading: false };
     return;
   }
-  reviewIssueReport = { documentId, status: currentDocument?.status || "unknown", needsReview: currentDocument?.status === "needs_review", issueCount: 0, issues: [], groups: [], loading: true };
+  const reviewState = currentDocument?.review_state || (currentDocument?.status === "needs_review" ? "needs_review" : currentDocument?.status === "finalized" ? "passed" : "unverified");
+  reviewIssueReport = { documentId, status: currentDocument?.status || "unknown", reviewState, reviewPending: !reviewPasses(reviewState), needsReview: reviewState === "needs_review", issueCount: 0, issues: [], groups: [], loading: true };
   renderPreflightSummary(document.getElementById("markdown-editor")?.value || "");
   try {
     const report = await request(`/api/documents/${documentId}/review-issues`);
@@ -276,8 +429,10 @@ async function loadReviewIssues(documentId, requestId) {
     reviewIssueReport = { ...report, loading: false };
   } catch (error) {
     if (requestId !== reviewIssueRequest) return;
-    reviewIssueReport = { documentId, status: currentDocument?.status || "unknown", needsReview: currentDocument?.status === "needs_review", issueCount: 0, issues: [], groups: [], loading: false, error: error.message };
+    reviewIssueReport = { documentId, status: currentDocument?.status || "unknown", reviewState, reviewPending: !reviewPasses(reviewState), needsReview: reviewState === "needs_review", issueCount: 0, issues: [], groups: [], loading: false, error: error.message };
   }
+  renderReviewHighlights();
+  renderReviewIssuePanel();
   renderPreflightSummary(document.getElementById("markdown-editor")?.value || "");
 }
 
@@ -292,14 +447,17 @@ function preflightChecks(markdown=document.getElementById("markdown-editor")?.va
   const stats=writingStatistics(markdown),goal=currentWritingGoal(),issues=qualityIssues(markdown);
   const title=document.getElementById("article-title")?.value.trim()||"";
   const kind=selectedDocKind();
-  const reviewPending=currentDocument?.status==="needs_review";
+  const reviewState=reviewIssueReport?.reviewState || currentDocument?.review_state || (currentDocument?.status === "needs_review" ? "needs_review" : currentDocument?.status === "finalized" ? "passed" : "unverified");
+  const reviewPending=Boolean(currentDocument)&&!reviewPasses(reviewState);
   const reviewIssues=reviewIssueReport?.issues||[];
-  const reviewDetail=reviewPending
-    ? reviewIssues.length ? `发现 ${reviewIssues.length} 项待修订问题：${reviewIssueReport.groups.map((item)=>`${item.label} ${item.count} 项`).join("、")}` : reviewIssueReport.loading ? "正在读取门禁问题明细…" : "成稿已生成，但仍有待编辑处理的问题"
-    : "未有待处理的自动审核问题";
+  const reviewDetail=reviewState === "confirmed"
+    ? "已手动确认审核建议，不阻塞发布"
+    : reviewPending
+      ? reviewState === "running" || reviewIssueReport.loading ? "正在执行自动审核…" : reviewState === "needs_review" ? reviewIssues.length ? `发现 ${reviewIssues.length} 项待修订问题：${reviewIssueReport.groups.map((item)=>`${item.label} ${item.count} 项`).join("、")}` : "成稿已生成，但仍有待编辑处理的问题" : reviewIssues.length ? `上次审核有 ${reviewIssues.length} 项建议，当前版本可由编辑确认` : "文稿已保存，尚未重新执行自动审核"
+      : "未有待处理的自动审核问题";
   return [
     {id:"save",label:"保存状态",pass:!editorDirty&&Boolean(currentDocument),detail:!currentDocument?"当前文稿尚未保存":editorDirty?"仍有修改等待保存":"当前内容已安全保存",action:"保存"},
-    {id:"review",label:"自动审核",pass:!reviewPending,detail:reviewDetail,issues:reviewIssues,action:"编辑"},
+    {id:"review",label:"自动审核",pass:!reviewPending,detail:reviewDetail,issues:reviewIssues,action:reviewState === "needs_review" ? "编辑" : "重新检查"},
     {id:"goal",label:"写作目标",pass:stats.chars>=goal,detail:`${stats.chars.toLocaleString("zh-CN")} / ${goal.toLocaleString("zh-CN")} 字`,action:"设置目标"},
     {id:"quality",label:"内容质量",pass:issues.length===0,detail:issues.length?`有 ${issues.length} 项结构或可读性建议`:"未发现明显质量问题",action:"查看问题"},
     {id:"final",label:"终稿门禁",pass:kind==="final"&&Boolean(title)&&stats.chars>=articleLengthLimit.min&&stats.chars<=articleLengthLimit.max,detail:kind!=="final"?"当前仍是草稿":!title?"缺少文章标题":stats.chars===0?"正文为空":stats.chars>articleLengthLimit.max?`超过 ${articleLengthLimit.max} 字上限（当前 ${stats.chars} 字）`:stats.chars<articleLengthLimit.min?`不足 ${articleLengthLimit.min} 字下限（当前 ${stats.chars} 字）`:"终稿格式与字数符合要求",action:"检查终稿"},
@@ -325,6 +483,12 @@ function renderPreflight() {
   const primary=document.getElementById("preflight-primary");
   primary.textContent=pending.length?"处理第一项":"完成检查";
   primary.dataset.preflightAction=pending[0]?.id||"close";
+  const confirmButton=document.getElementById("preflight-confirm-review");
+  if(confirmButton){
+    const canConfirm=Boolean(currentDocument?.id)&&["needs_review","unverified"].includes(reviewIssueReport?.reviewState)&&Boolean(reviewIssueReport?.issues?.length)&&!reviewIssueReport.loading;
+    confirmButton.hidden=!canConfirm;
+    confirmButton.disabled=!canConfirm;
+  }
 }
 
 function openPreflight() {
@@ -337,7 +501,12 @@ function handlePreflightAction(action) {
   if(action==="close"){dialog.close();return;}
   dialog.close();
   if(action==="save"){saveDocument().catch((error)=>toast(error.message, "error"));return;}
-  if(action==="review"){document.getElementById("markdown-editor")?.focus();return;}
+  if(action==="review"){
+    const reviewState=reviewIssueReport?.reviewState || currentDocument?.review_state;
+    if(reviewState !== "needs_review") runDocumentReview().catch((error)=>toast(error.message, "error"));
+    else document.getElementById("markdown-editor")?.focus();
+    return;
+  }
   if(action==="goal"){openWritingGoal();return;}
   if(action==="quality"){openQualityCheck();return;}
   if(action==="final"){
@@ -532,7 +701,7 @@ async function loadSelectedDocument() {
   const kind = selectedDocKind();
   if (!candidateId&&!daily) {
     currentDocument = null;
-    reviewIssueReport = { documentId: null, status: "unknown", needsReview: false, issueCount: 0, issues: [], groups: [], loading: false };
+    reviewIssueReport = { documentId: null, status: "unknown", reviewState: "unverified", reviewPending: true, needsReview: false, issueCount: 0, issues: [], groups: [], loading: false };
     editorDirty = false;
     clearAutoSave();
     const titleEl = document.getElementById("article-title");
@@ -555,7 +724,8 @@ async function loadSelectedDocument() {
     return;
   }
   currentDocument = docResult?.id ? docResult : null;
-  reviewIssueReport = { documentId: currentDocument?.id || null, status: currentDocument?.status || "unknown", needsReview: currentDocument?.status === "needs_review", issueCount: 0, issues: [], groups: [], loading: Boolean(currentDocument?.id) };
+  const reviewState = currentDocument?.review_state || (currentDocument?.status === "needs_review" ? "needs_review" : currentDocument?.status === "finalized" ? "passed" : "unverified");
+  reviewIssueReport = { documentId: currentDocument?.id || null, status: currentDocument?.status || "unknown", reviewState, reviewPending: !reviewPasses(reviewState), needsReview: reviewState === "needs_review", issueCount: 0, issues: [], groups: [], loading: Boolean(currentDocument?.id) };
   const candidate = daily?null:state.candidates.find((item) => item.id === candidateId);
   const titleEl = document.getElementById("article-title");
   const editor = document.getElementById("markdown-editor");
@@ -709,12 +879,14 @@ async function saveDocument({automatic=false}={}) {
   try {
     const docResult = await request(`/api/batches/${encodeURIComponent(state.activeBatchId)}/documents`, {
       method: "PUT",
-      body: JSON.stringify({ candidateId:daily?null:candidateId, kind:daily?`daily-${kind}`:kind, title, content, status: kind === "final" ? "finalized" : "draft" }),
+      body: JSON.stringify({ candidateId:daily?null:candidateId, kind:daily?`daily-${kind}`:kind, title, content, status: kind === "final" ? "finalized" : "draft", reviewState: "unverified" }),
     });
     if(sequence!==saveSequence)return docResult;
     currentDocument=docResult;
     reviewIssueRequest+=1;
-    reviewIssueReport={documentId:docResult.id||null,status:docResult.status||"finalized",needsReview:false,issueCount:0,issues:[],groups:[],loading:false};
+    reviewIssueReport={documentId:docResult.id||null,status:docResult.status||"finalized",reviewState:docResult.review_state||"unverified",reviewPending:true,needsReview:false,issueCount:reviewIssueReport.issueCount||0,issues:reviewIssueReport.issues||[],groups:reviewIssueReport.groups||[],loading:false};
+    renderReviewHighlights();
+    renderReviewIssuePanel();
     if(savingGeneration===editGeneration){
       editorDirty=false;
       setSaveState("saved",`${automatic?"已自动保存":"已保存"} · ${new Date(docResult.updated_at).toLocaleTimeString("zh-CN",{hour:"2-digit",minute:"2-digit"})}`);
@@ -757,8 +929,70 @@ async function aiDraft() {
   finally { if (button) { button.disabled = false; button.textContent = "AI 起草"; } }
 }
 
+async function runDocumentReview() {
+  if (!currentDocument?.id) return toast("请先保存当前文稿");
+  if (editorDirty) {
+    await saveDocument();
+    if (editorDirty) return;
+  }
+  const provider = document.getElementById("draft-provider")?.value || state.models?.defaultProvider;
+  reviewIssueRequest += 1;
+  // 重新检查期间保留上一轮问题，等新结果返回后再整体替换，避免列表闪空。
+  reviewIssueReport = { ...reviewIssueReport, reviewState: "running", reviewPending: true, needsReview: false, issueCount: reviewIssueReport.issueCount || 0, issues: reviewIssueReport.issues || [], groups: reviewIssueReport.groups || [], loading: true, error: null };
+  renderReviewHighlights();
+  renderReviewIssuePanel();
+  renderPreflightSummary(document.getElementById("markdown-editor")?.value || "");
+  try {
+    const result = await request(`/api/documents/${currentDocument.id}/review`, {
+      method: "POST", body: JSON.stringify({ provider }),
+    });
+    toast("自动审核任务已启动");
+    document.getElementById("production-job-dialog")?.showModal();
+    if (result?.id) await pollJob(result.id, async (job) => {
+      if (job.status !== "completed") {
+        reviewIssueReport = { ...reviewIssueReport, reviewState: "unverified", reviewPending: true, loading: false };
+        renderPreflightSummary(document.getElementById("markdown-editor")?.value || "");
+        return;
+      }
+      const report = await request(`/api/documents/${currentDocument.id}/review-issues`);
+      currentDocument = { ...currentDocument, status: report.status, review_state: report.reviewState };
+      reviewIssueReport = { ...report, loading: false };
+      renderReviewHighlights();
+      renderReviewIssuePanel();
+      renderPreflightSummary(document.getElementById("markdown-editor")?.value || "");
+    });
+  } catch (error) {
+    reviewIssueReport = { ...reviewIssueReport, reviewState: "unverified", reviewPending: true, loading: false, error: error.message };
+    renderPreflightSummary(document.getElementById("markdown-editor")?.value || "");
+    throw error;
+  }
+}
 
-async function pollJob(id) {
+async function confirmReview() {
+  if (!currentDocument?.id) return toast("请先保存当前文稿");
+  if (editorDirty) {
+    await saveDocument();
+    if (editorDirty) return;
+  }
+  const confirmed = await request(`/api/documents/${currentDocument.id}/review-confirm`, { method: "POST", body: "{}" });
+  currentDocument = confirmed;
+  reviewIssueReport = {
+    ...reviewIssueReport,
+    documentId: confirmed.id,
+    status: confirmed.status,
+    reviewState: confirmed.review_state || "confirmed",
+    reviewPending: false,
+    needsReview: false,
+    loading: false,
+    error: null,
+  };
+  renderReviewHighlights();
+  renderReviewIssuePanel();
+  renderPreflightSummary(document.getElementById("markdown-editor")?.value || "");
+  toast("已确认审核建议，发布检查不再阻塞");
+}
+
+async function pollJob(id, onComplete = null) {
   clearTimeout(state.jobTimer);
   try {
     const job = await request(`/api/jobs/${id}`);
@@ -769,14 +1003,18 @@ async function pollJob(id) {
       if (node) { node.textContent = output; node.scrollTop = node.scrollHeight; }
     }
     if (job.status === "running") {
-      state.jobTimer = setTimeout(() => pollJob(id), 1200);
+      state.jobTimer = setTimeout(() => pollJob(id, onComplete), 1200);
     } else {
-      toast(job.status === "completed" ? (job.type === "article" ? "完整成稿链已完成" : job.type === "typeset" ? "公众号排版 HTML 已完成" : "AI 打标完成") : `任务失败：${job.error || "未取得有效结果"}`);
+      toast(job.status === "completed" ? (job.type === "article" ? "完整成稿链已完成" : job.type === "article-review" ? "自动审核已完成" : job.type === "typeset" ? "公众号排版 HTML 已完成" : "AI 打标完成") : `任务失败：${job.error || "未取得有效结果"}`);
       if (job.status === "completed" && job.type === "typeset") {
         document.dispatchEvent(new CustomEvent("typeset:completed", { detail: { job } }));
       }
+      if (onComplete) await onComplete(job);
     }
-  } catch (err) { toast(err.message, "error"); }
+  } catch (err) {
+    if (onComplete) await onComplete({ status: "failed", error: err.message });
+    toast(err.message, "error");
+  }
 }
 
 async function runTypeset(imageDeliveryMode = "auto") {
@@ -865,6 +1103,8 @@ function bindEditor() {
   document.getElementById("editor-outline-toggle").addEventListener("click",()=>setOutlineVisible(document.getElementById("view-editor").classList.contains("outline-hidden")));
   document.getElementById("editor-quality-check").addEventListener("click",openQualityCheck);
   document.getElementById("editor-preflight").addEventListener("click",openPreflight);
+  document.getElementById("preflight-confirm-review")?.addEventListener("click",()=>confirmReview().catch((error)=>toast(error.message,"error")));
+  document.getElementById("document-review-issues")?.addEventListener("click",(event)=>{if(event.target.closest("[data-confirm-review]"))confirmReview().catch((error)=>toast(error.message,"error"));});
   document.querySelectorAll("[data-close-preflight]").forEach((button)=>button.addEventListener("click",()=>document.getElementById("preflight-dialog").close()));
   document.getElementById("preflight-list").addEventListener("click",(event)=>{const button=event.target.closest("[data-preflight-action]");if(button)handlePreflightAction(button.dataset.preflightAction);});
   document.getElementById("preflight-primary").addEventListener("click",(event)=>handlePreflightAction(event.currentTarget.dataset.preflightAction));

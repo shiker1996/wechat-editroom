@@ -133,6 +133,42 @@ test('质量问题支持点击定位正文且不会自动改写',()=>{
   assert.doesNotMatch(body,/setRangeText/);
 });
 
+test('自动审核问题会在右侧预览中高亮并保留悬停说明',()=>{
+  assert.match(editor,/function renderReviewHighlights\(/);
+  assert.match(editor,/reviewIssueReport\?\.reviewState !== "passed"/);
+  assert.match(editor,/mark\.className = 'review-highlight'/);
+  assert.match(editor,/mark\.title =/);
+  assert.match(editor,/renderReviewHighlights\(preview\)/);
+  assert.match(css,/\.markdown-preview mark\.review-highlight/);
+});
+
+test('审核问题列表固定展示在文章大纲中，正文修改后仍保留上次结果',()=>{
+  assert.match(editor,/function renderReviewIssuePanel\(/);
+  assert.match(editor,/document\.getElementById\('document-review-issues'\)/);
+  assert.match(editor,/host\.append\(panel\)/);
+  assert.match(editor,/上次审核问题/);
+  assert.match(editor,/文稿已修改 · 可重新检查或直接确认/);
+  assert.match(editor,/reviewIssueReport\.issues\|\|\[\]/);
+  assert.match(html,/id="document-review-issues"/);
+  assert.ok(html.indexOf('id="document-outline-list"') < html.indexOf('id="document-review-issues"'));
+  assert.match(css,/\.document-review-issue-panel/);
+});
+
+test('文章大纲加宽且审核列表不产生横向滚动',()=>{
+  assert.match(css,/grid-template-columns:minmax\(0,1fr\) minmax\(0,1fr\) 280px/);
+  assert.match(css,/\.document-outline\{overflow-y:auto!important;overflow-x:hidden!important\}/);
+  assert.match(css,/\.document-review-issues-list\{overflow-y:auto;overflow-x:hidden\}/);
+});
+
+test('保存后自动审核回到待检查，并支持重新触发独立审核任务',()=>{
+  assert.match(editor,/reviewState: "unverified"/);
+  assert.match(editor,/reviewState: "running"/);
+  assert.match(editor,/\/api\/documents\/\$\{currentDocument\.id\}\/review/);
+  assert.match(editor,/job\.type === "article-review"/);
+  assert.match(editor,/重新检查期间保留上一轮问题/);
+  assert.match(editor,/issues: reviewIssueReport\.issues \|\| \[\]/);
+});
+
 test('发布前检查统一汇总保存、目标、质量与终稿门禁',()=>{
   assert.match(html,/id="editor-preflight"/);
   assert.match(html,/id="preflight-dialog"/);
@@ -144,6 +180,9 @@ test('发布前检查统一汇总保存、目标、质量与终稿门禁',()=>{
   assert.match(editor,/review-issues/);
   assert.match(editor,/preflight-issue-list/);
   assert.match(editor,/data-preflight-action/);
+  assert.match(html,/id="preflight-confirm-review"/);
+  assert.match(editor,/review-confirm/);
+  assert.match(editor,/已手动确认审核建议，不阻塞发布/);
 });
 
 test('空候选批次不请求 candidateId 0 且候选恢复后清除空态提示',()=>{

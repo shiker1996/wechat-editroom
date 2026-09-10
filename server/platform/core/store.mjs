@@ -404,8 +404,8 @@ export class Store {
     return this.repositories.editorial.listMessages(candidateId);
   }
 
-  saveDocument({ batchId, candidateId = null, kind, title = '', content = '', filePath = null, status = 'draft' }) {
-    return this.repositories.content.saveDocument({ batchId, candidateId, kind, title, content, filePath, status });
+  saveDocument({ batchId, candidateId = null, kind, title = '', content = '', filePath = null, status = 'draft', reviewState = null, reviewedContentHash = null, reviewedAt = null }) {
+    return this.repositories.content.saveDocument({ batchId, candidateId, kind, title, content, filePath, status, reviewState, reviewedContentHash, reviewedAt });
   }
 
   getDocument(batchId, candidateId, kind) {

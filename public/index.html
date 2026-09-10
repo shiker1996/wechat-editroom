@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light">
   <title>见字 · 公众号编辑工作台</title>
-          <link rel="stylesheet" data-base-style="common" href="/assets/styles/common.css?v=20260907-css-split-26">
+          <link rel="stylesheet" data-base-style="common" href="/assets/styles/common.css?v=20260910-office-workspaces-3">
 </head>
 <body>
   <a class="skip-link" href="#main-content">跳到主内容</a>
@@ -14,6 +14,7 @@
     <div class="brand">
       <span class="brand-seal">见</span>
       <div><strong>见字</strong><small>NEWSROOM OS</small></div>
+      <button type="button" class="chrome-toggle" id="rail-toggle" aria-label="收起侧栏" aria-pressed="false" title="收起 / 展开侧栏（Ctrl+B）">☰</button>
     </div>
     <nav id="nav">
       <details class="nav-group" data-nav-group="today" open>
@@ -24,43 +25,38 @@
           <button class="nav-item" data-view="calendar">内容日历</button>
         </div>
       </details>
-      <details class="nav-group" data-nav-group="discovery">
-        <summary><span>02</span><b>发现与研判</b><small>采集 · 全景 · 档案</small></summary>
+      <details class="nav-group" data-nav-group="collection">
+        <summary><span>02</span><b>采集</b><small>来源 · 热点 · 运行</small></summary>
         <div class="nav-group-items">
           <button class="nav-item" data-view="overview">热点全景</button>
           <button class="nav-item" data-view="sources">采集源</button>
           <button class="nav-item" data-view="hotspots">热点档案</button>
         </div>
       </details>
-      <details class="nav-group" data-nav-group="article">
-        <summary><span>03</span><b>文章生产</b><small>入口 · 编辑 · 排版</small></summary>
+      <details class="nav-group" data-nav-group="article-production">
+        <summary><span>03</span><b>文章生产</b><small>选题 · 素材 · 编辑</small></summary>
         <div class="nav-group-items">
-          <div class="nav-section-label">选题管理</div>
           <button class="nav-item" data-view="topics">文章选题池</button>
-          <div class="nav-section-label">主动写作</div>
           <button class="nav-item" data-view="material-inbox">素材入箱</button>
           <button class="nav-item" data-view="editorial">热点事件</button>
           <button class="nav-item" data-view="daily">批次早报</button>
           <button class="nav-item" data-view="tutorial">自主写作</button>
-          <div class="nav-section-label">统一编辑与交付</div>
           <button class="nav-item" data-view="editor">文章编辑器</button>
           <button class="nav-item" data-view="preview">公众号排版</button>
           <button class="nav-item" data-view="cover">文章封面图</button>
         </div>
       </details>
-      <details class="nav-group" data-nav-group="social">
-        <summary><span>04</span><b>图文生产</b><small>管理 · 创作</small></summary>
+      <details class="nav-group" data-nav-group="social-production">
+        <summary><span>04</span><b>图文生产</b><small>选题 · 故事 · 生成</small></summary>
         <div class="nav-group-items">
-          <div class="nav-section-label">选题管理</div>
           <button class="nav-item" data-view="social-topics">图文选题池</button>
-          <div class="nav-section-label">创作方式</div>
           <button class="nav-item" data-view="social-editor">工具图文</button>
           <button class="nav-item" data-view="social-custom">自定义图文</button>
           <button class="nav-item" data-view="social-event">事件图文</button>
         </div>
       </details>
       <details class="nav-group" data-nav-group="publication">
-          <summary><span>05</span><b>发布与复盘</b><small>发布 · 数据 · 反馈</small></summary>
+          <summary><span>05</span><b>发布</b><small>交付 · 数据 · 反馈</small></summary>
         <div class="nav-group-items">
           <button class="nav-item" data-view="publication">发布中心</button>
           <button class="nav-item" data-view="wechat-review-prep">复盘数据台</button>
@@ -68,8 +64,8 @@
           <button class="nav-item" data-view="content-feedback">内容反哺</button>
         </div>
       </details>
-      <details class="nav-group" data-nav-group="governance">
-        <summary><span>06</span><b>资产与审计</b><small>产物 · 任务 · 日志</small></summary>
+      <details class="nav-group" data-nav-group="assets">
+        <summary><span>06</span><b>资产</b><small>产物 · 记录 · 日志</small></summary>
         <div class="nav-group-items">
           <button class="nav-item" data-view="artifacts">产物中心</button>
           <button class="nav-item" data-view="logs">任务日志</button>
@@ -90,52 +86,66 @@
 
   <main class="shell" id="main-content" tabindex="-1">
     <header class="topbar">
-      <div class="topbar-heading"><button type="button" class="chrome-toggle" id="rail-toggle" aria-label="收起侧栏" aria-pressed="false" title="收起 / 展开侧栏（Ctrl+B）">☰</button><div><span class="eyebrow">编辑工作台</span><h1 id="page-title">工作台总览</h1><span class="desktop-context"><i></i> 本机工作区</span></div></div>
+      <div class="topbar-heading"><div><span class="eyebrow">编辑工作台</span><h1 id="page-title">工作台总览</h1><span class="desktop-context" id="desktop-context"><i></i><span id="desktop-context-label">本机工作区</span></span></div></div>
       <div class="top-actions">
         <select id="batch-switcher" class="batch-switcher" aria-label="当前批次"><option value="">选择批次</option></select>
         <time id="clock"></time>
-        <button class="ghost-button desktop-shortcuts-button" id="desktop-shortcuts-button" type="button" title="查看快捷键（Ctrl+/）">快捷键</button>
-        <button class="ghost-button" id="quick-material-button">＋ 快速记素材</button>
-        <button class="ghost-button" id="new-breaking-button">⚡ 突发热点</button>
+        <div id="first-run-progress" class="first-run-progress" hidden></div>
         <button class="primary-button" id="new-batch-button">＋ 新建今日批次</button>
+        <details class="topbar-more">
+          <summary aria-label="更多操作">⋯</summary>
+          <div class="topbar-menu">
+            <button class="ghost-button desktop-shortcuts-button" id="desktop-shortcuts-button" type="button" title="查看快捷键（Ctrl+/）">快捷键</button>
+            <button class="ghost-button" id="quick-material-button">＋ 快速记素材</button>
+            <button class="ghost-button" id="new-breaking-button">⚡ 突发热点</button>
+          </div>
+        </details>
       </div>
     </header>
 
     <section class="view active" id="view-dashboard">
-      <div class="lead-grid">
-        <article class="dispatch-card reveal">
-          <div class="dispatch-top"><span>DAILY DISPATCH</span><time id="today-label"></time></div>
-          <h2>今天，<em>推进哪一步？</em></h2>
-          <p id="dashboard-brief">正在读取当前批次和待办状态。</p>
-          <div class="dispatch-actions">
-            <button class="ink-button" id="dashboard-primary-action">查看当前批次 →</button>
-            <button class="text-button" id="dashboard-new">新建今日批次</button>
-            <button class="text-button" data-go="hotspots">翻看历史热点</button>
+      <section class="home-primary reveal" aria-labelledby="dashboard-heading">
+        <div class="home-primary-head"><div><span class="kicker">TODAY'S WORKSPACE</span><time id="today-label"></time></div><span class="home-save-state"><i></i>本机工作区</span></div>
+        <div class="home-primary-body">
+          <div class="home-primary-copy">
+            <span class="home-status-line"><i id="dashboard-status-dot"></i><b id="dashboard-status">未开始</b></span>
+            <h2 id="dashboard-heading"><span id="dashboard-batch-title">今天的编辑任务</span></h2>
+            <p id="dashboard-brief">正在读取当前批次和待办状态。</p>
+            <div class="home-primary-actions">
+              <button class="ink-button" id="dashboard-primary-action">建立今日批次 →</button>
+              <button class="text-button" id="dashboard-new">新建批次</button>
+              <button class="text-button" data-go="hotspots">历史热点</button>
+            </div>
           </div>
-          <div class="edition-mark"><b id="edition-number">000</b><span>累计热点<br>ARCHIVED</span></div>
-        </article>
-        <section class="metric-grid reveal delay-1" id="metrics"></section>
-      </div>
-
-      <section class="attention-board reveal delay-1" aria-labelledby="attention-heading">
-        <div class="attention-head"><div><span class="kicker">TODAY'S DESK</span><h3 id="attention-heading">今日值班信号</h3></div><small>点击卡片直接处理</small></div>
-        <div class="attention-grid" id="dashboard-attention"></div>
+          <div class="home-progress" aria-label="当前批次进度">
+            <span>当前进度</span><strong id="dashboard-progress">0%</strong>
+            <div class="home-progress-track"><i id="dashboard-progress-fill"></i></div>
+            <small id="dashboard-batch-meta">尚未建立批次</small>
+          </div>
+        </div>
       </section>
 
-      <section class="efficiency-board reveal delay-2" aria-labelledby="efficiency-heading">
-        <div class="attention-head"><div><span class="kicker">PRODUCTION FEEDBACK</span><h3 id="efficiency-heading">内部生产效率</h3></div><small>基于当前批次真实运行记录</small></div>
-        <div class="efficiency-grid" id="dashboard-efficiency"></div>
-        <p class="efficiency-insight" id="efficiency-insight"></p>
-      </section>
+      <section class="home-summary reveal delay-1" id="metrics" aria-label="今日摘要"></section>
 
-      <div class="desk-grid">
-        <section class="panel reveal delay-2">
-          <div class="panel-head"><div><span class="kicker">ACTIVE EDITION</span><h3>当前进行中批次</h3></div><button class="text-button" data-go="batches">全部批次</button></div>
+      <div class="home-workspace-grid">
+        <section class="panel home-task-panel reveal delay-1" aria-labelledby="attention-heading">
+          <div class="panel-head"><div><span class="kicker">NEXT ACTIONS</span><h3 id="attention-heading">下一步</h3></div><small>选择一项继续</small></div>
+          <div class="home-task-list" id="dashboard-attention"></div>
+        </section>
+        <section class="panel home-batch-panel reveal delay-2" aria-labelledby="latest-heading">
+          <div class="panel-head"><div><span class="kicker">CURRENT BATCH</span><h3 id="latest-heading">当前批次</h3></div><button class="text-button" data-go="batches">管理批次 →</button></div>
           <div id="latest-batch" class="empty-state">还没有批次，先建立今天的编辑任务。</div>
         </section>
-        <section class="panel source-panel reveal delay-3">
-          <div class="panel-head"><div><span class="kicker">SOURCE DESK</span><h3>采集席位</h3></div><span class="legend"><i></i>最近状态</span></div>
+      </div>
+
+      <div class="home-support-grid">
+        <section class="panel reveal delay-2" aria-labelledby="sources-heading">
+          <div class="panel-head"><div><span class="kicker">SOURCE HEALTH</span><h3 id="sources-heading">采集源状态</h3></div><button class="text-button" data-go="sources">管理 →</button></div>
           <div id="source-health" class="source-list"></div>
+        </section>
+        <section class="panel reveal delay-3" aria-labelledby="activity-heading">
+          <div class="panel-head"><div><span class="kicker">RECENT ACTIVITY</span><h3 id="activity-heading">最近活动</h3></div><small>最近的工作记录</small></div>
+          <div class="home-activity-list" id="dashboard-recent-activity"></div>
         </section>
       </div>
     </section>
@@ -698,7 +708,7 @@
       <div class="writing-desk">
         <textarea id="markdown-editor" spellcheck="false" placeholder="# 标题&#10;&#10;从这里开始写作……"></textarea>
         <article id="markdown-preview" class="markdown-preview"><p>Markdown 预览</p></article>
-        <aside id="document-outline" class="document-outline" aria-label="文章大纲"><div><span>ARTICLE OUTLINE</span><b>文章大纲</b></div><nav id="document-outline-list"></nav></aside>
+        <aside id="document-outline" class="document-outline" aria-label="文章大纲"><div><span>ARTICLE OUTLINE</span><b>文章大纲</b></div><nav id="document-outline-list"></nav><section id="document-review-issues" class="document-review-issues" aria-live="polite"></section></aside>
       </div>
     </section>
 
@@ -1254,11 +1264,12 @@
   <dialog id="writing-goal-dialog" class="modal"><form id="writing-goal-form"><div class="modal-head"><div><span class="kicker">WRITING TARGET</span><h2>设置写作目标</h2></div><button type="button" class="close-button" data-close-writing-goal aria-label="关闭">×</button></div><label>目标可见字数<input id="writing-goal-input" type="number" min="200" max="10000" step="100" required></label><p class="fine-print">目标仅用于进度反馈；草稿和终稿可以分别设置，不改变保存与终稿门禁规则。</p><div class="modal-actions"><button type="button" class="ghost-button" data-close-writing-goal>取消</button><button type="submit" class="ink-button">保存目标</button></div></form></dialog>
   <dialog id="publication-dialog" class="modal publication-dialog"><form id="publication-form"><div class="modal-head"><div><span class="kicker">PUBLICATION RECORD</span><h2 id="publication-dialog-title">登记公众号发布信息</h2><p id="publication-dialog-context" class="modal-form-intro">发布后补充最终信息，方便关联后台数据。</p></div><button type="button" class="close-button" data-close-publication aria-label="关闭">×</button></div><div class="publication-status-strip"><span>当前状态</span><b id="publication-status">待登记</b><small id="publication-status-note">发布后补充 URL 和发布日期，系统才能关联后台数据。</small></div><div class="publication-form-grid"><label>公众号文章 URL<input id="publication-url" name="contentUrl" type="url" placeholder="https://mp.weixin.qq.com/s/..." autocomplete="url"><small>可以先不填，发布后再补。</small></label><label>实际发布日期<input id="publication-date" name="publishedAt" type="date"><small>优先填写真实发布日期，而不是计划日期。</small></label><label class="publication-span">发布时最终标题<input id="publication-title" name="titleAtPublish" maxlength="120" placeholder="默认带入当前标题"></label><label>内容支柱<input id="publication-pillar" name="contentPillar" placeholder="例如：开源与工程实践"></label><label>内容角色<select id="publication-role" name="contentRole"><option value="">未指定</option><option value="拉新">拉新</option><option value="涨粉">涨粉</option><option value="分享">分享</option><option value="讨论">讨论</option><option value="实验">实验</option></select></label><label>分发方式<select id="publication-lane" name="distributionLane"><option value="">未指定</option><option value="推荐">推荐</option><option value="通知">通知</option><option value="实验">实验</option></select></label><label>主动写作栏目<select id="publication-column" name="columnId"><option value="">未指定栏目</option></select></label></div><p class="fine-print publication-footnote">保存后不会抓取或发布文章；这里只记录发布关系，供后续文章匹配和复盘使用。</p><div class="modal-actions"><button type="button" class="ghost-button" data-close-publication>取消</button><button type="submit" class="ink-button">保存发布信息</button></div></form></dialog>
   <dialog id="quick-material-dialog" class="modal quick-material-dialog"><form id="quick-material-form"><div class="modal-head"><div><span class="kicker">QUICK CAPTURE</span><h2>记一条素材</h2><p class="modal-form-intro">先保存真实片段，稍后回素材箱分析、补全并选择素材进入自主写作。</p></div><button type="button" class="close-button" data-close-quick-material aria-label="关闭">×</button></div><div class="quick-material-form-grid"><label>来源<select name="sourceType"><option value="conversation">AI 会话</option><option value="reading">阅读</option><option value="life">生活</option><option value="project">项目</option><option value="text">其他文本</option></select></label><label>记录日期<input name="capturedAt" type="date" required></label><label class="quick-material-span">标题（可选）<input name="title" placeholder="例如：这次自动化为什么反而变慢了"></label><label class="quick-material-span">正文 / 原话<textarea name="rawText" rows="8" required placeholder="粘贴一段会话、笔记、日记、日志或刚刚想到的片段……"></textarea></label><label class="quick-material-span">标签（可选）<input name="tags" placeholder="用逗号分隔，例如：失败复盘，AI写作"></label></div><div class="modal-actions"><span class="quick-material-hint">快捷键：Ctrl + Shift + M</span><button type="button" class="ghost-button" data-close-quick-material>取消</button><button type="submit" class="ink-button">存入素材箱</button></div></form></dialog>
-  <dialog id="preflight-dialog" class="modal preflight-dialog"><div class="preflight-dialog-body"><div class="modal-head"><div><span class="kicker">PUBLISH READINESS</span><h2>发布前检查</h2></div><button type="button" class="close-button" data-close-preflight aria-label="关闭">×</button></div><div class="preflight-hero"><b id="preflight-title">正在检查当前文稿</b><span id="preflight-summary"></span></div><div id="preflight-list" class="preflight-list"></div><p class="fine-print">检查结果仅用于发布前确认，不会自动修改正文，也不会影响草稿自动保存。</p><div class="modal-actions"><button type="button" class="ghost-button" data-close-preflight>稍后处理</button><button type="button" class="ink-button" id="preflight-primary">查看待处理项</button></div></div></dialog>
+  <dialog id="preflight-dialog" class="modal preflight-dialog"><div class="preflight-dialog-body"><div class="modal-head"><div><span class="kicker">PUBLISH READINESS</span><h2>发布前检查</h2></div><button type="button" class="close-button" data-close-preflight aria-label="关闭">×</button></div><div class="preflight-hero"><b id="preflight-title">正在检查当前文稿</b><span id="preflight-summary"></span></div><div id="preflight-list" class="preflight-list"></div><p class="fine-print">自动审核只提供修改建议，不会自动修改正文，也不会强制阻止发布。你确认可以接受当前建议后即可继续。</p><div class="modal-actions"><button type="button" class="outline-button" id="preflight-confirm-review" hidden>确认建议，允许发布</button><button type="button" class="ghost-button" data-close-preflight>稍后处理</button><button type="button" class="ink-button" id="preflight-primary">查看待处理项</button></div></div></dialog>
   <dialog id="quality-dialog" class="modal quality-dialog"><div class="quality-dialog-body"><div class="modal-head"><div><span class="kicker">QUALITY REVIEW</span><h2>文稿质量检查</h2></div><button type="button" class="close-button" data-close-quality aria-label="关闭">×</button></div><p id="quality-summary" class="quality-summary"></p><div id="quality-issue-list" class="quality-issue-list"></div><div class="modal-actions"><button type="button" class="ink-button" data-close-quality>完成检查</button></div></div></dialog>
   <dialog id="theme-picker-dialog" class="theme-picker-dialog"><div class="theme-picker-shell"><div class="theme-picker-head"><div><span class="kicker">VISUAL THEME</span><h2 id="theme-picker-title">选择主题</h2><p>颜色只是第一眼，版式语气与内容类型同样重要。</p></div><button type="button" class="close-button" id="close-theme-picker" aria-label="关闭主题选择">×</button></div><div class="theme-picker-tabs" role="tablist"><button type="button" class="active" data-theme-filter="all">全部</button><button type="button" data-theme-filter="builtin">内置主题</button><button type="button" data-theme-filter="user">我的主题</button><select id="theme-picker-scene" aria-label="按内容场景筛选"><option value="all">全部场景</option></select></div><div id="theme-picker-grid" class="theme-picker-grid"></div><div class="theme-picker-foot"><span id="theme-picker-selection">请选择一个主题</span><button type="button" class="primary-button" id="confirm-theme-picker">使用此主题</button></div></div></dialog>
   <dialog id="first-run-dialog" class="modal first-run-dialog"><div class="first-run-shell"><aside class="first-run-rail"><div class="first-run-brand"><span class="run-mark">字</span><div><b>见字工作台</b><small>FIRST RUN GUIDE</small></div></div><p class="first-run-rail-intro">用几分钟完成本机配置，然后交付第一篇文章和第一组图文。</p><div id="first-run-steps" class="first-run-steps"></div><div class="first-run-rail-foot"><span>本地优先</span><span>可随时重开</span></div></aside><section class="first-run-content"><div class="first-run-head"><div><span class="kicker">WELCOME TO JIANZI</span><h2>第一次使用，从这里开始</h2></div><button type="button" class="close-button" data-first-run-later aria-label="稍后处理">×</button></div><div id="first-run-body" class="first-run-body"></div><div class="first-run-foot"><button type="button" class="ghost-button" data-first-run-later>稍后处理</button><div><button type="button" class="outline-button" data-first-run-back hidden>上一步</button><button type="button" class="primary-button" id="first-run-next" data-first-run-next>下一步</button></div></div></section></div></dialog>
   <dialog id="desktop-shortcuts-dialog" class="modal desktop-shortcuts-dialog"><div class="desktop-shortcuts-body"><div class="modal-head"><div><span class="kicker">DESKTOP WORKFLOW</span><h2>桌面快捷操作</h2><p class="modal-form-intro">常用动作可以直接通过键盘或窗口菜单完成。</p></div><button type="button" class="close-button" data-close-shortcuts aria-label="关闭快捷键说明">×</button></div><div class="shortcut-list"><div><span>工作台总览</span><kbd>Ctrl</kbd><b>＋</b><kbd>1</kbd></div><div><span>批次管理</span><kbd>Ctrl</kbd><b>＋</b><kbd>2</kbd></div><div><span>采集源</span><kbd>Ctrl</kbd><b>＋</b><kbd>3</kbd></div><div><span>文章编辑器</span><kbd>Ctrl</kbd><b>＋</b><kbd>4</kbd></div><div><span>新建今日批次</span><kbd>Ctrl</kbd><b>＋</b><kbd>N</kbd></div><div><span>快速记素材</span><kbd>Ctrl</kbd><b>＋</b><kbd>Shift</kbd><b>＋</b><kbd>M</kbd></div><div><span>收起 / 展开侧栏</span><kbd>Ctrl</kbd><b>＋</b><kbd>B</kbd></div><div><span>显示本说明</span><kbd>Ctrl</kbd><b>＋</b><kbd>/</kbd></div></div></div></dialog>
+  <dialog id="command-palette-dialog" class="modal command-palette-dialog" aria-labelledby="command-palette-title"><div class="command-palette-body"><div class="command-palette-head"><div><span class="kicker">COMMAND PALETTE</span><h2 id="command-palette-title">跳转或执行操作</h2></div><kbd>Esc</kbd></div><input id="command-palette-input" class="command-palette-input" type="search" autocomplete="off" placeholder="搜索工作区、操作或快捷键…" aria-label="搜索命令"><div id="command-palette-list" class="command-palette-list" role="listbox" aria-label="可用命令"></div><p class="command-palette-hint"><span><kbd>↑</kbd><kbd>↓</kbd>选择</span><span><kbd>Enter</kbd>执行</span><span><kbd>Esc</kbd>关闭</span></p></div></dialog>
   <div class="adjustment-code-popover" id="feedback-adjustment-code-dialog" role="dialog" aria-hidden="true" hidden>
     <div class="adjustment-code-popover-head"><div><span class="material-mark">EDIT DRAFT LINE</span><strong id="feedback-adjustment-code-title">编辑草案代码行</strong></div><button type="button" class="ghost-button" data-feedback-adjustment-editor-close aria-label="关闭">✕</button></div>
     <label class="adjustment-code-editor-label">代码行内容<textarea id="feedback-adjustment-code-editor" rows="3" spellcheck="false" wrap="soft"></textarea></label>
@@ -1266,6 +1277,6 @@
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
   <script src="/vendor/markdown-it.min.js"></script>
-  <script type="module" src="/src/main.js?v=20260908-run-trace-status1"></script>
+  <script type="module" src="/src/main.js?v=20260910-review-highlights-7"></script>
 </body>
 </html>

@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -49,6 +50,27 @@ function loadEchartsSource() {
   return fs.readFileSync(bundled, 'utf8');
 }
 
+// Puppeteer 可能寻找一个缓存中的精确 Chrome 补丁版本；如果本机已有
+// Chrome，应优先使用可执行文件，避免因 152.0.7977.75/.84 的补丁号差异启动失败。
+function findChromeExecutable() {
+  const programFilesX86 = process.env['ProgramFiles(x86)'] || '';
+  const explicitCandidates = [
+    process.env.PUPPETEER_EXECUTABLE_PATH || '',
+    path.join(process.env.PROGRAMFILES || '', 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    programFilesX86 ? path.join(programFilesX86, 'Google', 'Chrome', 'Application', 'chrome.exe') : '',
+    path.join(process.env.LOCALAPPDATA || '', 'Google', 'Chrome', 'Application', 'chrome.exe'),
+  ].filter(Boolean);
+  const explicit = explicitCandidates.find((candidate) => fs.existsSync(candidate));
+  if (explicit) return explicit;
+  const base = path.join(os.homedir(), '.cache', 'puppeteer', 'chrome');
+  if (!fs.existsSync(base)) return '';
+  const versions = fs.readdirSync(base)
+    .map((dir) => path.join(base, dir, 'chrome-win64', 'chrome.exe'))
+    .filter((exe) => fs.existsSync(exe))
+    .sort();
+  return versions.at(-1) || '';
+}
+
 const FENCE_RE = /```echarts\b[^\n]*\r?\n([\s\S]*?)```/gi;
 const MAX_OPTION_CHARS = 200_000;
 
@@ -61,11 +83,12 @@ if (fences.length) {
   fs.mkdirSync(imageDir, { recursive: true });
   const puppeteer = await loadPuppeteer();
   const echartsSource = loadEchartsSource();
+  const chrome = findChromeExecutable();
   // Chrome 启动偶发崩溃（尤其多进程并发时），失败后重试一次。
   let browser = null;
   for (let attempt = 0; attempt < 2 && !browser; attempt += 1) {
     try {
-      browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+      browser = await puppeteer.launch({ headless: 'new', ...(chrome ? { executablePath: chrome } : {}), args: ['--no-sandbox', '--disable-setuid-sandbox'] });
     } catch (error) {
       if (attempt === 1 || !/Failed to launch the browser/i.test(String(error.message))) throw error;
     }

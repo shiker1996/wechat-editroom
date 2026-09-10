@@ -20,7 +20,8 @@ function writeGenerated(name, parts) {
 
 // The browser loads this small common bundle first, then route bundles on demand.
 const generated = {
-  'common.css': writeGenerated('common.css', ['tokens-base.css', 'chrome.css', 'production.css', 'theme-picker.css']),
+  'common.css': writeGenerated('common.css', ['tokens-base.css', 'chrome.css', 'production.css', 'theme-picker.css', 'office-desktop.css']),
+  'office.css': writeGenerated('office.css', ['office-workspaces.css']),
   'social.css': writeGenerated('social.css', ['social-card.css']),
   'topics.css': writeGenerated('topics.css', ['topics-accessibility.css']),
   'editor.css': writeGenerated('editor.css', ['editor-themes.css']),

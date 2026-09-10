@@ -82,13 +82,49 @@ export async function handleArticleRoutes(context) {
     const document = store.getDocumentById(Number(reviewIssuesMatch[1]));
     if (!document) return json(response, 404, { error: '文稿不存在' });
     const artifactNames = new Set(reviewArtifactFileNames());
+    const documentDir = document.file_path ? path.resolve(path.dirname(document.file_path)) : '';
     const artifacts = store.listArtifacts({ batchId: document.batch_id }).filter((artifact) => {
       const sameCandidate = document.candidate_row_id == null
         ? artifact.candidate_row_id == null
         : Number(artifact.candidate_row_id) === Number(document.candidate_row_id);
-      return sameCandidate && artifactNames.has(String(artifact.name || ''));
+      // 兼容旧成稿链：历史产物没有 candidate_row_id，但同批次不同候选各自位于独立目录。
+      const sameLegacyDirectory = !sameCandidate && !artifact.candidate_row_id && documentDir && artifact.file_path
+        && path.resolve(path.dirname(artifact.file_path)) === documentDir;
+      return (sameCandidate || sameLegacyDirectory) && artifactNames.has(String(artifact.name || ''));
     });
     return json(response, 200, buildArticleReviewIssueReport({ document, artifacts }));
+  }
+
+  const reviewRunMatch = pathname.match(/^\/api\/documents\/(\d+)\/review$/);
+  if (reviewRunMatch && request.method === 'POST') {
+    const document = store.getDocumentById(Number(reviewRunMatch[1]));
+    if (!document) return json(response, 404, { error: '文稿不存在' });
+    const input = await body(request);
+    return json(response, 202, aiJobs.start({
+      batchId: document.batch_id,
+      candidateId: document.candidate_row_id,
+      provider: input.provider,
+      type: 'article-review',
+      documentKind: document.kind,
+    }));
+  }
+
+  const reviewConfirmMatch = pathname.match(/^\/api\/documents\/(\d+)\/review-confirm$/);
+  if (reviewConfirmMatch && request.method === 'POST') {
+    const document = store.getDocumentById(Number(reviewConfirmMatch[1]));
+    if (!document) return json(response, 404, { error: '文稿不存在' });
+    // 确认绑定当前已保存正文；正文再次保存时，编辑器会把审核状态重置为 unverified。
+    const confirmed = store.saveDocument({
+      batchId: document.batch_id,
+      candidateId: document.candidate_row_id,
+      kind: document.kind,
+      title: document.title,
+      content: document.content,
+      filePath: document.file_path,
+      status: document.kind === 'final' || document.kind === 'daily-final' ? 'finalized' : document.status,
+      reviewState: 'confirmed',
+    });
+    return json(response, 200, confirmed);
   }
 
 
@@ -106,7 +142,7 @@ export async function handleArticleRoutes(context) {
     if (!document || !revision) return json(response,404,{error:'文档或版本不存在'});
     if (document.file_path) writeUtf8(document.file_path,revision.content);
     const restored=store.saveDocument({batchId:document.batch_id,candidateId:document.candidate_row_id,
-      kind:document.kind,title:revision.title,content:revision.content,filePath:document.file_path,status:revision.status});
+      kind:document.kind,title:revision.title,content:revision.content,filePath:document.file_path,status:revision.status,reviewState:'unverified'});
     return json(response,200,restored);
   }
 

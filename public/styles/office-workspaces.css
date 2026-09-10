@@ -1,0 +1,458 @@
+/* Phase 3: page-level office workspaces. Loaded after route bundles. */
+
+/* Shared page framing */
+.view > .section-intro { margin-bottom: 18px; }
+.view > .section-intro p { max-width: 720px; line-height: 1.65; }
+.view .panel-head { gap: 18px; }
+.view .panel-head h3, .view .workspace-head h3 { font-family: var(--body); font-weight: 650; }
+.view .panel-head small, .view .workspace-head small { color: var(--muted); }
+.view .scope-tabs, .view .content-class-tabs { border-radius: 6px; overflow: hidden; }
+.view .scope-tabs button, .view .content-class-tabs button { color: var(--muted); background: var(--surface); }
+.view .scope-tabs button.active, .view .content-class-tabs button.active { color: var(--ink); background: var(--blue-soft); box-shadow: inset 0 -2px var(--blue); }
+
+/* Today: task board instead of a poster-like dashboard. */
+#view-dashboard .home-primary {
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--blue);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: none;
+}
+#view-dashboard .home-primary::after { display: none; }
+#view-dashboard .home-primary-head { border-bottom-color: var(--line); }
+#view-dashboard .home-status-line b, #view-dashboard .home-status-line i { color: var(--blue); }
+#view-dashboard .home-progress-track { background: var(--paper-deep); }
+#view-dashboard .home-progress-track i { background: var(--blue); }
+#view-dashboard .home-summary { border: 1px solid var(--line); background: var(--surface); box-shadow: none; }
+#view-dashboard .home-summary-item { background: var(--surface); }
+#view-dashboard .home-summary-item strong { color: var(--ink-strong); }
+#view-dashboard .home-summary-item + .home-summary-item { border-left-color: var(--line); }
+#view-dashboard .home-task-list .attention-card.ok { border-left-color: var(--green); }
+#view-dashboard .home-task-list .attention-card.active { border-left-color: var(--blue); }
+#view-dashboard .home-task-list .attention-card.warn,
+#view-dashboard .home-task-list .attention-card.bad { border-left-color: var(--red); background: var(--surface-danger); }
+
+/* Collection and overview: stable lists with restrained state accents. */
+#view-sources .source-register-summary,
+#view-sources .source-register-summary article { background: var(--surface); }
+#view-sources .source-register-summary article:nth-child(2),
+#view-sources .source-register-summary article:nth-child(3) { background: var(--surface-subtle); }
+#view-sources .source-register-summary article strong { color: var(--ink-strong); }
+#view-sources .source-compose { border-radius: 8px; }
+#view-sources .source-ledger-panel { border-radius: 8px; }
+#view-sources .subscription-row { background: var(--surface); }
+#view-sources .subscription-kind,
+#view-sources .subscription-kind.direct,
+#view-sources .subscription-kind.twitter { color: var(--ink); background: var(--paper-deep); }
+#view-overview .atlas-notice, #view-overview .atlas-hotlist-panel > .panel-head,
+#view-overview .atlas-table > .panel-head { background: var(--surface-subtle); }
+#view-overview .event-hotlist-item,
+#view-overview .event-cluster-card { background: var(--surface); }
+#view-overview .event-hotlist-item:hover,
+#view-overview .event-cluster-card:hover { box-shadow: inset 3px 0 var(--blue); }
+
+/* Task logs use the same neutral elevated surface as the rest of the desktop shell. */
+#view-logs .log-entry,
+#view-logs .log-governance-panel,
+#view-logs .hotword-summary-panel,
+#view-logs .hotword-refer,
+#view-logs .topic-pool-hint,
+#view-logs .hotword-index-card {
+  background: var(--surface);
+}
+#view-logs .log-entry.running { background: var(--blue-soft); }
+
+/* Article production: editor surfaces stay white, controls read like a desktop form. */
+#view-editor .writing-toolbar,
+#view-editor .ai-writing-bar,
+#view-editor .writing-stats,
+#view-editor .markdown-toolbar { border-color: var(--line); background: var(--surface); box-shadow: none; }
+#view-editor .writing-toolbar { border-top: 1px solid var(--line); }
+#view-editor .writing-desk { border: 1px solid var(--line); background: var(--surface); box-shadow: none; }
+#view-editor .writing-desk textarea, #view-editor .writing-desk .editor-preview { background: var(--surface); }
+#view-editor .document-state { border-color: var(--line); }
+#view-editor .writing-stats b.complete { color: var(--green); }
+#view-topics .candidate-board, #view-topics .ranking-panel { border-radius: 8px; background: var(--surface); }
+#view-topics .candidate-card { border-radius: 6px; background: var(--surface); }
+#view-topics .candidate-card:hover { border-color: var(--blue-border-strong); box-shadow: none; }
+#view-material-inbox .material-flow-strip { border-color: var(--line); background: var(--surface-subtle); }
+#view-material-inbox .material-capture-panel,
+#view-material-inbox .column-panel,
+#view-material-inbox .material-list-panel { border-radius: 8px; }
+
+/* Publication and assets: neutral index/list surfaces, blue as the action signal. */
+#view-publication .publication-intro,
+#view-publication .publication-index-panel,
+#view-artifacts .artifact-grid { border-color: var(--line); }
+#view-publication .publication-filterbar { background: var(--surface-subtle); border-color: var(--line); }
+#view-publication .publication-filter-tabs button.active { color: var(--ink); background: var(--blue-soft); border-color: var(--blue); }
+#view-publication .article-row, #view-artifacts .artifact-card { background: var(--surface); }
+#view-artifacts .artifact-card:hover { border-color: var(--blue-border-strong); background: var(--surface-hover); }
+
+/* Extension & customization: three pages use one practical management language. */
+#view-skills .capability-studio-hero {
+  padding: 26px 28px;
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--blue);
+  background: var(--surface);
+  color: var(--ink);
+}
+#view-skills .capability-studio-hero::after { display: none; }
+#view-skills .capability-studio-hero h2 { font-family: var(--body); font-size: 28px; }
+#view-skills .capability-studio-hero p { color: var(--muted); }
+#view-skills .capability-studio-hero .kicker { color: var(--muted); }
+#view-skills .capability-studio-seal { border-color: var(--line); transform: none; }
+#view-skills .capability-studio-seal span { color: var(--blue); }
+#view-skills .capability-studio-summary { border: 1px solid var(--line); background: var(--surface); }
+#view-skills .capability-studio-summary > span,
+#view-skills .capability-studio-summary > span.attention,
+#view-skills .capability-studio-summary > span.ready { background: var(--surface); }
+#view-skills .capability-studio-summary b { color: var(--blue); }
+#view-skills .capability-section-tabs { border-color: var(--line); background: var(--surface-subtle); }
+#view-skills .capability-section-tabs button { border-color: var(--line); }
+#view-skills .capability-section-tabs button:hover { background: var(--surface-hover); }
+#view-skills .capability-section-tabs button.active::after { background: var(--blue); }
+#view-skills .capability-section-tabs button > span { color: var(--blue); }
+#view-skills .skill-management-layout { border-color: var(--line); box-shadow: none; }
+#view-skills .skill-browser { border-color: var(--line); background: var(--surface-subtle); }
+#view-skills .skill-browser-controls { background: var(--surface-subtle); }
+#view-skills .skill-list-item:hover { background: var(--surface-hover); }
+#view-skills .skill-list-item.active { box-shadow: inset 3px 0 var(--blue); }
+#view-skills .skill-detail { background: var(--surface); }
+#view-skills .skill-editor-head { background: var(--surface); border-bottom: 1px solid var(--line); }
+#view-skills .extension-management-grid .runtime-commandbar {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: none;
+}
+#view-skills .extension-management-grid .runtime-commandbar small { color: var(--muted); }
+#view-skills .extension-management-grid .runtime-commandbar .ghost-button { color: var(--ink); border-color: var(--line); background: var(--surface); }
+#view-skills .extension-management-grid .runtime-commandbar .ghost-button:hover { color: var(--ink); border-color: var(--blue); background: var(--blue-soft); }
+#view-skills .extension-management-grid .runtime-commandbar .outline-button { color: var(--ink); border-color: var(--line-strong); background: var(--surface); }
+#view-skills .extension-card, #view-skills .remote-plugin-installer { box-shadow: none; }
+
+#view-themes .theme-library-launch button,
+#view-themes .theme-manager-panel,
+#view-themes .user-theme-form,
+#view-themes .user-theme-row { border-color: var(--line); box-shadow: none; }
+#view-themes .theme-library-launch button { border-top: 2px solid var(--blue); background: var(--surface); }
+#view-themes .theme-library-launch button:first-child,
+#view-themes .theme-library-launch button:nth-child(2),
+#view-themes .theme-library-launch button:last-child { border-top-color: var(--blue); }
+#view-themes .theme-library-launch button:hover { background: var(--surface-hover); }
+#view-themes .theme-library-launch span { color: var(--muted); }
+#view-themes .theme-manager-panel { background: var(--surface); }
+#view-themes .user-theme-row.active { border-color: var(--blue); background: var(--blue-soft); }
+#view-themes .ai-theme-creator { border-color: var(--line); background: var(--surface); box-shadow: none; }
+#view-themes .ai-theme-creator > header {
+  background: var(--surface-subtle);
+  color: var(--ink);
+  border-bottom-color: var(--line);
+}
+#view-themes .ai-theme-creator > header h4,
+#view-themes .ai-theme-creator > header .text-button { color: var(--ink); }
+#view-themes .ai-theme-creator > header p { color: var(--muted); }
+#view-themes .theme-editor-actions { border-top: 1px solid var(--line); padding-top: 14px; }
+
+#view-system .configuration-console,
+#view-system .runtime-config-panel { border: 1px solid var(--line); border-top-width: 1px; background: var(--surface); box-shadow: none; }
+#view-system .configuration-console-head { background: var(--surface); color: var(--ink); border-bottom: 1px solid var(--line); }
+#view-system .configuration-console-head h3 { font-family: var(--body); }
+#view-system .configuration-console-head p { color: var(--muted); }
+#view-system .configuration-console-head .kicker { color: var(--muted); }
+#view-system .configuration-readiness { border-color: var(--line); }
+#view-system .runtime-path-strip { background: var(--line); }
+#view-system .runtime-path-strip > span { background: var(--surface-subtle); }
+#view-system .config-panel-heading { border-bottom-color: var(--line); }
+#view-system .extension-settings-layout { border-color: var(--line); }
+#view-system .configuration-index { border-color: var(--line); background: var(--surface-subtle); }
+#view-system .configuration-index-head { border-color: var(--line); }
+#view-system .extension-settings-list button { border-color: var(--line); }
+#view-system .extension-settings-list button:hover { background: var(--surface-hover); }
+#view-system .extension-settings-list button.active { border-color: var(--line); box-shadow: inset 3px 0 var(--blue); background: var(--surface); }
+#view-system .extension-settings-editor { background: var(--surface); }
+
+/* Final Office surface pass: operational panels stay light; only the rail and true log/terminal output remain dark. */
+#view-overview .keyword-cloud,
+#view-overview .event-rank,
+#view-sources .source-compose,
+#view-system .runtime-commandbar,
+#view-system .maintenance-panel {
+  color: var(--ink);
+  background: var(--surface);
+  border-color: var(--line);
+  box-shadow: none;
+}
+#view-overview .keyword-cloud button { color: var(--ink); }
+#view-overview .keyword-cloud button:nth-child(4n+1) { color: var(--green); }
+#view-overview .keyword-cloud button:nth-child(5n) { color: var(--blue); }
+#view-overview .event-rank > span { color: var(--blue); }
+#view-overview .event-rank > small { color: var(--muted); }
+#view-overview .event-rank > em { color: var(--green); }
+#view-overview .atlas-controls {
+  color: var(--ink);
+  background: var(--surface-subtle);
+  border: 1px solid var(--line);
+}
+#view-overview .atlas-controls select,
+#view-overview .atlas-search input {
+  color: var(--ink);
+  background: var(--surface);
+  border-color: var(--line-strong);
+}
+#view-overview .scope-tabs button { color: var(--muted); border-color: var(--line); }
+#view-overview .scope-tabs button.active { color: var(--ink); background: var(--blue-soft); }
+#view-overview .atlas-search span { color: var(--blue); }
+#view-batches .batch-ledger-controls .scope-tabs button.active {
+  color: var(--white);
+  background: var(--blue);
+}
+#view-sources .source-compose::after { display: none; }
+#view-sources .source-compose .kicker,
+#view-sources .source-compose label,
+#view-sources .source-compose h3 { color: var(--ink); }
+#view-sources .source-compose input,
+#view-sources .source-compose select { color: var(--ink); background: var(--surface-subtle); border-color: var(--line-strong); }
+#view-sources .source-compose .outline-button { color: var(--ink); border-color: var(--line-strong); background: var(--surface); }
+#view-system .runtime-commandbar small,
+#view-system .maintenance-panel p { color: var(--muted); }
+#view-system .maintenance-panel .kicker,
+#view-system .maintenance-panel .maintenance-rule b { color: var(--blue); }
+#view-system .maintenance-panel .outline-button,
+#view-system .maintenance-panel .backup-picker { color: var(--ink); border-color: var(--line-strong); background: var(--surface); }
+
+/* Priority 1: bring the social-card studio back into the same Office workspace language. */
+#view-social-editor .social-candidate-tab-strip,
+#view-social-editor .social-control-deck,
+#view-social-editor .social-storyboard-stage,
+#view-social-editor .social-delivery {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+#view-social-editor .social-candidate-tab-strip,
+#view-social-editor .social-control-deck { background: var(--surface-subtle); }
+#view-social-editor .social-editor-candidate { border-color: var(--line); }
+#view-social-editor .social-editor-candidate:hover { background: var(--surface-hover); }
+#view-social-editor .social-editor-candidate.active {
+  color: var(--ink);
+  border-color: var(--blue);
+  background: var(--blue-soft);
+  box-shadow: inset 3px 0 var(--blue);
+}
+#view-social-editor .social-editor-candidate.active small,
+#view-social-editor .social-editor-candidate.active em { color: var(--muted); }
+#view-social-editor .social-editor-candidate b,
+#view-social-editor .social-editor-title a,
+#view-social-editor .card-plan-preview small { color: var(--blue); }
+#view-social-editor .social-delivery { border-top: 1px solid var(--line); }
+#view-social-editor .social-delivery-head { border-bottom-color: var(--line); }
+#view-social-editor .social-delivery-head h3,
+#view-social-editor .social-delivery-head p,
+#view-social-editor .social-delivery-head .kicker { color: var(--ink); }
+#view-social-editor .social-delivery-head p { color: var(--muted); }
+#view-social-editor .social-delivery-head .outline-button,
+#view-social-editor .social-delivery-head .primary-button {
+  color: var(--ink);
+  border-color: var(--line-strong);
+  background: var(--surface);
+  box-shadow: none;
+}
+#view-social-editor .social-delivery-head .primary-button:hover,
+#view-social-editor .social-delivery-head .outline-button:hover { background: var(--blue-soft); }
+#view-social-editor .social-delivery-status,
+#view-social-editor .social-beautify-status {
+  color: var(--ink);
+  border-color: var(--line);
+  border-left-color: var(--blue);
+  background: var(--surface-subtle);
+}
+#view-social-editor .social-delivery-status-label,
+#view-social-editor .social-beautify-status,
+#view-social-editor .social-beautify-status strong,
+#view-social-editor .social-beautify-status small { color: var(--blue); }
+#view-social-editor .social-delivery-status p,
+#view-social-editor .social-beautify-status span { color: var(--muted); }
+#view-social-editor .social-gallery-stage {
+  background: var(--editor-code-surface);
+  border: 1px solid var(--line);
+}
+#view-social-editor .social-gallery-stage > button {
+  color: var(--ink);
+  border-color: var(--line-strong);
+  background: var(--surface);
+}
+#view-social-editor .social-gallery-stage > button:hover { color: var(--ink); background: var(--blue-soft); }
+#view-social-editor .social-gallery-tools .outline-button {
+  color: var(--ink);
+  border-color: var(--line-strong);
+  background: var(--surface);
+}
+#view-social-editor .social-gallery-tools .outline-button:hover { color: var(--ink); background: var(--blue-soft); border-color: var(--blue); }
+#view-social-editor .social-gallery-film button { background: var(--surface-subtle); border-color: var(--line); }
+#view-social-editor .social-gallery-film button.active { border-color: var(--blue); }
+#view-social-editor .social-proof { border-color: var(--line); }
+#view-social-editor .social-proof-tabs button {
+  color: var(--muted);
+  border: 1px solid var(--line);
+  background: var(--surface-subtle);
+}
+#view-social-editor .social-proof-tabs button.active { color: var(--ink); background: var(--blue-soft); }
+#view-social-editor .social-proof pre { background: var(--editor-code-surface); color: var(--editor-code-ink); }
+#view-social-editor .social-production-bar {
+  color: var(--ink);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+#view-social-editor .social-production-bar .social-stage-number { color: var(--blue); border-color: var(--blue); }
+#view-social-editor .social-production-bar p { color: var(--muted); }
+#view-social-editor .social-production-bar .primary-button,
+#view-social-editor .social-production-bar .outline-button {
+  color: var(--ink);
+  border-color: var(--line-strong);
+  background: var(--surface);
+  box-shadow: none;
+}
+#view-social-editor .social-production-bar .primary-button:hover,
+#view-social-editor .social-production-bar .outline-button:hover { background: var(--blue-soft); border-color: var(--blue); }
+#view-social-editor .social-skill-settings > summary,
+#view-social-editor .social-theme-picker,
+#view-social-editor .storyboard-layout-control { color: var(--ink); background: var(--surface); border-color: var(--line); }
+#view-social-editor .social-theme-picker select { color: var(--ink); background: var(--surface-subtle); border-color: var(--line-strong); }
+
+/* P2: topic-pool explanations are informative, not attention-grabbing warnings. */
+.candidate-selection-reason {
+  border-left-color: var(--blue);
+  background: var(--blue-soft);
+  color: var(--muted);
+}
+.candidate-selection-reason b { color: var(--blue); }
+
+/* Editorial workspace candidate rail: keep the active item readable without the legacy navy slab. */
+#view-editorial .candidate-tab-strip {
+  border-color: var(--line);
+  background: var(--surface-subtle);
+}
+#view-editorial .candidate-sidebar {
+  background: var(--surface-subtle);
+  border-color: var(--line);
+  scrollbar-width: none;
+}
+#view-editorial .candidate-sidebar::-webkit-scrollbar { display: none; }
+#view-editorial .candidate-tab-arrow {
+  background: var(--ink);
+  color: var(--white);
+  border-color: var(--line);
+}
+#view-editorial .candidate-tab-arrow:hover:not(:disabled) {
+  background: var(--blue);
+  color: var(--white);
+}
+#view-editorial .candidate-tab-arrow:disabled { color: var(--muted); }
+#view-editorial .editorial-candidate {
+  position: relative;
+  flex: 0 0 clamp(220px, 25vw, 310px);
+  min-height: 96px;
+  padding: 11px 13px;
+  border-color: var(--line);
+  color: var(--ink);
+  background: transparent;
+  border-bottom: 1px solid var(--line);
+}
+#view-editorial .editorial-candidate:hover { background: var(--surface-hover); }
+#view-editorial .editorial-candidate.active {
+  background: var(--blue-soft);
+  color: var(--ink);
+  border-bottom-color: var(--blue);
+  border-color: var(--blue);
+  box-shadow: inset 3px 0 var(--blue);
+}
+#view-editorial .editorial-candidate b,
+#view-editorial .editorial-candidate.active b { color: var(--blue); }
+#view-editorial .editorial-candidate .editorial-candidate-title { color: inherit; }
+#view-editorial .editorial-candidate .editorial-candidate-lane { color: var(--muted); }
+#view-editorial label.question-field {
+  background: var(--surface-subtle);
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+
+/* Priority 2: remove the warm control-deck treatment from the capability studio. */
+#view-skills .consumer-access-toolbar,
+#view-skills .consumer-type-filter,
+#view-skills .consumer-access-card,
+#view-skills .consumer-access-row,
+#view-skills .skill-detail,
+#view-skills .skill-editor-head {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: none;
+}
+#view-skills .consumer-access-toolbar { background: var(--surface-subtle); }
+#view-skills .consumer-type-filter button { color: var(--muted); border-color: var(--line); }
+#view-skills .consumer-type-filter button.active { color: var(--ink); background: var(--blue-soft); }
+#view-skills .consumer-access-card > header small,
+#view-skills .consumer-access-row small { color: var(--muted); }
+#view-skills .consumer-manifest-warnings { background: var(--surface-danger); }
+#view-skills .capability-studio .skill-list-item.active { background: var(--blue-soft); }
+#view-skills .skill-markdown-view,
+#view-skills .remote-plugin-installer textarea { color: var(--editor-code-ink); background: var(--editor-code-surface); border-color: var(--line); }
+#view-skills .skill-runtime-policy-note.prompt-only { color: var(--warning); background: var(--warning-soft); }
+#view-skills .capability-section-tabs,
+#view-skills .skill-browser,
+#view-skills .skill-browser-controls { background: var(--surface-subtle); }
+
+/* Priority 3: standardize the remaining configuration panels and form controls. */
+#view-system .configuration-console-strip,
+#view-system .configuration-inline-legend,
+#view-system .configuration-form-actions,
+#view-system .runtime-save-row,
+#view-system .maintenance-disclosure,
+#view-system .maintenance-disclosure[open] > summary {
+  color: var(--ink);
+  background: var(--surface-subtle);
+  border-color: var(--line);
+}
+#view-system .configuration-fields input,
+#view-system .configuration-fields select,
+#view-system .configuration-fields textarea,
+#view-system .rsshub-kv-row input:not([type=checkbox]),
+#view-system .source-ledger-filters input,
+#view-system .source-ledger-filters select {
+  color: var(--ink);
+  background: var(--surface);
+  border-color: var(--line-strong);
+}
+#view-system .configuration-fields label { color: var(--ink); }
+#view-system .configuration-fields label small,
+#view-system .configuration-form-actions > small { color: var(--muted); }
+#view-system .resource-advanced,
+#view-system .configuration-issues,
+#view-system .source-plugin-fields,
+#view-system .source-assist-result,
+#view-system .source-assist-result article {
+  color: var(--ink);
+  background: var(--surface-subtle);
+  border-color: var(--line);
+}
+#view-system .kv-file-head { color: var(--ink); background: var(--surface-subtle); }
+#view-system .kv-file-head button { color: var(--blue); }
+#view-system .rsshub-kv-row,
+#view-system .kv-empty { background: var(--surface); }
+#view-system .rsshub-kv-row .kv-key[readonly] { background: var(--surface-subtle); }
+#view-system .configuration-console-strip > button { border-bottom-color: var(--blue); }
+#view-system .configuration-resource-mark { background: var(--blue); }
+#view-system .configuration-form-actions button,
+#view-system .runtime-save-row button { box-shadow: none; }
+
+@media (max-width: 760px) {
+  #view-skills .capability-studio-hero { padding: 22px 20px; }
+  #view-system .configuration-console-head { padding: 20px; }
+}

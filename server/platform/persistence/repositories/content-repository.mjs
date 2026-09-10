@@ -1,23 +1,37 @@
+import crypto from 'node:crypto';
 import { markdownVisibleChars } from '../../../shared/domain/markdown-visible-chars.mjs';
+
+const REVIEW_STATES = new Set(['unverified', 'running', 'passed', 'needs_review', 'confirmed']);
+function contentHash(content) { return crypto.createHash('sha256').update(String(content || ''), 'utf8').digest('hex'); }
+function resolveReviewState({ status, reviewState }) {
+  if (REVIEW_STATES.has(reviewState)) return reviewState;
+  if (status === 'needs_review') return 'needs_review';
+  if (status === 'finalized') return 'passed';
+  return 'unverified';
+}
 
 export class ContentRepository {
   constructor(db) { this.db = db; }
 
-  saveDocument({ batchId, candidateId = null, kind, title = '', content = '', filePath = null, status = 'draft' }) {
+  saveDocument({ batchId, candidateId = null, kind, title = '', content = '', filePath = null, status = 'draft', reviewState = null, reviewedContentHash = null, reviewedAt = null }) {
     const now = new Date().toISOString(); const visibleChars = markdownVisibleChars(content);
+    const effectiveReviewState = resolveReviewState({ status, reviewState });
+    const effectiveReviewedHash = effectiveReviewState === 'unverified' || effectiveReviewState === 'running' ? '' : (reviewedContentHash || contentHash(content));
+    const effectiveReviewedAt = effectiveReviewState === 'unverified' || effectiveReviewState === 'running' ? null : (reviewedAt || now);
     this.db.exec('BEGIN IMMEDIATE');
     try {
     const previous = this.getDocument(batchId, candidateId, kind);
     if (previous && candidateId == null) {
-      this.db.prepare(`UPDATE documents SET title=?,content=?,file_path=?,visible_chars=?,status=?,updated_at=? WHERE id=?`)
-        .run(title, content, filePath, visibleChars, status, now, previous.id);
+      this.db.prepare(`UPDATE documents SET title=?,content=?,file_path=?,visible_chars=?,status=?,review_state=?,reviewed_content_hash=?,reviewed_at=?,updated_at=? WHERE id=?`)
+        .run(title, content, filePath, visibleChars, status, effectiveReviewState, effectiveReviewedHash, effectiveReviewedAt, now, previous.id);
     } else {
       this.db.prepare(`INSERT INTO documents
-        (batch_id,candidate_row_id,kind,title,content,file_path,visible_chars,status,created_at,updated_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?)
+        (batch_id,candidate_row_id,kind,title,content,file_path,visible_chars,status,review_state,reviewed_content_hash,reviewed_at,created_at,updated_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
         ON CONFLICT(batch_id,candidate_row_id,kind) DO UPDATE SET title=excluded.title,content=excluded.content,
-        file_path=excluded.file_path,visible_chars=excluded.visible_chars,status=excluded.status,updated_at=excluded.updated_at`)
-        .run(batchId, candidateId, kind, title, content, filePath, visibleChars, status, now, now);
+        file_path=excluded.file_path,visible_chars=excluded.visible_chars,status=excluded.status,review_state=excluded.review_state,
+        reviewed_content_hash=excluded.reviewed_content_hash,reviewed_at=excluded.reviewed_at,updated_at=excluded.updated_at`)
+        .run(batchId, candidateId, kind, title, content, filePath, visibleChars, status, effectiveReviewState, effectiveReviewedHash, effectiveReviewedAt, now, now);
     }
     const document = this.getDocument(batchId, candidateId, kind);
     if (!previous || previous.title !== title || previous.content !== content || previous.status !== status) {

@@ -14,12 +14,50 @@ function writeProgress(patch) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...readProgress(), ...patch })); } catch { /* 隐私模式下不持久化向导状态 */ }
 }
 
+function suggestedStep() {
+  if (!snapshot?.modelReady) return 0;
+  if (!snapshot?.sourceReady) return 1;
+  if (!snapshot?.hasBatch) return 2;
+  return 3;
+}
+
+function routeStep(route) {
+  const view = String(route || "").split("/")[0];
+  if (view === "system") return 0;
+  if (["sources", "batches"].includes(view)) return 1;
+  if (["overview", "topics", "social-topics", "social-editor", "social-custom", "social-event", "editorial", "editor", "preview", "cover"].includes(view)) return 2;
+  return null;
+}
+
+function renderProgressDock() {
+  const host = document.getElementById("first-run-progress");
+  if (!host) return;
+  const progress = readProgress();
+  if (progress.completed) {
+    host.hidden = true;
+    host.innerHTML = "";
+    return;
+  }
+  const tasks = [Boolean(snapshot?.modelReady), Boolean(snapshot?.sourceReady), Boolean(snapshot?.hasBatch), false];
+  const completedCount = tasks.filter(Boolean).length;
+  const label = snapshot ? `${completedCount}/4 项已完成` : "打开查看配置进度";
+  const current = Math.min(4, Math.max(0, completedCount + 1));
+  host.hidden = false;
+  host.innerHTML = `<button type="button" class="first-run-progress-trigger" data-first-run-open aria-label="打开首次使用引导"><span class="first-run-progress-count">${completedCount}<small>/4</small></span><span class="first-run-progress-copy"><b>首次使用</b><small>${label}</small></span><span class="first-run-progress-bar" aria-hidden="true"><i style="width:${completedCount / 4 * 100}%"></i></span><span class="first-run-progress-step">${current}</span></button>`;
+}
+
 export function shouldOpenFirstRunWizard() {
   return Boolean(window.desktopBridge?.isDesktop) && !readProgress().seen;
 }
 
 function routeTo(route) {
+  const targetStep = routeStep(route);
+  if (targetStep !== null) {
+    step = Math.max(step, targetStep);
+    writeProgress({ currentStep: step });
+  }
   document.getElementById("first-run-dialog")?.close();
+  renderProgressDock();
   window.go?.(route);
 }
 
@@ -95,6 +133,7 @@ function renderBody() {
   if (next) next.textContent = step === STEP_LABELS.length - 1 ? "完成首次设置" : "下一步";
   if (back) back.hidden = step === 0;
   renderRail();
+  renderProgressDock();
 }
 
 async function refreshWizard() {
@@ -106,17 +145,34 @@ export async function openFirstRunWizard({ force = false } = {}) {
   const dialog = document.getElementById("first-run-dialog");
   if (!dialog) return;
   if (!force && !shouldOpenFirstRunWizard()) return;
+  const progress = readProgress();
   writeProgress({ seen: true });
   step = 0;
   dialog.showModal();
   document.getElementById("first-run-body").innerHTML = `<div class="first-run-loading">正在读取本机配置…</div>`;
-  try { await refreshWizard(); } catch { document.getElementById("first-run-body").innerHTML = `<div class="first-run-empty">配置状态暂时无法读取，请直接进入运行与配置中心检查。</div>`; }
+  try {
+    await refreshWizard();
+    step = Math.max(Number(progress.currentStep) || 0, suggestedStep());
+    renderBody();
+  } catch {
+    document.getElementById("first-run-body").innerHTML = `<div class="first-run-empty">配置状态暂时无法读取，请直接进入运行与配置中心检查。</div>`;
+  }
 }
 
 export function bindFirstRunWizard() {
   const dialog = document.getElementById("first-run-dialog");
   if (!dialog || dialog.dataset.bound) return;
   dialog.dataset.bound = "true";
+  renderProgressDock();
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest("[data-first-run-open]")) return;
+    event.preventDefault();
+    openFirstRunWizard({ force: true });
+  });
+  window.addEventListener("focus", () => {
+    if (readProgress().completed) return;
+    refreshWizard().catch(() => {});
+  });
   dialog.addEventListener("click", (event) => {
     const rsshubButton = event.target.closest("[data-first-run-rsshub-action]");
     if (rsshubButton) {
@@ -140,7 +196,8 @@ export function bindFirstRunWizard() {
           const message = document.createElement("small");
           message.className = "first-run-install-error";
           message.textContent = error.message || "RSSHub 安装失败";
-          installButton.parentElement?.appendChild(message);
+          rsshubButton.parentElement?.querySelector(".first-run-install-error")?.remove();
+          rsshubButton.parentElement?.appendChild(message);
         });
       return;
     }
@@ -149,12 +206,12 @@ export function bindFirstRunWizard() {
     const selectedStep = event.target.closest("[data-first-run-step]")?.dataset.firstRunStep;
     if (selectedStep !== undefined) { step = Number(selectedStep); return renderBody(); }
     if (event.target.closest("[data-first-run-next]")) {
-      if (step < STEP_LABELS.length - 1) { step += 1; renderBody(); }
-      else { writeProgress({ completed: true, seen: true }); dialog.close(); }
+      if (step < STEP_LABELS.length - 1) { step += 1; writeProgress({ currentStep: step }); renderBody(); }
+      else { writeProgress({ completed: true, seen: true, currentStep: step }); renderProgressDock(); dialog.close(); }
     }
     if (event.target.closest("[data-first-run-back]") && step > 0) { step -= 1; renderBody(); }
     if (event.target.closest("[data-first-run-later]")) { writeProgress({ seen: true }); dialog.close(); }
   });
-  dialog.addEventListener("close", () => { writeProgress({ seen: true }); });
+  dialog.addEventListener("close", () => { writeProgress({ seen: true }); renderProgressDock(); });
   window.openFirstRunWizard = () => openFirstRunWizard({ force: true });
 }

@@ -6,6 +6,7 @@ import { buildCoverHtml } from '../../../shared/themes/cover-theme-compiler.mjs'
 import { coverSpecFromTheme } from '../../../shared/themes/cover-components.mjs';
 import { validateThemeDefinition } from '../../../shared/themes/theme-validator.mjs';
 import { getSocialCardTemplateCapabilities, resolveSocialCardTemplateContext } from '../../../shared/rendering/social-card-template-resolver.mjs';
+import { DESKTOP_PREVIEW_COLORS as PREVIEW } from '../../../shared/desktop-preview-palette.mjs';
 
 export const ARTICLE_THEME_SPECIMEN=`# 主题样稿：把复杂内容讲清楚
 
@@ -96,7 +97,7 @@ function highlightSelector(target,field=''){
 function previewStyle(target,field){
   const selector=highlightSelector(target,field);
   const highlight=selector?`${selector}{outline:3px solid #E43D30!important;outline-offset:3px!important}`:'';
-  return `<style data-theme-preview-shell>html{background:#d8d6cf}body{margin:0;padding:24px;box-sizing:border-box}${target==='article'?'body>article{max-width:720px;margin:auto;box-shadow:0 10px 30px rgba(0,0,0,.16)}':''}${highlight}</style>`;
+  return `<style data-theme-preview-shell>html{background:${PREVIEW.paperDeep}}body{margin:0;padding:24px;box-sizing:border-box}${target==='article'?'body>article{max-width:720px;margin:auto;box-shadow:0 10px 30px rgba(48,52,59,.12)}':''}${highlight}</style>`;
 }
 
 export function compileThemePreview({target,definition,highlightField=''}){

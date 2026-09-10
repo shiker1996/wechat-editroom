@@ -117,8 +117,13 @@ export function buildArticleReviewIssueReport({ document = {}, artifacts = [], r
     }
   }
 
-  const needsReview = document.status === 'needs_review';
-  const visibleIssues = needsReview ? issues : [];
+  const reviewState = ['unverified', 'running', 'passed', 'needs_review', 'confirmed'].includes(document.review_state)
+    ? document.review_state
+    : document.status === 'needs_review' ? 'needs_review' : document.status === 'finalized' ? 'passed' : 'unverified';
+  const needsReview = reviewState === 'needs_review';
+  const manualConfirmed = reviewState === 'confirmed';
+  // 问题是审核建议，不应因正文保存或重新检查中的短暂状态被清空；只有明确通过的版本隐藏旧问题。
+  const visibleIssues = reviewState === 'passed' ? [] : issues;
   const groups = [...new Set(visibleIssues.map((item) => item.type))].map((type) => ({
     type,
     label: issueLabel(type),
@@ -127,6 +132,9 @@ export function buildArticleReviewIssueReport({ document = {}, artifacts = [], r
   return {
     documentId: document.id ?? null,
     status: document.status || 'unknown',
+    reviewState,
+    reviewPending: !['passed', 'confirmed'].includes(reviewState),
+    manualConfirmed,
     needsReview,
     issueCount: visibleIssues.length,
     issues: visibleIssues,

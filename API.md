@@ -471,6 +471,7 @@ AI 起草（单步）{ provider, instructions, existingDraft }
 排版 { provider, candidateId, mode, theme }
 - `theme` 可选：`auto`、`magazine-warm`（暖纸杂志风）、`gossip-card`（卡片吃瓜风）、`tech-wire`（暗色终端）、`research-report`（财经印刷）、`career-essay`（书信手账）、`news-digest`（黑白快讯）。
 - `auto` 按候选类别和文章形态选择主题；无法识别时回退 `magazine-warm`。
+- 默认按当前模型与阶段路由创建新的运行快照；仅在显式传 `reuseSnapshot:true`（兼容旧参数 `useLatestSkill:false`）时复用该候选最近一次排版快照。
 → 排版预览
 
 ---

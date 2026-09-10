@@ -257,9 +257,13 @@ export async function handleMediaRoutes(context) {
     const daily=input.documentKind==='daily-final';
     const candidate = daily?null:store.getCandidate(Number(input.candidateId));
     if ((!daily&&(!candidate||candidate.batch_id!==batchId))||(daily&&!store.getDocument(batchId,null,'daily-final'))) return json(response, 404, { error: '待排版文稿不存在或不属于当前批次' });
-    const previousSnapshot=input.useLatestSkill===true?null:store.findLatestGenerationSnapshot({
+    // 排版是用户主动发起的交付动作，应默认读取当前模型/阶段路由。
+    // 历史快照会冻结当时的 typeset.design 模型；只有明确要求复用时才恢复，
+    // 否则切换模型后再次点击排版仍会被旧模型接管。
+    const reusePreviousSnapshot=input.reuseSnapshot===true||input.useLatestSkill===false;
+    const previousSnapshot=reusePreviousSnapshot?store.findLatestGenerationSnapshot({
       batchId,candidateId:candidate?.id??null,purposes:['typeset'],
-    });
+    }):null;
     const cdnStatus = getCdnUploadStatus ? await getCdnUploadStatus() : { cdnConfigured:true };
     const imageDeliveryMode = requestedMode === 'local' || (requestedMode === 'auto' && cdnStatus.cdnConfigured === false) ? 'local' : 'cdn';
     return json(response, 202, aiJobs.start({ batchId, candidateId: candidate?.id??null,documentKind:daily?'daily-final':null,
@@ -358,7 +362,7 @@ export async function handleMediaRoutes(context) {
     const filePath = path.join(targetDir, fileName);
     const file = writeUtf8(filePath, String(input.content ?? ''));
     const document = store.saveDocument({ batchId, candidateId: candidate?.id ?? null, kind: input.kind,
-      title: input.title ?? '', content: String(input.content ?? ''), filePath, status: input.status ?? 'draft' });
+      title: input.title ?? '', content: String(input.content ?? ''), filePath, status: input.status ?? 'draft', reviewState: input.reviewState ?? null });
     store.upsertArtifact({ batchId, kind: input.kind.endsWith('final') ? (daily?'早报终稿':'文章终稿') : (daily?'早报初稿':'文章初稿'), name: fileName, path: filePath, ...file });
     store.updateBatch(batchId, { stage: input.kind.endsWith('final') ? 'review' : 'drafting', status: 'running' });
     return json(response, 200, document);

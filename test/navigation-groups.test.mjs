@@ -3,13 +3,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-test('侧栏按六个任务阶段组织并自动展开当前阶段', () => {
+test('侧栏按六个工作区组织并自动展开当前工作区', () => {
   const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
   const main = fs.readFileSync(new URL('../public/src/main.js', import.meta.url), 'utf8');
   const publication = fs.readFileSync(new URL('../public/src/views/publication.js', import.meta.url), 'utf8');
   const styles = readStyles();
   const editorCss = fs.readFileSync(new URL('../public/assets/styles/editor.css', import.meta.url), 'utf8');
-  for (const label of ['今日工作', '发现与研判', '文章生产', '图文生产', '发布与复盘', '资产与审计']) {
+  for (const label of ['今日工作', '采集', '文章生产', '图文生产', '发布', '资产']) {
     assert.match(html, new RegExp(label));
   }
   assert.equal((html.match(/class="nav-group"/g) || []).length, 6);

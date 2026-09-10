@@ -46,25 +46,34 @@ test('桌面壳提供原生菜单、工作区目录和安全的渲染器桥接',
 test('主界面提供桌面侧栏、快捷键和本机工作区提示', () => {
   assert.match(html, /id="rail-toggle"/);
   assert.match(html, /id="desktop-shortcuts-dialog"/);
+  assert.match(html, /id="command-palette-dialog"/);
   assert.match(html, /本机工作区/);
   assert.match(renderer, /jianzhi\.rail-collapsed/);
   assert.match(renderer, /window\.desktopBridge\?\.onCommand/);
+  assert.match(renderer, /bindCommandPalette\(\)/);
+  assert.match(renderer, /commandPaletteItems/);
   assert.doesNotMatch(renderer, /desktopCommandTail/);
   assert.match(renderer, /renderer-dispatch/);
   assert.ok(renderer.indexOf('bindBatchDrawer();') < renderer.indexOf('window.desktopBridge?.ready?.();'));
   assert.ok(renderer.indexOf('window.desktopBridge?.ready?.();') < renderer.indexOf('await init();'));
   assert.match(renderer, /Ctrl\+\/|event\.key === "\/"/);
+  assert.match(renderer, /event\.key\.toLowerCase\(\) === "k"/);
+  assert.match(renderer, /\^\[1-4\]\$/);
 });
 
 test('首次启动向导覆盖模型、采集、文章和图文交付路径', () => {
   assert.match(html, /id="first-run-dialog"/);
+  assert.match(html, /id="first-run-progress"/);
   assert.match(html, /id="first-run-steps"/);
-  assert.match(html, /文章生产/);
-  assert.match(html, /图文生产/);
+  assert.match(html, /id="view-editor"/);
+  assert.match(html, /id="view-social-editor"/);
   assert.match(renderer, /openFirstRunWizard/);
   assert.match(renderer, /command === "onboarding"/);
   assert.match(firstRun, /\/api\/models/);
   assert.match(firstRun, /\/api\/collection-capabilities/);
   assert.match(firstRun, /jianzhi\.first-run-wizard\.v1/);
+  assert.match(firstRun, /data-first-run-open/);
+  assert.match(firstRun, /renderProgressDock/);
+  assert.doesNotMatch(firstRun, /installButton\.parentElement/);
   assert.match(main, /sendDesktopCommand\('onboarding'\)/);
 });
