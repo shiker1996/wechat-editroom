@@ -39,37 +39,19 @@ const mmdcCandidates = [
 ];
 const mmdcCli = mmdcCandidates.find((candidate) => fs.existsSync(candidate)) || '';
 
-// mmdc 自带的 puppeteer 可能找不到它期望的 Chrome 版本；
-// 优先使用 Puppeteer 缓存中的 headless shell，避免 Windows Runner 上系统 Chrome
-// 的自动更新、首次启动检查和已有用户进程影响渲染，再回退到普通 Chrome/系统 Chrome。
-function findChromeExecutable() {
+// mmdc 使用项目根目录的 Puppeteer。优先让同一份 Puppeteer 解析它
+// 自己管理的浏览器，避免共享缓存中存在多个版本时误选旧浏览器。
+async function findChromeExecutable() {
   const explicit = process.env.PUPPETEER_EXECUTABLE_PATH || '';
   if (explicit && fs.existsSync(explicit)) return explicit;
-
-  const cacheRoots = [...new Set([
-    process.env.PUPPETEER_CACHE_DIR || '',
-    path.join(os.homedir(), '.cache', 'puppeteer'),
-  ].filter(Boolean))];
-  const cachedCandidates = [];
-  for (const root of cacheRoots) {
-    const headlessShell = path.join(root, 'chrome-headless-shell');
-    if (fs.existsSync(headlessShell)) {
-      cachedCandidates.push(...fs.readdirSync(headlessShell)
-        .sort()
-        .reverse()
-        .map((version) => path.join(headlessShell, version, 'chrome-headless-shell-win64', 'chrome-headless-shell.exe')));
-    }
-    const chrome = path.join(root, 'chrome');
-    if (fs.existsSync(chrome)) {
-      cachedCandidates.push(...fs.readdirSync(chrome)
-        .sort()
-        .reverse()
-        .map((version) => path.join(chrome, version, 'chrome-win64', 'chrome.exe')));
-    }
+  try {
+    const loaded = await import('puppeteer');
+    const puppeteer = loaded.default ?? loaded;
+    const managed = await puppeteer.executablePath();
+    if (managed && fs.existsSync(managed)) return managed;
+  } catch {
+    // 独立技能包可继续交给 mmdc 自己解析浏览器。
   }
-  const cached = cachedCandidates.find((candidate) => fs.existsSync(candidate));
-  if (cached) return cached;
-
   const programFilesX86 = process.env['ProgramFiles(x86)'] || '';
   return [
     path.join(process.env.PROGRAMFILES || '', 'Google', 'Chrome', 'Application', 'chrome.exe'),
@@ -86,7 +68,7 @@ let result = markdown;
 if (fences.length) {
   fs.mkdirSync(imageDir, { recursive: true });
   if (!mmdcCli) fail(`未找到 @mermaid-js/mermaid-cli（已检查项目本地依赖和 npm 全局目录）。请运行 npm install -D @mermaid-js/mermaid-cli`);
-  const chrome = findChromeExecutable();
+  const chrome = await findChromeExecutable();
   const pptrConfig = path.join(imageDir, '.mmdc-puppeteer-config.json');
   const mermaidConfig = path.join(imageDir, '.mmdc-theme-config.json');
   fs.writeFileSync(mermaidConfig, JSON.stringify(mermaidConfigForTheme(tokens)));

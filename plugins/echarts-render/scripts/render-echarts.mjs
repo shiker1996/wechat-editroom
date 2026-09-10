@@ -50,26 +50,39 @@ function loadEchartsSource() {
   return fs.readFileSync(bundled, 'utf8');
 }
 
-// Puppeteer 可能寻找一个缓存中的精确 Chrome 补丁版本；如果本机已有
-// Chrome，应优先使用可执行文件，避免因 152.0.7977.75/.84 的补丁号差异启动失败。
-function findChromeExecutable() {
+// Puppeteer 可能寻找一个缓存中的精确 Chrome 补丁版本。优先让当前
+// Puppeteer 自己解析它安装/期望的浏览器，避免从共享缓存里按目录名误选旧版本。
+async function findChromeExecutable(puppeteer) {
   const programFilesX86 = process.env['ProgramFiles(x86)'] || '';
   const explicitCandidates = [
     process.env.PUPPETEER_EXECUTABLE_PATH || '',
+  ].filter(Boolean);
+  const explicit = explicitCandidates.find((candidate) => fs.existsSync(candidate));
+  if (explicit) return explicit;
+  try {
+    const managed = await puppeteer.executablePath();
+    if (managed && fs.existsSync(managed)) return managed;
+  } catch {
+    // Older/standalone Puppeteer builds may not expose an executable path.
+  }
+  const systemCandidates = [
     path.join(process.env.PROGRAMFILES || '', 'Google', 'Chrome', 'Application', 'chrome.exe'),
     programFilesX86 ? path.join(programFilesX86, 'Google', 'Chrome', 'Application', 'chrome.exe') : '',
     path.join(process.env.LOCALAPPDATA || '', 'Google', 'Chrome', 'Application', 'chrome.exe'),
   ].filter(Boolean);
-  const explicit = explicitCandidates.find((candidate) => fs.existsSync(candidate));
-  if (explicit) return explicit;
-  const base = path.join(os.homedir(), '.cache', 'puppeteer', 'chrome');
-  if (!fs.existsSync(base)) return '';
-  const versions = fs.readdirSync(base)
-    .map((dir) => path.join(base, dir, 'chrome-win64', 'chrome.exe'))
-    .filter((exe) => fs.existsSync(exe))
-    .sort();
-  return versions.at(-1) || '';
+  return systemCandidates.find((candidate) => fs.existsSync(candidate)) || '';
 }
+
+const BROWSER_ARGS = [
+  '--no-sandbox',
+  '--disable-setuid-sandbox',
+  '--disable-gpu',
+  '--disable-dev-shm-usage',
+  '--disable-extensions',
+  '--no-first-run',
+  '--no-default-browser-check',
+  '--disable-background-networking',
+];
 
 const FENCE_RE = /```echarts\b[^\n]*\r?\n([\s\S]*?)```/gi;
 const MAX_OPTION_CHARS = 200_000;
@@ -83,14 +96,23 @@ if (fences.length) {
   fs.mkdirSync(imageDir, { recursive: true });
   const puppeteer = await loadPuppeteer();
   const echartsSource = loadEchartsSource();
-  const chrome = findChromeExecutable();
+  const chrome = await findChromeExecutable(puppeteer);
   // Chrome 启动偶发崩溃（尤其多进程并发时），失败后重试一次。
   let browser = null;
   for (let attempt = 0; attempt < 2 && !browser; attempt += 1) {
+    const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wechat-echarts-chrome-'));
     try {
-      browser = await puppeteer.launch({ headless: 'new', ...(chrome ? { executablePath: chrome } : {}), args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+      browser = await puppeteer.launch({
+        headless: 'new',
+        ...(chrome ? { executablePath: chrome } : {}),
+        userDataDir,
+        timeout: 45000,
+        args: BROWSER_ARGS,
+      });
     } catch (error) {
-      if (attempt === 1 || !/Failed to launch the browser/i.test(String(error.message))) throw error;
+      fs.rmSync(userDataDir, { recursive: true, force: true });
+      const details = String(error?.stack || error?.message || error);
+      if (attempt === 1 || !/Failed to launch the browser|Timed out after \d+ ms while waiting for the WS endpoint URL|TimeoutError/i.test(details)) throw error;
     }
   }
   try {
@@ -133,6 +155,10 @@ if (fences.length) {
     }
   } finally {
     await browser.close();
+    if (browser?.process()?.spawnargs) {
+      const profileArg = browser.process().spawnargs.find((arg) => arg.startsWith('--user-data-dir='));
+      if (profileArg) fs.rmSync(profileArg.slice('--user-data-dir='.length), { recursive: true, force: true });
+    }
   }
 }
 
