@@ -204,9 +204,9 @@ export async function installRsshub(config = {}, options = {}) {
     if (fs.existsSync(path.join(rootDir, 'pnpm-lock.yaml')) && !pnpm) {
       throw new Error('RSSHub 需要 pnpm，但应用内未找到 pnpm 运行时');
     }
+    const manager = pnpm || npm;
     if (!manager) throw new Error('RSSHub 需要 npm，但应用内未找到 npm 运行时');
     onProgress?.('正在安装 RSSHub 依赖，这一步可能需要几分钟');
-    const manager = pnpm || npm;
     const installArgs = pnpm
       ? ['install', '--frozen-lockfile', '--ignore-scripts', '--config.package-manager-strict=false']
       : [fs.existsSync(path.join(rootDir, 'package-lock.json')) ? 'ci' : 'install', '--ignore-scripts', '--legacy-peer-deps', '--no-audit', '--no-fund'];

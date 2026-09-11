@@ -62,3 +62,12 @@ test('RSSHub 启停脚本不依赖 OpenClaw 或机器绝对路径', () => {
   assert.doesNotMatch(installer, /ComSpec|cmd\.exe|\/c/);
   assert.match(installer, /spawn\(command, args/);
 });
+
+test('RSSHub 安装器先解析依赖管理器再检查其存在', () => {
+  const projectRoot=path.resolve(path.dirname(new URL(import.meta.url).pathname.slice(1)),'..');
+  const installer=fs.readFileSync(path.join(projectRoot,'server','platform','integrations','rsshub-installer.mjs'),'utf8');
+  const managerDeclaration=installer.indexOf('const manager = pnpm || npm;');
+  const managerGuard=installer.indexOf('if (!manager)');
+  assert.ok(managerDeclaration >= 0);
+  assert.ok(managerGuard > managerDeclaration);
+});
