@@ -22,7 +22,7 @@ export async function handleBatchRoutes({ request, response, pathname, searchPar
   if (request.method === 'POST' && pathname === '/api/batches') {
     const input = await body(request);
     const date = /^\d{4}-\d{2}-\d{2}$/.test(input.date ?? '') ? input.date : new Date().toISOString().slice(0, 10);
-    return respond(json, response, 201, store.createBatch({ date, title: input.title || `${date} 每日选题`, note: input.note }));
+    return respond(json, response, 201, store.createBatch({ date, title: input.title, note: input.note }));
   }
   if (request.method === 'POST' && pathname === '/api/batches/breaking') {
     const input = await body(request);

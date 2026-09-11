@@ -61,6 +61,7 @@ import { createRequestHarnessGateway, resolveSkillToolPolicy } from '../../skill
 import { buildRunInput, readRunInputDownload } from '../../agent/run-input.mjs';
 import { runEditorialAgentTurn } from '../../../features/articles/application/agent/editorial-adapter.mjs';
 import { extractLocalProjectPath } from '../../integrations/local-project-reader.mjs';
+import { getAccountContext, isAccountContextConfigured, saveAccountContext } from '../../../shared/domain/account-context.mjs';
 
 function skillsUsingCapabilities(root, capabilities) {
   const expected=new Set(capabilities);
@@ -140,6 +141,22 @@ export async function handleSystemRoutes(context) {
     json(response,400,{error:`能力未登记，不得${action}：${unregistered.join('、')}。请先在能力目录（config/capabilities.json）补充条目`,code:'CAPABILITY_NOT_REGISTERED',capabilities:unregistered});
     return true;
   };
+
+  if (request.method === 'GET' && pathname === '/api/system/account-context') {
+    const context = getAccountContext({ workspaceRoot: root, refresh: true });
+    const configured = isAccountContextConfigured(context, { workspaceRoot: root });
+    json(response, 200, { configured, context: configured ? context : {}, file: 'account-context.json' });
+    return true;
+  }
+  if (request.method === 'PUT' && pathname === '/api/system/account-context') {
+    try {
+      const context = saveAccountContext(await body(request), { workspaceRoot: root });
+      json(response, 200, { configured: true, context, file: 'account-context.json' });
+    } catch (error) {
+      json(response, 400, { error: error.message });
+    }
+    return true;
+  }
 
   if (request.method === 'POST' && pathname === '/api/system/cache/clear') {
     const input = await body(request);

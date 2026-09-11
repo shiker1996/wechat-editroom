@@ -13,8 +13,13 @@ export function applyWorkbenchSchema(db) {
         lifecycle_status TEXT NOT NULL DEFAULT 'active',
         stage TEXT NOT NULL DEFAULT 'collect',
         note TEXT NOT NULL DEFAULT '',
+        daily_sequence INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS batch_daily_sequences (
+        batch_date TEXT PRIMARY KEY,
+        next_sequence INTEGER NOT NULL DEFAULT 1
       );
       CREATE TABLE IF NOT EXISTS source_runs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -770,6 +775,25 @@ export function applyWorkbenchSchema(db) {
     if(!socialTemplateMetricColumns.has('hard_gate_failure'))db.exec('ALTER TABLE social_template_metrics ADD COLUMN hard_gate_failure INTEGER NOT NULL DEFAULT 0');
     const batchColumns=new Set(db.prepare('PRAGMA table_info(batches)').all().map((column)=>column.name));
     if(!batchColumns.has('batch_type'))db.exec("ALTER TABLE batches ADD COLUMN batch_type TEXT NOT NULL DEFAULT 'regular'");
+    if(!batchColumns.has('daily_sequence'))db.exec('ALTER TABLE batches ADD COLUMN daily_sequence INTEGER NOT NULL DEFAULT 0');
+    db.exec(`CREATE TABLE IF NOT EXISTS batch_daily_sequences (
+      batch_date TEXT PRIMARY KEY,
+      next_sequence INTEGER NOT NULL DEFAULT 1
+    )`);
+    // 为没有序号的历史批次建立稳定的当天序号；之后的序号由计数表单调分配，删除/归档不会复用。
+    const legacyBatchRows=db.prepare(`SELECT id,batch_date FROM batches WHERE daily_sequence=0 ORDER BY batch_date ASC,created_at ASC,id ASC`).all();
+    const sequenceByDate=new Map();
+    for(const row of legacyBatchRows){
+      const next=(sequenceByDate.get(row.batch_date)||Number(db.prepare('SELECT COALESCE(MAX(daily_sequence),0) AS max_sequence FROM batches WHERE batch_date=?').get(row.batch_date)?.max_sequence||0))+1;
+      sequenceByDate.set(row.batch_date,next);
+      db.prepare('UPDATE batches SET daily_sequence=? WHERE id=?').run(next,row.id);
+    }
+    const sequenceDates=db.prepare('SELECT batch_date,COALESCE(MAX(daily_sequence),0) AS max_sequence FROM batches GROUP BY batch_date').all();
+    const upsertSequence=db.prepare(`INSERT INTO batch_daily_sequences(batch_date,next_sequence) VALUES(?,?)
+      ON CONFLICT(batch_date) DO UPDATE SET next_sequence=MAX(batch_daily_sequences.next_sequence,excluded.next_sequence)`);
+    for(const row of sequenceDates)upsertSequence.run(row.batch_date,Number(row.max_sequence||0)+1);
+    // 0 表示仍未完成编号的外部/旧写入，允许多个旧行共存；正式序号必须按天唯一。
+    db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_batches_date_sequence ON batches(batch_date,daily_sequence) WHERE daily_sequence > 0');
     const modelCallColumns=new Set(db.prepare('PRAGMA table_info(model_calls)').all().map((column)=>column.name));
     if(!modelCallColumns.has('generation_snapshot_id'))db.exec('ALTER TABLE model_calls ADD COLUMN generation_snapshot_id INTEGER');
     if(!modelCallColumns.has('agent_run_id'))db.exec('ALTER TABLE model_calls ADD COLUMN agent_run_id TEXT');
