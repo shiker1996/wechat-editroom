@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { tagBatch, buildTaggingInput, normalizeEventPart, normalizeEventParts, normalizeActionType, deriveEventKey } from '../server/features/research/llm/tasks.mjs';
 
 test('eventParts 规范化为小写无标点形式，缺 who/what 时返回 null', () => {
@@ -64,6 +67,38 @@ test('打标输入注入 RSS 摘要并截断，无摘要时不携带该字段', 
   assert.equal(long.summary.length, 500);
   const none = buildTaggingInput({ id:3, source:'reddit', title:'t', url:'https://example.com/3', raw_json: '{}' });
   assert.equal('summary' in none, false);
+});
+
+test('热点打标提示词注入当前账号上下文并约束受众判断', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tagging-account-context-'));
+  try {
+    fs.writeFileSync(path.join(root, 'account-context.json'), JSON.stringify({
+      name: '测试园艺账号',
+      readerProfile: '城市园艺爱好者和社区组织者',
+      contentPillars: ['城市种植：阳台与社区实践'],
+      notificationPolicy: { readerStakes: ['时间', '空间'] },
+    }));
+    const hotspots = [{ id: 1, title: '社会热点', source: 'rsshub', url: 'https://example.com/1', raw_json: '{}' }];
+    const store = {
+      getBatch() { return { hotspots }; },
+      updateModelCall() {},
+      updateHotspotTags() {},
+    };
+    let systemPrompt = '';
+    const gateway = {
+      config: { defaultProvider: 'deepseek', providers: { deepseek: { maxOutputTokens: 8192, taggingChunkSize: 1 } } },
+      async complete(input) {
+        systemPrompt = input.messages[0].content;
+        return { callId: 1, content: JSON.stringify({ items: [{ id: 1, eventKey: '主体|动作', preScores: { audience: 1 } }] }), finishReason: 'stop', model: 'test', context: {}, usage: {} };
+      },
+    };
+    await tagBatch({ gateway, store, batchId: 'b1', provider: 'deepseek', workspaceRoot: root });
+    assert.match(systemPrompt, /测试园艺账号/);
+    assert.match(systemPrompt, /城市园艺爱好者和社区组织者/);
+    assert.doesNotMatch(systemPrompt, /国内科技\/互联网\/职场公众号/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('打标 JSON 截断时标记 invalid_output 并自动拆分重试', async () => {

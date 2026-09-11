@@ -2,6 +2,17 @@ import { isFreshForBatch } from '../index.mjs';
 import { isResearchEligibleHotspot } from '../domain/hotspot-pipeline-scope.mjs';
 import { selectionPrompt } from './selection-prompts.mjs';
 import { parseModelJson } from '../../../platform/llm/model-json.mjs';
+import { formatAccountContext } from '../../../shared/domain/account-context.mjs';
+
+function accountAwareTagPrompt({ basePrompt, workspaceRoot }) {
+  const accountContext = formatAccountContext({ workspaceRoot });
+  return `${basePrompt}
+
+## 当前账号上下文
+以下是账号配置，不是新闻事实。受众相关度和相关理由必须依据这份配置判断；不得据此补写事件信息，也不得为了迎合账号定位修改事件本身的分类。
+${accountContext}
+- 仍然只使用输入的标题、摘要、来源、链接、发布时间和元数据作事件证据；账号上下文只决定“与谁相关”，不提供新闻事实。`;
+}
 
 function hasResearchTags(item) {
   try {
@@ -76,7 +87,8 @@ export function buildTaggingInput({ id, source, source_group, source_type, sourc
 }
 
 export async function tagBatch({ gateway, store, batchId, provider, limit, hotspotIds = null, force = false, maxAgeHours = 168, workspaceRoot, runId = null, onProgress = () => {} }) {
-  const { prompt: tagSystem } = selectionPrompt({ workspaceRoot, skillName: 'hotspot-tagging' });
+  const { prompt: baseTagSystem } = selectionPrompt({ workspaceRoot, skillName: 'hotspot-tagging' });
+  const tagSystem = accountAwareTagPrompt({ basePrompt: baseTagSystem, workspaceRoot });
   const batch = store.getBatch(batchId);
   if (!batch) throw new Error('批次不存在');
   // 超过有效时间窗口的旧闻不会进入研判，打标纯属浪费 token，直接跳过（仍保留在批次档案中）

@@ -127,22 +127,21 @@ function builtInQueries(maxQueries = 6) {
 }
 
 function accountInterestText(accountContext) {
-  const pillars = (accountContext?.contentPillars || []).map((p, i) => `${i + 1}. ${p}`).join('\n');
-  return `- 账号：${accountContext?.name || ''}（${accountContext?.description || ''}）
-- 核心读者：${accountContext?.readerProfile || ''}
-- 内容支柱：\n${pillars}`;
+  return `## 账号上下文
+以下配置决定账号相关度和查询方向，不是仓库或新闻事实；不得自行补充账号没有提供的行业、读者或内容偏好。
+${JSON.stringify(accountContext || {}, null, 2)}`;
 }
 
 export async function planRepoDiscoveryQueries({ workspaceRoot, gateway, accountContext, refreshDays = 7, maxQueries = 6, provider = '', log = () => {} }) {
   const cached = loadCachedQueries(workspaceRoot, refreshDays);
   if (cached) return cached;
   if (!gateway) return { queries: builtInQueries(maxQueries), generatedAt: null, cached: false, fallback: true };
-  const system = `你是技术公众号的开源选题策划。根据账号内容支柱与读者画像，设计 GitHub Search 查询组，用于发现最近活跃、值得公众号写成实操/解读图文的开源项目。
+  const system = `你是开源项目选题策划。根据调用方提供的账号上下文与读者画像，设计 GitHub Search 查询组，用于发现最近活跃、值得该账号继续加工的开源项目。
 要求：
-- 输出 3~${maxQueries} 组查询，优先覆盖具体工作场景：文件/PDF、终端/远程开发、浏览器自动化、数据库/可观测性、开发者效率、隐私本地化、可复用组件、Skill/Workflow；至少 60% 查询组不得以 AI 为中心；
-- 至少 1 组覆盖组件、插件、Library 或 SDK，至少 1 组覆盖 Skill、Workflow 或自动化；Agent 相关查询最多 1 组且必须绑定具体工作结果；
+- 输出 3~${maxQueries} 组查询，覆盖账号内容支柱对应的具体读者场景；不要自行假定账号所属行业、读者职业或内容偏好；
+- 查询应优先描述可核验的使用场景和直接结果，避免只围绕热门名词扩展；
 - query 字段只写 GitHub Search 的关键词部分（可含 topic: 限定符），不要写 stars:/created:/fork: 等限定符，系统会统一追加；
-- 禁止单独使用 llm、agent、ai、prompt、framework、cli、rust、kubernetes 等宽泛词作为 query；每组必须说明读者使用后的直接结果；
+- 禁止单独使用宽泛词作为 query；每组必须说明账号核心读者使用后的直接结果；
 - minStars 按领域热度给 50~1000，小众方向放低、大众方向放高；
 - 返回严格 JSON：{"queries":[{"label":"方向名（10 字内）","lane":"场景组","query":"关键词","projectTypes":["tool|component|plugin-extension|skill-workflow|data-content|infrastructure|ai-utility|agent"],"directUseCase":"直接结果","searchMode":"new|active|evergreen","language":"可选，留空表示不限","createdWithinDays":30到90,"activityWindowDays":30到180,"minStars":数字}]}`;
   const user = accountInterestText(accountContext);
@@ -172,9 +171,10 @@ const INTEREST_CONCURRENCY = 4;
 export async function filterRepositoriesByInterest({ gateway, accountContext, repos, threshold = 6, provider = '', log = () => {}, chunkSize = INTEREST_CHUNK_SIZE, concurrency = INTEREST_CONCURRENCY }) {
   const list = (repos || []).filter((repo) => repo?.repository);
   if (!list.length || !gateway) return repos || [];
-  const system = `你是技术公众号的选题编辑。按"核心读者是否会想读一篇该仓库的实操/解读图文"为每个仓库打 0~10 分，并给一句 20 字内的中文理由。
-评分锚点：9-10 分=读者会立刻想试用且能解决具体工作问题的工具；7-8 分=与内容支柱强相关并有明确输入输出；5-6 分=相关但受众窄或同质严重；0-4 分=与账号定位基本无关。
-纯 Agent、Agent Framework、Agent 优化或只讲模型编排的项目，除非绑定具体工作场景并提供可运行结果，否则最高 5 分；AI PDF、代码审查、浏览器自动化、知识库和终端工具等实用型 AI 项目不因使用 AI 被降权。
+  const system = `你是开源项目选题编辑。按"账号核心读者是否会想继续了解或使用该仓库"为每个仓库打 0~10 分，并给一句 20 字内的中文理由。
+评分必须以调用方提供的账号上下文为唯一账号相关依据：结合读者画像、内容支柱、分发策略和读者利益判断；不要自行假定固定行业或职业。
+评分锚点：9-10 分=与账号支柱高度匹配，并能给核心读者带来明确、可验证的结果；7-8 分=有清晰连接和输入输出，但价值或适用范围有限；5-6 分=存在弱连接、受众窄或同质严重；0-4 分=与账号定位基本无关。
+项目类型、技术栈或模型标签本身不加分；只有在账号上下文允许的情况下，具体场景和可验证结果才可提高分数。
 返回严格 JSON：{"results":[{"repository":"owner/name","score":数字,"reason":"理由"}]}，必须覆盖全部输入仓库。`;
   const batches = [];
   for (let index = 0; index < list.length; index += Math.max(1, chunkSize)) batches.push(list.slice(index, index + chunkSize));
