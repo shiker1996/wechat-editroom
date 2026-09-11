@@ -392,14 +392,16 @@ export class WorkbenchQueryService {
     const runDetailCols = 'root_run_id, workflow_run_id, agent_run_id, stage_id';
     const modelDetailCols = `${runDetailCols}, model, output_text, reasoning_text, tool_calls_json, prompt_tokens, completion_tokens, reasoning_tokens, estimated_input_tokens, latency_ms, compressed, output_budget_json, generation_snapshot_id`;
     const nullDetailCols = modelDetailCols.split(', ').map((col) => `NULL AS ${col}`).join(', ');
-    if (!logType || logType === 'collection') queries.push(`SELECT 'collection' AS log_type, id, batch_id, 'collection' AS subtype, provider, status, COALESCE(error,'') AS message, COALESCE(finished_at,started_at) AS ts, root_run_id, workflow_run_id, id AS agent_run_id, stage_id, ${nullDetailCols.split(', ').slice(4).join(', ')} FROM agent_runs WHERE entry_point='collection' AND id=root_run_id`);
-    if (!logType || logType === 'ai') queries.push(`SELECT 'ai' AS log_type, CAST(ai_runs.id AS TEXT) AS id, ai_runs.batch_id, ai_runs.type AS subtype, ai_runs.provider, ai_runs.status, COALESCE(ai_runs.error,ai_runs.progress) AS message, ai_runs.created_at AS ts, ar.root_run_id, ar.workflow_run_id, ar.id AS agent_run_id, ar.stage_id, ${nullDetailCols.split(', ').slice(4).join(', ')} FROM ai_runs LEFT JOIN agent_runs ar ON ar.id='job:' || CAST(ai_runs.id AS TEXT)`);
-    if (logType === 'source') queries.push(`SELECT 'source' AS log_type, CAST(id AS TEXT) AS id, batch_id, source AS subtype, source AS provider, status, COALESCE(error,'') AS message, ended_at AS ts, root_run_id, workflow_run_id, NULL AS agent_run_id, stage_id, ${nullDetailCols.split(', ').slice(4).join(', ')} FROM source_runs`);
-    if (!logType || logType === 'model') queries.push(`SELECT 'model' AS log_type, CAST(id AS TEXT) AS id, COALESCE(batch_id,'') AS batch_id, purpose AS subtype, provider, status, COALESCE(error,'') AS message, created_at AS ts, ${modelDetailCols} FROM model_calls`);
+    if (!logType || logType === 'collection') queries.push(`SELECT 'collection' AS log_type, id, batch_id, 'collection' AS subtype, provider, status, COALESCE(error,'') AS message, COALESCE(finished_at,started_at) AS ts, root_run_id, workflow_run_id, id AS agent_run_id, stage_id, NULL AS workflow_status, ${nullDetailCols.split(', ').slice(4).join(', ')} FROM agent_runs WHERE entry_point='collection' AND id=root_run_id`);
+    if (!logType || logType === 'ai') queries.push(`SELECT 'ai' AS log_type, CAST(ai_runs.id AS TEXT) AS id, ai_runs.batch_id, ai_runs.type AS subtype, ai_runs.provider, ai_runs.status, COALESCE(ai_runs.error,ai_runs.progress) AS message, ai_runs.created_at AS ts, ar.root_run_id, ar.workflow_run_id, ar.id AS agent_run_id, ar.stage_id, ar.status AS workflow_status, ${nullDetailCols.split(', ').slice(4).join(', ')} FROM ai_runs LEFT JOIN agent_runs ar ON ar.id='job:' || CAST(ai_runs.id AS TEXT)`);
+    if (logType === 'source') queries.push(`SELECT 'source' AS log_type, CAST(id AS TEXT) AS id, batch_id, source AS subtype, source AS provider, status, COALESCE(error,'') AS message, ended_at AS ts, root_run_id, workflow_run_id, NULL AS agent_run_id, stage_id, NULL AS workflow_status, ${nullDetailCols.split(', ').slice(4).join(', ')} FROM source_runs`);
+    if (!logType || logType === 'model') queries.push(`SELECT 'model' AS log_type, CAST(id AS TEXT) AS id, COALESCE(batch_id,'') AS batch_id, purpose AS subtype, provider, status, COALESCE(error,'') AS message, created_at AS ts, NULL AS workflow_status, ${modelDetailCols} FROM model_calls`);
     if (!queries.length) return [];
     const rows=this.db.prepare(`${queries.join(' UNION ALL ')} ORDER BY ts DESC LIMIT ?`).all(limit);
     const traceStatuses = new Map();
     const withWorkflowStatus = (row) => {
+      // AI 列表只需要任务状态；完整 Workflow Trace 由详情接口按需加载。
+      if (row.log_type === 'ai') return row;
       const rootRunId = String(row.root_run_id || '').trim();
       if (!rootRunId) return row;
       if (!traceStatuses.has(rootRunId)) {
@@ -408,7 +410,12 @@ export class WorkbenchQueryService {
         traceStatuses.set(rootRunId, status);
       }
       const workflowStatus = traceStatuses.get(rootRunId);
-      return workflowStatus ? { ...row, status: workflowStatus, workflow_status: workflowStatus } : row;
+      if (!workflowStatus) return row;
+      // AI 任务卡片的主状态以 ai_runs 为准；agent_runs 是执行追踪状态，
+      // 重启恢复期间可能短暂滞后，不能把已中断的 AI 任务重新显示成运行中。
+      return row.log_type === 'ai'
+        ? { ...row, workflow_status: workflowStatus }
+        : { ...row, status: workflowStatus, workflow_status: workflowStatus };
     };
     if(!rows.some((row)=>row.log_type==='model'))return rows.map(withWorkflowStatus);
     const connections=new Map();

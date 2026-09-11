@@ -482,10 +482,11 @@ async function pollJobNotifications() {
     for (const job of jobs) {
       const previous = jobNoticeState.get(job.id);
       jobNoticeState.set(job.id, job.status);
-      if (!previous || previous === job.status || !["completed", "failed", "interrupted"].includes(job.status)) continue;
+      if (!previous || previous === job.status || !["completed", "failed", "interrupted", "cancelled"].includes(job.status)) continue;
       const labels = { tag: "打标", retag: "重新打标", research: "事件研判", article: "成稿", daily: "批次早报", tutorial: "教程成稿", typeset: "排版", "social-card": "图文生成", "cover-image": "封面图生成" };
       const label = job.run_kind === "source" ? `来源采集 · ${job.type || "source"}` : (labels[job.type] || job.type || "后台任务");
-      toast(job.status === "completed" ? `${label}任务已完成` : `${label}任务${job.status === "interrupted" ? "已中断" : "失败"}${job.error ? `：${job.error}` : ""}`, job.status === "completed" ? "success" : "error");
+      const statusText = job.status === "completed" ? "已完成" : job.status === "interrupted" ? "已中断" : job.status === "cancelled" ? "已取消" : "失败";
+      toast(`${label}任务${statusText}${job.error && job.status !== "cancelled" ? `：${job.error}` : ""}`, job.status === "completed" ? "success" : job.status === "cancelled" ? "" : "error");
     }
     // 定期清理：只保留最近一轮仍返回的任务，避免 Map 无限增长
     const activeIds = new Set(jobs.map((job) => job.id));

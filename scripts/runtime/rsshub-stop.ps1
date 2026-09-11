@@ -1,10 +1,26 @@
 param(
     [string]$PidFile = "",
-    [int]$Port = 1200
+    [int]$Port = 0
 )
 
 $projectRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
-if ([string]::IsNullOrWhiteSpace($PidFile)) { $PidFile = Join-Path $projectRoot "data\rsshub.pid" }
+function Read-LocalConfig {
+    $configPath = Join-Path $projectRoot "config.local.json"
+    if (-not (Test-Path -LiteralPath $configPath -PathType Leaf)) { return $null }
+    try { return (Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json) } catch { return $null }
+}
+$localConfig = Read-LocalConfig
+if ([string]::IsNullOrWhiteSpace($PidFile)) {
+    $configuredPid = [string]$localConfig.rsshub.pidFile
+    if ([string]::IsNullOrWhiteSpace($configuredPid)) { $configuredPid = "data\rsshub.pid" }
+    $PidFile = if ([System.IO.Path]::IsPathRooted($configuredPid)) { $configuredPid } else { Join-Path $projectRoot $configuredPid }
+}
+if ($Port -le 0) {
+    $baseUrl = [string]$localConfig.rsshub.baseUrl
+    $parsedPort = 0
+    if ($baseUrl) { try { $parsedPort = ([System.Uri]$baseUrl).Port } catch { $parsedPort = 0 } }
+    $Port = if ($parsedPort -gt 0) { $parsedPort } else { 1200 }
+}
 $PidFile = [System.IO.Path]::GetFullPath($PidFile)
 $stopped = $false
 

@@ -6,18 +6,30 @@ import readline from 'node:readline/promises';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
+function configuredRsshubRoot(root) {
+  const configPath = path.join(root, 'config.local.json');
+  let configured = 'RSSHub';
+  try {
+    const local = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    if (typeof local?.rsshub?.rootDir === 'string' && local.rsshub.rootDir.trim()) configured = local.rsshub.rootDir.trim();
+  } catch { /* config.local.json 的合法性由最终环境检测报告 */ }
+  return path.isAbsolute(configured) ? path.resolve(configured) : path.resolve(root, configured);
+}
+
 // 汇总各项安装状态：done 跳过 / pending 待处理 / optional-missing 可选缺失。
 export function inspectSetup(root) {
   const hasDeps = fs.existsSync(path.join(root, 'node_modules', 'markdown-it'));
   const configPath = path.join(root, 'config.local.json');
   const hasConfig = fs.existsSync(configPath);
-  const rsshubCloned = fs.existsSync(path.join(root, 'RSSHub', 'lib'));
+  const rsshubRoot = configuredRsshubRoot(root);
+  const rsshubCloned = fs.existsSync(path.join(rsshubRoot, 'lib'));
   // 与 scripts/runtime/rsshub-start.ps1 的运行前提一致：本地 tsx 运行时存在才算就绪。
-  const rsshubReady = rsshubCloned && fs.existsSync(path.join(root, 'RSSHub', 'node_modules', 'tsx', 'dist', 'cli.mjs'));
+  const rsshubReady = rsshubCloned && fs.existsSync(path.join(rsshubRoot, 'node_modules', 'tsx', 'dist', 'cli.mjs'));
   return {
     nodeOk: Number(process.versions.node.split('.')[0]) >= 24,
     deps: hasDeps ? 'done' : 'pending',
     config: hasConfig ? 'done' : 'pending',
+    rsshubRoot,
     rsshub: rsshubReady ? 'done' : rsshubCloned ? 'deps-missing' : 'optional-missing',
   };
 }
@@ -58,14 +70,14 @@ async function main() {
   // eslint 10 与 eslint-nibble 的 peer 声明冲突，统一加 --legacy-peer-deps。
   const installRsshubDeps = () => {
     console.log('  安装 RSSHub 依赖（首次约数分钟）……');
-    const install = spawnSync('npm', ['install', '--legacy-peer-deps'], { cwd: path.join(root, 'RSSHub'), stdio: 'inherit', shell: process.platform === 'win32' });
-    if (install.status !== 0) console.error('  [警告] RSSHub 依赖安装失败，可稍后进入 RSSHub/ 目录手动执行 npm install --legacy-peer-deps。');
+    const install = spawnSync('npm', ['install', '--legacy-peer-deps'], { cwd: status.rsshubRoot, stdio: 'inherit', shell: process.platform === 'win32' });
+    if (install.status !== 0) console.error(`  [警告] RSSHub 依赖安装失败，可稍后进入 ${status.rsshubRoot} 目录手动执行 npm install --legacy-peer-deps。`);
     else console.log('  RSSHub 已就位。');
   };
   if (status.rsshub === 'deps-missing') {
     console.log('\n[3/3] RSSHub 目录已克隆，但依赖未安装，热点采集功能不可用（可选）。');
     if (await confirm('  现在安装 RSSHub 依赖？(Y/n) ')) installRsshubDeps();
-    else console.log('  已跳过。需要时可重跑本向导，或进入 RSSHub/ 目录执行 npm install --legacy-peer-deps。');
+    else console.log(`  已跳过。需要时可重跑本向导，或进入 ${status.rsshubRoot} 目录执行 npm install --legacy-peer-deps。`);
   } else if (status.rsshub === 'optional-missing') {
     console.log('\n[3/3] 未找到 RSSHub 目录，热点采集功能不可用（可选）。');
     if (await confirm('  现在从 GitHub 克隆 RSSHub 并安装依赖？(Y/n) ')) {
@@ -73,7 +85,8 @@ async function main() {
       if (gitCheck.status !== 0) {
         console.log('  未找到 git，无法自动克隆。请安装 git 后重跑本向导，或手动克隆 https://github.com/DIYgod/RSSHub 到 RSSHub/ 目录。');
       } else {
-        const clone = spawnSync('git', ['clone', '--depth', '1', 'https://github.com/DIYgod/RSSHub.git', 'RSSHub'], { cwd: root, stdio: 'inherit', shell: process.platform === 'win32' });
+        fs.mkdirSync(path.dirname(status.rsshubRoot), { recursive: true });
+        const clone = spawnSync('git', ['clone', '--depth', '1', 'https://github.com/DIYgod/RSSHub.git', status.rsshubRoot], { cwd: root, stdio: 'inherit', shell: process.platform === 'win32' });
         if (clone.status !== 0) {
           console.error('  [警告] RSSHub 克隆失败（网络原因可稍后重跑本向导，幂等）。');
         } else {

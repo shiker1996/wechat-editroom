@@ -146,3 +146,24 @@ test('队列头部被同互斥键阻塞时，后续无冲突任务可先行', as
     assert.equal(mgr.pending.length, 0);
   } finally { teardown(ctx); }
 });
+
+test('排队中的 AI 任务可以取消且不会被调度执行', async () => {
+  const ctx = setup();
+  try {
+    const { batch, candidates } = makeCandidates(ctx.store, 2);
+    const mgr = ctx.manager(1);
+    const first = mgr.start({ batchId: batch.id, candidateId: candidates[0].id, type: 'social-card' });
+    const queued = mgr.start({ batchId: batch.id, candidateId: candidates[1].id, type: 'social-card' });
+    assert.equal(first.status, 'running');
+    assert.equal(queued.status, 'queued');
+
+    const result = mgr.cancel(queued.id);
+    assert.equal(result.ok, true);
+    assert.equal(mgr.get(queued.id).status, 'cancelled');
+    assert.equal(ctx.store.getAiRun(queued.id).status, 'cancelled');
+    assert.equal(mgr.pending.includes(queued.id), false);
+
+    await settle(120);
+    assert.equal(mgr.get(queued.id).status, 'cancelled');
+  } finally { teardown(ctx); }
+});

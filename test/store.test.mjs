@@ -405,10 +405,12 @@ test('单源健康状态持久化且重启恢复悬空任务', () => {
     store.updateBatch(batch.id,{status:'running'});
     const sourceRunId=store.startSourceRun(batch.id,'rsshub');
     store.createAiRun({id:'ai-running',batchId:batch.id,type:'tag',provider:'deepseek'});
+    store.startAgentRun({id:'job:ai-running',entryPoint:'batch-job:tag',batchId:batch.id,provider:'deepseek',rootRunId:'job:ai-running',workflowRunId:'job:ai-running',stageId:'job'});
     store.recordSubscriptionRun(batch.id,{sourceGroup:'rsshub',sourceType:'twitter',sourceKey:'twitter:/twitter/user/OpenAI',sourceName:'@OpenAI',status:'running',startedAt:'2026-07-19T00:00:00.000Z'});
     const recovered=store.recoverInterruptedWork();
     assert.deepEqual(recovered,{aiRuns:1,sourceRuns:1,subscriptionRuns:1,batches:1});
     assert.equal(store.getAiRun('ai-running').status,'interrupted');
+    assert.equal(store.getAgentRun('job:ai-running').status,'interrupted');
     assert.equal(store.getBatch(batch.id).sources.find((item)=>item.id===sourceRunId).status,'interrupted');
     assert.equal(store.listSubscriptionHealth()[0].status,'interrupted');
     assert.equal(store.getSourceRun(sourceRunId).status,'interrupted');

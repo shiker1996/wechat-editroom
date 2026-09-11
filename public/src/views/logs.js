@@ -531,6 +531,16 @@ function bindLogs() {
   });
   document.getElementById("log-governance-save")?.addEventListener("click", () => saveLogGovernance().catch((error) => toast(error.message, "error")));
   document.getElementById("log-list").addEventListener("click", (event) => {
+    const cancelButton = event.target.closest("[data-cancel-ai-job]");
+    if (cancelButton) {
+      event.preventDefault();
+      if (!window.confirm("确认取消这个排队中的 AI 任务？")) return;
+      cancelButton.disabled = true;
+      request(`/api/jobs/${encodeURIComponent(cancelButton.dataset.cancelAiJob)}/cancel`, { method: "POST", body: "{}" })
+        .then(() => { toast("排队任务已取消"); return loadLogs(currentLogType); })
+        .catch((error) => { cancelButton.disabled = false; toast(error.message, "error"); });
+      return;
+    }
     const button = event.target.closest("[data-open-run-trace]");
     if (!button) return;
     event.preventDefault();
@@ -1022,7 +1032,7 @@ async function loadLogs(logType) {
         const ts = formatDate(item.ts, { year:"numeric", hour:"2-digit", minute:"2-digit", second:"2-digit", hour12:false });
         const sc =
           item.status === "completed" || item.status === "ok" || item.status === "success" ? "ok"
-          : item.status === "failed" || item.status === "error" ? "bad"
+          : ["failed", "error", "interrupted", "aborted", "limit", "cancelled"].includes(item.status) ? "bad"
           : item.status === "running" || item.status === "testing" ? "running" : "idle";
         const tl = item.log_type === "collection" ? "采集任务" : item.log_type === "ai" ? "AI" : item.log_type === "source" ? "来源明细" : item.log_type === "model" ? "模型" : item.log_type;
         const message = item.message || "";
@@ -1033,7 +1043,9 @@ async function loadLogs(logType) {
         const logKey = `${item.log_type}:${item.id}`;
         const providerDisplay=item.log_type === "model" ? (item.provider_display || [item.provider,item.model].filter(Boolean).join(" · ")) : item.provider;
         const traceButton = item.root_run_id ? `<button type="button" class="inline-button log-trace-button" data-open-run-trace="${escapeHtml(item.root_run_id)}">${item.log_type === "collection" ? "查看采集 Workflow Trace" : "查看 Run Trace"}</button>` : "";
-        return `<article class="log-entry ${sc}"><div class="log-head"><span class="log-type-badge">${tl}</span><time>${escapeHtml(ts)}</time>${item.batch_id ? `<span class="log-batch">${escapeHtml(item.batch_id)}</span>` : ""}<span class="log-status status-pill ${sc}">${escapeHtml(item.status)}</span></div><div class="log-body"><code>${escapeHtml(item.subtype || "")}</code>${body}</div>${providerDisplay ? `<div class="log-meta"><span>${item.log_type === "model" ? "供应商 / 模型" : "服务商"}：${escapeHtml(providerDisplay)}</span></div>` : ""}${traceButton ? `<div class="log-actions">${traceButton}</div>` : ""}${item.log_type === "model" ? renderModelDetail(item, logKey) : ""}</article>`;
+        const cancelButton = item.log_type === "ai" && item.status === "queued" ? `<button type="button" class="inline-button log-cancel-job-button" data-cancel-ai-job="${escapeHtml(item.id)}">取消排队</button>` : "";
+        const actions = traceButton || cancelButton ? `<div class="log-actions">${traceButton}${cancelButton}</div>` : "";
+        return `<article class="log-entry ${sc}"><div class="log-head"><span class="log-type-badge">${tl}</span><time>${escapeHtml(ts)}</time>${item.batch_id ? `<span class="log-batch">${escapeHtml(item.batch_id)}</span>` : ""}<span class="log-status status-pill ${sc}">${escapeHtml(item.status)}</span></div><div class="log-body"><code>${escapeHtml(item.subtype || "")}</code>${body}</div>${providerDisplay ? `<div class="log-meta"><span>${item.log_type === "model" ? "供应商 / 模型" : "服务商"}：${escapeHtml(providerDisplay)}</span></div>` : ""}${actions}${item.log_type === "model" ? renderModelDetail(item, logKey) : ""}</article>`;
       }).join("")
     : `<div class="empty-state">${logs.length ? "没有符合当前筛选条件的日志。" : "暂无日志记录。"}</div>`;
   list.querySelectorAll("details[data-log-detail]").forEach((detail) => {

@@ -16,7 +16,7 @@ export class SourceRunRepository {
       const ai=this.db.prepare("UPDATE ai_runs SET status='interrupted',error=?,progress='任务已中断，可重新执行',updated_at=? WHERE status IN ('running','queued')").run(reason,now).changes;
       const sources=this.db.prepare("UPDATE source_runs SET status='interrupted',error=?,ended_at=? WHERE status='running'").run(reason,now).changes;
       const subscriptions=this.db.prepare("UPDATE subscription_runs SET status='interrupted',error=?,ended_at=? WHERE status='running'").run(reason,now).changes;
-      this.db.prepare("UPDATE agent_runs SET status='interrupted',error=?,finished_at=? WHERE status IN ('running','testing') AND entry_point='collection'").run(reason,now);
+      this.db.prepare("UPDATE agent_runs SET status='interrupted',error=?,finished_at=? WHERE status IN ('running','testing') AND (entry_point='collection' OR entry_point LIKE 'batch-job:%')").run(reason,now);
       const batches=this.db.prepare("UPDATE batches SET status='interrupted',updated_at=? WHERE status='running'").run(now).changes;
       const result={aiRuns:Number(ai),sourceRuns:Number(sources),subscriptionRuns:Number(subscriptions),batches:Number(batches)};
       this.db.exec('COMMIT');

@@ -39,6 +39,6 @@ test('安装向导不再创建或写入根 .env', () => {
 
 test('RSSHub 缺失时安装向导提供 GitHub 浅克隆并安装依赖', () => {
   const source = fs.readFileSync(new URL('../scripts/runtime/setup.mjs', import.meta.url), 'utf8');
-  assert.match(source, /git['"], \['clone', '--depth', '1', 'https:\/\/github\.com\/DIYgod\/RSSHub\.git', 'RSSHub'/);
-  assert.match(source, /npm['"], \['install', '--legacy-peer-deps'\], \{ cwd: path\.join\(root, 'RSSHub'\)/);
+  assert.match(source, /git['"], \['clone', '--depth', '1', 'https:\/\/github\.com\/DIYgod\/RSSHub\.git', status\.rsshubRoot/);
+  assert.match(source, /npm['"], \['install', '--legacy-peer-deps'\], \{ cwd: status\.rsshubRoot/);
 });

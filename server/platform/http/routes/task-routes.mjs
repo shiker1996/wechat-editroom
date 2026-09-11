@@ -111,6 +111,16 @@ export async function handleTaskRoutes({ request, response, pathname, searchPara
     return respond(json, response, 202, aiJobs.start({ batchId, provider: previousSnapshot ? null : input.provider, type: 'daily', snapshotId: previousSnapshot?.id || null, stageSelections, focuses: Array.isArray(input.focuses) ? input.focuses : [], focus: input.focus || null }));
   }
   if (request.method === 'GET' && pathname === '/api/jobs') return respond(json, response, 200, store.listRecentRuns(boundedLimit(searchParams,40,500)));
+  const cancelJobMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/cancel$/);
+  if (cancelJobMatch && request.method === 'POST') {
+    const jobId = decodeURIComponent(cancelJobMatch[1]);
+    const result = aiJobs.cancel(jobId);
+    if (!result.ok) {
+      if (result.code === 'JOB_NOT_FOUND') return respond(json, response, 404, { error: '任务不存在或服务已重启', code: result.code });
+      return respond(json, response, 409, { error: '仅支持取消排队中的 AI 任务', code: result.code, status: result.status });
+    }
+    return respond(json, response, 200, { ...result.job, cancelled: true });
+  }
   const jobMatch = pathname.match(/^\/api\/jobs\/([^/]+)$/);
   if (jobMatch && request.method === 'GET') {
     const persistedSource = /^source:(\d+)$/.exec(jobMatch[1]);

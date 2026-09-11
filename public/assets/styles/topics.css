@@ -163,8 +163,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .log-output-empty { margin:6px 0;color:var(--muted);font-size:11px; }
 .log-budget>summary,.log-reasoning>summary,.log-tool-calls>summary { cursor:pointer;font-size:11px;font-weight:700;color:var(--muted); }
 .log-actions { display:flex;justify-content:flex-end;margin-top:2px; }
-.log-trace-button { padding:3px 8px;border:1px solid var(--line);background:transparent;color:var(--red);font-size:11px;font-weight:700;cursor:pointer; }
-.log-trace-button:hover { background:var(--ink);color:var(--white); }
+.log-trace-button,.log-cancel-job-button { padding:3px 8px;border:1px solid var(--line);background:transparent;color:var(--red);font-size:11px;font-weight:700;cursor:pointer; }
+.log-trace-button:hover,.log-cancel-job-button:hover { background:var(--ink);color:var(--white); }
 .log-search { display:flex;align-items:center;gap:6px;min-width:220px;border:1px solid var(--line);padding:5px 8px;background:var(--paper); }
 .log-search input { min-width:0;border:0;outline:0;background:transparent;width:100%;font-size:11px; }
 .log-status-filter { display:flex;align-items:center;gap:6px;color:var(--muted);font-size:11px; }

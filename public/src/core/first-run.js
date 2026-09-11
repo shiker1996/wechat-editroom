@@ -105,6 +105,9 @@ function renderBody() {
       const rsshubStatus = snapshot.rsshubStatus || {};
       let rsshubAction = "";
       let detail = item.ready ? `${item.enabledSourceCount} 个采集源已启用` : escapeHtml(item.reason || "暂不可用");
+      if (item.id === "reddit") {
+        rsshubAction = `<button type="button" class="outline-button first-run-reddit-login" data-first-run-reddit-action="login" title="打开采集专用浏览器，登录状态会保存在 Reddit Profile 中">打开浏览器登录</button>`;
+      }
       if (item.id === "rsshub") {
         if (!rsshubStatus.installed) {
           detail = "尚未安装 RSSHub";
@@ -198,6 +201,25 @@ export function bindFirstRunWizard() {
           message.textContent = error.message || "RSSHub 安装失败";
           rsshubButton.parentElement?.querySelector(".first-run-install-error")?.remove();
           rsshubButton.parentElement?.appendChild(message);
+        });
+      return;
+    }
+    const redditButton = event.target.closest("[data-first-run-reddit-action]");
+    if (redditButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      redditButton.disabled = true;
+      redditButton.textContent = "打开中…";
+      request("/api/system/runtime/reddit/start", { method: "POST", body: "{}" })
+        .then(() => refreshWizard())
+        .catch((error) => {
+          redditButton.disabled = false;
+          redditButton.textContent = "打开失败，重试";
+          const message = document.createElement("small");
+          message.className = "first-run-install-error";
+          message.textContent = error.message || "Reddit 浏览器启动失败";
+          redditButton.parentElement?.querySelector(".first-run-install-error")?.remove();
+          redditButton.parentElement?.appendChild(message);
         });
       return;
     }

@@ -1,15 +1,35 @@
 param(
     [string]$RsshubDir = "",
     [string]$PidFile = "",
-    [int]$Port = 1200,
+    [int]$Port = 0,
     [int]$StartupTimeoutSeconds = 90,
     [string]$NodePath = ""
 )
 
 $ErrorActionPreference = "Stop"
 $projectRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
-if ([string]::IsNullOrWhiteSpace($RsshubDir)) { $RsshubDir = Join-Path $projectRoot "RSSHub" }
-if ([string]::IsNullOrWhiteSpace($PidFile)) { $PidFile = Join-Path $projectRoot "data\rsshub.pid" }
+function Read-LocalConfig {
+    $configPath = Join-Path $projectRoot "config.local.json"
+    if (-not (Test-Path -LiteralPath $configPath -PathType Leaf)) { return $null }
+    try { return (Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json) } catch { return $null }
+}
+$localConfig = Read-LocalConfig
+if ([string]::IsNullOrWhiteSpace($RsshubDir)) {
+    $configuredRoot = [string]$localConfig.rsshub.rootDir
+    if ([string]::IsNullOrWhiteSpace($configuredRoot)) { $configuredRoot = "RSSHub" }
+    $RsshubDir = if ([System.IO.Path]::IsPathRooted($configuredRoot)) { $configuredRoot } else { Join-Path $projectRoot $configuredRoot }
+}
+if ([string]::IsNullOrWhiteSpace($PidFile)) {
+    $configuredPid = [string]$localConfig.rsshub.pidFile
+    if ([string]::IsNullOrWhiteSpace($configuredPid)) { $configuredPid = "data\rsshub.pid" }
+    $PidFile = if ([System.IO.Path]::IsPathRooted($configuredPid)) { $configuredPid } else { Join-Path $projectRoot $configuredPid }
+}
+if ($Port -le 0) {
+    $baseUrl = [string]$localConfig.rsshub.baseUrl
+    $parsedPort = 0
+    if ($baseUrl) { try { $parsedPort = ([System.Uri]$baseUrl).Port } catch { $parsedPort = 0 } }
+    $Port = if ($parsedPort -gt 0) { $parsedPort } else { 1200 }
+}
 $RsshubDir = [System.IO.Path]::GetFullPath($RsshubDir)
 $PidFile = [System.IO.Path]::GetFullPath($PidFile)
 

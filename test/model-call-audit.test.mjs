@@ -47,6 +47,30 @@ test('统一日志查询的模型分支返回调用详情字段',t=>{
   assert.equal(source.model,null);
 });
 
+test('AI 日志卡片以 ai_runs 状态为准，不被滞后的执行追踪覆盖', t => {
+  const store = workspace(t);
+  const batch = store.createBatch({ date:'2026-08-16', title:'状态一致性' });
+  store.createAiRun({ id:'ai-interrupted', batchId:batch.id, type:'tag', provider:'deepseek' });
+  store.startAgentRun({ id:'job:ai-interrupted', entryPoint:'batch-job:tag', batchId:batch.id, provider:'deepseek', rootRunId:'job:ai-interrupted', workflowRunId:'job:ai-interrupted', stageId:'job' });
+  store.updateAiRun('ai-interrupted', { status:'interrupted', error:'工作台重启时任务仍在运行，已标记为中断' });
+
+  const [row] = store.listLogs({ logType:'ai' });
+  assert.equal(row.status, 'interrupted');
+  assert.equal(row.workflow_status, 'running');
+});
+
+test('AI 日志列表不为每条记录加载完整 Workflow Trace', t => {
+  const store = workspace(t);
+  const batch = store.createBatch({ date:'2026-08-16', title:'日志列表性能' });
+  store.createAiRun({ id:'ai-list', batchId:batch.id, type:'tag', provider:'deepseek' });
+  store.startAgentRun({ id:'job:ai-list', entryPoint:'batch-job:tag', batchId:batch.id, provider:'deepseek', rootRunId:'job:ai-list', workflowRunId:'job:ai-list', stageId:'job' });
+  store.queries.workbench.getWorkflowRunTrace = () => { throw new Error('AI 日志列表不应加载完整 Trace'); };
+
+  const [row] = store.listLogs({ logType:'ai' });
+  assert.equal(row.id, 'ai-list');
+  assert.equal(row.workflow_status, 'running');
+});
+
 test('model_calls 保留最近 2000 条，超出后旧行被清理',t=>{
   const store=workspace(t);
   for(let i=0;i<2100;i++){

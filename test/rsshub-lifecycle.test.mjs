@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { loadConfig } from '../server/platform/core/config.mjs';
 import { normalizeRssHubLifecycleConfig } from '../plugins/rsshub/collector.mjs';
+import { inspectSetup } from '../scripts/runtime/setup.mjs';
 
 test('RSSHub 生命周期路径相对项目根目录解析', () => {
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'newsroom-rsshub-config-'));
@@ -16,6 +17,34 @@ test('RSSHub 生命周期路径相对项目根目录解析', () => {
     assert.equal(config.rsshub.stopScript,path.join(root,'scripts','runtime','rsshub-stop.ps1'));
     assert.equal(config.rsshub.pidFile,path.join(root,'data','rsshub.pid'));
   } finally {fs.rmSync(root,{recursive:true,force:true});}
+});
+
+test('环境检测和安装引导使用 config.local.json 中的 RSSHub 自定义目录', () => {
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'newsroom-rsshub-custom-root-'));
+  const rsshubRoot=path.join(root,'runtime','rsshub');
+  try {
+    fs.writeFileSync(path.join(root,'config.local.json'),JSON.stringify({rsshub:{rootDir:'runtime/rsshub'}}));
+    fs.mkdirSync(path.join(rsshubRoot,'lib'),{recursive:true});
+    fs.mkdirSync(path.join(rsshubRoot,'node_modules','tsx','dist'),{recursive:true});
+    fs.writeFileSync(path.join(rsshubRoot,'node_modules','tsx','dist','cli.mjs'),'');
+    const status=inspectSetup(root);
+    assert.equal(status.rsshubRoot,rsshubRoot);
+    assert.equal(status.rsshub,'done');
+  } finally {fs.rmSync(root,{recursive:true,force:true});}
+});
+
+test('RSSHub 启停脚本默认读取 config.local.json 的路径、PID 和端口', () => {
+  const projectRoot=path.resolve(path.dirname(new URL(import.meta.url).pathname.slice(1)),'..');
+  const startScript = fs.readFileSync(path.join(projectRoot, 'scripts', 'runtime', 'rsshub-start.ps1'), 'utf8');
+  const stopScript = fs.readFileSync(path.join(projectRoot, 'scripts', 'runtime', 'rsshub-stop.ps1'), 'utf8');
+
+  assert.match(startScript, /config\.local\.json/);
+  assert.match(startScript, /rsshub\.rootDir/);
+  assert.match(startScript, /rsshub\.pidFile/);
+  assert.match(startScript, /rsshub\.baseUrl/);
+  assert.match(stopScript, /config\.local\.json/);
+  assert.match(stopScript, /rsshub\.pidFile/);
+  assert.match(stopScript, /rsshub\.baseUrl/);
 });
 
 test('RSSHub 兼容迁移旧启停脚本路径', () => {

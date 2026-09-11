@@ -81,6 +81,9 @@ test('首次启动向导覆盖模型、采集、文章和图文交付路径', ()
   assert.match(firstRun, /\/api\/collection-capabilities/);
   assert.match(firstRun, /jianzhi\.first-run-wizard\.v1/);
   assert.match(firstRun, /data-first-run-open/);
+  assert.match(firstRun, /data-first-run-reddit-action/);
+  assert.match(firstRun, /\/api\/system\/runtime\/reddit\/start/);
+  assert.match(firstRun, /打开浏览器登录/);
   assert.match(firstRun, /renderProgressDock/);
   assert.doesNotMatch(firstRun, /installButton\.parentElement/);
   assert.match(main, /sendDesktopCommand\('onboarding'\)/);

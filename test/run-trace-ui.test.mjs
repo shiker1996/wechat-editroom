@@ -11,6 +11,8 @@ test('日志页面提供 Run Trace 入口并消费聚合指标', () => {
   assert.match(html, /id="run-trace-dialog"/);
   assert.match(html, /data-log-type="collection"[^>]*>采集任务/);
   assert.match(ui, /data-open-run-trace/);
+  assert.match(ui, /data-cancel-ai-job/);
+  assert.match(ui, /\/api\/jobs\/\$\{encodeURIComponent\(cancelButton\.dataset\.cancelAiJob\)\}\/cancel/);
   assert.match(ui, /\/api\/runs\/\$\{encoded\}/);
   assert.match(ui, /\/metrics/);
   assert.match(ui, /Workflow \/ Agent Run/);

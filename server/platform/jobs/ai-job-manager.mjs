@@ -76,8 +76,26 @@ export class AiJobManager {
   }
 
   pruneTerminalJobs(limit = 100) {
-    const terminal=[...this.jobs.values()].filter((job)=>['completed','failed','interrupted'].includes(job.status));
+    const terminal=[...this.jobs.values()].filter((job)=>['completed','failed','interrupted','cancelled'].includes(job.status));
     for(const job of terminal.slice(0,Math.max(0,terminal.length-limit)))this.jobs.delete(job.id);
+  }
+
+  cancel(id, reason = '排队任务已取消') {
+    const job = this.jobs.get(id);
+    const persisted = job ?? this.store.getAiRun(id);
+    if (!persisted) return { ok: false, code: 'JOB_NOT_FOUND' };
+    if (persisted.status !== 'queued') return { ok: false, code: 'JOB_NOT_QUEUED', status: persisted.status };
+    const pendingIndex = this.pending.indexOf(id);
+    if (pendingIndex >= 0) this.pending.splice(pendingIndex, 1);
+    if (job) {
+      job.status = 'cancelled';
+      job.error = reason;
+      job.progress = reason;
+      job.finishedAt = new Date().toISOString();
+    }
+    this.store.updateAiRun(id, { status: 'cancelled', error: reason, progress: reason });
+    this.tick();
+    return { ok: true, job: this.get(id) };
   }
 
   log(job,message) {
