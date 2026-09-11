@@ -40,6 +40,34 @@ test('RSSHub 采集器归一化统一配置中的旧绝对路径和 HTML 空格�
   assert.equal(config.stopScript,'scripts\\runtime\\rsshub-stop.ps1');
 });
 
+test('RSSHub 采集器不重复追加已存在的 runtime 目录', () => {
+  const config=normalizeRssHubLifecycleConfig({
+    startScript:'D:\\test\\scripts\\runtime\\rsshub-start.ps1',
+    stopScript:'scripts/runtime/rsshub-stop.ps1',
+  });
+  assert.equal(config.startScript,'D:\\test\\scripts\\runtime\\rsshub-start.ps1');
+  assert.equal(config.stopScript,'scripts\\runtime\\rsshub-stop.ps1');
+});
+
+test('Windows 桌面版将斜杠形式的 RSSHub 脚本相对路径解析到资源目录', () => {
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'newsroom-rsshub-resource-root-'));
+  const previous={
+    desktop:process.env.WORKBENCH_DESKTOP,
+    resource:process.env.WORKBENCH_RESOURCE_ROOT,
+  };
+  try {
+    process.env.WORKBENCH_DESKTOP='1';
+    process.env.WORKBENCH_RESOURCE_ROOT='D:\\test\\wechat-newsroom-workbench\\resources\\app';
+    const config=loadConfig(root);
+    assert.equal(config.rsshub.startScript,'D:\\test\\wechat-newsroom-workbench\\resources\\app\\scripts\\runtime\\rsshub-start.ps1');
+    assert.equal(config.rsshub.stopScript,'D:\\test\\wechat-newsroom-workbench\\resources\\app\\scripts\\runtime\\rsshub-stop.ps1');
+  } finally {
+    if(previous.desktop===undefined) delete process.env.WORKBENCH_DESKTOP; else process.env.WORKBENCH_DESKTOP=previous.desktop;
+    if(previous.resource===undefined) delete process.env.WORKBENCH_RESOURCE_ROOT; else process.env.WORKBENCH_RESOURCE_ROOT=previous.resource;
+    fs.rmSync(root,{recursive:true,force:true});
+  }
+});
+
 test('RSSHub 启停脚本不依赖 OpenClaw 或机器绝对路径', () => {
   const projectRoot=path.resolve(path.dirname(new URL(import.meta.url).pathname.slice(1)),'..');
   const start=fs.readFileSync(path.join(projectRoot,'scripts','runtime','rsshub-start.ps1'),'utf8');

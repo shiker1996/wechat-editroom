@@ -10,6 +10,7 @@ export function normalizeRssHubLifecycleConfig(config = {}) {
     const file = path.win32.basename(text);
     const directory = path.win32.dirname(text);
     if (!['rsshub-start.ps1', 'rsshub-stop.ps1'].includes(file.toLowerCase())) return text;
+    if (path.win32.basename(directory).toLowerCase() === 'runtime') return path.win32.join(directory, file);
     return path.win32.join(directory, 'runtime', file);
   };
   return {

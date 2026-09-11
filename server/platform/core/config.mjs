@@ -136,7 +136,12 @@ export function resolveArticleLength(config, chain) {
 }
 
 function merge(base, override) {
-  const result = { ...base };
+  const result = {};
+  for (const [key, value] of Object.entries(base ?? {})) {
+    result[key] = value && typeof value === 'object'
+      ? Array.isArray(value) ? [...value] : merge(value, {})
+      : value;
+  }
   for (const [key, value] of Object.entries(override ?? {})) {
     result[key] = value && typeof value === 'object' && !Array.isArray(value)
       ? merge(base[key] ?? {}, value)
@@ -171,9 +176,11 @@ export function loadConfig(root = process.cwd(), options = {}) {
         normalized=path.join('scripts','runtime',file);
       }
     }
+    const normalizedForComparison = normalized.replaceAll('\\', '/').toLowerCase();
+    const resourceScriptPrefix = 'scripts/runtime/';
     const useResourceRoot = (key === 'startScript' || key === 'stopScript')
       && process.env.WORKBENCH_DESKTOP === '1'
-      && normalized.toLowerCase().startsWith(path.join('scripts', 'runtime').toLowerCase());
+      && normalizedForComparison.startsWith(resourceScriptPrefix);
     config.rsshub[key]=path.isAbsolute(normalized)?normalized:path.resolve(useResourceRoot ? resourceRoot : configRoot,normalized);
   }
   const envPort=Number(process.env.WORKBENCH_PORT);
