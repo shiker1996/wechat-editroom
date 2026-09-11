@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { buildImagesMarkdown, imageManifestFile, isCdnConfigurationMissing, parseImagePlaceholders, registerGeneratedImageAssets, registerGeneratedSlotImage, uploadImageToCdn } from './image-workflow.mjs';
+import { buildImagesMarkdown, getImageWorkspace, imageManifestFile, parseImagePlaceholders, registerGeneratedImageAssets, registerGeneratedSlotImage, uploadImageToCdn } from './image-workflow.mjs';
 import { generateArticleImage } from './article-image-generator.mjs';
 import { loadSkillBundle } from '../../../platform/llm/skill-runtime.mjs';
 import { batchArticlesDir, candidateArticleDir } from '../../../platform/core/workspace-paths.mjs';
@@ -174,18 +174,11 @@ export async function runTypesetPipeline({ gateway, store, batchId, candidateId,
     [/```\s*echarts\b/i, 'cap_diagram_echarts_render', 'ECharts', '09-FINAL.echarts.md'],
   ];
   const chartNotes = [];
-  let effectiveImageDeliveryMode = imageDeliveryMode === 'cdn' ? 'cdn' : 'local';
+  const effectiveImageDeliveryMode = imageDeliveryMode === 'cdn' ? 'cdn' : 'local';
   const uploadIfConfigured = async (workdirPath, itemId, options) => {
-    if (effectiveImageDeliveryMode !== 'cdn' || !autoUploadGeneratedImages) return false;
-    try {
-      await uploadImageToCdnFn(workdirPath, itemId, options);
-      return true;
-    } catch (error) {
-      if (!isCdnConfigurationMissing(error)) throw error;
-      effectiveImageDeliveryMode = 'local';
-      onProgress('未配置 CDN，排版改用本地图片占位，不阻塞后续流程');
-      return false;
-    }
+    if (effectiveImageDeliveryMode !== 'cdn') return false;
+    await uploadImageToCdnFn(workdirPath, itemId, options);
+    return true;
   };
   let chartReadyPath = renderedPath;
   for (const [pattern, capability, label, fileName] of chartSteps) {
@@ -210,7 +203,6 @@ export async function runTypesetPipeline({ gateway, store, batchId, candidateId,
       onProgress(`排版 3/6：${label} 图片已更新，正在上传 CDN`);
       await uploadIfConfigured(workdir, item.id, { authorizedExternalWrite:true, allowedCapabilities:typesetRuntime.allowedCapabilities,
         store,batchId,candidateId,generationSnapshotId:typesetRuntime.snapshotId,skillId:'wechat-article-typeset',rootRunId,workflowRunId,stageId });
-      if (effectiveImageDeliveryMode !== 'cdn') break;
     }
     addArtifact(store, batchId, `${label} 转图文章`, path.basename(chartPath), chartPath, { rootRunId, workflowRunId, stageId: 'images' });
     chartNotes.push(`${label} ${chartReport.converted} 张${effectiveImageDeliveryMode === 'local' ? '（仅本地占位）' : pendingUploads.length ? '（已重新上传 CDN）' : '（内容未变，复用 CDN）'}`);
@@ -236,6 +228,15 @@ export async function runTypesetPipeline({ gateway, store, batchId, candidateId,
     } catch (error) {
       record('images', 'wechat-article-typeset', '', 'blocked', `${label} 生成失败：${error.message}`);
       throw new Error(`${label} 图片生成失败，已停止排版以避免使用旧图：${error.message}`);
+    }
+  }
+  if (effectiveImageDeliveryMode === 'cdn') {
+    const pendingManualUploads = getImageWorkspace(workdir).items.filter((item) =>
+      !item.generated && item.localPath && item.status !== 'cdn');
+    for (const item of pendingManualUploads) {
+      onProgress(`排版 3/6：${item.id} 本地图片正在上传 CDN`);
+      await uploadIfConfigured(workdir, item.id, { authorizedExternalWrite:true, allowedCapabilities:typesetRuntime.allowedCapabilities,
+        store,batchId,candidateId,generationSnapshotId:typesetRuntime.snapshotId,skillId:'wechat-article-typeset',rootRunId,workflowRunId,stageId });
     }
   }
   const imageResult = buildImagesMarkdown(workdir, fs.readFileSync(chartReadyPath, 'utf8'), { imageDeliveryMode: effectiveImageDeliveryMode });

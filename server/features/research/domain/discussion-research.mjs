@@ -488,6 +488,7 @@ export function readDiscussionResearchContext({ workspaceRoot, batchId, candidat
     reference_events: referenceEvents,
     verified_research_materials: materials,
     research_reports: researchReports,
+    candidate_coverage: exact || generatedTopics.length ? 'covered' : 'uncovered',
     topic_candidates: generatedTopics,
     topic_candidate: generatedTopic ? { ...generatedTopic, angle: generatedTopic.angle || null, thesis: generatedTopic.thesis || null } : { status: 'provisional', type: matched.length > 1 ? 'dual_event_relation' : 'single_event', angle: null, thesis: null, discussion_question: question, is_author_stance: false, note: '候选命题只用于编辑确认，不代表作者最终立场。' },
     evidence_boundary: { open_questions: openQuestions, note: generatedTopic || generatedTopics.length ? '研判已形成候选选题；角度与作者命题仍需编辑会确认。' : '当前只提供事件内和事件间研判，尚未形成可直接发布的候选选题。' },

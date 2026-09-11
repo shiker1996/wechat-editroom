@@ -124,5 +124,5 @@ export async function runEditorialAgentTurn({ gateway, store, registry, candidat
     return { ...agent, reply, limited: true };
   }
   if (!String(agent.assistantReply || '').trim()) throw new Error('编辑室未通过结束工具提交有效回复，请重发上一条回答');
-  return { ...finalizeEditorialResult({ store, candidateId, current, reply: agent.assistantReply, result: { ...resultMeta(lastModelResult, provider), usage: lastModelResult?.usage, model: lastModelResult?.model } }), agentRunId: agent.agentRunId, toolCalls: agent.toolCalls };
+  return { ...finalizeEditorialResult({ store, candidateId, current, researchContext, reply: agent.assistantReply, result: { ...resultMeta(lastModelResult, provider), usage: lastModelResult?.usage, model: lastModelResult?.model } }), agentRunId: agent.agentRunId, toolCalls: agent.toolCalls };
 }

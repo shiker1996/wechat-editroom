@@ -250,7 +250,7 @@ export async function buildEditorialMessages(current,answer,events=[],retrieve=n
   ];
 }
 
-export function finalizeEditorialResult({store,candidateId,current,reply='',result={}}) {
+export function finalizeEditorialResult({store,candidateId,current,reply='',result={},researchContext=null}) {
   const assistantReply=String(reply||'').trim();
   const latest=store.getCandidate(candidateId);
   if(latest?.status==='locked'||latest?.editorial?.brief_status==='LOCKED'){
@@ -261,7 +261,7 @@ export function finalizeEditorialResult({store,candidateId,current,reply='',resu
   const base=latest||current;
   const mergedCandidate=store.getCandidate(candidateId)||base;
   // 就绪由代码推导：必填表单项填好即可成稿，不由模型声明。
-  const readiness=evaluateEditorialReadiness({candidate:mergedCandidate,editorial:mergedCandidate.editorial||{}});
+  const readiness=evaluateEditorialReadiness({candidate:{...mergedCandidate,research_context:researchContext},editorial:mergedCandidate.editorial||{}});
   const editorial=store.saveEditorial(candidateId,{...(mergedCandidate.editorial||{}),
     editor_question:'',open_questions:readiness.missing.join('；'),
     next_action:readiness.ready?'WRITE_NOW':'DISCUSS',brief_status:readiness.ready?'WRITE_NOW':'DISCUSS'});

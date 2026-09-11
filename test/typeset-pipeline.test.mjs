@@ -304,6 +304,34 @@ test('仅本地排版不上传 Mermaid 图片并在 HTML 中输出占位符', { 
   assert.ok(artifacts.some((item) => item.name === 'article.ai.html'));
 });
 
+test('CDN 配置模式在排版阶段自动上传本地人工图片并写回 CDN 地址', async (t) => {
+  const markdown = '# 测试文章\n\n正文。\n\n<!-- IMG:资料:01 | 内容:产品截图 | 建议位置:“正文。”段后 | 比例:16:9 | 出处:官方 | 版权:已确认 -->\n';
+  const { root, store, gateway } = createTypesetFixture(t, markdown);
+  const workdir = path.join(root, 'articles', '2026-07-19-c01');
+  const localPath = path.join(workdir, 'images', '资料-01.png');
+  fs.mkdirSync(path.dirname(localPath), { recursive:true });
+  fs.writeFileSync(localPath, 'fake-png');
+  fs.writeFileSync(path.join(workdir, 'image-assets.json'), JSON.stringify({ version:1, items:{
+    '资料:01': { id:'资料:01', localPath, type:'资料', content:'产品截图' },
+  } }), 'utf8');
+  const uploads = [];
+  const result = await runTypesetPipeline({
+    gateway, store, batchId:'batch-1', candidateId:1, provider:'fake', workspaceRoot:root,
+    skillsWorkspaceRoot:process.cwd(), imageDeliveryMode:'cdn',
+    uploadImageToCdnFn: async (workdirPath, id) => {
+      uploads.push(id);
+      const manifestPath = path.join(workdirPath, 'image-assets.json');
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+      manifest.items[id].url = 'https://cdn.example.test/zi-liao-01.png';
+      fs.writeFileSync(manifestPath, JSON.stringify(manifest), 'utf8');
+    },
+  });
+  const html = fs.readFileSync(result.finalHtml, 'utf8');
+  assert.deepEqual(uploads, ['资料:01']);
+  assert.match(html, /https:\/\/cdn\.example\.test\/zi-liao-01\.png/);
+  assert.doesNotMatch(html, /data-image-placeholder="资料:01"/);
+});
+
 test('仅本地图片占位符可进入公众号 HTML 且保留图片结构', () => {
   const markdown = '# 标题\n\n正文。\n\n![图片占位 · 来源:01：官方截图](image-placeholder:%E6%9D%A5%E6%BA%90%3A01)';
   const html = markdownToHtml(markdown);

@@ -165,15 +165,13 @@ function openImageZoom(src, alt) {
   overlay.querySelector(".image-zoom-close").focus();
 }
 
-// 排版前预检：未配置 CDN 时允许仅本地占位排版；已配置 CDN 时沿用原有公开地址门禁。
+// 排版前预检只读取配图规划和系统配置；已配置 CDN 时由排版任务自动上传本地图片。
 function typesetBlockReason() {
   const data = state.imageWorkspace;
   const hasCandidate = Boolean(state.productionPreview?.candidates?.length);
   if (!hasCandidate) return "请先运行完整成稿链";
   if (!data?.planned) return "请先点击「AI 规划必要配图」，确认本文需要哪些配图";
   if (data.deliveryMode === 'local' || data.cdnConfigured === false) return "";
-  const manual = data.manualUnresolved || (data.unresolved || []).filter((id) => !(data.generatedPending || []).includes(id));
-  if (manual.length) return `还有 ${manual.length} 张人工配图未上传 CDN：${manual.join("、")}，请先在配图工作台处理`;
   return "";
 }
 
@@ -187,14 +185,13 @@ function renderImageWorkspace() {
   if (button) button.textContent = data.planned ? '重新检查必要配图' : 'AI 规划必要配图';
   if (status) {
     if (localOnly) status.textContent = data.cdnReason ? `未配置图片 CDN：${data.cdnReason}。将使用仅本地排版，图片位置输出为空占位符，粘贴到公众号后请逐个替换。` : '当前使用仅本地排版，图片位置会输出为空占位符，粘贴到公众号后请逐个替换。';
-    else if (data.cdnStatus === 'unhealthy' || data.cdnStatus === 'unknown') status.textContent = `图片 CDN 当前不可用：${data.cdnReason || '请检查配置'}。已配置时仍按 CDN 流程校验，排版失败会明确提示。`;
     else if (!data.planned) status.textContent = '尚未执行配图规划；正式排版前需要先确认是否存在必要图片。';
     else if (!data.total) status.textContent = '配图规划完成：本文没有必须人工提供的来源图或资料图。';
     else {
       const manual = data.manualUnresolved || (data.unresolved || []).filter((id) => !(data.generatedPending || []).includes(id));
       const automatic = data.generatedPending || [];
       status.textContent = manual.length
-        ? localOnly ? `将输出 ${manual.length} 个人工配图占位符：${manual.join('、')}` : `人工配图待处理 ${manual.length} 张：${manual.join('、')}`
+        ? localOnly ? `将输出 ${manual.length} 个人工配图占位符：${manual.join('、')}` : `人工配图 ${manual.length} 张将在排版时自动上传 CDN：${manual.join('、')}`
         : automatic.length
           ? localOnly ? `${automatic.length} 张自动图片将在排版结果中输出为空占位符` : `人工配图已就绪；${automatic.length} 张自动生成图片（Mermaid、ECharts、统计卡或时间线）将在排版时按当前主题生成并上传 CDN`
           : `配图已就绪 ${data.ready||0} / ${data.total} · 可以进入正式排版`;
@@ -212,7 +209,7 @@ function renderImageWorkspace() {
   if (btn) {
     // 不再因配图未就绪 disable（禁用按钮点击无任何反馈）；保持可点，由点击预检 toast 说明原因
     btn.disabled = !hasCandidate;
-    btn.title = typesetBlockReason() || (localOnly ? '仅本地生成公众号排版 HTML；图片输出为空占位符' : '生成公众号排版 HTML；自动图表将在任务中上传');
+    btn.title = typesetBlockReason() || (localOnly ? '仅本地生成公众号排版 HTML；图片输出为空占位符' : '生成公众号排版 HTML；本地图片和自动图表将在任务中上传 CDN');
   }
   const copyButton = document.getElementById('copy-typeset-html');
   if (copyButton) {

@@ -106,6 +106,18 @@ test('启动任务时把 candidateId/documentKind/focus 等执行参数传给 ru
   } finally { teardown(ctx); }
 });
 
+test('排版任务保留图片交付模式并传给 typeset handler', () => {
+  const ctx = setup();
+  try {
+    const { batch, candidates } = makeCandidates(ctx.store, 1);
+    const mgr = ctx.manager(2);
+    let received = null;
+    mgr.run = (job, options) => { received = options; return Promise.resolve(); };
+    mgr.start({ batchId: batch.id, candidateId: candidates[0].id, type: 'typeset', imageDeliveryMode: 'cdn' });
+    assert.equal(received.imageDeliveryMode, 'cdn');
+  } finally { teardown(ctx); }
+});
+
 test('run 边界异常会落为 failed，不产生未处理拒绝', async () => {
   const ctx = setup();
   try {

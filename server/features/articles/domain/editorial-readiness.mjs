@@ -57,29 +57,12 @@ export const EDITORIAL_FIELDS=Object.freeze([
   {key:'reader_action',label:'读者行动依据',required:false,scope:'editorial'},
 ]);
 
-// 文章候选的默认池角色已经区分了“人工补选”和研判产出的候选。
-// 这里把它收敛成编辑室使用的显式模式：手动选入的候选没有研判点时，
-// 不应被迫伪造研判主线；研判驱动候选仍然保留完整研判门禁。
-const MANUAL_EDITORIAL_POOL_ROLES=new Set(['人工补选','人工晋级文章','综合选题']);
-
 export function resolveEditorialMode(candidate={}){
   const explicit=String(candidate.editorial_mode||candidate.editorialMode||'').trim();
   if(explicit==='manual')return 'manual';
-  const researchScore=candidate.research_value??candidate.researchValue;
-  if(String(researchScore??'').trim()!==''&&Number.isFinite(Number(researchScore))&&Number(researchScore)<=0)return 'manual';
   const researchContext=candidate.research_context||candidate.researchContext;
-  if(researchContext?.status==='no_matching_event')return 'manual';
-  if(researchContext?.status==='available'
-    && !((Array.isArray(researchContext.topic_candidates)&&researchContext.topic_candidates.length)
-      || researchContext.topic_candidate?.candidate_id))return 'manual';
-  if(explicit==='research')return 'research';
-  const articleTrack=Array.isArray(candidate.tracks)
-    ? candidate.tracks.find((track)=>track?.track==='article')
-    : null;
-  const poolRole=String(articleTrack?.pool_role||candidate.pool_role||articleTrack?.poolRole||'').trim();
-  if(MANUAL_EDITORIAL_POOL_ROLES.has(poolRole))return 'manual';
-  if(String(candidate.source_type||'').trim()==='manual')return 'manual';
-  return 'research';
+  const coverage=String(candidate.research_coverage||candidate.researchCoverage||researchContext?.candidate_coverage||'').trim();
+  return coverage==='covered'?'research':'manual';
 }
 
 export function editorialFieldComplete(field,value){

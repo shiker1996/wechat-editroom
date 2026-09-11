@@ -101,21 +101,15 @@ setToolConfigurationResolver((manifest)=>{
   return extensionConfigurationService.resolve({extensionType:'tool',extensionId:manifest.id,manifest});
 });
 
-async function getCdnUploadStatus() {
-  try {
-    const registry = await getToolRegistry(root);
-    const plugin = registry.resolve('cap_image_cdn_upload');
-    if (!plugin) return { uploaderAvailable:false, cdnConfigured:false, cdnStatus:'missing', cdnReason:'未安装图片 CDN 上传能力' };
-    const configuration = plugin.manifest.configuration
-      ? extensionConfigurationService.resolve({ extensionType:'tool', extensionId:plugin.manifest.id, manifest:plugin.manifest })
-      : { configured:true };
-    if (!configuration.configured) return { uploaderAvailable:false, cdnConfigured:false, cdnStatus:'needs_configuration', cdnReason:'图片 CDN 尚未完成配置' };
-    const health = await registry.health('cap_image_cdn_upload');
-    if (health.status === 'ok') return { uploaderAvailable:true, cdnConfigured:true, cdnStatus:'ready', cdnReason:'' };
-    return { uploaderAvailable:false, cdnConfigured:true, cdnStatus:'unhealthy', cdnReason:health.error?.message || '图片 CDN 当前不可用' };
-  } catch (error) {
-    return { uploaderAvailable:false, cdnConfigured:null, cdnStatus:'unknown', cdnReason:`图片 CDN 状态读取失败：${error.message}` };
-  }
+async function getCdnUploadConfiguration() {
+  const registry = await getToolRegistry(root);
+  const plugin = registry.resolve('cap_image_cdn_upload');
+  if (!plugin) return { uploaderAvailable:false, cdnConfigured:false, cdnStatus:'missing', cdnReason:'未安装图片 CDN 上传能力' };
+  const configuration = plugin.manifest.configuration
+    ? extensionConfigurationService.resolve({ extensionType:'tool', extensionId:plugin.manifest.id, manifest:plugin.manifest })
+    : { configured:true };
+  if (!configuration.configured) return { uploaderAvailable:false, cdnConfigured:false, cdnStatus:'needs_configuration', cdnReason:'图片 CDN 尚未完成配置' };
+  return { uploaderAvailable:true, cdnConfigured:true, cdnStatus:'configured', cdnReason:'' };
 }
 
 setSkillConfigurationResolver((manifest)=>extensionConfigurationService.resolve({extensionType:'skill',extensionId:manifest.id,manifest}));
@@ -423,7 +417,7 @@ async function api(request, response, url) {
   if (await handleContentRoutes({ request, response, pathname, searchParams, store, artifactRoots, mime, json, body, root, models })) return;
   if (await handleSystemRoutes({ request, response, pathname, searchParams, root, resourceRoot: runtimePaths.appRoot, config, store, batchWorkdir, json, body, aiJobs,
     binaryBody, createWorkbenchBackup, models, candidateEventGroups })) return;
-  const mediaResult = await handleMediaRoutes({ request, response, pathname, searchParams, store, config, json, body, path, fs, os, mime, root, execFileAsync, isInsideRoots, getImageWorkspace, getCdnUploadStatus, batchArticlesDir, saveLocalImage, uploadImageToCdn, articleWorkdir, models, planImagePlaceholders, writeUtf8, saveImageMetadata, imageManifestFile, aiJobs, planArticleVisuals, defaultTypesetTheme, TYPESET_THEMES, analyzeVisualComplexity });
+  const mediaResult = await handleMediaRoutes({ request, response, pathname, searchParams, store, config, json, body, path, fs, os, mime, root, execFileAsync, isInsideRoots, getImageWorkspace, getCdnUploadConfiguration, batchArticlesDir, saveLocalImage, uploadImageToCdn, articleWorkdir, models, planImagePlaceholders, writeUtf8, saveImageMetadata, imageManifestFile, aiJobs, planArticleVisuals, defaultTypesetTheme, TYPESET_THEMES, analyzeVisualComplexity });
   if (mediaResult !== false) return mediaResult;
   const articleResult = await handleArticleRoutes({ request, response, pathname, store, json, body, candidateEventGroups, fetchCandidateSource, config, root, writeUtf8, path, batchWorkdir, lockedBrief, draftArticle, models, aiJobs, localSecurity });
   if (articleResult !== false) return articleResult;
