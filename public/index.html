@@ -61,6 +61,7 @@
           <button class="nav-item" aria-label="复盘数据台" data-view="wechat-review-prep"><span class="nav-icon" data-icon="台" aria-hidden="true"></span><span class="nav-label">复盘数据台</span></button>
           <button class="nav-item" aria-label="公众号复盘" data-view="wechat-review"><span class="nav-icon" data-icon="复" aria-hidden="true"></span><span class="nav-label">公众号复盘</span></button>
           <button class="nav-item" aria-label="内容反哺" data-view="content-feedback"><span class="nav-icon" data-icon="馈" aria-hidden="true"></span><span class="nav-label">内容反哺</span></button>
+          <button class="nav-item" aria-label="账号画像" data-view="account"><span class="nav-icon" data-icon="像" aria-hidden="true"></span><span class="nav-label">账号画像</span></button>
         </div>
       </details>
       <details class="nav-group" data-nav-group="assets">
@@ -983,6 +984,18 @@
       </div>
     </section>
 
+    <section class="view" id="view-account">
+      <div class="section-intro system-intro"><div><span class="kicker">ACCOUNT PROFILE</span></div><p>维护公众号是谁、为谁写以及长期关注什么。这里的账号画像会参与热点过滤、受众判断和选题评分。</p></div>
+      <div class="system-workspace">
+        <section class="runtime-config-panel configuration-console">
+          <section class="account-context-config" id="account-context-config">
+            <div class="account-context-config-head"><div><span class="kicker">ACCOUNT CONTEXT</span><h3>账号画像</h3><p>填写一次即可，后续可随时调整；内容生产会读取这里的长期定位，配置只保存在本机。</p></div><div class="account-context-config-badge" id="account-context-config-badge"><i></i><span>正在读取</span></div></div>
+            <div id="account-context-editor"></div>
+          </section>
+        </section>
+      </div>
+    </section>
+
     <section class="view" id="view-system">
       <div class="section-intro system-intro"><div><span class="kicker">LOCAL CONFIGURATION</span></div><p>统一管理模型、采集器、技能、工具和本机参数。采集源的连通性测试已收回“采集源”页面，敏感值只在服务端保存。</p></div>
       <div class="system-workspace">
@@ -1236,7 +1249,7 @@
     <form method="dialog" id="batch-form">
       <div class="modal-head"><div><span class="kicker">NEW EDITION</span><h2>建立每日批次</h2></div><button type="button" class="close-button" data-close-batch-dialog aria-label="关闭">×</button></div>
       <label>日期<input name="date" type="date" required></label>
-      <label>批次名称<input name="title" placeholder="例如：周一 AI 与大厂动态"></label>
+      <label>批次名称<input name="title" placeholder="可留空，自动生成创建时间和当天序号"></label>
       <label>今日备注<textarea name="note" rows="3" placeholder="今天特别关注什么？可留空"></textarea></label>
       <div class="modal-actions"><button type="button" class="ghost-button" data-close-batch-dialog>取消</button><button type="submit" value="default" class="primary-button">建立批次</button></div>
     </form>

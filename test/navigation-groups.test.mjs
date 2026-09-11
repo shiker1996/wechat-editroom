@@ -13,7 +13,7 @@ test('侧栏按六个工作区组织并自动展开当前工作区', () => {
     assert.match(html, new RegExp(label));
   }
   assert.equal((html.match(/class="nav-group"/g) || []).length, 6);
-  assert.equal((html.match(/class="nav-item/g) || []).length, 24);
+  assert.equal((html.match(/class="nav-item/g) || []).length, 25);
   assert.match(html, /data-view="material-inbox"[^>]*>[\s\S]*?nav-label">素材入箱/);
   assert.match(html, /data-view="wechat-review-prep"[^>]*>[\s\S]*?nav-label">复盘数据台/);
   assert.match(html, /data-view="wechat-review"[^>]*>[\s\S]*?nav-label">公众号复盘/);

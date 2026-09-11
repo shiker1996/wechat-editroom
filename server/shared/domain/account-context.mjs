@@ -9,6 +9,12 @@ import path from 'node:path';
 let cached = null;
 let cachedFile = '';
 
+const EDITABLE_FIELDS = new Set([
+  'name', 'description', 'readerProfile', 'contentPillars', 'voiceGuardrails',
+  'packagingModes', 'followReason', 'conversionBridge', 'differentiators',
+  'articleFramework', 'contentRatio', 'distributionStrategy', 'notificationPolicy', 'scoring',
+]);
+
 function getDefaults() {
   return {
     name: '我的公众号',
@@ -115,4 +121,80 @@ export function formatAccountContext(options={}) {
     if (lines.length) parts.push(`\n## 通知资格\n${lines.join('\n')}`);
   }
   return parts.join('\n');
+}
+
+function accountContextPath(options = {}) {
+  return path.resolve(options.filePath || path.join(options.workspaceRoot || process.cwd(), 'account-context.json'));
+}
+
+function cleanText(value, field) {
+  if (value === undefined) return undefined;
+  if (value === null) return '';
+  if (typeof value !== 'string') throw new Error(`${field} 必须是文本`);
+  return value.trim();
+}
+
+function cleanList(value, field) {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) throw new Error(`${field} 必须是数组`);
+  return value.map((item) => {
+    if (typeof item !== 'string') throw new Error(`${field} 只能包含文本`);
+    return item.trim();
+  }).filter(Boolean);
+}
+
+function hasText(value) {
+  return typeof value === 'string' && Boolean(value.trim());
+}
+
+function normalizeAccountPatch(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('账号配置必须是对象');
+  const patch = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (!EDITABLE_FIELDS.has(key)) continue;
+    if (['contentPillars', 'voiceGuardrails', 'packagingModes', 'differentiators', 'articleFramework'].includes(key)) {
+      patch[key] = cleanList(value, key);
+    } else if (['contentRatio', 'distributionStrategy', 'notificationPolicy', 'scoring'].includes(key)) {
+      if (value !== undefined && (!value || typeof value !== 'object' || Array.isArray(value))) throw new Error(`${key} 必须是对象`);
+      patch[key] = value;
+    } else {
+      patch[key] = cleanText(value, key);
+    }
+  }
+  return patch;
+}
+
+export function isAccountContextConfigured(context, options = {}) {
+  const filePath = accountContextPath(options);
+  return fs.existsSync(filePath)
+    && hasText(context?.name)
+    && hasText(context?.description)
+    && hasText(context?.readerProfile)
+    && Array.isArray(context?.contentPillars)
+    && context.contentPillars.length > 0;
+}
+
+export function saveAccountContext(input, options = {}) {
+  const filePath = accountContextPath(options);
+  let existing = {};
+  if (fs.existsSync(filePath)) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) existing = parsed;
+    } catch {
+      existing = {};
+    }
+  }
+  const patch = normalizeAccountPatch(input);
+  const next = { ...existing, ...patch };
+  if (!hasText(next.name) || !hasText(next.description) || !hasText(next.readerProfile) || !Array.isArray(next.contentPillars) || !next.contentPillars.length) {
+    throw new Error('请至少填写账号名称、账号简介、核心读者和一个内容支柱');
+  }
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  const temporary = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+  fs.writeFileSync(temporary, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
+  fs.renameSync(temporary, filePath);
+  cached = next;
+  cachedFile = filePath;
+  return next;
 }

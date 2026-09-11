@@ -52,7 +52,6 @@ export async function createBatch(event) {
   const form = event.currentTarget;
   const input = Object.fromEntries(new FormData(form));
   if (!input.date || Number.isNaN(Date.parse(input.date))) return toast("请选择有效的批次日期", "error");
-  if (!String(input.title || "").trim()) input.title = `${input.date} 每日选题`;
   const submit = form.querySelector("button[type=submit]");
   submit.disabled = true; submit.textContent = "正在建立…";
   try {

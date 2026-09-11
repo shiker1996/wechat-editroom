@@ -1,15 +1,52 @@
 import crypto from 'node:crypto';
 
+const shanghaiClock = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+});
+
+function localTimeOf(date) {
+  return shanghaiClock.format(date);
+}
+
 export class BatchRepository {
   constructor(db) { this.db = db; }
 
   create({ date, title, note = '', batchType = 'regular', requestedTracks = ['article'] }) {
     const now = new Date().toISOString();
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const dailySequence = this.reserveDailySequence(date);
+      const safeTitle = String(title ?? '').trim();
+      const finalTitle = safeTitle || `${date} ${localTimeOf(new Date(now))} · 每日选题 #${String(dailySequence).padStart(2, '0')}`;
     const insert=this.db.prepare(`INSERT INTO batches
-      (id, batch_date, title, batch_type, requested_tracks, status, stage, note, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, 'draft', 'collect', ?, ?, ?)`)
-    for(let attempt=0;attempt<5;attempt+=1){const id=`${date}-${crypto.randomBytes(5).toString('hex')}`;try{insert.run(id,date,title,batchType,JSON.stringify(requestedTracks),note,now,now);return id;}catch(error){if(!String(error.message).includes('UNIQUE'))throw error;}}
-    throw new Error('批次 ID 生成冲突，请重试');
+      (id, batch_date, title, batch_type, requested_tracks, status, stage, note, daily_sequence, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, 'draft', 'collect', ?, ?, ?, ?)`);
+      for(let attempt=0;attempt<5;attempt+=1){
+        const id=`${date}-${crypto.randomBytes(5).toString('hex')}`;
+        try{
+          insert.run(id,date,finalTitle,batchType,JSON.stringify(requestedTracks),note,dailySequence,now,now);
+          this.db.exec('COMMIT');
+          return id;
+        }catch(error){if(!String(error.message).includes('UNIQUE'))throw error;}
+      }
+      throw new Error('批次 ID 生成冲突，请重试');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  reserveDailySequence(date) {
+    const row=this.db.prepare('SELECT next_sequence FROM batch_daily_sequences WHERE batch_date=?').get(date);
+    if(row){
+      const sequence=Number(row.next_sequence);
+      this.db.prepare('UPDATE batch_daily_sequences SET next_sequence=? WHERE batch_date=?').run(sequence+1,date);
+      return sequence;
+    }
+    const max=Number(this.db.prepare('SELECT COALESCE(MAX(daily_sequence),0) AS max_sequence FROM batches WHERE batch_date=?').get(date)?.max_sequence||0);
+    const sequence=max+1;
+    this.db.prepare('INSERT INTO batch_daily_sequences(batch_date,next_sequence) VALUES(?,?)').run(date,sequence+1);
+    return sequence;
   }
 
   list(limit = 60) {

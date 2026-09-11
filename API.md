@@ -951,6 +951,10 @@ GET 返回脱敏后的当前运行设置；PUT 更新受支持的 `.env` 字段�
 
 返回所有声明动态 `configuration` Schema 的技能、工具和采集器，以及配置状态和脱敏后的当前值，供运行与配置中心自动生成扩展配置目录。
 
+### GET|PUT /api/system/account-context
+
+读取或保存本机 `account-context.json` 的账号画像。保存接口接受账号名称、简介、核心读者、内容支柱、写作边界、关注理由和内容承接等字段；服务端校验必填定位并原子写入，同时保留文件中未在表单编辑的评分与分发策略等高级配置。前端入口位于“发布 → 账号画像”。
+
 ### GET /api/system/configuration/catalog
 
 返回统一配置资源目录。资源类型包括 `system`、`model-connection`、`model-provider`、`tool`、`collector` 和 `skill`；模型供应商连接与具体模型分开返回，响应只包含 Schema、配置状态及脱敏值。

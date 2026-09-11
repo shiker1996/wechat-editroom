@@ -13,7 +13,7 @@ const viewModules = {
   topics: "./views/topics.js", daily: "./views/daily.js", tutorial: "./views/tutorial.js", "social-topics": "./views/topics.js", "social-editor": "./views/social-editor.js", "social-custom": "./views/social-editor.js", "social-event": "./views/social-editor.js", editorial: "./views/editorial.js",
   editor: "./views/editor.js", preview: "./views/preview.js", cover: "./views/cover.js", publication: "./views/publication.js",
   hotspots: "./views/hotspots.js", artifacts: "./views/artifacts.js",
-  system: "./views/system.js", skills: "./views/skills.js", sources: "./views/subscriptions.js",
+  system: "./views/system.js", account: "./views/account.js", skills: "./views/skills.js", sources: "./views/subscriptions.js",
   themes: "./views/theme-manager.js",
   logs: "./views/logs.js?v=20260908-run-trace-status1",
   calendar: "./views/calendar.js",
@@ -51,6 +51,7 @@ const viewStyles = {
   "wechat-review-prep": ["editor"],
   "wechat-review": ["topics", "editor"],
   "content-feedback": ["editor"],
+  account: ["system"],
   themes: ["social", "editor", "system"],
   hotspots: ["topics"],
   logs: ["topics"],
@@ -104,13 +105,13 @@ const jobNoticeState = new Map();
 let jobNoticeTimer = null;
 // 浏览器前进/后退触发 go 时不重复压栈
 let navigatingFromHistory = false;
-const moduleVersion = "20260910-review-highlights-7";
+const moduleVersion = "20260911-batch-naming-account-profile-1";
 
 const titles = {
   dashboard: "工作台总览", batches: "批次管理", overview: "热点全景",
   topics: "文章选题池", daily: "批次早报", tutorial: "自主写作", "social-topics": "图文选题池", "social-editor": "工具图文", "social-custom": "自定义图文", "social-event": "事件图文", editorial: "热点事件创作", editor: "文章编辑器",
   preview: "公众号排版", cover: "文章封面图", publication: "发布中心", hotspots: "热点档案", artifacts: "产物中心",
-  system: "运行与配置中心", themes: "主题中心", skills: "技能与工具", sources: "采集源",
+  system: "运行与配置中心", account: "账号画像", themes: "主题中心", skills: "技能与工具", sources: "采集源",
   logs: "任务日志", calendar: "内容日历", "material-inbox": "素材入箱", "wechat-review-prep": "复盘数据台", "wechat-review": "公众号复盘", "content-feedback": "内容反哺",
 };
 
