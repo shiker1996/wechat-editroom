@@ -110,6 +110,7 @@
             }
         ],
         "win": {
+            "icon": "build/brand-seal.png",
             "signAndEditExecutable": false,
             "target": [
                 {
