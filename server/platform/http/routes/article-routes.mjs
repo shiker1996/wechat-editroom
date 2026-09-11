@@ -210,10 +210,10 @@ export async function handleArticleRoutes(context) {
     const candidate = store.getCandidate(Number(lockMatch[1]));
     if (!candidate) return json(response, 404, { error: '候选不存在' });
     const editorial = candidate.editorial;
-    const readiness = evaluateEditorialReadiness({ candidate, editorial });
-    if (!readiness.ready) return json(response, 409, { error: `编辑底稿未就绪，仍缺：${readiness.missing.join('、')}` });
     const events = candidateEventGroups(candidate);
     const researchContext = readDiscussionResearchContext({ workspaceRoot: root, batchId: candidate.batch_id, candidate, events });
+    const readiness = evaluateEditorialReadiness({ candidate: { ...candidate, research_context: researchContext }, editorial });
+    if (!readiness.ready) return json(response, 409, { error: `编辑底稿未就绪，仍缺：${readiness.missing.join('、')}` });
     const materialBrief = buildMaterialBrief({ candidate, editorial, researchContext, events });
     const lockedEditorial = { ...editorial, material_brief: materialBrief };
     const batch = store.getBatch(candidate.batch_id);

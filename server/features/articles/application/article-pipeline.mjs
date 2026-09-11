@@ -15,6 +15,7 @@ import { configuredRepairAttempts, evaluateConfiguredGates } from '../../../plat
 import { batchTopicsDir, candidateArticleDir } from '../../../platform/core/workspace-paths.mjs';
 import { resolveArticleLength } from '../../../platform/core/config.mjs';
 import { evaluateArticleFactEligibility } from '../domain/article-fact-eligibility.mjs';
+import { readDiscussionResearchContext } from '../../research/index.mjs';
 import { callDecisionTool, DECISION_TITLE_PLAN_TOOL, decisionToolDefinition, normalizeDecisionTitlePlan } from '../../../platform/llm/decision-tools.mjs';
 import {
   buildPublicationClaimRegister, extractArticleTitle, publicationComplianceIssue,
@@ -373,7 +374,8 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   if (!routeGate.eligible) throw new Error(`文章路线门禁未通过：${routeGate.reason}`);
   const editorial=candidate.editorial;
   if(editorial.brief_status!=='LOCKED')throw new Error('必须先完成编辑会并锁定 article-brief.md');
-  const editorialReadiness=evaluateEditorialReadiness({candidate,editorial});
+  const researchContext=readDiscussionResearchContext({workspaceRoot,batchId,candidate});
+  const editorialReadiness=evaluateEditorialReadiness({candidate:{...candidate,research_context:researchContext},editorial});
   if(!editorialReadiness.ready)throw new Error(`编辑底稿未就绪,仍缺：${editorialReadiness.missing.join('、')}`);
   // F 分数只决定自动入池；能完成编辑会并锁定简报，表示作者已人工确认该选题，
   // 手动确认的低分选题也应允许进入成稿链。

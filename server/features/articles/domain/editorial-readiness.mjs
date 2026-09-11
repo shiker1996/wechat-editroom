@@ -57,6 +57,31 @@ export const EDITORIAL_FIELDS=Object.freeze([
   {key:'reader_action',label:'读者行动依据',required:false,scope:'editorial'},
 ]);
 
+// 文章候选的默认池角色已经区分了“人工补选”和研判产出的候选。
+// 这里把它收敛成编辑室使用的显式模式：手动选入的候选没有研判点时，
+// 不应被迫伪造研判主线；研判驱动候选仍然保留完整研判门禁。
+const MANUAL_EDITORIAL_POOL_ROLES=new Set(['人工补选','人工晋级文章','综合选题']);
+
+export function resolveEditorialMode(candidate={}){
+  const explicit=String(candidate.editorial_mode||candidate.editorialMode||'').trim();
+  if(explicit==='manual')return 'manual';
+  const researchScore=candidate.research_value??candidate.researchValue;
+  if(String(researchScore??'').trim()!==''&&Number.isFinite(Number(researchScore))&&Number(researchScore)<=0)return 'manual';
+  const researchContext=candidate.research_context||candidate.researchContext;
+  if(researchContext?.status==='no_matching_event')return 'manual';
+  if(researchContext?.status==='available'
+    && !((Array.isArray(researchContext.topic_candidates)&&researchContext.topic_candidates.length)
+      || researchContext.topic_candidate?.candidate_id))return 'manual';
+  if(explicit==='research')return 'research';
+  const articleTrack=Array.isArray(candidate.tracks)
+    ? candidate.tracks.find((track)=>track?.track==='article')
+    : null;
+  const poolRole=String(articleTrack?.pool_role||candidate.pool_role||articleTrack?.poolRole||'').trim();
+  if(MANUAL_EDITORIAL_POOL_ROLES.has(poolRole))return 'manual';
+  if(String(candidate.source_type||'').trim()==='manual')return 'manual';
+  return 'research';
+}
+
 export function editorialFieldComplete(field,value){
   if(field.key==='research_basis')return researchBasisDecision(value);
   if(field.key==='confirmed_facts')return confirmedFactsDecision(value);
@@ -65,6 +90,8 @@ export function editorialFieldComplete(field,value){
 }
 
 export function evaluateEditorialReadiness({candidate={},editorial={}}={}){
+  const mode=resolveEditorialMode(candidate);
+  const researchFieldsRequired=mode!=='manual';
   const materialBrief=editorial.material_brief&&typeof editorial.material_brief==='object'?editorial.material_brief:{};
   const fields=EDITORIAL_FIELDS.map((field)=>{
     const source=field.scope==='candidate'?candidate:editorial;
@@ -77,8 +104,11 @@ export function evaluateEditorialReadiness({candidate={},editorial={}}={}){
     const value=field.key==='adopted_research_points'
       ? rawValue.map((item)=>item.statement).join('；')
       : rawValue;
-    return {...field,value,rawValue,ok:editorialFieldComplete(field,rawValue)};
+    const required=researchFieldsRequired||!['adopted_research_points','research_basis'].includes(field.key)
+      ? field.required
+      : false;
+    return {...field,required,value,rawValue,ok:editorialFieldComplete(field,rawValue)};
   });
   const missing=fields.filter((field)=>field.required&&!field.ok).map((field)=>field.label);
-  return {ready:missing.length===0,missing,fields};
+  return {ready:missing.length===0,missing,fields,mode};
 }

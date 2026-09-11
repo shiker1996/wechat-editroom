@@ -167,7 +167,7 @@ export async function handleBatchRoutes({ request, response, pathname, searchPar
     const file = path.join(batchWorkdir(batch), 'sources', 'event-heat-ranking.json');
     let ranking = null;
     try { ranking = JSON.parse(fs.readFileSync(file, 'utf8')); } catch {}
-    if (!ranking || !Array.isArray(ranking.items) || ranking.titleVersion !== 2) {
+    if (!ranking || !Array.isArray(ranking.items) || ranking.titleVersion !== 2 || ranking.scoringVersion !== 2 || ranking.scoringModels?.news_event !== 'T_account') {
       ranking = buildEventHeatRanking({ store, batch, previousItems: loadPreviousEventHeatItems({ store, workspaceRoot: root, batch }) });
     }
     return respond(json, response, 200, ranking);
@@ -182,7 +182,7 @@ export async function handleBatchRoutes({ request, response, pathname, searchPar
       const heatFile = path.join(batchWorkdir(batch), 'sources', 'event-heat-ranking.json');
       eventHeatRanking = fs.existsSync(heatFile) ? JSON.parse(fs.readFileSync(heatFile, 'utf8')) : null;
     } catch { eventHeatRanking = null; }
-    if (!eventHeatRanking || !Array.isArray(eventHeatRanking.items) || eventHeatRanking.titleVersion !== 2) {
+    if (!eventHeatRanking || !Array.isArray(eventHeatRanking.items) || eventHeatRanking.titleVersion !== 2 || eventHeatRanking.scoringVersion !== 2 || eventHeatRanking.scoringModels?.news_event !== 'T_account') {
       eventHeatRanking = buildEventHeatRanking({ store, batch, previousItems: loadPreviousEventHeatItems({ store, workspaceRoot: root, batch }) });
     }
     const memberships = store.listEventHotspots?.({ batchId, limit: 100000 }) || [];

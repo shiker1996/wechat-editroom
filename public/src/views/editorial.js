@@ -258,17 +258,18 @@ function renderSelectedResearchSummary(points = selectedResearchPoints()) {
   const summary = document.getElementById("editorial-research-selection-summary");
   const focusSummary = document.getElementById("editorial-focus-research-summary");
   const labels = points.map((point) => `<span class="editorial-research-selection-chip"><b>${escapeHtml(point.label || (point.scope === "inter_event" ? "事件间关系" : "事件内研判"))}</b><span class="editorial-research-selection-chip-text">${escapeHtml(researchPointText(point))}</span></span>`).join("");
+  const manualMode = state.editorialCandidate?.editorial_mode === "manual";
   if (summary) {
     summary.innerHTML = points.length
       ? `<span class="editorial-research-selection-count">编辑室 Agent 已采用 ${points.length} 条研判拓展点</span><button type="button" class="text-button" data-editorial-open="research">查看研判</button>`
-      : '<span class="muted">等待编辑室 Agent 根据本篇角度和命题选择研判拓展点</span><button type="button" class="text-button" data-editorial-open="research">查看研判</button>';
+      : `<span class="muted">${manualMode ? "手动选入模式：当前没有研判点，可依据已确认事实成稿" : "等待编辑室 Agent 根据本篇角度和命题选择研判拓展点"}</span><button type="button" class="text-button" data-editorial-open="research">查看研判</button>`;
   }
-  if (focusSummary) focusSummary.innerHTML = points.length ? labels : '<span class="muted">等待编辑室 Agent 自动选择研判拓展点</span>';
+  if (focusSummary) focusSummary.innerHTML = points.length ? labels : `<span class="muted">${manualMode ? "手动选入模式：不要求研判拓展点" : "等待编辑室 Agent 自动选择研判拓展点"}</span>`;
 }
 
 function renderResearchPointSelection(options, selected) {
   const selectedKeys = new Set(selected.map((point) => String(point.point_id || "")));
-  if (!options.length) return '<section class="editorial-research-selection"><div class="research-section-head"><h4>研判拓展点</h4><span>0 条</span></div><p class="muted">当前研判没有可供编辑室 Agent 采用的反常、利益冲突、发散方向或事件间关系。</p></section>';
+  if (!options.length) return `<section class="editorial-research-selection"><div class="research-section-head"><h4>研判拓展点</h4><span>0 条</span></div><p class="muted">当前研判没有可供编辑室 Agent 采用的反常、利益冲突、发散方向或事件间关系。${state.editorialCandidate?.editorial_mode === "manual" ? "本选题为手动选入模式，可以依据已确认事实继续成稿。" : "请先补充或重新执行事件研判。"}</p></section>`;
   const groups = [
     ["事件内研判", options.filter((item) => item.scope === "internal")],
     ["事件间关系", options.filter((item) => item.scope === "inter_event")],
@@ -279,6 +280,7 @@ function renderResearchPointSelection(options, selected) {
 async function openEditorial(id) {
   await ensureModelOptions();
   const candidate = await request(`/api/candidates/${id}`);
+  state.editorialCandidate = candidate;
   await Promise.all([
     loadSkillSelect(document.getElementById("editorial-writer-skill"), `/api/candidates/${id}/writer-skills`),
     loadStageSkillControls(document.getElementById("editorial-stage-skills"), `/api/candidates/${id}/stage-skills`),
@@ -467,13 +469,14 @@ function renderEditorialReadiness() {
   if (!form) return;
   const text = (name) => form.elements[name]?.value?.trim() || "";
   const adoptedPoints = parseResearchPoints(form.elements.adopted_research_points?.value || "[]");
+  const manualMode = state.editorialCandidate?.editorial_mode === "manual";
   const checks = [
     { label: "已确认事实", field: "confirmed_facts", ok: confirmedFactsComplete(text("confirmed_facts")) },
     { label: "明确观点", field: "author_opinions", ok: substantive(text("author_opinions")) },
     { label: "写作角度", field: "angle", ok: substantive(text("angle")) },
     { label: "锁定命题", field: "thesis", ok: substantive(text("thesis")) },
-    { label: "采用的研判拓展点", field: "adopted_research_points", ok: adoptedPoints.length > 0 },
-    { label: "采用的研判主线", field: "research_basis", ok: researchBasisComplete(text("research_basis")) },
+    { label: manualMode ? "采用的研判拓展点（手动模式可跳过）" : "采用的研判拓展点", field: "adopted_research_points", ok: adoptedPoints.length > 0, optional: manualMode },
+    { label: manualMode ? "采用的研判主线（手动模式可跳过）" : "采用的研判主线", field: "research_basis", ok: researchBasisComplete(text("research_basis")), optional: manualMode },
     { label: "读者后果", field: "reader_consequence", ok: substantive(text("reader_consequence")) },
     { label: "利益/责任冲突", field: "conflict", ok: substantive(text("conflict")) },
     { label: "禁止写入", field: "forbidden_claims", ok: forbiddenClaimsComplete(text("forbidden_claims")) },
@@ -501,7 +504,9 @@ function renderEditorialReadiness() {
   const title = document.getElementById("editorial-production-title");
   if (title) title.textContent = ready ? "编辑决策已完整，可以进入成稿" : "尚未达到成稿条件";
   const hint = document.getElementById("editorial-production-hint");
-  if (hint) hint.textContent = ready ? "点击后会保存当前决策、锁定文章简报，并运行完整成稿链。" : `还需完成：${required.filter((c) => !c.ok).map((c) => c.label).join("、")}`;
+  if (hint) hint.textContent = ready
+    ? `点击后会保存当前决策、锁定文章简报，并运行完整成稿链。${manualMode ? "当前为手动选入模式，研判点为空不影响成稿。" : ""}`
+    : `还需完成：${required.filter((c) => !c.ok).map((c) => c.label).join("、")}`;
   const btn = document.getElementById("start-editorial-production");
   if (btn) {
     btn.hidden = !ready;

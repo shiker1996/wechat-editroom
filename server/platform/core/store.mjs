@@ -304,13 +304,13 @@ export class Store {
     return this.queries.batches.getOverview(batchId);
   }
 
-  addCandidates(batchId, hotspotIds, { tracks = ['article'] } = {}) {
-    this.repositories.candidates.addFromHotspots(batchId, hotspotIds, { tracks });
+  addCandidates(batchId, hotspotIds, { tracks = ['article'], editorialMode = 'manual' } = {}) {
+    this.repositories.candidates.addFromHotspots(batchId, hotspotIds, { tracks, editorialMode });
     return this.listCandidates(batchId);
   }
 
-  createCompositeCandidate(batchId, hotspotIds, { title='', poolRole='综合选题', tracks=['article'], dimension='event' } = {}) {
-    const id = this.repositories.candidates.createComposite(batchId, hotspotIds, { title, poolRole, tracks, dimension });
+  createCompositeCandidate(batchId, hotspotIds, { title='', poolRole='综合选题', tracks=['article'], dimension='event', editorialMode='manual' } = {}) {
+    const id = this.repositories.candidates.createComposite(batchId, hotspotIds, { title, poolRole, tracks, dimension, editorialMode });
     return id == null ? null : this.getCandidate(id);
   }
 

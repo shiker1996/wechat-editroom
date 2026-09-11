@@ -802,6 +802,11 @@ export function runDatabaseMigrations(db, migrateSchema) {
     try {
       const columns = new Set(db.prepare('PRAGMA table_info(editorial_sessions)').all().map((column) => column.name));
       if (!columns.has('material_brief_json')) db.exec("ALTER TABLE editorial_sessions ADD COLUMN material_brief_json TEXT NOT NULL DEFAULT '{}'");
+      const candidateColumns = new Set(db.prepare('PRAGMA table_info(candidates)').all().map((column) => column.name));
+      if (!candidateColumns.has('editorial_mode')) {
+        db.exec("ALTER TABLE candidates ADD COLUMN editorial_mode TEXT NOT NULL DEFAULT 'research'");
+        db.exec("UPDATE candidates SET editorial_mode='manual' WHERE pool_role IN ('人工补选','人工晋级文章','综合选题')");
+      }
       db.exec('COMMIT');
     } catch (error) { db.exec('ROLLBACK'); throw error; }
   }

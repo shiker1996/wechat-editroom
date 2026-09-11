@@ -1,7 +1,7 @@
 const $ = (selector) => document.querySelector(selector);
 
 const carouselSlides = [
-  { image: './assets/ui-demo.gif', kicker: '01 / FULL WORKFLOW', title: '完整工作流 GIF', description: '从总览到热点、选题、编辑和公众号排版，21 秒看完真实工作流' },
+  { type: 'video', image: './assets/ui-demo-cover.png', src: 'https://player.bilibili.com/player.html?isOutside=true&aid=117250979792750&bvid=BV1KjYj6GEJU&cid=41783987390&p=1', kicker: '01 / FULL WORKFLOW', title: '完整工作流教程视频', description: '从总览到热点、选题、编辑和公众号排版，直接看完一条真实链路' },
   { image: './assets/ui-dashboard.png', kicker: '02 / WORKSPACE', title: '总览 Dashboard', description: '批次、任务与产物一眼回到工作现场' },
   { image: './assets/ui-atlas.png', kicker: '03 / HOTSPOT ATLAS', title: '热点全景', description: '从信息源进入事件与候选选题' },
   { image: './assets/ui-editorial.png', kicker: '04 / EDITORIAL ROOM', title: 'AI 编辑会', description: '把角度、事实和风险放在同一张桌上' },
@@ -13,7 +13,7 @@ const carouselSlides = [
 function initCarousel() {
   const root = $('[data-carousel]');
   if (!root) return;
-  const image = $('#carousel-image');
+  const media = $('#carousel-media');
   const kicker = $('#carousel-kicker');
   const title = $('#carousel-title');
   const description = $('#carousel-description');
@@ -48,8 +48,23 @@ function initCarousel() {
     const slide = carouselSlides[index];
     root.classList.add('is-switching');
     window.setTimeout(() => {
-      image.src = slide.image;
-      image.alt = `${slide.title}界面`;
+      media.replaceChildren();
+      if (slide.type === 'video') {
+        const iframe = document.createElement('iframe');
+        iframe.src = slide.src;
+        iframe.setAttribute('scrolling', 'no');
+        iframe.setAttribute('frameborder', '0');
+        iframe.setAttribute('allow', 'fullscreen');
+        iframe.setAttribute('allowfullscreen', 'true');
+        iframe.title = slide.title;
+        media.append(iframe);
+      } else {
+        const image = document.createElement('img');
+        image.id = 'carousel-image';
+        image.src = slide.image;
+        image.alt = `${slide.title}界面`;
+        media.append(image);
+      }
       kicker.textContent = slide.kicker;
       title.textContent = slide.title;
       description.textContent = slide.description;

@@ -44,7 +44,7 @@ export { runCoverImageJob } from './application/cover-image-generator.mjs';
 export { runAiVisualCoverJob } from './application/ai-visual-cover-generator.mjs';
 export { AI_VISUAL_COVER_STAGE_CONTRACT, createAiVisualCoverStageRecorder, writeAiVisualCoverDeliveryGate, writeAiVisualCoverGenerationReport, writeAiVisualCoverSkillManifest } from './application/ai-visual-cover-pipeline.mjs';
 export { AI_VISUAL_COVER_FINAL_HTML, AI_VISUAL_COVER_HEIGHT, AI_VISUAL_COVER_HTML, AI_VISUAL_COVER_WIDTH, buildAiVisualCoverScaffold, buildCoverThemeSnapshot, buildCoverVisualInput } from './application/ai-visual-cover-composer.mjs';
-export { evaluateEditorialReadiness, substantiveDecision, confirmedFactsDecision, researchBasisDecision, EDITORIAL_FIELDS } from './domain/editorial-readiness.mjs';
+export { evaluateEditorialReadiness, resolveEditorialMode, substantiveDecision, confirmedFactsDecision, researchBasisDecision, EDITORIAL_FIELDS } from './domain/editorial-readiness.mjs';
 export { normalizeResearchPoints, researchPointsComplete, mergeResearchPoints, normalizeRejectedAngles } from './domain/research-selection.mjs';
 export { normalizeResearchCoverageResult, researchCoverageNeedsRevision } from './domain/research-coverage.mjs';
 export { finalizeEditorialResult, buildEditorialMessages } from './llm/editorial-room.mjs';

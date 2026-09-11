@@ -119,6 +119,26 @@ test('纯项目手动加入文章轨道时返回人工晋级提示', async () =>
   assert.equal(added, false);
 });
 
+test('已有文章级事件分类时，不因单条开源仓库报道误拦截文章轨道', async () => {
+  const { handleCandidateRoutes } = await import('../server/platform/http/routes/candidate-routes.mjs');
+  let payload = null; let added = false;
+  const handled = await handleCandidateRoutes({
+    request: { method: 'POST' }, response: {}, pathname: '/api/batches/b1/candidates', searchParams: new URLSearchParams(),
+    store: {
+      getBatch() { return { hotspots: [{ id: 7, title: 'DeepSeek 开源部署仓库并发布新模型', url: 'https://github.com/deepseek-ai/demo' }] }; },
+      listEventHotspots() { return [{ hotspot_id: 7, event_id: 'E7' }]; },
+      getEventRecord() { return { content_class: 'open_source_technology', article_eligible: 1 }; },
+      addCandidates() { added = true; return []; },
+      listCandidates() { return []; },
+    },
+    body: async () => ({ hotspotIds: [7], tracks: ['article'] }),
+    json(_response, status, data) { payload = { status, data }; },
+  });
+  assert.equal(handled, true);
+  assert.equal(payload.status, 201);
+  assert.equal(added, true);
+});
+
 test('人工晋级文章路线写入分类快照并创建文章轨道', async () => {
   const { handleCandidateRoutes } = await import('../server/platform/http/routes/candidate-routes.mjs');
   let payload = null; const calls = [];

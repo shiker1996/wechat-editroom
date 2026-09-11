@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { isPureProjectEvent, readDiscussionResearchContext, scoreCards } from '../../../features/research/index.mjs';
-import { routeBreakingAnalysis } from '../../../features/articles/index.mjs';
+import { resolveEditorialMode, routeBreakingAnalysis } from '../../../features/articles/index.mjs';
 import { buildMaterialBrief } from '../../../shared/domain/material-brief.mjs';
 import { buildCustomFactSheet, customFactMarkdown, customSourceUrl, socialRouteForContentClass } from '../../../features/social-cards/index.mjs';
 import { createRepositoryCandidate } from '../../../features/social-cards/index.mjs';
@@ -20,6 +20,34 @@ import { parseModelJson } from '../../llm/model-json.mjs';
 
 function readJsonFile(filePath) {
   try { return JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch { return null; }
+}
+
+function articleRouteProjectHotspots(store, batchId, hotspots = []) {
+  const memberships = store.listEventHotspots?.({ batchId, limit: 100000 }) || [];
+  const eventIdsByHotspot = new Map();
+  for (const membership of memberships) {
+    const hotspotId = Number(membership.hotspot_id);
+    if (!Number.isFinite(hotspotId)) continue;
+    const eventIds = eventIdsByHotspot.get(hotspotId) || [];
+    eventIds.push(String(membership.event_id));
+    eventIdsByHotspot.set(hotspotId, eventIds);
+  }
+  const recordById = new Map();
+  const recordFor = (eventId) => {
+    if (!eventId || !store.getEventRecord) return null;
+    if (!recordById.has(eventId)) recordById.set(eventId, store.getEventRecord(eventId));
+    return recordById.get(eventId);
+  };
+  return hotspots.filter((hotspot) => {
+    const classifiedArticleEvent = (eventIdsByHotspot.get(Number(hotspot.id)) || [])
+      .map(recordFor)
+      .find((record) => record
+        && String(record.content_class || '') !== 'github_project'
+        && record.article_eligible !== false
+        && Number(record.article_eligible) !== 0);
+    if (classifiedArticleEvent) return false;
+    return isPureProjectEvent({ representative_title: hotspot.title, title: hotspot.title, articles: [hotspot] });
+  });
 }
 
 function selectedWritingMaterialIds(input = {}) {
@@ -194,8 +222,8 @@ export async function handleCandidateRoutes({ request, response, pathname, searc
     const tracks = Array.isArray(input.tracks) && input.tracks.length ? input.tracks : ['article'];
     if (tracks.includes('article')) {
       const batch = store.getBatch(batchId);
-      const projects = (batch?.hotspots || []).filter((hotspot) => input.hotspotIds.some((id) => Number(id) === Number(hotspot.id)))
-        .filter((hotspot) => isPureProjectEvent({ representative_title: hotspot.title, title: hotspot.title, articles: [hotspot] }));
+      const projects = articleRouteProjectHotspots(store, batchId,
+        (batch?.hotspots || []).filter((hotspot) => input.hotspotIds.some((id) => Number(id) === Number(hotspot.id))));
       if (projects.length) return respond(json, response, 409, { error: '纯项目默认只能进入图文池；如需写文章，请先补充技术机制或生态趋势证据并人工晋级分类', code: 'ARTICLE_ROUTE_REQUIRES_PROMOTION', hotspotIds: projects.map((item) => item.id) });
     }
     const added = store.addCandidates(batchId, input.hotspotIds, { tracks });
@@ -217,8 +245,8 @@ export async function handleCandidateRoutes({ request, response, pathname, searc
     const batchId = decodeURIComponent(compositeMatch[1]); const input = await body(request);
     if (!Array.isArray(input.hotspotIds) || input.hotspotIds.length < 2) return respond(json, response, 400, { error: '综合选题至少需要 2 个热点' });
     const compositeBatch = store.getBatch(batchId);
-    const compositeProjects = (compositeBatch?.hotspots || []).filter((hotspot) => input.hotspotIds.some((id) => Number(id) === Number(hotspot.id)))
-      .filter((hotspot) => isPureProjectEvent({ representative_title: hotspot.title, title: hotspot.title, articles: [hotspot] }));
+    const compositeProjects = articleRouteProjectHotspots(store, batchId,
+      (compositeBatch?.hotspots || []).filter((hotspot) => input.hotspotIds.some((id) => Number(id) === Number(hotspot.id))));
     if ((Array.isArray(input.tracks) ? input.tracks : ['article']).includes('article') && compositeProjects.length) {
       return respond(json, response, 409, { error: '综合选题包含纯项目，不能直接进入文章路线；请先人工晋级项目分类或仅选择非项目事件', code: 'ARTICLE_ROUTE_REQUIRES_PROMOTION', hotspotIds: compositeProjects.map((item) => item.id) });
     }
@@ -384,7 +412,7 @@ async function handleIndependentCreation({ request, response, pathname, root, co
     const candidate = store.getCandidate(Number(retryMatch[1])); if (!candidate) return respond(json, response, 404, { error: '自主写作项目不存在' }); const creation = store.getCustomArticleRequestByCandidate(candidate.id); const outputMode = candidate.tracks?.find((item) => item.track === 'article')?.output_mode || candidate.output_mode || ''; if (!creation && !['wechat-experience', 'wechat-tutorial'].includes(outputMode)) return respond(json, response, 409, { error: '该候选不是自主写作项目' }); const input = await body(request); const explicitSkillId = String(input.skillId || '').trim(); const requestedStages = input.stageSkills && typeof input.stageSkills === 'object' ? input.stageSkills : {}; const hasExplicitStages = Object.values(requestedStages).some((value) => String(value || '').trim()); const previousSnapshot = (input.useLatestSkill === true || explicitSkillId || hasExplicitStages) ? null : store.findLatestGenerationSnapshot({ batchId: candidate.batch_id, candidateId: candidate.id, purposes: ['tutorial', 'personal-writing'] }); const articleMode = outputMode === 'wechat-experience' ? 'experience' : 'tutorial'; const skillSelection = previousSnapshot ? null : await resolveEntryWriterSkill({ workspaceRoot: root, entryPoint: 'independent-writing', contentType: articleMode, requestedSkillId: explicitSkillId, recommendedSkillId: articleMode === 'experience' ? 'wechat-mp-personal-writing' : 'wechat-mp-tutorial' }); const stageSelections = previousSnapshot ? null : await resolveArticleStageSkills({ workspaceRoot: root, entryPoint: 'independent-writing', requested: requestedStages }); const job = aiJobs.start({ batchId: candidate.batch_id, candidateId: candidate.id, provider: previousSnapshot ? null : input.provider, type: 'tutorial', snapshotId: previousSnapshot?.id || null, skillSelection, stageSelections }); if (creation) store.updateCustomArticleRequest(creation.id, { latestJobId: job.id }); return respond(json, response, 202, { ...job, candidate });
   }
   const candidateMatch = pathname.match(/^\/api\/candidates\/(\d+)$/);
-  if (candidateMatch && request.method === 'GET') { const candidate = store.getCandidate(Number(candidateMatch[1])); if (candidate) { candidate.events = candidateEventGroups(candidate); const card = candidate.events.map((group) => group.card).find(Boolean); if (card) candidate.event_card = card; candidate.research_context = readDiscussionResearchContext({ workspaceRoot: root, batchId: candidate.batch_id, candidate, events: candidate.events }); candidate.editorial = candidate.editorial || {}; const materialBrief = buildMaterialBrief({ candidate, editorial: candidate.editorial, researchContext: candidate.research_context, events: candidate.events }); candidate.editorial.material_brief = materialBrief; if (candidate.research_context) candidate.research_context.material_readiness = materialBrief.material_readiness; } return respond(json, response, candidate ? 200 : 404, candidate ?? { error: '候选不存在' }); }
+  if (candidateMatch && request.method === 'GET') { const candidate = store.getCandidate(Number(candidateMatch[1])); if (candidate) { candidate.events = candidateEventGroups(candidate); const card = candidate.events.map((group) => group.card).find(Boolean); if (card) candidate.event_card = card; candidate.research_context = readDiscussionResearchContext({ workspaceRoot: root, batchId: candidate.batch_id, candidate, events: candidate.events }); candidate.editorial_mode = resolveEditorialMode(candidate); candidate.editorial = candidate.editorial || {}; const materialBrief = buildMaterialBrief({ candidate, editorial: candidate.editorial, researchContext: candidate.research_context, events: candidate.events }); candidate.editorial.material_brief = materialBrief; if (candidate.research_context) candidate.research_context.material_readiness = materialBrief.material_readiness; } return respond(json, response, candidate ? 200 : 404, candidate ?? { error: '候选不存在' }); }
   if (candidateMatch && request.method === 'PATCH') { const candidate = store.updateCandidate(Number(candidateMatch[1]), await body(request)); return respond(json, response, candidate ? 200 : 404, candidate ?? { error: '候选不存在' }); }
   if (candidateMatch && request.method === 'DELETE') { store.deleteCandidate(Number(candidateMatch[1])); return respond(json, response, 200, { ok: true }); }
   const candidateTracksMatch = pathname.match(/^\/api\/candidates\/(\d+)\/tracks$/);

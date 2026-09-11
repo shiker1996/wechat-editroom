@@ -13,8 +13,10 @@
 [![Latest Release](https://img.shields.io/github/v/release/shiker1996/wechat-newsroom-workbench?label=latest%20release)](https://github.com/shiker1996/wechat-newsroom-workbench/releases/latest)
 
 <p align="center">
-  <img src="docs/screenshots/ui-demo.gif" alt="见字工作台：从热点到选题、文章和交付产物" width="760">
+  <iframe src="https://player.bilibili.com/player.html?isOutside=true&aid=117250979792750&bvid=BV1KjYj6GEJU&cid=41783987390&p=1" width="760" height="428" scrolling="no" frameborder="0" allow="fullscreen" allowfullscreen="true" title="见字工作台教程视频"></iframe>
 </p>
+
+<p align="center"><a href="https://www.bilibili.com/video/BV1KjYj6GEJU" target="_blank" rel="noreferrer">如果当前 Markdown 渲染器不支持播放器，点击打开 B 站教程视频 ↗</a></p>
 
 <p align="center">
   <a href="https://github.com/shiker1996/wechat-newsroom-workbench/releases/latest">下载 Windows 桌面版</a> ·

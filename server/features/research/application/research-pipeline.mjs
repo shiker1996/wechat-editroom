@@ -675,7 +675,7 @@ export async function runResearchPipeline({ gateway, store, batchId, provider, w
     const member = event.articles?.find((article) => cardsByEvent.has(article.legacy_event_id));
     if (member) event.card = cardsByEvent.get(member.legacy_event_id);
   }
-  // 分类完成后再计算 T：news_event 使用新闻热度模型，技术/趋势/项目使用各自的价值模型。
+  // 分类完成后再计算 T：news_event 使用账号化 T_account，技术/趋势/项目使用各自的价值模型。
   const eventHeatPath = path.join(sourcesDir, 'event-heat-ranking.json');
   try {
     const previousItems = loadPreviousEventHeatItems({ store, workspaceRoot, batch });

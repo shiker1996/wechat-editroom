@@ -169,6 +169,7 @@ export function applyWorkbenchSchema(db) {
         hotspot_id INTEGER,
         candidate_id TEXT NOT NULL,
         pool_role TEXT NOT NULL DEFAULT '人工补选',
+        editorial_mode TEXT NOT NULL DEFAULT 'research',
         risk_level TEXT NOT NULL DEFAULT '待评估',
         angle TEXT NOT NULL DEFAULT '',
         thesis TEXT NOT NULL DEFAULT '',

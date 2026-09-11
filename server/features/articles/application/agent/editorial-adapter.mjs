@@ -91,7 +91,7 @@ function persistEditorialFormState(store, candidateId, state) {
 
 export async function runEditorialAgentTurn({ gateway, store, registry, candidateId, provider, answer = '', events = [], retrieve = null, workspaceRoot, projectPath = '', onEvent = () => {}, budget = {}, suppliedUrls = [], allowedCapabilities = null, signal = null, resumeFrom = '', onRunCreated = null }) {
   const candidate = store.getCandidate(candidateId); if (!candidate) throw new Error('候选不存在'); if (candidate.editorial.brief_status === 'LOCKED') throw new Error('简报已经锁定；如需改方向，请先建立新候选'); if (answer.trim()) store.addEditorialMessage(candidateId, 'user', answer.trim());
-  const current = store.getCandidate(candidateId), providerConfig = gateway.config.providers[provider || gateway.config.defaultProvider], researchContext = readDiscussionResearchContext({ workspaceRoot, batchId: current.batch_id, candidate: current, events }), baseMessages = await buildEditorialMessages(current, answer, events, retrieve, workspaceRoot, researchContext);
+  const current = store.getCandidate(candidateId), providerConfig = gateway.config.providers[provider || gateway.config.defaultProvider], researchContext = readDiscussionResearchContext({ workspaceRoot, batchId: current.batch_id, candidate: current, events }), baseMessages = await buildEditorialMessages({ ...current, research_context: researchContext }, answer, events, retrieve, workspaceRoot, researchContext);
   const adaptation = buildAdaptation({ adaptation: requireAgentAdaptation(workspaceRoot, 'agent.editorial'), inputs: { events, suppliedUrls, projectPath }, workspaceRoot, store, batchId: candidate.batch_id, consumerId: 'agent.editorial', searchMaxResults: false });
   // 研判选择是编辑室自身的本地业务动作，不依赖技能配置中的插件白名单；
   // 外部资料工具仍严格遵循 allowedCapabilities。

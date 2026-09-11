@@ -3,6 +3,7 @@ import path from 'node:path';
 import { batchTopicsDir } from '../../../platform/core/workspace-paths.mjs';
 
 const HOUR = 60 * 60 * 1000;
+const EVENT_HEAT_SCORING_VERSION = 2;
 
 function timeValue(value) {
   const parsed = Date.parse(value || '');
@@ -71,8 +72,11 @@ function eventText(event = {}) {
     .flat(4).filter(Boolean).join(' ');
 }
 
-function preScoresOf(event = {}) {
-  return event.tags?.preScores || event.preScores || {};
+function preScoresOf(event = {}, currentHotspots = []) {
+  const direct = event.tags?.preScores || event.preScores;
+  if (direct && typeof direct === 'object' && Object.keys(direct).length) return direct;
+  return currentHotspots.map((hotspot) => parseRaw(hotspot).aiTags?.preScores)
+    .find((scores) => scores && typeof scores === 'object') || {};
 }
 
 function sourceStats({ currentHotspots, currentMemberships, features }) {
@@ -85,9 +89,37 @@ function sourceStats({ currentHotspots, currentMemberships, features }) {
   };
 }
 
+function accountNewsScoreParts({ event, currentHotspots, base }) {
+  const scores = preScoresOf(event, currentHotspots);
+  const readerConnection = clamp((Number(scores.audience) || 0) / 20 * 40, 0, 40);
+  const readerImpact = clamp((Number(scores.impact) || 0) / 10 * 25, 0, 25);
+  const informationGain = clamp((Number(scores.informationGain) || 0) / 15 * 20, 0, 20);
+  const evidenceQuality = Number.isFinite(Number(scores.sourceReliability))
+    ? clamp((Number(scores.sourceReliability) || 0) / 10 * 10, 0, 10)
+    : clamp((Number(base.evidenceScore) || 0) / 10 * 10, 0, 10);
+  // 热度只作为弱信号：新鲜度 3 分，扩散/报道动量 2 分。
+  const freshness = clamp((Number(base.freshnessScore) || 0) / 25 * 3, 0, 3);
+  const diffusion = clamp(((Number(base.incrementScore) || 0) + (Number(base.sourceSpreadScore) || 0) + (Number(base.momentumScore) || 0)) / 55 * 2, 0, 2);
+  const historyDecay = clamp((Number(base.historyDecayScore) || 0) * 0.75, 0, 15);
+  const scoreValue = Number(clamp(
+    readerConnection + readerImpact + informationGain + evidenceQuality + freshness + diffusion - historyDecay,
+    0, 100,
+  ).toFixed(1));
+  return {
+    readerConnection: Number(readerConnection.toFixed(1)),
+    readerImpact: Number(readerImpact.toFixed(1)),
+    informationGain: Number(informationGain.toFixed(1)),
+    evidenceQuality: Number(evidenceQuality.toFixed(1)),
+    freshness: Number(freshness.toFixed(1)),
+    diffusion: Number(diffusion.toFixed(1)),
+    historyDecay: Number(historyDecay.toFixed(1)),
+    scoreValue,
+  };
+}
+
 function scorePartsForClass(contentClass, { event, currentHotspots, currentMemberships, base, asOf }) {
   const features = classificationOf(event).features;
-  const scores = preScoresOf(event);
+  const scores = preScoresOf(event, currentHotspots);
   const stats = sourceStats({ currentHotspots, currentMemberships, features });
   const repositoryMeta = event.repositoryMeta || event.articles?.find((article) => article.repositoryMeta)?.repositoryMeta || null;
   const text = eventText(event);
@@ -116,6 +148,9 @@ function scorePartsForClass(contentClass, { event, currentHotspots, currentMembe
     const visualPotential = clamp((features.hasGithubRepository ? 6 : 2) + (repositoryMeta?.topics?.length ? 4 : 0), 0, 10);
     return { projectClarity: Number(projectClarity.toFixed(1)), demonstrability: Number(demonstrability.toFixed(1)), discoveryFreshness, sourceCompleteness: Number(sourceCompleteness.toFixed(1)), visualPotential: Number(visualPotential.toFixed(1)), sourceCount: stats.sourceCount, scoreValue: Number(clamp(projectClarity + demonstrability + discoveryFreshness + sourceCompleteness + visualPotential, 0, 100).toFixed(1)) };
   }
+  if (contentClass === 'news_event') {
+    return base.scoreParts || accountNewsScoreParts({ event, currentHotspots, base });
+  }
   return {
     freshness: base.freshnessScore,
     increment: base.incrementScore,
@@ -134,11 +169,12 @@ export function scoreClassifiedEvent({ event, currentMemberships = [], historica
   const { contentClass, status } = classificationOf(event);
   const scoreParts = scorePartsForClass(contentClass, { event, currentHotspots: currentMemberships.map((membership) => hotspotsById.get(Number(membership.hotspot_id))).filter(Boolean), currentMemberships, base, asOf });
   const scoreValue = Number.isFinite(Number(scoreParts.scoreValue)) ? Number(scoreParts.scoreValue) : base.heatScore;
+  const scoreModel = contentClass === 'news_event' ? 'T_account' : contentClass;
   return {
     ...base,
     contentClass,
     classificationStatus: status,
-    scoreModel: contentClass,
+    scoreModel,
     scoreValue,
     heatScore: scoreValue,
     eventValue: scoreValue,
@@ -149,8 +185,9 @@ export function scoreClassifiedEvent({ event, currentMemberships = [], historica
 }
 
 /**
- * Build a deterministic event-level heat ranking. The model/resolver supplies
- * event identity; this function only scores persisted evidence and recency.
+ * Build a deterministic event-level ranking. The model/resolver supplies event
+ * identity; news events use the persisted account-aware semantic scores, with
+ * recency and propagation retained only as weak supporting signals.
  */
 export function scoreEventHeat({ event, currentMemberships = [], historicalMemberships = [], hotspotsById = new Map(), asOf = Date.now() }) {
   const currentIds = new Set(currentMemberships.map((membership) => Number(membership.hotspot_id)).filter(Number.isFinite));
@@ -187,10 +224,14 @@ export function scoreEventHeat({ event, currentMemberships = [], historicalMembe
   const historyDecayScore = Math.round(clamp(Math.max(0, repeatDays - 1) * 4 + (newReportCount === 0 && repeatDays > 1 ? 5 : 0), 0, 20));
   const stale = (newReportCount === 0 && repeatDays > 1 && ageHours > 24) || ageHours > 72;
   const state = stale ? 'stale' : (event.event_state || 'continuing');
-  const heatScore = Math.round(clamp(
+  const genericHeatScore = Math.round(clamp(
     freshnessScore + incrementScore + sourceSpreadScore + momentumScore + chinaRelevanceScore + evidenceScore - historyDecayScore,
     0, 100,
   ));
+  const base = { freshnessScore, incrementScore, sourceSpreadScore, momentumScore, evidenceScore, historyDecayScore };
+  const isNewsEvent = classificationOf(event).contentClass === 'news_event';
+  const accountScoreParts = isNewsEvent ? accountNewsScoreParts({ event, currentHotspots, base }) : null;
+  const heatScore = accountScoreParts?.scoreValue ?? genericHeatScore;
   return {
     eventId: event.id,
     title: representativeTitle(event),
@@ -206,6 +247,7 @@ export function scoreEventHeat({ event, currentMemberships = [], historicalMembe
     chinaRelevanceScore,
     evidenceScore,
     historyDecayScore,
+    ...(accountScoreParts ? { scoreParts: accountScoreParts } : {}),
     reportCount: currentMemberships.length,
     historicalReportCount: allMemberships.length,
     sourceCount: sourceNames.size,
@@ -224,9 +266,9 @@ export function scoreEventHeat({ event, currentMemberships = [], historicalMembe
 }
 
 export function buildEventHeatRanking({ store, batch, previousItems = [], events = [], asOf = Date.now() }) {
-  if (!store || !batch) return { schemaVersion: 2, titleVersion: 2, generatedAt: new Date(asOf).toISOString(), batchId: batch?.id || null, items: [] };
+  if (!store || !batch) return { schemaVersion: 2, titleVersion: 2, scoringVersion: EVENT_HEAT_SCORING_VERSION, generatedAt: new Date(asOf).toISOString(), batchId: batch?.id || null, items: [] };
   const currentMemberships = store.listEventHotspots?.({ batchId: batch.id, limit: 100000 }) || [];
-  if (!currentMemberships.length) return { schemaVersion: 2, titleVersion: 2, generatedAt: new Date(asOf).toISOString(), batchId: batch.id, items: [] };
+  if (!currentMemberships.length) return { schemaVersion: 2, titleVersion: 2, scoringVersion: EVENT_HEAT_SCORING_VERSION, generatedAt: new Date(asOf).toISOString(), batchId: batch.id, items: [] };
   const historicalMemberships = store.listEventHotspots?.({ limit: 100000 }) || currentMemberships;
   const hotspotsById = new Map((batch.hotspots || []).map((hotspot) => [Number(hotspot.id), hotspot]));
   const currentByEvent = new Map();
@@ -264,15 +306,16 @@ export function buildEventHeatRanking({ store, batch, previousItems = [], events
       const priorRank = prior?.contentClass === contentClass && Number.isFinite(Number(prior.rank)) ? Number(prior.rank) : null;
       return { ...item, rank: index + 1, boardRank: index + 1, rankScope: contentClass, previousRank: priorRank, rankDelta: priorRank == null ? null : priorRank - (index + 1) };
     });
-    return [contentClass, { contentClass, scoreModel: contentClass, scoreComparable: false, totalEvents: board.length, items: board }];
+    return [contentClass, { contentClass, scoreModel: contentClass === 'news_event' ? 'T_account' : contentClass, scoreComparable: false, totalEvents: board.length, items: board }];
   }));
   return {
     schemaVersion: 2,
     titleVersion: 2,
+    scoringVersion: EVENT_HEAT_SCORING_VERSION,
     generatedAt: new Date(asOf).toISOString(),
     batchId: batch.id,
-    scoring: { freshness: 25, increment: 25, sourceSpread: 15, momentum: 15, chinaRelevance: 10, evidence: 10, historyDecay: -20, eventValue: 100 },
-    scoringModels: { news_event: 'T_news', open_source_technology: 'T_technology', open_source_trend: 'T_trend', github_project: 'projectDiscoveryScore' },
+    scoring: { readerConnection: 40, readerImpact: 25, informationGain: 20, evidenceQuality: 10, freshness: 3, diffusion: 2, historyDecay: -15, eventValue: 100 },
+    scoringModels: { news_event: 'T_account', open_source_technology: 'T_technology', open_source_trend: 'T_trend', github_project: 'projectDiscoveryScore' },
     totalEvents: ranked.length,
     rankings,
     items: ranked,

@@ -443,6 +443,7 @@ export function readDiscussionResearchContext({ workspaceRoot, batchId, candidat
   const hotspotIds = new Set([
     candidate.hotspot_id,
     ...list(candidate.member_hotspot_ids),
+    ...list(candidate.hotspots).map((hotspot) => hotspot?.id || hotspot?.hotspot_id),
   ].map((value) => Number(value)).filter((value) => Number.isInteger(value) && value > 0));
   for (const event of clusters) if (list(event.articles).some((article) => hotspotIds.has(Number(article.hotspot_id)))) eventIds.add(idOf(event));
   const matched = (report.scope?.items || []).filter((item) => eventIds.has(String(item.event_id)));

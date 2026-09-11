@@ -38,9 +38,9 @@ export class CandidateSelectionService {
       item._hotspotIds = ids;
       item._rowId = null;
       if (ids.length > 1) item._rowId = this.repositories.candidates.createComposite(batchId, ids, {
-        title: item.title || '', poolRole: item.poolRole || '综合选题', tracks: ['article'], dimension: item.dimension || 'event',
+        title: item.title || '', poolRole: item.poolRole || '综合选题', tracks: ['article'], dimension: item.dimension || 'event', editorialMode: 'research',
       });
-      else if (ids.length === 1) this.repositories.candidates.addFromHotspots(batchId, ids);
+      else if (ids.length === 1) this.repositories.candidates.addFromHotspots(batchId, ids, { editorialMode: 'research' });
     }
     for (const item of records) {
       const row = item._rowId ? { id: item._rowId } : this.db.prepare('SELECT id FROM candidates WHERE batch_id=? AND hotspot_id=?')
@@ -91,7 +91,7 @@ export class CandidateSelectionService {
       const hotspot = this.db.prepare('SELECT url,raw_json FROM hotspots WHERE id=? AND batch_id=?').get(item.hotspotId, batchId);
       const repository = repositoryKey(hotspot?.url, hotspot?.raw_json);
       if (repository && completedRepositories.has(repository)) continue;
-      this.repositories.candidates.addFromHotspots(batchId, [item.hotspotId], { tracks: ['social_cards'] });
+      this.repositories.candidates.addFromHotspots(batchId, [item.hotspotId], { tracks: ['social_cards'], editorialMode: 'research' });
       const row = this.db.prepare('SELECT id FROM candidates WHERE batch_id=? AND hotspot_id=? ORDER BY id LIMIT 1')
         .get(batchId, item.hotspotId);
       if (!row) continue;

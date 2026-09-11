@@ -143,7 +143,7 @@ export function routeBreakingAnalysis({store,batchId,tracks}){
   const batch=store.getBatch(batchId);if(!batch||batch.batch_type!=='breaking')throw new Error('突发专题不存在');
   const saved=store.getBreakingAnalysis(batchId);if(!saved?.analysis)throw new Error('请先完成突发分析');
   const selected=[...new Set((tracks||[]).filter((value)=>['article','social_cards'].includes(value)))];if(!selected.length)throw new Error('请至少选择一个进入方向');
-  const hotspot=batch.hotspots[0];store.addCandidates(batchId,[hotspot.id],{tracks:selected});
+  const hotspot=batch.hotspots[0];store.addCandidates(batchId,[hotspot.id],{tracks:selected,editorialMode:'research'});
   const candidate=store.getCandidateByHotspot(batchId,hotspot.id);
   const {article,social}=saved.analysis;
   const mapped=mapBreakingArticleScore(article);

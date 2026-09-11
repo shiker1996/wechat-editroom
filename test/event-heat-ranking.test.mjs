@@ -4,9 +4,9 @@ import { scoreClassifiedEvent, scoreEventHeat, buildEventHeatRanking } from '../
 
 const asOf = Date.parse('2026-08-23T12:00:00Z');
 
-function hotspot(id, { title = `事件 ${id}`, source = 'rss', marketScope = '国内', publishedAt = '2026-08-23T10:00:00Z', relevance = 8 } = {}) {
+function hotspot(id, { title = `事件 ${id}`, source = 'rss', marketScope = '国内', publishedAt = '2026-08-23T10:00:00Z', relevance = 8, preScores } = {}) {
   return { id, title, source, source_group: source, source_name: source, market_scope: marketScope, published_at: publishedAt,
-    url: `https://example.com/${id}`, raw_json: JSON.stringify({ aiTags: { chinaRelevance: relevance, keywords: [title] } }) };
+    url: `https://example.com/${id}`, raw_json: JSON.stringify({ aiTags: { chinaRelevance: relevance, keywords: [title], ...(preScores ? { preScores } : {}) } }) };
 }
 
 function membership(eventId, hotspotId, createdAt, isNew = 0) {
@@ -25,6 +25,28 @@ test('新事件和来源扩散会得到增量分，单事件只返回一个排�
   assert.equal(score.eventValue, score.heatScore);
   assert.equal(score.t, score.heatScore);
   assert.ok(score.incrementScore > 0);
+});
+
+test('新闻事件的 T 直接按 T_account 计算，传播热度不能压过读者关联', () => {
+  const current = [membership('STECH', 1, '2026-08-23T10:00:00Z'), membership('STECH', 2, '2026-08-23T11:00:00Z')];
+  const hotspotsById = new Map([
+    [1, hotspot(1, { source: 'rss' })],
+    [2, hotspot(2, { source: 'news' })],
+  ]);
+  const shared = { event_state: 'new_event', confidence: 'high', first_seen_at: '2026-08-23T10:00:00Z', last_seen_at: '2026-08-23T10:00:00Z' };
+  const technical = scoreClassifiedEvent({
+    event: { ...shared, id: 'STECH', title: '开发者工具发布', tags: { preScores: { audience: 18, informationGain: 12, impact: 9, sourceReliability: 8 } } },
+    currentMemberships: current, historicalMemberships: current, hotspotsById, asOf,
+  });
+  const social = scoreClassifiedEvent({
+    event: { ...shared, id: 'SSOCIAL', title: '社会民生事件', tags: { preScores: { audience: 4, informationGain: 4, impact: 3, sourceReliability: 9 } } },
+    currentMemberships: current.map((row) => ({ ...row, event_id: 'SSOCIAL' })), historicalMemberships: current, hotspotsById, asOf,
+  });
+  assert.equal(technical.scoreModel, 'T_account');
+  assert.equal(social.scoreModel, 'T_account');
+  assert.ok(technical.scoreValue > social.scoreValue);
+  assert.ok((technical.scoreParts.freshness + technical.scoreParts.diffusion) <= 5);
+  assert.ok((social.scoreParts.freshness + social.scoreParts.diffusion) <= 5);
 });
 
 test('连续出现但无新信息的事件会衰减为过时', () => {
