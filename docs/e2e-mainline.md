@@ -6,7 +6,7 @@
 npm run test:e2e
 ```
 
-测试位于 `test/e2e/mainline.test.mjs`，每次运行都会创建临时工作区和临时 SQLite 数据库，结束后清理，不会污染项目的 `data/`、`articles/` 或 `social-cards/`。
+测试位于 `test/e2e/mainline.test.mjs`，每次运行都会创建临时工作区和临时 SQLite 数据库，结束后清理，不会污染项目的 `data/`、`articles/` 或 `social-cards/`。E2E 不复制项目根目录的运行时 `data/installed-skills` 或 `data/skill-packages.json`；临时工作区只使用仓库内的 `skills/`，并生成空的第三方技能目录清单，因此可在干净 CI 检出中运行。
 
 ## 覆盖范围
 

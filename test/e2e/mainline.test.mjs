@@ -25,11 +25,11 @@ test('主链路 E2E：采集、文章与图文产物均可从真实 HTTP 服务�
   const databasePath = path.join(workspaceRoot, 'data', 'workbench.db');
   assert.notEqual(path.resolve(workspaceRoot), projectRoot, 'E2E 必须使用隔离工作区');
   fs.mkdirSync(path.join(workspaceRoot, 'data', 'source-cache'), { recursive: true });
+  fs.mkdirSync(path.join(workspaceRoot, 'data', 'installed-skills'), { recursive: true });
+  fs.writeFileSync(path.join(workspaceRoot, 'data', 'skill-packages.json'), JSON.stringify({ schemaVersion: 1, packages: {}, entryDefaults: {}, stageDefaults: {} }, null, 2));
   // SkillRegistry treats the workspace as the source of truth; copy the checked-in
   // built-in skills into the disposable workspace so selection is tested too.
   fs.cpSync(path.join(projectRoot, 'skills'), path.join(workspaceRoot, 'skills'), { recursive: true });
-  fs.cpSync(path.join(projectRoot, 'data', 'installed-skills'), path.join(workspaceRoot, 'data', 'installed-skills'), { recursive: true });
-  fs.copyFileSync(path.join(projectRoot, 'data', 'skill-packages.json'), path.join(workspaceRoot, 'data', 'skill-packages.json'));
   const rsshub = await startFakeRssHub();
   const github = await startFakeGitHub();
   const model = await startFakeModel();

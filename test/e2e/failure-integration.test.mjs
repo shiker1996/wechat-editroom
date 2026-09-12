@@ -14,9 +14,9 @@ function prepareWorkspace(root) {
   const workspaceRoot = path.join(root, 'workspace');
   const configRoot = path.join(root, 'config');
   fs.mkdirSync(path.join(workspaceRoot, 'data', 'source-cache'), { recursive: true });
+  fs.mkdirSync(path.join(workspaceRoot, 'data', 'installed-skills'), { recursive: true });
+  fs.writeFileSync(path.join(workspaceRoot, 'data', 'skill-packages.json'), JSON.stringify({ schemaVersion: 1, packages: {}, entryDefaults: {}, stageDefaults: {} }, null, 2));
   fs.cpSync(path.join(projectRoot, 'skills'), path.join(workspaceRoot, 'skills'), { recursive: true });
-  fs.cpSync(path.join(projectRoot, 'data', 'installed-skills'), path.join(workspaceRoot, 'data', 'installed-skills'), { recursive: true });
-  fs.copyFileSync(path.join(projectRoot, 'data', 'skill-packages.json'), path.join(workspaceRoot, 'data', 'skill-packages.json'));
   return { workspaceRoot, configRoot, databasePath: path.join(workspaceRoot, 'data', 'workbench.db') };
 }
 
