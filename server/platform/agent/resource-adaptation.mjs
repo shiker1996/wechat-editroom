@@ -259,7 +259,7 @@ export function loadAdaptationMessages(root,consumerId){
 // state 为可变对象，handler 的副作用（projectContext、externalSources）写在这里。
 // 阶段 3：装配时读一次目录 resourceKind 映射（静态优先合并）缓存进 resolveArguments 闭包。
 // 阶段 5：拒绝文案按 consumerId 从 config 读取（capability → 文案），配置未覆盖的由档案内联兜底。
-export function buildAdaptation({adaptation={},inputs={},workspaceRoot,store,batchId,consumerId,searchMaxResults=5}={}){
+export function buildAdaptation({adaptation={},inputs={},workspaceRoot,store,batchId,candidateId,consumerId,searchMaxResults=5}={}){
   const {resourceSources=[],resultHandlers={},defaultResultHandler='sanitize-only',handlerOptions={}}=adaptation;
   const messages=workspaceRoot&&consumerId?loadAdaptationMessages(workspaceRoot,consumerId):{};
   const resources=new Map(),state={},profiles=mergedResourceProfiles(workspaceRoot?resolveCatalogResourceProfiles(workspaceRoot):{});
@@ -276,7 +276,7 @@ export function buildAdaptation({adaptation={},inputs={},workspaceRoot,store,bat
     sanitizeToolResult:(result,request,{agentRunId}={})=>{
       const handler=RESULT_HANDLERS[resultHandlers[request.capability]||defaultResultHandler];
       if(!handler)throw new Error(`未知结果处理器：${resultHandlers[request.capability]||defaultResultHandler}`);
-      return handler(result,request,{store,batchId,agentRunId,state,options:handlerOptions,inputs,resources});
+      return handler(result,request,{store,batchId,candidateId,agentRunId,state,options:handlerOptions,inputs,resources});
     },
   };
 }
@@ -292,6 +292,35 @@ function backfillResourceContent(result,request,resources) {
   return trimmed;
 }
 
+function persistCandidateSource(result, request, { store, candidateId, resources } = {}) {
+  const trimmed = backfillResourceContent(result, request, resources);
+  if (trimmed?.status !== 'ok' || !store || candidateId == null) return trimmed;
+  const resourceId = String(request.arguments?.resourceId || '');
+  if (!resourceId.startsWith('candidate-source:')) return trimmed;
+  const resource = resources?.get(resourceId);
+  const data = trimmed.data || {};
+  const content = String(data.content || data.text || data.excerpt || '');
+  const url = String(data.url || resource?.url || '').trim();
+  if (!url) return trimmed;
+  store.saveCandidateSource(candidateId, {
+    url,
+    final_url: data.final_url || data.url || url,
+    status: data.status || 'ok',
+    title: data.title || resource?.title || '',
+    description: data.description || '',
+    author: data.author || '',
+    published_at: data.published_at || '',
+    content,
+    content_chars: Number(data.content_chars || content.length),
+    fetched_at: data.fetched_at || new Date().toISOString(),
+    error: data.error || '',
+    fetch_method: data.fetch_method || 'editorial-room',
+    quality: data.quality,
+    evidence_level: data.evidence_level || '',
+  });
+  return trimmed;
+}
+
 // 结果处理器注册表（阶段 1 代码内注册表）。
 // ctx 形态：{store, batchId, agentRunId, state, options, inputs, resources}；state 为 buildAdaptation 提供的可变对象
 // （projectContext、externalSources 副作用写在这里），inputs 为调用方运行时输入值。
@@ -303,6 +332,7 @@ export const RESULT_HANDLERS=Object.freeze({
   // 仅回填本轮内存资源，不写入事实附件；供编辑室这类只读会话串联
   // url.fetch → passage.retrieve。
   'resource-content-backfill':(result,request,{resources}={})=>backfillResourceContent(result,request,resources),
+  'candidate-source-persist':(result,request,ctx={})=>persistCandidateSource(result,request,ctx),
   'fact-attachment':(result,request,{store,batchId,agentRunId,state,options={},resources}={})=>{
     if(result?.status!=='ok')return result;
     const trimmed=sanitizeCapabilityResult(result,request),data={...trimmed.data,_agentQuery:String(request.arguments?.query||'')};

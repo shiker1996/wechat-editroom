@@ -21,7 +21,7 @@ function makeRoot(t,mutate){
 
 test('loadAgentAdaptation：真实 config 三个 agent 条目均有合法 adaptation 声明',()=>{
   const editorial=loadAgentAdaptation(projectRoot,'agent.editorial');
-  assert.deepEqual(editorial,{resourceSources:[{source:'hotspotSources'},{source:'candidateUrls'},{source:'project'}],resultHandlers:{'cap_content_url_fetch':'resource-content-backfill'},defaultResultHandler:'sanitize-only',handlerOptions:{}});
+  assert.deepEqual(editorial,{resourceSources:[{source:'hotspotSources'},{source:'candidateUrls'},{source:'project'}],resultHandlers:{'cap_content_url_fetch':'candidate-source-persist'},defaultResultHandler:'sanitize-only',handlerOptions:{}});
   const tutorial=loadAgentAdaptation(projectRoot,'agent.independent-writing');
   assert.deepEqual(tutorial,{resourceSources:[{source:'materials',limit:5},{source:'documentRoots'},{source:'project'}],resultHandlers:{'cap_filesystem_project_read':'project-fact-attachment'},defaultResultHandler:'fact-attachment',handlerOptions:{}});
   const social=loadAgentAdaptation(projectRoot,'agent.custom-social');
@@ -61,6 +61,22 @@ test('非法 source / handler 名在读取处报错',(t)=>{
 test('inputs 缺某来源时该注册器跳过不炸（空输入不产出条目）',()=>{
   const adaptation=buildAdaptation({adaptation:{resourceSources:[{source:'hotspotSources'},{source:'candidateUrls'},{source:'project'},{source:'materials',limit:5},{source:'documentRoots'}]},inputs:{}});
   assert.deepEqual([...adaptation.resources.keys()],[]);
+});
+
+test('编辑室 URL 抓取结果写入当前候选来源表', () => {
+  const saved = [];
+  const adaptation = buildAdaptation({
+    adaptation: { resourceSources: [{ source: 'candidateUrls' }], resultHandlers: { cap_content_url_fetch: 'candidate-source-persist' } },
+    inputs: { suppliedUrls: ['https://example.com/source'] },
+    store: { saveCandidateSource: (candidateId, input) => saved.push({ candidateId, input }) },
+    candidateId: 42,
+  });
+  const result = adaptation.sanitizeToolResult({ status: 'ok', data: { url: 'https://example.com/source', final_url: 'https://example.com/source', title: '原文', content: '正文' } }, { capability: 'cap_content_url_fetch', arguments: { resourceId: 'candidate-source:1' } });
+  assert.equal(result.status, 'ok');
+  assert.equal(saved.length, 1);
+  assert.equal(saved[0].candidateId, 42);
+  assert.equal(saved[0].input.content, '正文');
+  assert.equal(saved[0].input.content_chars, 2);
 });
 
 test('materials 的 limit 来自声明条目（去重 + 截断语义同 mergeMaterialUrls）',()=>{

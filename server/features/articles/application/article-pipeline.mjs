@@ -24,12 +24,12 @@ import {
 import {
   ARTICLE_LENGTH_RANGE, articleLengthStatus, articleStageOutputIssue, authorizedWritingBrief,
   buildDraftUserPrompt, compositeSourceText, normalizePlanningResult, selectWriterSkill,
-  sourceCacheIssue, unverifiedFactBaseIssue, buildResearchCoveragePrompt,
+  readArticleSourceInput, sourceCacheIssue, unverifiedFactBaseIssue, buildResearchCoveragePrompt,
 } from './article-pipeline-contract.mjs';
 export {
   ARTICLE_LENGTH_RANGE, articleLengthStatus, articleStageOutputIssue, authorizedWritingBrief,
   buildDraftUserPrompt, compositeSourceText, normalizePlanningResult, selectWriterSkill,
-  sourceCacheIssue, unverifiedFactBaseIssue, buildResearchCoveragePrompt,
+  readArticleSourceInput, sourceCacheIssue, unverifiedFactBaseIssue, buildResearchCoveragePrompt,
 } from './article-pipeline-contract.mjs';
 export {
   buildPublicationClaimRegister, extractArticleTitle, publicationComplianceIssue,
@@ -381,8 +381,8 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   // 手动确认的低分选题也应允许进入成稿链。
   const batch=store.getBatch(batchId); const workdir=candidateArticleDir(workspaceRoot,batch,candidate);
   fs.mkdirSync(workdir,{recursive:true}); let providerConfig=gateway.config.providers[provider||gateway.config.defaultProvider];
-  const sourceUrls=candidate.composite?(candidate.hotspots||[]).map((h)=>h.url).filter(Boolean).join(String.fromCharCode(10)):
-    (candidate.materials?.length?candidate.materials.map((item)=>item.url).join(String.fromCharCode(10)):candidate.url);
+  const sourceInput=readArticleSourceInput({candidate,workspaceRoot,store});
+  const sourceUrls=sourceInput.sourceUrls.join(String.fromCharCode(10));
   const readerStake=String(candidate.reader_stake||'').trim();
   const requestedDistributionLane=normalizeDistributionLane(candidate.distribution_lane);
   const distributionLane=requestedDistributionLane==='通知池'&&!readerStake?'实验池':requestedDistributionLane;
@@ -395,21 +395,8 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
     conflict:materialBrief.conflict,baselineChange:materialBrief.baseline_change,counterEvidence:materialBrief.counter_evidence,
     evidenceBoundary:materialBrief.evidence_boundary,readerAction:materialBrief.reader_action,materialReadiness:materialBrief.material_readiness};
   // 将已抓取的原始来源一并交给规划器，禁止模型凭常识补写日期、任职经历和合同细节。
-  try {
-    if(candidate.composite){
-      brief.sourceText=compositeSourceText(candidate);
-    }else{
-      const cacheFile = path.join(workspaceRoot, 'data', 'source-cache', `${candidate.hotspot_id}.json`);
-      if (fs.existsSync(cacheFile)) {
-        const sourceDoc = JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
-        if (sourceDoc?.content) {
-          const mismatch=sourceCacheIssue(candidate,sourceDoc);
-          if(mismatch)throw Object.assign(new Error(mismatch),{fatalSourceCache:true});
-          brief.sourceText = String(sourceDoc.content).slice(0, 18000);
-        }
-      }
-    }
-  } catch (error) { if(error?.fatalSourceCache)throw error; }
+  if (sourceInput.issue) throw Object.assign(new Error(sourceInput.issue), { fatalSourceCache: true });
+  brief.sourceText=sourceInput.sourceText;
   const historicalSnapshot=snapshotId?store.getGenerationSnapshot?.(snapshotId):null;
   const historicalWriter=historicalSnapshot?.snapshot?.selection?.selectedSkill
     ||historicalSnapshot?.snapshot?.skills?.[0]?.id;
@@ -471,11 +458,14 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   // 不要在这里传固定 maxOutputTokens：gateway 的 article-fact-base
   // profile 需要在 finish=length 时从 5000 自动扩容到 8000，否则
   // parseModelJson 只能看到半截 JSON，后续大纲和成稿都不会开始。
-  const factBaseResult=await gateway.complete({provider,purpose:'article-fact-base',batchId,candidateId,jsonMode:true,messages:[
-    {role:'system',protected:true,content:buildArticleStageSystem(orchestratorSkill,'fact-base')},
-    {role:'user',protected:true,content:JSON.stringify({topic:brief.topic,researchBasis:brief.researchBasis,adoptedResearchPoints:brief.adoptedResearchPoints,rejectedAngles:brief.rejectedAngles,confirmedFacts:brief.confirmedFacts,authorOpinions:brief.authorOpinions,forbiddenClaims:brief.forbiddenClaims,materialBrief:brief.materialBrief,sourceUrl:brief.sourceUrl,sourceText:brief.sourceText||''})},
-  ]});
-  const factBase=parseJsonResult(factBaseResult,store);
+  const preflightSnapshot=readJsonIfPresent(path.join(workdir,'editorial-preflight.json'),null);
+  const preflightFactBase=readJsonIfPresent(path.join(workdir,'02-fact-base.json'),null);
+  const factBase=preflightSnapshot?.ready&&preflightFactBase
+    ? preflightFactBase
+    : parseJsonResult(await gateway.complete({provider,purpose:'article-fact-base',batchId,candidateId,jsonMode:true,messages:[
+      {role:'system',protected:true,content:buildArticleStageSystem(orchestratorSkill,'fact-base')},
+      {role:'user',protected:true,content:JSON.stringify({topic:brief.topic,researchBasis:brief.researchBasis,adoptedResearchPoints:brief.adoptedResearchPoints,rejectedAngles:brief.rejectedAngles,confirmedFacts:brief.confirmedFacts,authorOpinions:brief.authorOpinions,forbiddenClaims:brief.forbiddenClaims,materialBrief:brief.materialBrief,sourceUrl:brief.sourceUrl,sourceText:brief.sourceText||''})},
+    ]}),store);
   brief.factBase=factBase;
   const publicationClaimRegister=buildPublicationClaimRegister(factBase);
   brief.publicationClaimRegister=publicationClaimRegister;

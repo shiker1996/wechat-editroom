@@ -635,7 +635,9 @@ async function startEditorialProduction() {
   const candidateId = await persistEditorialForm({ refresh: false });
   if (!candidateId) return toast("请先选择候选");
   try {
-    await request(`/api/candidates/${candidateId}/lock`, { method: "POST" });
+    await request(`/api/candidates/${candidateId}/lock`, { method: "POST", body: JSON.stringify({
+      provider: document.getElementById("editorial-provider")?.value || "",
+    }) });
     const result = await request(`/api/candidates/${candidateId}/ai/article`, { method: "POST", body: JSON.stringify({
       provider: document.getElementById("editorial-provider")?.value || "",
       skillId: document.getElementById("editorial-writer-skill")?.value || "",

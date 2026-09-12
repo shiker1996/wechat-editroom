@@ -171,7 +171,7 @@
           {"source": "project"}
         ],
         "resultHandlers": {
-          "cap_content_url_fetch": "resource-content-backfill"
+          "cap_content_url_fetch": "candidate-source-persist"
         },
         "defaultResultHandler": "sanitize-only"
       },

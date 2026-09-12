@@ -5,7 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { Store } from '../server/platform/core/store.mjs';
 import { ToolRegistry } from '../server/platform/tools/registry.mjs';
-import { runEditorialAgentTurn, selectEditorialResearchPoints } from '../server/features/articles/application/agent/editorial-adapter.mjs';
+import { editorialPreflightToolResult, runEditorialAgentTurn, selectEditorialResearchPoints } from '../server/features/articles/application/agent/editorial-adapter.mjs';
 import { buildEditorialMessages } from '../server/features/articles/llm/editorial-room.mjs';
 
 function call(capability, input, id = capability) {
@@ -78,6 +78,13 @@ test('编辑室消息把研判拓展点作为写作输入，不带评分字段',
   assert.match(content, /事件二反驳了继续扩大的判断/);
   assert.match(content, /外部反例样本/);
   assert.doesNotMatch(content, /event_value|event_rank/);
+});
+
+test('编辑室预检门禁失败仍返回标准成功工具结果', () => {
+  const result = editorialPreflightToolResult({ ready: false, gates: [{ id: 'source-cache', passed: false, issues: ['缺少来源正文'], warnings: ['主来源 URL 不匹配'] }] });
+  assert.equal(result.status, 'ok');
+  assert.equal(result.data.ready, false);
+  assert.deepEqual(result.warnings, ['主来源 URL 不匹配']);
 });
 
 test('编辑室把研判点目录独立传递，不能被主上下文截断', async () => {

@@ -49,4 +49,5 @@ export { normalizeResearchPoints, researchPointsComplete, mergeResearchPoints, n
 export { normalizeResearchCoverageResult, researchCoverageNeedsRevision } from './domain/research-coverage.mjs';
 export { finalizeEditorialResult, buildEditorialMessages } from './llm/editorial-room.mjs';
 export { EDITORIAL_AGENT_CAPABILITIES, runEditorialAgentTurn } from './application/agent/editorial-adapter.mjs';
+export { runEditorialPreflight } from './application/editorial-preflight.mjs';
 export { TUTORIAL_AGENT_CAPABILITIES, runTutorialAgentTurn, tutorialProjectAttachmentArguments } from './application/agent/tutorial-adapter.mjs';

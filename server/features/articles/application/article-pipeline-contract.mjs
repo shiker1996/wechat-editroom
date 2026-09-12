@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { markdownVisibleChars } from '../../../shared/domain/markdown-visible-chars.mjs';
 
 function cleanMarkdown(value) { return String(value||'').trim().replace(/^```(?:markdown)?\s*/i,'').replace(/\s*```$/,''); }
@@ -54,6 +56,63 @@ export function sourceCacheIssue(candidate,sourceDoc) {
   const expected=normalizeUrl(candidate?.url); const actual=normalizeUrl(sourceDoc.url||sourceDoc.final_url);
   if(!expected||!actual||expected===actual)return null;
   return `来源缓存与热点原文不一致（缓存为 ${sourceDoc.url}，热点为 ${candidate.url}），编辑室粘贴的替代来源可能已覆盖原缓存；请重新抓取热点原文或回编辑室确认来源后再成稿`;
+}
+
+function readSourceCache(workspaceRoot, hotspotId) {
+  if (!workspaceRoot || hotspotId == null) return null;
+  try {
+    return JSON.parse(fs.readFileSync(path.join(workspaceRoot, 'data', 'source-cache', `${hotspotId}.json`), 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function supplementalSourceRows(store, candidateId) {
+  if (!store || candidateId == null || typeof store.listCandidateSources !== 'function') return [];
+  return store.listCandidateSources(candidateId).filter((item) =>
+    (item?.status === 'ok' || item?.status === 'partial') && String(item?.content || '').trim());
+}
+
+function supplementalSourceText(rows, { maxChars = 12000, perSourceChars = 4000 } = {}) {
+  let result = '';
+  for (const item of rows) {
+    const block = `\n\n## 补充来源：${item.title || '未命名'}\nURL：${item.final_url || item.url || ''}\n${String(item.content).slice(0, perSourceChars)}`;
+    if (result.length + block.length > maxChars) {
+      const remaining = maxChars - result.length;
+      if (remaining > 200) result += block.slice(0, remaining);
+      break;
+    }
+    result += block;
+  }
+  return result.trim();
+}
+
+export function readArticleSourceInput({ candidate, workspaceRoot, store, maxChars = 18000 } = {}) {
+  const supplemental = supplementalSourceRows(store, candidate?.id);
+  const supplementalText = supplementalSourceText(supplemental);
+  const supplementalUrls = supplemental.map((item) => item.final_url || item.url).filter(Boolean);
+  if (candidate?.composite) {
+    const documents = Array.isArray(candidate.source_documents) ? candidate.source_documents : [];
+    const missing = documents.filter((item) => item?.source?.status !== 'ok' && item?.source?.status !== 'partial');
+    const primaryText = compositeSourceText(candidate);
+    const sourceText = [primaryText, supplementalText].filter(Boolean).join('\n\n').slice(0, maxChars);
+    const issue = !sourceText
+      ? '综合选题尚未形成可用的来源原文，请先完成备料抓取'
+      : missing.length
+        ? `综合选题仍有 ${missing.length} 个来源未成功抓取，请先完成备料抓取`
+        : null;
+    const primaryUrls = documents.map((item) => item.url || item.source?.final_url || item.source?.url).filter(Boolean);
+    return { sourceText, sourceUrls: [...new Set([...primaryUrls, ...supplementalUrls])], issue, primary: null, supplemental };
+  }
+
+  const primary = readSourceCache(workspaceRoot, candidate?.hotspot_id);
+  const primaryText = String(primary?.content || '').trim();
+  const mismatch = sourceCacheIssue(candidate, primary);
+  const sourceText = [primaryText.slice(0, maxChars), supplementalText].filter(Boolean).join('\n\n').slice(0, maxChars);
+  const issue = !sourceText ? '热点原文尚未抓取或没有可用正文，请先完成备料抓取' : null;
+  const candidateUrls = candidate?.materials?.map((item) => item.url).filter(Boolean) || [];
+  const sourceUrls = [...new Set([candidate?.url, ...candidateUrls, primary?.final_url || primary?.url, ...supplementalUrls].filter(Boolean))];
+  return { sourceText, sourceUrls, issue, warning: mismatch, primary, supplemental };
 }
 
 export function unverifiedFactBaseIssue(factBase) {

@@ -64,6 +64,10 @@ export class EditorialRepository {
     return this.db.prepare('SELECT * FROM editorial_messages WHERE candidate_row_id=? ORDER BY id').all(candidateId);
   }
 
+  clearMessages(candidateId) {
+    return this.db.prepare('DELETE FROM editorial_messages WHERE candidate_row_id=?').run(Number(candidateId)).changes;
+  }
+
   getCard(candidateId) {
     return this.db.prepare('SELECT * FROM card_editorial_sessions WHERE candidate_row_id=?').get(Number(candidateId)) ?? {
       candidate_row_id: Number(candidateId), target_reader: '', pain_point: '', tool_positioning: '', must_highlight: '',
