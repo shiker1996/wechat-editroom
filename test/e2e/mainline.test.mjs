@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { performance } from 'node:perf_hooks';
 import test from 'node:test';
 import { Store } from '../../server/platform/core/store.mjs';
 import { setCredentialFields } from '../../server/platform/tools/remote-credentials.mjs';
@@ -10,6 +11,12 @@ import { runBrowserMainlineFlow, runBrowserSmoke } from './support/browser-smoke
 import { startWorkbench, waitForJob, writeFixtureConfig } from './support/workbench-process.mjs';
 
 const projectRoot = path.resolve(import.meta.dirname, '../..');
+const PERFORMANCE_THRESHOLDS = Object.freeze({
+  collectMs: 30_000,
+  researchMs: 60_000,
+  browserSocialFlowMs: 120_000,
+  articleMs: 120_000,
+});
 
 test('主链路 E2E：采集、文章与图文产物均可从真实 HTTP 服务闭环', async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'write-assistant-e2e-'));
@@ -28,6 +35,7 @@ test('主链路 E2E：采集、文章与图文产物均可从真实 HTTP 服务�
   const model = await startFakeModel();
   let workbench;
   let failure = null;
+  const timings = {};
   try {
     const store = new Store(databasePath);
     const batch = store.createBatch({ date: '2026-09-12', title: 'E2E 主链路固定夹具', requestedTracks: ['article', 'social_cards'] });
@@ -51,20 +59,26 @@ test('主链路 E2E：采集、文章与图文产物均可从真实 HTTP 服务�
     assert.deepEqual(fixtureSource?.config?.route, '/e2e/news?limit=30');
     await workbench.api(`/api/collection-sources/${fixtureSource.id}/test`, { method: 'POST', body: {} });
 
+    const collectStartedAt = performance.now();
     const collect = await workbench.api(`/api/batches/${batch.id}/collect`, { method: 'POST', body: { provider: 'fixture' } });
     const collectStatuses = [];
     try { await waitForJob(workbench.api, collect.id, { observedStatuses: collectStatuses }); }
     catch (error) { throw new Error(`${error.message}\n服务日志：${workbench.logs.join('')}\nRSSHub 请求：${rsshub.requests.join(', ')}`); }
     assert.ok(rsshub.requests.includes('/e2e/news?limit=30'), `采集未请求固定 RSS：${rsshub.requests.join(', ')}`);
     assert.equal(collectStatuses.at(-1), 'completed', `采集任务未通过轮询进入完成态：${collectStatuses.join(' -> ')}`);
+    timings.collectMs = Math.round(performance.now() - collectStartedAt);
+    assert.ok(timings.collectMs <= PERFORMANCE_THRESHOLDS.collectMs, `采集阶段超出性能阈值：${timings.collectMs}ms > ${PERFORMANCE_THRESHOLDS.collectMs}ms`);
     const tagging = await workbench.api(`/api/batches/${batch.id}/ai/tag`, { method: 'POST', body: { provider: 'fixture' } });
     assert.ok(Number(tagging.updated) > 0, '真实打标阶段必须处理采集热点');
     assert.equal(tagging.eventCards?.failed || 0, 0, '真实事件卡阶段不应失败');
+    const researchStartedAt = performance.now();
     const researchStart = await workbench.api(`/api/batches/${batch.id}/ai/research`, { method: 'POST', body: { provider: 'fixture' } });
     const researchStatuses = [];
     try { await waitForJob(workbench.api, researchStart.id, { observedStatuses: researchStatuses }); }
     catch (error) { throw new Error(`${error.message}\n服务日志：${workbench.logs.join('')}\n模型请求：${JSON.stringify(model.requests)}`); }
     assert.equal(researchStatuses.at(-1), 'completed', `研判任务未通过轮询进入完成态：${researchStatuses.join(' -> ')}`);
+    timings.researchMs = Math.round(performance.now() - researchStartedAt);
+    assert.ok(timings.researchMs <= PERFORMANCE_THRESHOLDS.researchMs, `研判阶段超出性能阈值：${timings.researchMs}ms > ${PERFORMANCE_THRESHOLDS.researchMs}ms`);
     const researchArtifacts = await workbench.api(`/api/artifacts?batch_id=${encodeURIComponent(batch.id)}`);
     for (const name of ['discussion-research.json', 'discussion-research-reports.md', 'topic-candidate-generation.json']) {
       const artifact = researchArtifacts.find((item) => item.name === name);
@@ -101,11 +115,16 @@ test('主链路 E2E：采集、文章与图文产物均可从真实 HTTP 服务�
     assert.equal(fetchedSource.status, 'ok', '文章原文必须通过真实备料接口就绪');
     assert.ok(Number(fetchedSource.content_chars) > 800, '文章备料应来自 RSS 正文摘要而不是预置缓存');
 
-    const browserFlow = await runBrowserMainlineFlow({ baseUrl: workbench.baseUrl, socialCandidateId: socialCandidate.id, factsText: '固定仓库分析 Fixture 工具', diagnosticsDir: path.join(root, 'diagnostics') });
+    const browserFlowStartedAt = performance.now();
+    const browserFlow = await runBrowserMainlineFlow({ baseUrl: workbench.baseUrl, socialCandidateId: socialCandidate.id, factsText: '固定仓库分析 Fixture 工具', diagnosticsDir: path.join(root, 'diagnostics'), visualBaselinePath: path.join(projectRoot, 'test/e2e/fixtures/social-card-plan.sha256') });
+    timings.browserSocialFlowMs = Math.round(performance.now() - browserFlowStartedAt);
+    assert.ok(timings.browserSocialFlowMs <= PERFORMANCE_THRESHOLDS.browserSocialFlowMs, `图文浏览器主链路超出性能阈值：${timings.browserSocialFlowMs}ms > ${PERFORMANCE_THRESHOLDS.browserSocialFlowMs}ms`);
     assert.deepEqual(browserFlow.actions, ['打开工具图文', '选择图文候选', '分析仓库', '生成故事板', '生成图文并等待交付']);
     assert.match(browserFlow.deliveryMeta, /\d+ 张/);
+    assert.match(browserFlow.visualSignature, /^[a-f0-9]{64}$/, '图文视觉回归未生成有效签名');
     assert.deepEqual(github.requests.sort(), ['/repos/example/e2e-tool', '/repos/example/e2e-tool/license', '/repos/example/e2e-tool/readme', '/repos/example/e2e-tool/releases/latest'].sort(), `仓库分析必须通过固定 GitHub API 完成：${github.requests.join(', ')}`);
 
+    const articleStartedAt = performance.now();
     let articleJob;
     try { articleJob = await workbench.api(`/api/candidates/${articleCandidate.id}/ai/article`, { method: 'POST', body: { provider: 'fixture', useLatestSkill: true } }); }
     catch (error) { throw new Error(`${error.message}\n服务日志：${workbench.logs.join('')}`); }
@@ -113,6 +132,8 @@ test('主链路 E2E：采集、文章与图文产物均可从真实 HTTP 服务�
     try { await waitForJob(workbench.api, articleJob.id, { observedStatuses: articleStatuses }); }
     catch (error) { throw new Error(`${error.message}\n模型请求：${JSON.stringify(model.requests)}`); }
     assert.equal(articleStatuses.at(-1), 'completed', `文章任务未通过轮询进入完成态：${articleStatuses.join(' -> ')}`);
+    timings.articleMs = Math.round(performance.now() - articleStartedAt);
+    assert.ok(timings.articleMs <= PERFORMANCE_THRESHOLDS.articleMs, `文章阶段超出性能阈值：${timings.articleMs}ms > ${PERFORMANCE_THRESHOLDS.articleMs}ms`);
     const articleArtifacts = await workbench.api(`/api/artifacts?batch_id=${encodeURIComponent(batch.id)}`);
     const articleRows = articleArtifacts.filter((item) => Number(item.candidate_row_id) === articleCandidate.id);
     const requiredArticleArtifacts = [
@@ -194,7 +215,7 @@ test('主链路 E2E：采集、文章与图文产物均可从真实 HTTP 服务�
     const diagnosticsDir = path.join(root, 'diagnostics');
     try {
       fs.mkdirSync(diagnosticsDir, { recursive: true });
-      fs.writeFileSync(path.join(diagnosticsDir, 'failure.json'), JSON.stringify({ message: error.message, stack: error.stack }, null, 2));
+      fs.writeFileSync(path.join(diagnosticsDir, 'failure.json'), JSON.stringify({ message: error.message, stack: error.stack, timings, performanceThresholds: PERFORMANCE_THRESHOLDS }, null, 2));
       fs.writeFileSync(path.join(diagnosticsDir, 'workbench.log'), workbench?.logs?.join('') || '');
       fs.writeFileSync(path.join(diagnosticsDir, 'rsshub-requests.json'), JSON.stringify(rsshub.requests, null, 2));
       fs.writeFileSync(path.join(diagnosticsDir, 'model-requests.json'), JSON.stringify(model.requests, null, 2));
