@@ -111,7 +111,7 @@
         ],
         "win": {
             "icon": "build/brand-seal.png",
-            "signAndEditExecutable": false,
+            "signAndEditExecutable": true,
             "target": [
                 {
                     "target": "nsis",
