@@ -17,6 +17,8 @@ jobs:
   verify:
     runs-on: windows-latest
     timeout-minutes: 45
+    env:
+      E2E_ARTIFACT_DIR: test-results/e2e
     steps:
       - uses: actions/checkout@v4
 
@@ -41,6 +43,9 @@ jobs:
       - name: 构建校验
         run: npm run build
 
+      - name: 主链路 E2E 门禁
+        run: npm run test:e2e
+
       - name: 全量测试
         run: npm test
         # 覆盖浏览器渲染层（布局审计、ECharts、浏览器内联化），Chromium 来自 postinstall 下载，
@@ -62,3 +67,12 @@ jobs:
 
       - name: 秘密扫描
         run: node scripts/quality/secret-scan.mjs
+
+      - name: 上传 E2E 诊断产物
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-diagnostics-${{ github.run_id }}
+          path: test-results/e2e
+          if-no-files-found: ignore
+          retention-days: 14
