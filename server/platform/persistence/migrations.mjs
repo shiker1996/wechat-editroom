@@ -836,6 +836,15 @@ export function runDatabaseMigrations(db, migrateSchema) {
       db.exec('COMMIT');
     } catch (error) { db.exec('ROLLBACK'); throw error; }
   }
+  // Repair invariant for databases that were stamped at a newer schema version
+  // before batch naming introduced its sequence table. The table is additive and
+  // safe to create on every startup; without it, creating a batch fails with
+  // SQLITE_ERROR even though listing existing batches still works.
+  if (arguments.length < 2) {
+    const batchColumns = new Set(db.prepare('PRAGMA table_info(batches)').all().map((column) => column.name));
+    if (!batchColumns.has('daily_sequence')) db.exec("ALTER TABLE batches ADD COLUMN daily_sequence INTEGER NOT NULL DEFAULT 0");
+    db.exec('CREATE TABLE IF NOT EXISTS batch_daily_sequences (batch_date TEXT PRIMARY KEY, next_sequence INTEGER NOT NULL DEFAULT 1)');
+  }
   const violations = db.prepare('PRAGMA foreign_key_check').all();
   if (violations.length) throw new Error(`数据库迁移后存在 ${violations.length} 项外键完整性错误`);
 }
