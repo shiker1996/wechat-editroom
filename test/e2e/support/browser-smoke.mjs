@@ -92,3 +92,51 @@ export async function runBrowserSmoke({ baseUrl, routes, diagnosticsDir = null }
     await browser.close();
   }
 }
+
+export async function runBrowserMainlineFlow({ baseUrl, socialCandidateId, factsText = '固定仓库分析 Fixture 工具', diagnosticsDir = null }) {
+  const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+  const page = await browser.newPage();
+  await page.setViewport({ width: 1440, height: 1000, deviceScaleFactor: 1 });
+  const consoleErrors = [];
+  const pageErrors = [];
+  const failedRequests = [];
+  const badResponses = [];
+  page.on('console', (message) => { if (message.type() === 'error' && !message.location()?.url?.endsWith('/favicon.ico')) consoleErrors.push(message.text()); });
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+  page.on('requestfailed', (request) => { if (CORE_RESOURCE_TYPES.has(request.resourceType())) failedRequests.push(`${request.method()} ${request.url()} · ${request.failure()?.errorText || 'failed'}`); });
+  page.on('response', (response) => { const request = response.request(); if (response.status() >= 500 && CORE_RESOURCE_TYPES.has(request.resourceType())) badResponses.push(`${response.status()} ${request.method()} ${response.url()}`); });
+  try {
+    await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.waitForFunction(() => document.querySelector('#view-dashboard.view.active') !== null, { timeout: 30000 });
+    await page.evaluate(() => window.go('social-editor'));
+    await page.waitForSelector(`[data-social-candidate="${Number(socialCandidateId)}"]`, { visible: true, timeout: 30000 });
+    await page.click(`[data-social-candidate="${Number(socialCandidateId)}"]`);
+    await page.waitForFunction(() => document.querySelector('#social-editor-fields:not([hidden])') !== null, { timeout: 30000 });
+    await page.click('#inspect-repository');
+    await page.waitForFunction((expected) => document.querySelector('#repository-facts')?.innerText.includes(expected), { timeout: 30000 }, factsText);
+    await page.click('#analyze-card-editorial');
+    await page.waitForFunction(() => document.querySelectorAll('#card-plan-preview [data-card-page]').length >= 4 && document.querySelector('#generate-social-card')?.disabled === false, { timeout: 120000 });
+    await page.click('#generate-social-card');
+    await page.waitForFunction(() => {
+      const panel = document.querySelector('#social-delivery');
+      const meta = document.querySelector('#social-delivery-meta')?.textContent || '';
+      return panel && !panel.hidden && /\d+ 张/.test(meta);
+    }, { timeout: 180000 });
+    assert.deepEqual(consoleErrors, [], `主链路浏览器操作出现控制台错误：${consoleErrors.join(' | ')}`);
+    assert.deepEqual(pageErrors, [], `主链路浏览器操作出现页面异常：${pageErrors.join(' | ')}`);
+    assert.deepEqual(failedRequests, [], `主链路浏览器操作关键资源加载失败：${failedRequests.join(' | ')}`);
+    assert.deepEqual(badResponses, [], `主链路浏览器操作返回服务端错误：${badResponses.join(' | ')}`);
+    return { actions: ['打开工具图文', '选择图文候选', '分析仓库', '生成故事板', '生成图文并等待交付'], deliveryMeta: await page.$eval('#social-delivery-meta', (node) => node.textContent.trim()) };
+  } catch (error) {
+    if (diagnosticsDir) {
+      try {
+        fs.mkdirSync(diagnosticsDir, { recursive: true });
+        await page.screenshot({ path: path.join(diagnosticsDir, 'browser-mainline-failure.png'), fullPage: true });
+        fs.writeFileSync(path.join(diagnosticsDir, 'browser-mainline-failure.json'), JSON.stringify({ message: error.message, consoleErrors, pageErrors, failedRequests, badResponses }, null, 2));
+      } catch {}
+    }
+    throw error;
+  } finally {
+    await browser.close();
+  }
+}

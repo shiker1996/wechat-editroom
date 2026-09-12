@@ -9,13 +9,17 @@ function cacheFile(cacheDir,apiPath){return path.join(cacheDir,`${crypto.createH
 function readCache(file){try{return JSON.parse(fs.readFileSync(file,'utf8'));}catch{return null;}}
 function writeCache(file,value){fs.mkdirSync(path.dirname(file),{recursive:true});const temp=`${file}.tmp`;fs.writeFileSync(temp,JSON.stringify(value),'utf8');fs.renameSync(temp,file);}
 const delay=(ms)=>new Promise((resolve)=>setTimeout(resolve,ms));
+function githubApiBaseUrl(){
+  const configured=String(process.env.WORKBENCH_GITHUB_API_BASE_URL||process.env.GITHUB_API_BASE_URL||'https://api.github.com').trim();
+  return configured.replace(/\/+$/,'');
+}
 
 export async function requestGitHubJson(apiPath,{fetchImpl=fetch,token=process.env.GITHUB_ACCESS_TOKEN,cacheDir=null,ttlMs=15*60*1000,optional=false}={}){
   const authenticated=Boolean(token);const file=cacheDir?cacheFile(cacheDir,apiPath):null;const cached=file?readCache(file):null;
   if(cached&&Date.now()-Date.parse(cached.fetchedAt)<ttlMs){health={...health,status:'ok',authenticated,cacheHits:health.cacheHits+1};return cached.data;}
   const headers={'accept':'application/vnd.github+json','user-agent':'write-assistant/0.1','x-github-api-version':'2022-11-28'};if(token)headers.authorization=`Bearer ${token}`;if(cached?.etag)headers['if-none-match']=cached.etag;
   let lastError;
-  for(let attempt=0;attempt<2;attempt+=1){try{const response=await fetchImpl(`https://api.github.com${apiPath}`,{headers,signal:AbortSignal.timeout(15000)});updateHealth(response,authenticated);
+  for(let attempt=0;attempt<2;attempt+=1){try{const response=await fetchImpl(`${githubApiBaseUrl()}${apiPath}`,{headers,signal:AbortSignal.timeout(15000)});updateHealth(response,authenticated);
       if(response.status===304&&cached){health.cacheHits+=1;writeCache(file,{...cached,fetchedAt:new Date().toISOString()});return cached.data;}
       if(optional&&response.status===404)return null;
       if(response.ok){const data=await response.json();if(file)writeCache(file,{etag:header(response,'etag')||'',fetchedAt:new Date().toISOString(),data});return data;}
@@ -26,4 +30,3 @@ export async function requestGitHubJson(apiPath,{fetchImpl=fetch,token=process.e
 }
 
 export function getGitHubApiHealth(){return {...health};}
-

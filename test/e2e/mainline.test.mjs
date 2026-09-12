@@ -5,8 +5,8 @@ import path from 'node:path';
 import test from 'node:test';
 import { Store } from '../../server/platform/core/store.mjs';
 import { setCredentialFields } from '../../server/platform/tools/remote-credentials.mjs';
-import { startFakeModel, startFakeRssHub } from './support/fake-upstreams.mjs';
-import { runBrowserSmoke } from './support/browser-smoke.mjs';
+import { startFakeGitHub, startFakeModel, startFakeRssHub } from './support/fake-upstreams.mjs';
+import { runBrowserMainlineFlow, runBrowserSmoke } from './support/browser-smoke.mjs';
 import { startWorkbench, waitForJob, writeFixtureConfig } from './support/workbench-process.mjs';
 
 const projectRoot = path.resolve(import.meta.dirname, '../..');
@@ -24,6 +24,7 @@ test('主链路 E2E：采集、文章与图文产物均可从真实 HTTP 服务�
   fs.cpSync(path.join(projectRoot, 'data', 'installed-skills'), path.join(workspaceRoot, 'data', 'installed-skills'), { recursive: true });
   fs.copyFileSync(path.join(projectRoot, 'data', 'skill-packages.json'), path.join(workspaceRoot, 'data', 'skill-packages.json'));
   const rsshub = await startFakeRssHub();
+  const github = await startFakeGitHub();
   const model = await startFakeModel();
   let workbench;
   let failure = null;
@@ -41,7 +42,7 @@ test('主链路 E2E：采集、文章与图文产物均可从真实 HTTP 服务�
     assert.ok(!path.resolve(databasePath).toLowerCase().startsWith(`${projectRoot}${path.sep}`.toLowerCase()), '临时数据库不得落到项目目录');
 
     writeFixtureConfig(configRoot, { workspaceRoot, rsshub: { baseUrl: rsshub.baseUrl, rootDir: path.join(projectRoot, 'RSSHub'), keepAlive: true, maxAgeHours: 168, allowUndated: true }, llm: { defaultProvider: 'fixture', providers: { fixture: { label: 'E2E Fixture', baseUrl: model.baseUrl, protocol: 'chat_completions', model: 'fixture', apiKeyEnv: 'E2E_FIXTURE_KEY', contextWindow: 32000, maxOutputTokens: 16000, supportsJsonMode: true, supportsNativeTools: true, supportsThinkingToggle: true, enabled: true } } } });
-    workbench = await startWorkbench({ projectRoot, workspaceRoot, configRoot, port: 0 });
+    workbench = await startWorkbench({ projectRoot, workspaceRoot, configRoot, port: 0, env: { WORKBENCH_GITHUB_API_BASE_URL: github.baseUrl } });
     const actualPort = Number(new URL(workbench.baseUrl).port);
     assert.ok(actualPort > 0);
     const sources = await workbench.api('/api/collection-sources');
@@ -100,12 +101,10 @@ test('主链路 E2E：采集、文章与图文产物均可从真实 HTTP 服务�
     assert.equal(fetchedSource.status, 'ok', '文章原文必须通过真实备料接口就绪');
     assert.ok(Number(fetchedSource.content_chars) > 800, '文章备料应来自 RSS 正文摘要而不是预置缓存');
 
-    const postCollectStore = new Store(databasePath);
-    postCollectStore.saveRepositoryFactSheet(socialCandidate.id, { repository: 'example/e2e-tool', sourceUrl: 'https://github.com/example/e2e-tool', status: 'ok', data: { repository: 'example/e2e-tool', sourceUrl: 'https://github.com/example/e2e-tool', summary: '固定测试工具。', coreCapabilities: ['固定采集和可复算输出'], installation: ['npm install'], license: { type: 'MIT' }, maturity: 'demo' }, checkedAt: new Date().toISOString() });
-    postCollectStore.saveCardEditorial(socialCandidate.id, { target_reader: '需要核验内容链路的开发者', pain_point: '改动后无法确认产物是否完整', tool_positioning: '固定测试工具', must_highlight: '固定输入、可复算输出和失败可追踪', must_disclose: '内容基于固定测试资料，未实际运行第三方项目', getting_started: 'npm test', forbidden_claims: '不得声称真实用户收益', output_mode: 'wechat-tool-cards', visual_style: 'ice-blue', composition_mode: 'smart', layout_style: 'auto', recommended_pages: 4, card_plan_json: JSON.stringify([{ role: 'cover', title: 'E2E 主链路测试', lead: '固定输入与可追踪输出' }, { role: 'content', title: '为什么需要', content_blocks: [{ type: 'text', title: '问题', content: '每次改动都需要确认采集、文章和图文产物仍能闭环。' }] }, { role: 'content', title: '验证步骤', content_blocks: [{ type: 'list', title: '步骤', items: ['启动固定采集源', '等待任务完成', '检查最终产物'] }] }, { role: 'ending', title: '完成标准', content_blocks: [{ type: 'text', title: '边界', content: '测试输出只代表固定夹具下的流程完整。' }] }]), status: 'AI_READY' });
-    fs.mkdirSync(path.join(workspaceRoot, 'social-cards', `${batch.id}-${socialCandidate.candidate_id.toLowerCase()}`), { recursive: true });
-    fs.writeFileSync(path.join(workspaceRoot, 'social-cards', `${batch.id}-${socialCandidate.candidate_id.toLowerCase()}`, 'fact-sheet.md'), '# 固定仓库事实\n\n- 核心能力：固定采集和可复算输出\n- 安装方式：npm install\n- 许可证：MIT\n- 边界：未实际运行第三方项目\n');
-    postCollectStore.close();
+    const browserFlow = await runBrowserMainlineFlow({ baseUrl: workbench.baseUrl, socialCandidateId: socialCandidate.id, factsText: '固定仓库分析 Fixture 工具', diagnosticsDir: path.join(root, 'diagnostics') });
+    assert.deepEqual(browserFlow.actions, ['打开工具图文', '选择图文候选', '分析仓库', '生成故事板', '生成图文并等待交付']);
+    assert.match(browserFlow.deliveryMeta, /\d+ 张/);
+    assert.deepEqual(github.requests.sort(), ['/repos/example/e2e-tool', '/repos/example/e2e-tool/license', '/repos/example/e2e-tool/readme', '/repos/example/e2e-tool/releases/latest'].sort(), `仓库分析必须通过固定 GitHub API 完成：${github.requests.join(', ')}`);
 
     let articleJob;
     try { articleJob = await workbench.api(`/api/candidates/${articleCandidate.id}/ai/article`, { method: 'POST', body: { provider: 'fixture', useLatestSkill: true } }); }
@@ -141,12 +140,6 @@ test('主链路 E2E：采集、文章与图文产物均可从真实 HTTP 服务�
     const finalArticles = await workbench.api('/api/articles');
     assert.ok(finalArticles.some((item) => Number(item.candidate_row_id) === articleCandidate.id && item.status === 'finalized'));
 
-    const storyboard = await workbench.api(`/api/candidates/${socialCandidate.id}/ai/card-editorial`, { method: 'POST', body: { provider: 'fixture' } });
-    assert.notEqual(storyboard.themeState.status, 'needs-storyboard');
-    const socialJob = await workbench.api(`/api/candidates/${socialCandidate.id}/ai/social-card`, { method: 'POST', body: { provider: 'fixture', useLatestSkill: true } });
-    const socialStatuses = [];
-    await waitForJob(workbench.api, socialJob.id, { observedStatuses: socialStatuses });
-    assert.equal(socialStatuses.at(-1), 'completed', `图文任务未通过轮询进入完成态：${socialStatuses.join(' -> ')}`);
     const replayIds = new Set(model.requests.map((request) => request.replayId));
     assert.ok(model.requests.length > 0, '主链路应调用模型 Replay');
     assert.ok(replayIds.has('hotspot-tagging'), `打标 Replay 未命中：${[...replayIds].join(', ')}`);
@@ -212,7 +205,8 @@ test('主链路 E2E：采集、文章与图文产物均可从真实 HTTP 服务�
   } finally {
     await workbench?.close();
     await model.close();
-    await rsshub.close();
+      await rsshub.close();
+      await github.close();
     if (failure && process.env.E2E_ARTIFACT_DIR) {
       try {
         const destination = path.resolve(process.env.E2E_ARTIFACT_DIR);

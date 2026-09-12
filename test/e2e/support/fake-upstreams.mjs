@@ -25,6 +25,10 @@ function sendJson(response, payload, status = 200) {
   response.end(body);
 }
 
+function sendGitHubJson(response, payload, status = 200) {
+  sendJson(response, payload, status);
+}
+
 function articleMarkdown() {
   const paragraph = '这是一段来自固定测试模型的文章正文。它只验证采集、事实、规划、写作、审查、搜索优化和发布安全门禁能够依次完成，不代表真实项目效果，也不替代人工核验来源。';
   return `# E2E 主链路：固定事实如何变成可核验内容\n\n${Array.from({ length: 10 }, (_, index) => `## 第 ${index + 1} 节：验证一条完整内容链路\n\n${paragraph}${paragraph}`).join('\n\n')}\n`;
@@ -220,6 +224,34 @@ export async function startFakeRssHub({ status = 200, routeStatus = status } = {
       return;
     }
     response.writeHead(404); response.end();
+  });
+  const port = await listen(server);
+  return { baseUrl: `http://127.0.0.1:${port}`, requests, close: () => new Promise((resolve) => server.close(resolve)) };
+}
+
+export async function startFakeGitHub() {
+  const requests = [];
+  const readme = '# E2E Fixture Tool\n\n固定仓库资料，用于验证真实仓库分析接口能够驱动图文事实基座。\n\n## Features\n\n- 通过固定接口返回可核验的项目能力。\n- 生成可追踪的事实清单和图文故事板。\n\n## Installation\n\n    npm install e2e-fixture-tool\n';
+  const encodedReadme = Buffer.from(readme, 'utf8').toString('base64');
+  const server = http.createServer((request, response) => {
+    requests.push(request.url || '');
+    const url = request.url || '';
+    if (url === '/repos/example/e2e-tool') return sendGitHubJson(response, {
+      full_name: 'example/e2e-tool', html_url: 'https://github.com/example/e2e-tool',
+      description: '固定仓库分析 Fixture 工具', homepage: '', stargazers_count: 42, forks_count: 7,
+      default_branch: 'main', language: 'JavaScript', topics: ['e2e', 'fixture', 'web'], archived: false,
+      license: { spdx_id: 'MIT' },
+    });
+    if (url === '/repos/example/e2e-tool/readme') return sendGitHubJson(response, {
+      html_url: 'https://github.com/example/e2e-tool#readme', content: encodedReadme,
+    });
+    if (url === '/repos/example/e2e-tool/license') return sendGitHubJson(response, {
+      html_url: 'https://github.com/example/e2e-tool/blob/main/LICENSE', license: { spdx_id: 'MIT' },
+    });
+    if (url === '/repos/example/e2e-tool/releases/latest') return sendGitHubJson(response, {
+      html_url: 'https://github.com/example/e2e-tool/releases/tag/v1.2.3', tag_name: 'v1.2.3', published_at: '2026-09-10T00:00:00.000Z', prerelease: false,
+    });
+    return sendGitHubJson(response, { message: 'fixture github route not found' }, 404);
   });
   const port = await listen(server);
   return { baseUrl: `http://127.0.0.1:${port}`, requests, close: () => new Promise((resolve) => server.close(resolve)) };
