@@ -3,8 +3,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { Store } from '../server/platform/core/store.mjs';
-import { aggregateSocialTemplateMetricsByDimension, buildSocialTemplateCalibrationReport, summarizeSocialTemplateRun } from '../server/shared/rendering/social-card-template-metrics.mjs';
+import { configureStoreServices, Store } from '../server/platform/core/store.mjs';
+import { createSocialTemplateMetricsRepository } from '../server/features/social-cards/index.mjs';
+import { aggregateSocialTemplateMetricsByDimension, buildSocialTemplateCalibrationReport, summarizeSocialTemplateRun } from '../server/features/social-cards/rendering/social-card-template-metrics.mjs';
+
+configureStoreServices({ socialTemplateMetricsFactory: ({ db }) => createSocialTemplateMetricsRepository({ db }) });
 
 test('Phase 5 按模板、主题和页面角色输出容量校准建议', () => {
   const rows = [

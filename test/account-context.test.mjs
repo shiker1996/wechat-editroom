@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { formatAccountContext, isAccountContextConfigured, loadAccountContext, saveAccountContext } from '../server/shared/domain/account-context.mjs';
+import { formatAccountContext } from '../server/shared/domain/account-context-model.mjs';
+import { isAccountContextConfigured, loadAccountContext, saveAccountContext } from '../server/platform/application/account-context-service.mjs';
 
 const appHtml = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
 const mainJs = fs.readFileSync(new URL('../public/src/main.js', import.meta.url), 'utf8');
@@ -45,7 +46,7 @@ test('账号上下文格式化双分发策略与通知资格', () => {
   }), 'utf8');
 
   loadAccountContext(file);
-  const formatted = formatAccountContext();
+  const formatted = formatAccountContext(loadAccountContext(file));
   assert.match(formatted, /## 分发策略/);
   assert.match(formatted, /### 推荐池/);
   assert.match(formatted, /优先内容：工具、方法/);

@@ -5,7 +5,7 @@ import { isResearchEligibleHotspot } from '../../domain/hotspot-pipeline-scope.m
 import { isFreshForBatch, tagsOf } from '../../domain/hotspot-clustering.mjs';
 import { resolveStableBatchEvents } from '../stable-event-service.mjs';
 import { parseModelJson as parseSharedModelJson } from '../../../../platform/llm/model-json.mjs';
-import { selectionPrompt } from '../../llm/selection-prompts.mjs';
+import { selectionPrompt } from '../../../../platform/skills/skill-prompt.mjs';
 import { deriveClassificationFeatures, normalizeEventClassification } from '../../domain/content-routing.mjs';
 
 function parseModelJson(result, store) {

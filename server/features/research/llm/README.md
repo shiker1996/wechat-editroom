@@ -6,4 +6,4 @@
 
 ## 依赖边界
 
-可依赖 `platform/llm` 通用能力与 research domain；不得反向依赖 HTTP、任务调度或持久化实现。
+可依赖 `platform/llm` 通用能力与 research domain；跨垂直技能 Prompt 加载由 `platform/skills/` 提供；不得反向依赖 HTTP、任务调度或持久化实现。

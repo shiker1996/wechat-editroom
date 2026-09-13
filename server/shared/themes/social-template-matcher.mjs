@@ -1,4 +1,4 @@
-import { getSocialCardTemplatePack } from '../rendering/social-card-template-registry.mjs';
+import { getSocialCardTemplatePack } from '../../features/social-cards/rendering/social-card-template-registry.mjs';
 
 const STANDARD = 'standard-v1';
 const MATCH_SOURCES = Object.freeze(['program-recommended', 'user-selected', 'inherited', 'compatibility']);

@@ -17,6 +17,7 @@ import { resolveWorkspaceTheme } from '../../../platform/application/themes/user
 import { defaultTypesetTheme, enforceWechatFlowLayout, extractHtmlModelOutput, htmlPreservesStructure } from '../../../shared/rendering/typeset-output.mjs';
 import { markdownToHtml, normalizeDesignTokens } from '../../../shared/rendering/markdown-renderer.mjs';
 import { resolveAutoTheme } from '../../../platform/application/themes/auto-theme-router.mjs';
+import { getAccountContext } from '../../../platform/application/account-context-service.mjs';
 
 export { defaultTypesetTheme, enforceWechatFlowLayout, extractHtmlModelOutput, htmlPreservesStructure } from '../../../shared/rendering/typeset-output.mjs';
 export { markdownToHtml } from '../../../shared/rendering/markdown-renderer.mjs';
@@ -273,7 +274,7 @@ export async function runTypesetPipeline({ gateway, store, batchId, candidateId,
   } else {
     // 眉题取账号名（没有账号配置时省略）；主题 tokens 作底色，LLM tokens 叠加覆盖
     let kicker = '';
-    try { kicker = String(JSON.parse(fs.readFileSync(path.join(workspaceRoot, 'account-context.json'), 'utf8')).name || '').trim(); } catch { /* 无账号配置 */ }
+    kicker = String(getAccountContext({ workspaceRoot }).name || '').trim();
     writeFile(draftHtml, markdownToHtml(imageResult.content, { ...articleRenderTokens, kicker }));
     draftDetail = `确定性渲染：主题 ${theme}@${themeDefinition.version}（${themeDefinition.hash}），按 JSON 主题和 design tokens 输出内联样式，未调用模型`;
   }

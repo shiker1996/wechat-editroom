@@ -1,6 +1,7 @@
-import { formatAccountContext } from '../../../shared/domain/account-context.mjs';
+import { formatAccountContext } from '../../../shared/domain/account-context-model.mjs';
+import { getAccountContext } from '../../../platform/application/account-context-service.mjs';
 import { evaluateEditorialReadiness, substantiveDecision, EDITORIAL_FIELDS } from '../domain/editorial-readiness.mjs';
-import { selectionPrompt } from '../../research/llm/selection-prompts.mjs';
+import { selectionPrompt } from '../../../platform/skills/skill-prompt.mjs';
 import { delimitUntrusted, trimConversation, truncateAtBoundary } from '../../../platform/llm/context-safety.mjs';
 
 export { substantiveDecision };
@@ -9,7 +10,7 @@ export { substantiveDecision };
 // 技能文本用 {{ACCOUNT_CONTEXT}} 占位符标出注入位置。技能缺失或被禁用时 selectionPrompt 直接抛错（fail-fast）。
 function editorialSystem(workspaceRoot) {
   const { prompt } = selectionPrompt({ workspaceRoot, skillName:'editorial-room-chat' });
-  return prompt.replaceAll('{{ACCOUNT_CONTEXT}}', formatAccountContext({workspaceRoot}));
+  return prompt.replaceAll('{{ACCOUNT_CONTEXT}}', formatAccountContext(getAccountContext({ workspaceRoot })));
 }
 
 // 单源摘录预算：长正文经由 cap_content_passage_retrieve 检索压缩（头部+相关段落），

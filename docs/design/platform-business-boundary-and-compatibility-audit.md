@@ -273,7 +273,7 @@ HTTP 路由文件可以继续留在 platform 作为传输适配层，但 `candid
 - `features/research/application/` 接管候选选择与研究失败分类；`features/research/llm/` 接管选题 prompt loader。
 - `features/articles/application/agent/` 接管编辑室、自主写作 Agent；`features/social-cards/application/agent/` 接管自定义图文 Agent。
 - `platform/jobs/ai-job-manager.mjs` 收敛为通用队列、并发、互斥和状态运行时，通过构造参数注入业务 handler。
-- `platform/core/store.mjs` 通过 `platform/application/store-services.mjs` 做应用装配，不直接导入业务 feature。
+- `platform/core/store.mjs` 通过 `configureStoreServices` 接收启动装配注入的业务服务工厂，不导入 `platform/application` 或业务 feature；研究垂直负责创建候选选择服务。
 
 已同步路由、server 装配、能力基线、README 与架构守卫；platform/llm 已移除选题 prompt loader，platform/jobs、platform/agent、platform/integrations 不再保留上述业务实现。
 

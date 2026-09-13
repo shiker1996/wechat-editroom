@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { evaluateCustomCardGate, CUSTOM_CONTENT_TYPES, CUSTOM_SOURCE_LEVELS } from '../server/features/social-cards/index.mjs';
 import { buildCustomFactSheet, customFactMarkdown, parsePointLine, customSourceUrl } from '../server/features/social-cards/index.mjs';
 import { renderStoryboardHtml } from '../server/features/social-cards/application/social-card-pipeline.mjs';
-import { sanitizeCardPlan } from '../server/shared/rendering/storyboard-content.mjs';
+import { sanitizeCardPlan } from '../server/features/social-cards/rendering/storyboard-content.mjs';
 import { socialThemeDefinition } from '../server/shared/themes/social-theme-compiler.mjs';
 
 const okEditorial={must_disclose:'体验来自作者确认',forbidden_claims:'不得夸大效果',target_reader:'职场新人',pain_point:'整理效率低',recommended_pages:6};

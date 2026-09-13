@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
-import { getSocialCardTemplatePack, SOCIAL_CARD_RENDERER_BLOCK_TYPES } from '../rendering/social-card-template-registry.mjs';
-import { SOCIAL_CARD_PAGE_ROLES } from '../rendering/social-card-role.mjs';
+import { getSocialCardTemplatePack, SOCIAL_CARD_RENDERER_BLOCK_TYPES } from '../../features/social-cards/rendering/social-card-template-registry.mjs';
+import { SOCIAL_CARD_PAGE_ROLES } from '../../features/social-cards/rendering/social-card-role.mjs';
 import { parseModelJson } from '../model-json.mjs';
 
 export const SOCIAL_TEMPLATE_PROPOSAL_PROMPT_VERSION='social-template-proposal-v2';

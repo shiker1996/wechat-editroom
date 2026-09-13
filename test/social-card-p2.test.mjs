@@ -31,7 +31,7 @@ function renderStoryboardHtml(options={}){
 
 test('图文管线在内部使用版式白名单时建立本地 ESM 绑定', () => {
   const pipeline = fs.readFileSync(path.join(root, 'server', 'features', 'social-cards', 'application', 'social-card-pipeline.mjs'), 'utf8');
-  assert.match(pipeline, /import \{ SOCIAL_CARD_LAYOUTS \} from '\.\.\/\.\.\/\.\.\/shared\/rendering\/social-card-layout\.mjs';/);
+  assert.match(pipeline, /import \{ SOCIAL_CARD_LAYOUTS \} from '\.\.\/rendering\/social-card-layout\.mjs';/);
   assert.match(pipeline, /layout_style:SOCIAL_CARD_LAYOUTS\.includes/);
 });
 

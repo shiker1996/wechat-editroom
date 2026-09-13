@@ -5,7 +5,7 @@ import { compileSocialTheme } from '../../../shared/themes/social-theme-compiler
 import { buildCoverHtml } from '../../../shared/themes/cover-theme-compiler.mjs';
 import { coverSpecFromTheme } from '../../../shared/themes/cover-components.mjs';
 import { validateThemeDefinition } from '../../../shared/themes/theme-validator.mjs';
-import { getSocialCardTemplateCapabilities, resolveSocialCardTemplateContext } from '../../../shared/rendering/social-card-template-resolver.mjs';
+import { getSocialCardTemplateCapabilities, resolveSocialCardTemplateContext } from '../../../features/social-cards/rendering/social-card-template-resolver.mjs';
 import { DESKTOP_PREVIEW_COLORS as PREVIEW } from '../../../shared/desktop-preview-palette.mjs';
 
 export const ARTICLE_THEME_SPECIMEN=`# 主题样稿：把复杂内容讲清楚

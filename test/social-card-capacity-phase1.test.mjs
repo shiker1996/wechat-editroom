@@ -4,12 +4,12 @@ import { socialThemeDefinition } from '../server/shared/themes/social-theme-comp
 import {
   getSocialCardTemplatePack,
   listSocialCardTemplatePacks,
-} from '../server/shared/rendering/social-card-template-registry.mjs';
+} from '../server/features/social-cards/rendering/social-card-template-registry.mjs';
 import {
   createSocialCardStoryboardThemeSnapshot,
   getSocialCardTemplateCapabilities,
-} from '../server/shared/rendering/social-card-template-resolver.mjs';
-import { resolveSocialCardCapacityProfile } from '../server/shared/rendering/social-card-capacity.mjs';
+} from '../server/features/social-cards/rendering/social-card-template-resolver.mjs';
+import { resolveSocialCardCapacityProfile } from '../server/features/social-cards/rendering/social-card-capacity.mjs';
 
 test('阶段 1 五套模板包的十个角色均声明容量 profile', () => {
   const roles = ['cover', 'concept', 'feature', 'steps', 'data', 'compare', 'evidence', 'timeline', 'risk', 'ending'];
@@ -61,4 +61,3 @@ test('阶段 1 故事板主题快照记录容量版本、哈希与 resolved prof
   assert.equal(snapshot.capacityProfile.theme.themeId, 'brutalist');
   assert.equal(snapshot.capacityProfile.roles.feature.template, 'feature-grid');
 });
-

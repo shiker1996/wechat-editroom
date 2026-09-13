@@ -3,7 +3,7 @@ import { SOCIAL_DENSITY_MAX_HIGH_VALUES, socialDensityHighFields, themeNumericLi
 import { ARTICLE_COMPONENT_CATALOG, SOCIAL_COMPONENT_CATALOG } from './component-catalog.mjs';
 import { validateCoverThemeSpec } from './cover-components.mjs';
 import { colorContrast } from './color-utils.mjs';
-import { getSocialCardTemplatePack } from '../rendering/social-card-template-registry.mjs';
+import { getSocialCardTemplatePack } from '../../features/social-cards/rendering/social-card-template-registry.mjs';
 export { colorContrast } from './color-utils.mjs';
 
 const TOP_FIELDS=new Set(['schemaVersion','id','label','version','description','targets','status','source','basedOn','tags','tokens','article','social','cover']);

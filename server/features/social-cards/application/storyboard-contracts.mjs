@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { buildSocialCardTemplateCapabilityPrompt } from '../../../shared/rendering/social-card-template-resolver.mjs';
+import { buildSocialCardTemplateCapabilityPrompt } from '../rendering/social-card-template-resolver.mjs';
 
 export const SOCIAL_CARD_STORYBOARD_CONTRACTS = Object.freeze({
   factBase:'social_card_fact_base',

@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const SOURCE_TYPES = new Set(['conversation', 'reading', 'life', 'project', 'text']);
 const PLAN_STATUSES = new Set(['idea', 'planned', 'writing', 'done', 'cancelled']);
 const WECHAT_CONTENT_TYPES = new Set(['unknown', 'article', 'social']);
 const ARTICLE_MATCH_ARTIFACT_TYPES = new Set(['文章终稿', '早报终稿', '图文发布文案']);
@@ -51,7 +50,7 @@ function headerIndexes(headers, name) {
 function cell(row, name, headers) { const index = headers.findIndex((item) => item === name); return index < 0 ? '' : row[index] ?? ''; }
 
 export class ContentPlanningRepository {
-  constructor(db) { this.db = db; }
+  constructor(db, { materialRepository = null } = {}) { this.db = db; this.materialRepository = materialRepository; }
 
   listColumns({ includeInactive = false } = {}) {
     const rows = this.db.prepare(`SELECT * FROM content_columns ${includeInactive ? '' : 'WHERE active=1'} ORDER BY active DESC,id ASC`).all();
@@ -70,57 +69,6 @@ export class ContentPlanningRepository {
       .run(safeName, String(description || '').trim(), JSON.stringify(modes), active ? 1 : 0, timestamp, timestamp);
     const row = this.db.prepare('SELECT * FROM content_columns WHERE name=?').get(safeName);
     return { ...row, active: Boolean(row.active), writing_modes: jsonValue(row.writing_modes_json, ['experience']) };
-  }
-
-  createMaterial({ sourceType = 'text', title = '', rawText, capturedAt = '', tags = [], evidence = [], iteration = {}, nextTeaser = '' } = {}) {
-    if (!SOURCE_TYPES.has(sourceType)) sourceType = 'text';
-    const text = String(rawText || '').trim(); if (!text) throw new Error('素材正文不能为空');
-    const timestamp = now();
-    const result = this.db.prepare(`INSERT INTO writing_materials(source_type,title,raw_text,captured_at,tags_json,evidence_json,iteration_json,next_teaser,created_at,updated_at)
-      VALUES(?,?,?,?,?,?,?,?,?,?)`).run(sourceType, String(title || '').trim(), text, dateValue(capturedAt) || timestamp.slice(0, 10), JSON.stringify(tags), JSON.stringify(evidence), JSON.stringify(iteration), String(nextTeaser || '').trim(), timestamp, timestamp);
-    return this.getMaterial(Number(result.lastInsertRowid));
-  }
-
-  getMaterial(id) {
-    const row = this.db.prepare(`SELECT m.*,c.name AS recommended_column_name
-      FROM writing_materials m LEFT JOIN content_columns c ON c.id=m.recommended_column_id WHERE m.id=?`).get(Number(id));
-    return row ? this.#material(row) : null;
-  }
-
-  listMaterials({ status = '', sourceType = '', query = '', limit = 200 } = {}) {
-    const where = ['1=1']; const values = [];
-    if (status) { where.push('m.status=?'); values.push(status); }
-    if (sourceType) { where.push('m.source_type=?'); values.push(sourceType); }
-    if (query) { where.push('(m.title LIKE ? OR m.raw_text LIKE ? OR m.tags_json LIKE ?)'); const q = `%${query}%`; values.push(q, q, q); }
-    values.push(Math.min(Math.max(Number(limit) || 200, 1), 500));
-    return this.db.prepare(`SELECT m.*,c.name AS recommended_column_name FROM writing_materials m
-      LEFT JOIN content_columns c ON c.id=m.recommended_column_id WHERE ${where.join(' AND ')} ORDER BY m.updated_at DESC,m.id DESC LIMIT ?`).all(...values).map((row) => this.#material(row));
-  }
-
-  updateMaterial(id, input = {}) {
-    const current = this.getMaterial(id); if (!current) return null;
-    const fields = [], values = [];
-    const assign = (column, value) => { fields.push(`${column}=?`); values.push(value); };
-    if (input.title !== undefined) assign('title', String(input.title || '').trim());
-    if (input.rawText !== undefined) { const text = String(input.rawText || '').trim(); if (!text) throw new Error('素材正文不能为空'); assign('raw_text', text); }
-    if (input.sourceType !== undefined) assign('source_type', SOURCE_TYPES.has(input.sourceType) ? input.sourceType : 'text');
-    if (input.capturedAt !== undefined) assign('captured_at', dateValue(input.capturedAt) || new Date().toISOString().slice(0, 10));
-    if (input.status !== undefined) assign('status', ['inbox', 'developing', 'planned', 'archived'].includes(input.status) ? input.status : 'inbox');
-    if (input.tags !== undefined) assign('tags_json', JSON.stringify(input.tags));
-    if (input.evidence !== undefined) assign('evidence_json', JSON.stringify(input.evidence));
-    if (input.iteration !== undefined) assign('iteration_json', JSON.stringify(input.iteration));
-    if (input.assessment !== undefined) assign('assessment_json', JSON.stringify(input.assessment));
-    if (input.recommendedColumnId !== undefined) assign('recommended_column_id', input.recommendedColumnId || null);
-    if (input.nextTeaser !== undefined) assign('next_teaser', String(input.nextTeaser || '').trim());
-    if (!fields.length) return current;
-    assign('updated_at', now()); values.push(Number(id));
-    this.db.prepare(`UPDATE writing_materials SET ${fields.join(',')} WHERE id=?`).run(...values);
-    return this.getMaterial(id);
-  }
-
-  saveAssessment(id, assessment) {
-    const payload = { ...assessment, assessed_at: now() };
-    return this.updateMaterial(id, { assessment: payload, recommendedColumnId: assessment.recommended_column_id || null });
   }
 
   createWritingMaterialBrief({ materialIds = [], ...fields } = {}) {
@@ -246,8 +194,21 @@ export class ContentPlanningRepository {
   }
 
   #assertMaterialIds(ids) {
-    const missing = ids.filter((materialId) => !this.getMaterial(materialId));
+    const missing = ids.filter((materialId) => !(this.materialRepository
+      ? this.materialRepository.getMaterial(materialId)
+      : this.db.prepare('SELECT id FROM writing_materials WHERE id=?').get(Number(materialId))));
     if (missing.length) throw new Error('关联的素材不存在：' + missing.join('、'));
+  }
+
+  #materialExists(id) {
+    return this.materialRepository
+      ? Boolean(this.materialRepository.getMaterial(id))
+      : Boolean(this.db.prepare('SELECT id FROM writing_materials WHERE id=?').get(Number(id)));
+  }
+
+  #updateMaterialStatus(id, status) {
+    if (this.materialRepository) return this.materialRepository.updateMaterial(id, { status });
+    this.db.prepare('UPDATE writing_materials SET status=?,updated_at=? WHERE id=?').run(status, now(), Number(id));
   }
 
   #linkBriefMaterials(briefId, ids) {
@@ -278,12 +239,12 @@ export class ContentPlanningRepository {
   }
 
   createPlan({ materialId, columnId = null, titleDirection = '', titleIntent = '', planType = 'draft', plannedDate = null, status = 'idea', teaser = '' } = {}) {
-    if (!this.getMaterial(materialId)) throw new Error('素材不存在');
+    if (!this.#materialExists(materialId)) throw new Error('素材不存在');
     if (!PLAN_STATUSES.has(status)) status = 'idea';
     const timestamp = now();
     const result = this.db.prepare(`INSERT INTO material_content_plans(material_id,column_id,title_direction,title_intent,plan_type,planned_date,status,teaser,created_at,updated_at)
       VALUES(?,?,?,?,?,?,?,?,?,?)`).run(Number(materialId), columnId || null, String(titleDirection || '').trim(), String(titleIntent || '').trim(), String(planType || 'draft'), dateValue(plannedDate), status, String(teaser || '').trim(), timestamp, timestamp);
-    if (status === 'planned') this.updateMaterial(materialId, { status: 'planned' });
+    if (status === 'planned') this.#updateMaterialStatus(materialId, 'planned');
     return this.getPlan(Number(result.lastInsertRowid));
   }
 
@@ -716,8 +677,6 @@ export class ContentPlanningRepository {
   }
 
   listCalendarPlans(month) { return this.listPlans({ month }).map((plan) => ({ content_type: 'writing_plan', id: plan.id, title: plan.title_direction || plan.material_title || '待发展素材', batch_date: plan.planned_date, updated_at: plan.updated_at, pool_role: plan.column_name || '主动写作', plan_status: plan.status, column_name: plan.column_name, column_id: plan.column_id, material_id: plan.material_id, material_title: plan.material_title, raw_text: plan.raw_text, title_direction: plan.title_direction, title_intent: plan.title_intent, teaser: plan.teaser, publication_id: plan.publication_id, publication_status: plan.publication_status, publication_url: plan.publication_url, publication_published_at: plan.publication_published_at })); }
-
-  #material(row) { return { ...row, tags: jsonValue(row.tags_json, []), evidence: jsonValue(row.evidence_json, []), iteration: jsonValue(row.iteration_json, {}), assessment: jsonValue(row.assessment_json, {}), recommended_column_id: row.recommended_column_id ? Number(row.recommended_column_id) : null }; }
 
   #brief(row) {
     return {

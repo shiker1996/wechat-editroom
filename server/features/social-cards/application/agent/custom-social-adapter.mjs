@@ -1,7 +1,7 @@
 import { runSkill } from '../../../../platform/agent/harness.mjs';
 import { buildConversationToolCatalog, buildNativeToolDefinitions, providerSupportsNativeTools, providerSupportsToolCallStreaming } from '../../../../platform/agent/tool-catalog.mjs';
 import { deriveAgentEntryCapabilities } from '../../../../platform/agent/entry-capabilities.mjs';
-import { requestMessages, sanitizeFormUpdates } from '../../llm/custom-social-chat.mjs';
+import { requestMessages, sanitizeFormUpdates } from '../custom-social-chat.mjs';
 import { buildAllowedRoots, applyCatalogSchemas, buildAdaptation, requireAgentAdaptation } from '../../../../platform/agent/resource-adaptation.mjs';
 import { buildFormUpdateTool, createFormUpdateHandler, normalizeFormState } from '../../../../platform/agent/form-update-tool.mjs';
 import { CONVERSATION_FINISH_CAPABILITY, buildConversationFinishTool, createConversationFinishHandler } from '../../../../platform/agent/conversation-finish-tool.mjs';

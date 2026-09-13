@@ -3,8 +3,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { Store } from '../server/platform/core/store.mjs';
-import { aggregateSocialTemplateMetrics, summarizeSocialTemplateRun } from '../server/shared/rendering/social-card-template-metrics.mjs';
+import { configureStoreServices, Store } from '../server/platform/core/store.mjs';
+import { createSocialTemplateMetricsRepository } from '../server/features/social-cards/index.mjs';
+import { aggregateSocialTemplateMetrics, summarizeSocialTemplateRun } from '../server/features/social-cards/rendering/social-card-template-metrics.mjs';
+
+configureStoreServices({ socialTemplateMetricsFactory: ({ db }) => createSocialTemplateMetricsRepository({ db }) });
 
 test('Phase 4 模板指标统计区分模板回退、布局问题和单页成功率', () => {
   const run = summarizeSocialTemplateRun({

@@ -9,7 +9,7 @@ import {
   resolveSocialCardTemplate,
   resolveSocialCardTemplateContext,
   validateSocialCardTemplateCompatibility,
-} from '../server/shared/rendering/social-card-template-resolver.mjs';
+} from '../server/features/social-cards/rendering/social-card-template-resolver.mjs';
 
 function legacyTheme(id='peach') {
   const theme=structuredClone(socialThemeDefinition(id));

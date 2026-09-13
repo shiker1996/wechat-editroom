@@ -20,16 +20,22 @@ import { CollectionSourceRepository } from '../persistence/repositories/collecti
 import { EventResolutionRepository } from '../persistence/repositories/event-resolution-repository.mjs';
 import { EventResolutionReviewRepository } from '../persistence/repositories/event-resolution-review-repository.mjs';
 import { AgentRunRepository } from '../persistence/repositories/agent-run-repository.mjs';
-import { SocialTemplateMetricsRepository } from '../persistence/repositories/social-template-metrics-repository.mjs';
 import { SocialTemplateProposalMetricsRepository } from '../persistence/repositories/social-template-proposal-metrics-repository.mjs';
 import { ContentPlanningRepository } from '../persistence/repositories/content-planning-repository.mjs';
+import { MaterialRepository } from '../persistence/repositories/material-repository.mjs';
 import { ArticleArtifactRepository } from '../persistence/repositories/article-artifact-repository.mjs';
 import { BatchQueryService } from '../persistence/queries/batch-query-service.mjs';
 import { CandidateQueryService } from '../persistence/queries/candidate-query-service.mjs';
 import { EventResolutionQueryService } from '../persistence/queries/event-resolution-query-service.mjs';
-import { createCandidateSelectionService } from '../application/store-services.mjs';
 import { DatabaseRestoreService } from '../persistence/database-restore-service.mjs';
 
+let candidateSelectionServiceFactory = null;
+let socialTemplateMetricsRepositoryFactory = null;
+
+export function configureStoreServices({ candidateSelectionFactory, socialTemplateMetricsFactory } = {}) {
+  if (candidateSelectionFactory !== undefined) candidateSelectionServiceFactory = typeof candidateSelectionFactory === 'function' ? candidateSelectionFactory : null;
+  if (socialTemplateMetricsFactory !== undefined) socialTemplateMetricsRepositoryFactory = typeof socialTemplateMetricsFactory === 'function' ? socialTemplateMetricsFactory : null;
+}
 
 
 export class Store {
@@ -38,6 +44,8 @@ export class Store {
     this.referenceDate = options.referenceDate || null;
     this.db = openWorkbenchDatabase(dbPath);
     runDatabaseMigrations(this.db);
+    const material = new MaterialRepository(this.db);
+    const contentPlanning = new ContentPlanningRepository(this.db, { materialRepository: material });
     this.repositories = Object.freeze({
       aiRuns: new AiRunRepository(this.db),
       batches: new BatchRepository(this.db),
@@ -57,9 +65,10 @@ export class Store {
       eventResolution: new EventResolutionRepository(this.db),
       eventResolutionReview: new EventResolutionReviewRepository(this.db),
       agentRuns: new AgentRunRepository(this.db),
-      socialTemplateMetrics: new SocialTemplateMetricsRepository(this.db),
+      socialTemplateMetrics: null,
       socialTemplateProposalMetrics: new SocialTemplateProposalMetricsRepository(this.db),
-      contentPlanning: new ContentPlanningRepository(this.db),
+      contentPlanning,
+      material,
       articleArtifacts: new ArticleArtifactRepository(this.db),
     });
     const auditGovernance = this.repositories.extensionSettings.get('system', 'audit-governance')?.value;
@@ -77,8 +86,19 @@ export class Store {
         getWorkflowRunTrace: (rootRunId, options = {}) => this.getWorkflowRunTrace(rootRunId, options),
       }),
     });
+    const createCandidateSelection = options.candidateSelectionServiceFactory || candidateSelectionServiceFactory;
+    const createSocialTemplateMetrics = options.socialTemplateMetricsRepositoryFactory || socialTemplateMetricsRepositoryFactory;
+    const socialTemplateMetrics = typeof createSocialTemplateMetrics === 'function'
+      ? createSocialTemplateMetrics({ db: this.db })
+      : null;
+    this.repositories = Object.freeze({ ...this.repositories, socialTemplateMetrics });
     this.services = Object.freeze({
-      candidateSelection: createCandidateSelectionService(this.db, this.repositories, this.queries.candidates),
+      material: typeof options.materialServiceFactory === 'function'
+        ? options.materialServiceFactory({ repository: this.repositories.material })
+        : null,
+      candidateSelection: typeof createCandidateSelection === 'function'
+        ? createCandidateSelection({ db: this.db, repositories: this.repositories, candidateQueries: this.queries.candidates })
+        : null,
       databaseRestore: new DatabaseRestoreService(this.db),
     });
   }
@@ -563,15 +583,20 @@ export class Store {
   }
 
   saveAnalyzedCandidates(batchId, records) {
-    return this.services.candidateSelection.saveAnalyzed(batchId, records);
+    return this.#candidateSelectionService().saveAnalyzed(batchId, records);
   }
 
   clearGeneratedArticleCandidates(batchId) {
-    return this.services.candidateSelection.clearGeneratedArticleCandidates(batchId);
+    return this.#candidateSelectionService().clearGeneratedArticleCandidates(batchId);
   }
 
   saveSocialPreselection(batchId, records) {
-    return this.services.candidateSelection.saveSocialPreselection(batchId, records);
+    return this.#candidateSelectionService().saveSocialPreselection(batchId, records);
+  }
+
+  #candidateSelectionService() {
+    if (!this.services.candidateSelection) throw new Error('候选选择服务未装配，请从研究业务入口配置 Store');
+    return this.services.candidateSelection;
   }
 
   getRepositoryFactSheet(candidateId) {
@@ -609,11 +634,19 @@ export class Store {
 
   listContentColumns(options = {}) { return this.repositories.contentPlanning.listColumns(options); }
   saveContentColumn(input) { return this.repositories.contentPlanning.saveColumn(input); }
-  createWritingMaterial(input) { return this.repositories.contentPlanning.createMaterial(input); }
-  getWritingMaterial(id) { return this.repositories.contentPlanning.getMaterial(id); }
-  listWritingMaterials(input = {}) { return this.repositories.contentPlanning.listMaterials(input); }
-  updateWritingMaterial(id, input = {}) { return this.repositories.contentPlanning.updateMaterial(id, input); }
-  saveWritingAssessment(id, assessment) { return this.repositories.contentPlanning.saveAssessment(id, assessment); }
+  createWritingMaterial(input) { return this.services.material?.create(input) || this.repositories.material.createMaterial(input); }
+  captureWritingMaterial(input, context = {}) {
+    if (!this.services.material) throw new Error('素材服务未装配');
+    return this.services.material.capture(input, context);
+  }
+  getWritingMaterial(id) { return this.services.material?.get(id) || this.repositories.material.getMaterial(id); }
+  listWritingMaterials(input = {}) { return this.services.material?.list(input) || this.repositories.material.listMaterials(input); }
+  updateWritingMaterial(id, input = {}) { return this.services.material?.update(id, input) || this.repositories.material.updateMaterial(id, input); }
+  saveWritingAssessment(id, assessment) { return this.services.material?.saveAssessment(id, assessment) || this.repositories.material.saveAssessment(id, assessment); }
+  reassessWritingMaterial(id, context = {}) {
+    if (!this.services.material) throw new Error('素材服务未装配');
+    return this.services.material.reassess(id, context);
+  }
   createWritingMaterialBrief(input) { return this.repositories.contentPlanning.createWritingMaterialBrief(input); }
   getWritingMaterialBrief(id) { return this.repositories.contentPlanning.getWritingMaterialBrief(id); }
   listWritingMaterialBriefs(input = {}) { return this.repositories.contentPlanning.listWritingMaterialBriefs(input); }
@@ -739,9 +772,9 @@ export class Store {
   listRecentThemeRouting(input) { return this.repositories.themes.listRecentRouting(input); }
   listBatchThemeRouting(input) { return this.repositories.themes.listBatchRouting(input); }
   themeArchiveImpact(id) { return this.repositories.themes.archiveImpact(id); }
-  recordSocialTemplateMetric(input) { return this.repositories.socialTemplateMetrics.record(input); }
-  listSocialTemplateMetrics(input = {}) { return this.repositories.socialTemplateMetrics.list(input); }
-  socialTemplateMetricsStats(input = {}) { return this.repositories.socialTemplateMetrics.stats(input); }
+  recordSocialTemplateMetric(input) { return this.repositories.socialTemplateMetrics?.record(input) ?? null; }
+  listSocialTemplateMetrics(input = {}) { return this.repositories.socialTemplateMetrics?.list(input) ?? []; }
+  socialTemplateMetricsStats(input = {}) { return this.repositories.socialTemplateMetrics?.stats(input) ?? { usageCount: 0, calibration: { schemaVersion: 1, sampleCount: 0, dimensions: [] }, rollout: null }; }
   recordSocialTemplateProposalMetric(input) { return this.repositories.socialTemplateProposalMetrics.record(input); }
   listSocialTemplateProposalMetrics(input = {}) { return this.repositories.socialTemplateProposalMetrics.list(input); }
   socialTemplateProposalMetricsStats(input = {}) { return this.repositories.socialTemplateProposalMetrics.stats(input); }

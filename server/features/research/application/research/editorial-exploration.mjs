@@ -1,5 +1,5 @@
 import { parseModelJson as parseSharedModelJson } from '../../../../platform/llm/model-json.mjs';
-import { selectionPrompt } from '../../llm/selection-prompts.mjs';
+import { selectionPrompt } from '../../../../platform/skills/skill-prompt.mjs';
 
 function parseModelJson(result, store) {
   return parseSharedModelJson(result, { store, label: '研判模型' });

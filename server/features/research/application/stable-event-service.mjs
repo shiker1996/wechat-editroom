@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { batchTopicsDir } from '../../../platform/core/workspace-paths.mjs';
-import { loadShadowHistory, materializeStableEvents, resolveEventShadow } from '../domain/event-resolution-shadow.mjs';
+import { materializeStableEvents, resolveEventShadow } from '../domain/event-resolution-shadow.mjs';
+import { loadShadowHistory } from './event-resolution-shadow-service.mjs';
 
 function readJson(filePath) {
   try {

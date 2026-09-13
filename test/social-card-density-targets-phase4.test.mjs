@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { assessSocialCardDensityTargets, resolveSocialCardDensityTarget } from '../server/shared/rendering/social-card-density-targets.mjs';
+import { assessSocialCardDensityTargets, resolveSocialCardDensityTarget } from '../server/features/social-cards/rendering/social-card-density-targets.mjs';
 
 test('阶段 4 角色目标利用率区分普通页、续页和模板视觉负担', () => {
   assert.equal(resolveSocialCardDensityTarget({ kind: 'content', role: 'feature' }, { templatePackId: 'clean-v1' }), 0.72);
@@ -25,4 +25,3 @@ test('阶段 4 只把硬门禁通过但视觉偏空的页面标为校准目标',
   assert.equal(result.pages[0].target, 72);
   assert.equal(result.pages[1].target, 68);
 });
-

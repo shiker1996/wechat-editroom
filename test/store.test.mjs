@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { Store } from '../server/platform/core/store.mjs';
+import { configureStoreServices, Store } from '../server/platform/core/store.mjs';
 import { WorkbenchQueryService } from '../server/platform/persistence/queries/workbench-query-service.mjs';
 import { EditorialRepository } from '../server/platform/persistence/repositories/editorial-repository.mjs';
 import { SocialCandidateRepository } from '../server/platform/persistence/repositories/social-candidate-repository.mjs';
@@ -11,7 +11,10 @@ import { CustomArticleRepository } from '../server/platform/persistence/reposito
 import { BatchQueryService } from '../server/platform/persistence/queries/batch-query-service.mjs';
 import { CandidateQueryService } from '../server/platform/persistence/queries/candidate-query-service.mjs';
 import { CandidateSelectionService } from '../server/features/research/application/candidate-selection-service.mjs';
+import { createCandidateSelectionService } from '../server/features/research/index.mjs';
 import { DatabaseRestoreService } from '../server/platform/persistence/database-restore-service.mjs';
+
+configureStoreServices({ candidateSelectionFactory: ({ db, repositories, candidateQueries }) => createCandidateSelectionService(db, repositories, candidateQueries) });
 
 test('Store delegates cross-domain reads to the workbench query service', () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'newsroom-query-service-'));

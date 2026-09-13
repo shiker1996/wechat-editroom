@@ -1,5 +1,5 @@
 import { parseModelJson as parseSharedModelJson } from '../../../../platform/llm/model-json.mjs';
-import { selectionPrompt } from '../../llm/selection-prompts.mjs';
+import { selectionPrompt } from '../../../../platform/skills/skill-prompt.mjs';
 import { dimensionPartsOf } from '../../domain/hotspot-dimensions.mjs';
 import { normalizeResearchSearchTask, RESEARCH_SEARCH_POLICY, RESEARCH_SEARCH_RELATION_AXES } from '../../domain/research-search.mjs';
 

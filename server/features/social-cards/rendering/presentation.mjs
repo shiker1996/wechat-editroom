@@ -1,11 +1,11 @@
 import { compileSocialTheme, socialThemeDefinition } from '../../../shared/themes/social-theme-compiler.mjs';
-import { NEON_V1_CSS, renderNeonStoryboardSections } from '../../../shared/rendering/templates/social/neon-v1.mjs';
-import { BRUTALIST_V1_CSS, renderBrutalistStoryboardSections } from '../../../shared/rendering/templates/social/brutalist-v1.mjs';
-import { EDITORIAL_V1_CSS, renderEditorialStoryboardSections } from '../../../shared/rendering/templates/social/editorial-v1.mjs';
-import { CLEAN_V1_CSS, renderCleanStoryboardSections } from '../../../shared/rendering/templates/social/clean-v1.mjs';
-import { renderStoryboardSections } from '../../../shared/rendering/storyboard-page-renderer.mjs';
-import { renderStoryboardDocument } from '../../../shared/rendering/storyboard-document-renderer.mjs';
-import { resolveSocialCardTemplateContext } from '../../../shared/rendering/social-card-template-resolver.mjs';
+import { NEON_V1_CSS, renderNeonStoryboardSections } from './templates/social/neon-v1.mjs';
+import { BRUTALIST_V1_CSS, renderBrutalistStoryboardSections } from './templates/social/brutalist-v1.mjs';
+import { EDITORIAL_V1_CSS, renderEditorialStoryboardSections } from './templates/social/editorial-v1.mjs';
+import { CLEAN_V1_CSS, renderCleanStoryboardSections } from './templates/social/clean-v1.mjs';
+import { renderStoryboardSections } from './storyboard-page-renderer.mjs';
+import { renderStoryboardDocument } from './storyboard-document-renderer.mjs';
+import { resolveSocialCardTemplateContext } from './social-card-template-resolver.mjs';
 import { parseModelJson } from '../../../platform/llm/model-json.mjs';
 
 function extractCardPlanJsonText(value) {

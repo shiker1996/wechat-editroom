@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { batchTopicsDir } from '../../../platform/core/workspace-paths.mjs';
 import { isResearchEligibleHotspot } from '../domain/hotspot-pipeline-scope.mjs';
-import { loadShadowHistory, resolveEventShadow } from '../domain/event-resolution-shadow.mjs';
+import { resolveEventShadow } from '../domain/event-resolution-shadow.mjs';
+import { loadShadowHistory } from './event-resolution-shadow-service.mjs';
 
 function readJson(filePath) {
   try { if (fs.existsSync(filePath)) return JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch {}

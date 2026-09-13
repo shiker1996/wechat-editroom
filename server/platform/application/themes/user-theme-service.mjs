@@ -2,7 +2,7 @@ import { validateThemeDefinition, ThemeValidationError } from '../../../shared/t
 import { themeNumericLimits } from '../../../shared/themes/theme-numeric-limits.mjs';
 import { getBuiltinThemeRegistry, themeHash } from '../../../shared/themes/theme-registry.mjs';
 import { assertThemePublishable } from './theme-publish-gate.mjs';
-import { getSocialCardTemplatePack } from '../../../shared/rendering/social-card-template-registry.mjs';
+import { getSocialCardTemplatePack } from '../../../features/social-cards/rendering/social-card-template-registry.mjs';
 import { matchSocialTemplate, templateMatchMetadata } from '../../../shared/themes/social-template-matcher.mjs';
 import { normalizeThemeMetadata } from '../../../shared/themes/theme-metadata.mjs';
 

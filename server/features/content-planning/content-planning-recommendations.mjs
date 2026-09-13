@@ -1,4 +1,4 @@
-import { classifyWechatArticle, matchWechatPerformance } from './wechat-content-insights.mjs';
+import { classifyWechatArticle, matchWechatPerformance } from '../content-feedback/domain/wechat-content-insights.mjs';
 
 const LEVEL_WEIGHT = { high: 3, medium: 2, low: 1 };
 

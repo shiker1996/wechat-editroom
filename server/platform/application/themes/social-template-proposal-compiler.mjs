@@ -2,8 +2,8 @@ import { colorContrast } from '../../../shared/themes/theme-validator.mjs';
 import { socialThemeDefinition } from '../../../shared/themes/social-theme-compiler.mjs';
 import { SOCIAL_THEME_SPECIMEN } from './theme-preview.mjs';
 import { renderStoryboardHtml } from '../../../features/social-cards/index.mjs';
-import { SOCIAL_CARD_PAGE_ROLES } from '../../../shared/rendering/social-card-role.mjs';
-import { SOCIAL_CARD_RENDERER_BLOCK_TYPES, getSocialCardTemplatePack } from '../../../shared/rendering/social-card-template-registry.mjs';
+import { SOCIAL_CARD_PAGE_ROLES } from '../../../features/social-cards/rendering/social-card-role.mjs';
+import { SOCIAL_CARD_RENDERER_BLOCK_TYPES, getSocialCardTemplatePack } from '../../../features/social-cards/rendering/social-card-template-registry.mjs';
 import { validateSocialTemplateProposal, SocialTemplateProposalError, SOCIAL_TEMPLATE_PROPOSAL_ERROR_CODES } from '../../../shared/themes/social-template-proposal.mjs';
 
 const DENSITIES = new Set(['compact', 'standard', 'airy']);

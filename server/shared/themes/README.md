@@ -6,4 +6,4 @@
 
 ## 依赖边界
 
-不得导入 features 或 platform application；主题编排服务放 platform/application/themes。
+通用主题规则不依赖业务 HTTP、任务调度或持久化；Social 模板能力由对应 feature 提供，主题协调层只通过受控能力使用它。

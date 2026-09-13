@@ -4,8 +4,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { delimitUntrusted, markdownInlineData, trimConversation, truncateAtBoundary } from '../server/platform/llm/context-safety.mjs';
-import { getAccountContext } from '../server/shared/domain/account-context.mjs';
-import { requestMessages } from '../server/features/social-cards/llm/custom-social-chat.mjs';
+import { getAccountContext } from '../server/platform/application/account-context-service.mjs';
+import { requestMessages } from '../server/features/social-cards/application/custom-social-chat.mjs';
 
 test('不可信资料具有显式定界且截断保持代码围栏闭合',()=>{
   const value=`第一段\n\n\`\`\`js\n${'x'.repeat(300)}`;const clipped=truncateAtBoundary(value,120);

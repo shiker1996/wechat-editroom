@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { illustrateArticle } from './article-illustration.mjs';
 import { scoreKeywords } from './seo-score.mjs';
-import { formatAccountContext } from '../../../shared/domain/account-context.mjs';
+import { formatAccountContext } from '../../../shared/domain/account-context-model.mjs';
+import { getAccountContext } from '../../../platform/application/account-context-service.mjs';
 import { normalizeDistributionLane } from '../../../shared/domain/distribution-strategy.mjs';
 import { parseModelJson } from '../../../platform/llm/model-json.mjs';
 import { evaluateEditorialReadiness } from '../domain/editorial-readiness.mjs';
@@ -483,7 +484,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   writeFile(path.join(workdir,'02-fact-gate.json'), JSON.stringify(factGate, null, 2));
   if (!factGate.eligible) throw new Error(`文章事实门禁未通过：${factGate.reason}`);
   onProgress('Step 2 建立事实基座、大纲与标题候选');
-  const PLAN_SYSTEM = `${buildArticleStageSystem(orchestratorSkill,'planning')}\n\n## 账号上下文\n${formatAccountContext({workspaceRoot})}`;
+  const PLAN_SYSTEM = `${buildArticleStageSystem(orchestratorSkill,'planning')}\n\n## 账号上下文\n${formatAccountContext(getAccountContext({ workspaceRoot }))}`;
   // 大纲阶段同样使用 output-budget 的 6000 -> 10000 自适应重试，
   // 由 providerMax 负责兜底，不要用调用方固定上限关闭该机制。
   const planningResult=await gateway.complete({provider,purpose:'article-planning',batchId,candidateId,jsonMode:true,

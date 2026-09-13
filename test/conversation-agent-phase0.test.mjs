@@ -78,7 +78,7 @@ test('Phase 5 三个生产入口保留可扫描调用点并统一启用 Agent ru
 
 test('Phase 5 收口后无旧私有协议、旧执行器或 provider 隐式搜索',()=>{
   const article=fs.readFileSync(new URL('../server/platform/http/routes/article-routes.mjs',import.meta.url),'utf8');
-  const customChat=fs.readFileSync(new URL('../server/features/social-cards/llm/custom-social-chat.mjs',import.meta.url),'utf8');
+  const customChat=fs.readFileSync(new URL('../server/features/social-cards/application/custom-social-chat.mjs',import.meta.url),'utf8');
   const candidate=fs.readFileSync(new URL('../server/platform/http/routes/candidate-routes.mjs',import.meta.url),'utf8');
   assert.doesNotMatch(article,/fetchEvents|autoFetchEditorialEvents|runEditorialTurnStream/);
   assert.doesNotMatch(candidate,/runTutorialChatStream|runCustomSocialChatStream/);

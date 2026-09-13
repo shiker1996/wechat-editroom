@@ -1,4 +1,4 @@
-import { summarizeSocialTemplateExtensionGate } from '../../../shared/rendering/social-template-extension-gate.mjs';
+import { summarizeSocialTemplateExtensionGate } from '../../../shared/themes/social-template-extension-gate.mjs';
 
 function json(value, fallback) {
   try { return value == null ? fallback : JSON.parse(value); } catch { return fallback; }

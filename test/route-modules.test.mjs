@@ -9,6 +9,7 @@ test('server delegates isolated functional route modules', () => {
   for (const handler of [
     'handleModelRoutes',
     'handleContentRoutes',
+    'handleContentFeedbackRoutes',
     'handleSystemRoutes',
     'handleMediaRoutes',
     'handleArticleRoutes',

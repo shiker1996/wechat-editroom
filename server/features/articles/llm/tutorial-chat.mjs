@@ -66,4 +66,4 @@ export function evaluateTutorialChatReadiness({ draft = {}, updates = {}, projec
   return {ready:missing.length===0,missing};
 }
 import { delimitUntrusted, trimConversation } from '../../../platform/llm/context-safety.mjs';
-import { selectionPrompt } from '../../research/llm/selection-prompts.mjs';
+import { selectionPrompt } from '../../../platform/skills/skill-prompt.mjs';

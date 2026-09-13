@@ -5,7 +5,7 @@ import { themeCatalog } from '../server/platform/http/routes/theme-routes.mjs';
 import { compileThemePreview } from '../server/platform/application/themes/theme-preview.mjs';
 import { socialThemeDefinition } from '../server/shared/themes/social-theme-compiler.mjs';
 import { auditThemeForPublish, assertThemePublishable } from '../server/platform/application/themes/theme-publish-gate.mjs';
-import { socialCardTemplateEditorCatalog } from '../server/shared/rendering/social-card-template-registry.mjs';
+import { socialCardTemplateEditorCatalog } from '../server/features/social-cards/rendering/social-card-template-registry.mjs';
 import { handleThemeRoutes } from '../server/platform/http/routes/theme-routes.mjs';
 
 test('Phase 3 social 主题目录返回模板包与版式倾向', () => {

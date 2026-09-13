@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { Store } from '../server/platform/core/store.mjs';
-import { applyProjectDiscoveryFeedbackToHeatRanking, applyProjectDiscoveryFeedbackToRanking, buildProjectDiscoveryFeedbackSnapshot } from '../server/features/content-planning/project-discovery-feedback.mjs';
+import { applyProjectDiscoveryFeedbackToHeatRanking, applyProjectDiscoveryFeedbackToRanking, buildProjectDiscoveryFeedbackSnapshot } from '../server/features/content-feedback/domain/project-discovery-feedback.mjs';
 
 function row(id, scenario, reads, type = 'tool') {
   return { match_status: 'confirmed', content_type: 'social', metric_id: id, import_batch_id: `import-${id}`, metric_title: `项目 ${id}`, published_date: `2026-08-${String(id).padStart(2, '0')}`, reads, shares: Math.round(reads / 100), follows_after_read: Math.round(reads / 1000), content_class: 'github_project', hotspot_url: `https://github.com/acme/project-${id}`, hotspot_raw_json: JSON.stringify({ repository: `acme/project-${id}`, projectType: type, scenarioIds: [scenario], directUseCase: '处理日常工作' }) };

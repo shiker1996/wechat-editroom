@@ -9,8 +9,8 @@ import { AiThemeCandidateStore, AiThemeRateLimiter } from '../../../shared/theme
 import { AI_THEME_ERROR_CODES } from '../../../shared/themes/ai-theme-contract.mjs';
 import { articleComponentEditorCatalog, socialComponentEditorCatalog } from '../../../shared/themes/component-catalog.mjs';
 import { socialDensityHighFields } from '../../../shared/themes/theme-numeric-limits.mjs';
-import { getSocialCardTemplatePack, socialCardTemplateEditorCatalog } from '../../../shared/rendering/social-card-template-registry.mjs';
-import { resolveSocialCardTemplateContext } from '../../../shared/rendering/social-card-template-resolver.mjs';
+import { getSocialCardTemplatePack, socialCardTemplateEditorCatalog } from '../../../features/social-cards/rendering/social-card-template-registry.mjs';
+import { resolveSocialCardTemplateContext } from '../../../features/social-cards/rendering/social-card-template-resolver.mjs';
 import { generateSocialTemplateProposal, SOCIAL_TEMPLATE_PROPOSAL_ERROR_CODES } from '../../../shared/themes/social-template-proposal.mjs';
 import { SocialTemplateProposalStore, SocialTemplateProposalRateLimiter } from '../../../shared/themes/social-template-proposal-store.mjs';
 import { compileSocialTemplateProposal, compileSocialTemplateProposalPack, compileSocialTemplateProposalCss } from '../../application/themes/social-template-proposal-compiler.mjs';

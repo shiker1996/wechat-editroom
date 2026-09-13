@@ -2,13 +2,16 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { batchTopicsDir } from '../../../platform/core/workspace-paths.mjs';
 import { estimateTokens } from '../../../platform/llm/context-manager.mjs';
-import { formatAccountContext, getAccountContext } from '../../../shared/domain/account-context.mjs';
+import { formatAccountContext } from '../../../shared/domain/account-context-model.mjs';
+import { getAccountContext } from '../../../platform/application/account-context-service.mjs';
 import { parseModelJson as parseSharedModelJson } from '../../../platform/llm/model-json.mjs';
 import { enforceNotificationQuota, isConcreteReaderStake, resolveDistributionDecision, resolveNotificationPolicy } from '../../../shared/domain/distribution-strategy.mjs';
 import { isResearchEligibleHotspot } from '../domain/hotspot-pipeline-scope.mjs';
-import { selectionPrompt } from '../llm/selection-prompts.mjs';
-import { loadShadowHistory, resolveEventShadow } from '../domain/event-resolution-shadow.mjs';
-import { buildEventHeatRanking, loadPreviousEventHeatItems } from '../domain/event-heat-ranking.mjs';
+import { selectionPrompt } from '../../../platform/skills/skill-prompt.mjs';
+import { resolveEventShadow } from '../domain/event-resolution-shadow.mjs';
+import { loadShadowHistory } from './event-resolution-shadow-service.mjs';
+import { buildEventHeatRanking } from '../domain/event-heat-ranking.mjs';
+import { loadPreviousEventHeatItems } from './event-heat-ranking-service.mjs';
 import { DISCUSSION_RESEARCH_TOP_K, buildDiscussionResearch, discussionResearchMarkdown, resolveDiscussionResearchTopK } from '../domain/discussion-research.mjs';
 import { buildTopicCandidates, selectTopicCandidates, topicCandidatesMarkdown } from '../domain/topic-candidate-generation.mjs';
 import { materializeStableEvents } from '../domain/event-resolution-shadow.mjs';
@@ -19,8 +22,9 @@ import { ensureBatchEventCards, generateEventCards, overviewHtml, readEventCards
 import { brainstorm, breakingSynthesis, synthesize } from './research/editorial-exploration.mjs';
 import { classifyContentRoute, scoreStatusForCard } from '../domain/content-routing.mjs';
 import { G_SOCIAL_CLASS_CAPS, G_SOCIAL_THRESHOLDS, G_SOCIAL_WEIGHTS, scoreSocialCandidate, selectSocialCandidates, selectSocialPool } from '../domain/social-scoring.mjs';
-import { applyProjectReaderValuesToHeatRanking, attachProjectReaderValues, evaluateProjectReaderValue, selectProjectReaderValueCandidates } from '../domain/project-reader-value.mjs';
-import { applyProjectDiscoveryFeedbackToHeatRanking, applyProjectDiscoveryFeedbackToRanking } from '../../content-planning/project-discovery-feedback.mjs';
+import { applyProjectReaderValuesToHeatRanking, attachProjectReaderValues, selectProjectReaderValueCandidates } from '../domain/project-reader-value.mjs';
+import { evaluateProjectReaderValue } from './project-reader-value-service.mjs';
+import { applyProjectDiscoveryFeedbackToHeatRanking, applyProjectDiscoveryFeedbackToRanking } from '../../content-feedback/index.mjs';
 import { buildResearchDigest, generateDiscussionResearchSinglePass, generateDiscussionResearchTopics } from './research/discussion-research-stage.mjs';
 
 // 研究子阶段仍统一通过 selectionPrompt 加载项目技能：hotspot-brainstorm、hotspot-synthesis、event-card-generator。
@@ -35,7 +39,7 @@ export { DIMENSION_POOL_ROLES, dimensionSelections };
 export { ensureBatchEventCards, generateEventCards, overviewHtml, readEventCardsFile };
 export { brainstorm, breakingSynthesis, synthesize };
 export { G_SOCIAL_CLASS_CAPS, G_SOCIAL_THRESHOLDS, G_SOCIAL_WEIGHTS, scoreSocialCandidate, selectSocialCandidates, selectSocialPool };
-export { applyProjectReaderValuesToHeatRanking, attachProjectReaderValues, evaluateProjectReaderValue, selectProjectReaderValueCandidates };
+export { applyProjectReaderValuesToHeatRanking, attachProjectReaderValues, selectProjectReaderValueCandidates };
 export { DISCUSSION_RESEARCH_TOP_K, buildDiscussionResearch, discussionResearchMarkdown, resolveDiscussionResearchTopK };
 export { buildTopicCandidates, selectTopicCandidates, topicCandidatesMarkdown };
 
@@ -119,7 +123,7 @@ export function deterministicTimeliness(value, batchDate) {
 function accountSnapshot(workspaceRoot) {
   // 账号定位以结构化配置 account-context.json 为准（getAccountContext 有默认值兜底）；
   // .agents 下的作者资产档案存在时作为补充注入。
-  const entries = [{ label: '账号上下文', file: 'account-context.json', content: formatAccountContext({workspaceRoot}) }];
+  const entries = [{ label: '账号上下文', file: 'account-context.json', content: formatAccountContext(getAccountContext({ workspaceRoot })) }];
   const assetsFile = path.join(workspaceRoot, '.agents', 'wechat-author-assets.md');
   if (fs.existsSync(assetsFile)) entries.push({ label: '作者资产', file: assetsFile, content: fs.readFileSync(assetsFile, 'utf8').slice(0, 16000) });
   return entries;

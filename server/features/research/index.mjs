@@ -32,10 +32,14 @@ export { runEventResolutionBackfill, writeEventResolutionBackfillReport } from '
 export { buildEventResolutionOperationsMetrics, readEventResolutionReview } from './application/event-resolution-operations.mjs';
 export { buildTopicScoreOperationsMetrics } from './application/topic-score-operations.mjs';
 export { CandidateSelectionService } from './application/candidate-selection-service.mjs';
+export { createCandidateSelectionService } from './application/store-service-factory.mjs';
 export { classifyResearchFailure, recordResearchFailure } from './application/research-failure.mjs';
-export { buildEventHeatRanking, loadPreviousEventHeatItems, scoreClassifiedEvent, scoreEventHeat } from './domain/event-heat-ranking.mjs';
-export { PROJECT_READER_VALUE_TOP_K, PROJECT_READER_VALUE_TOP_K_OPTIONS, PROJECT_READER_VALUE_WEIGHTS, applyProjectReaderValuesToHeatRanking, attachProjectReaderValues, evaluateProjectReaderValue, projectReaderValueInput, resolveProjectReaderValueTopK, scoreProjectReaderValue, selectProjectReaderValueCandidates } from './domain/project-reader-value.mjs';
-export { DISCUSSION_RESEARCH_SCHEMA_VERSION, DISCUSSION_RESEARCH_TOP_K, DISCUSSION_RESEARCH_TOP_K_OPTIONS, resolveDiscussionResearchTopK, DISCUSSION_RESEARCH_EXCLUDED_CONTENT_CLASSES, buildDiscussionResearch, discussionResearchMarkdown, readDiscussionResearchContext } from './domain/discussion-research.mjs';
+export { buildEventHeatRanking, scoreClassifiedEvent, scoreEventHeat } from './domain/event-heat-ranking.mjs';
+export { loadPreviousEventHeatItems } from './application/event-heat-ranking-service.mjs';
+export { PROJECT_READER_VALUE_TOP_K, PROJECT_READER_VALUE_TOP_K_OPTIONS, PROJECT_READER_VALUE_WEIGHTS, applyProjectReaderValuesToHeatRanking, attachProjectReaderValues, projectReaderValueInput, resolveProjectReaderValueTopK, scoreProjectReaderValue, selectProjectReaderValueCandidates } from './domain/project-reader-value.mjs';
+export { evaluateProjectReaderValue } from './application/project-reader-value-service.mjs';
+export { DISCUSSION_RESEARCH_SCHEMA_VERSION, DISCUSSION_RESEARCH_TOP_K, DISCUSSION_RESEARCH_TOP_K_OPTIONS, resolveDiscussionResearchTopK, DISCUSSION_RESEARCH_EXCLUDED_CONTENT_CLASSES, buildDiscussionResearch, discussionResearchMarkdown } from './domain/discussion-research.mjs';
+export { readDiscussionResearchContext } from './application/discussion-research-service.mjs';
 export {
   RESEARCH_SEARCH_SCHEMA_VERSION,
   RESEARCH_SEARCH_TASK_TYPES,
@@ -74,7 +78,8 @@ export {
 export { buildTopicCandidates, selectTopicCandidates, topicCandidatesMarkdown, discussionQuestionForContext } from './domain/topic-candidate-generation.mjs';
 export { projectStableEvents } from './domain/event-resolution-cluster-projection.mjs';
 export { duplicatePenaltyForHeat, EVENT_RESOLUTION_POLICY } from './domain/event-resolution-policy.mjs';
-export { loadShadowHistory, materializeStableEvents, resolveEventShadow, structuredMatch, buildEventTitle } from './domain/event-resolution-shadow.mjs';
+export { materializeStableEvents, resolveEventShadow, structuredMatch, buildEventTitle } from './domain/event-resolution-shadow.mjs';
+export { loadShadowHistory } from './application/event-resolution-shadow-service.mjs';
 export { clusterItems as clusterResearchItems, isFreshForBatch as isResearchItemFresh, tagsOf } from './domain/hotspot-clustering.mjs';
 export { isResearchEligibleHotspot } from './domain/hotspot-pipeline-scope.mjs';
 export { buildHotspotAtlas } from './rendering/hotspot-atlas.mjs';

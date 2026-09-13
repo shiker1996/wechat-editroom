@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { renderStoryboardHtml } from '../server/features/social-cards/application/social-card-pipeline.mjs';
 import { socialThemeDefinition } from '../server/shared/themes/social-theme-compiler.mjs';
-import { getSocialCardTemplatePack } from '../server/shared/rendering/social-card-template-registry.mjs';
-import { createSocialCardStoryboardThemeSnapshot, resolveSocialCardStoryboardThemeState } from '../server/shared/rendering/social-card-template-resolver.mjs';
+import { getSocialCardTemplatePack } from '../server/features/social-cards/rendering/social-card-template-registry.mjs';
+import { createSocialCardStoryboardThemeSnapshot, resolveSocialCardStoryboardThemeState } from '../server/features/social-cards/rendering/social-card-template-resolver.mjs';
 import { validateThemeDefinition } from '../server/shared/themes/theme-validator.mjs';
 
 const BATCH_B_THEMES = [

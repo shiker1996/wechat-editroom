@@ -2,21 +2,21 @@ import fs from 'node:fs';
 import {
   applySocialCardRestructureOperations,
   validateSocialCardRestructureOperations,
-} from '../../../shared/rendering/social-card-repair-policy.mjs';
+} from '../rendering/social-card-repair-policy.mjs';
 import {
   buildSocialCardContentAtoms,
   buildSocialCardSupplementUsageIndex,
   normalizeSocialCardContentFingerprint,
-} from '../../../shared/rendering/social-card-content-atoms.mjs';
-import { inferCardPageRole } from '../../../shared/rendering/social-card-role.mjs';
-import { getSocialCardSupplementSlots } from '../../../shared/rendering/social-card-supplement-slots.mjs';
-import { buildSocialCardFactCandidatePrompt, knownSourceRefsFromSocialCardFactIndex } from '../../../shared/rendering/social-card-fact-index.mjs';
+} from '../rendering/social-card-content-atoms.mjs';
+import { inferCardPageRole } from '../rendering/social-card-role.mjs';
+import { getSocialCardSupplementSlots } from '../rendering/social-card-supplement-slots.mjs';
+import { buildSocialCardFactCandidatePrompt, knownSourceRefsFromSocialCardFactIndex } from '../rendering/social-card-fact-index.mjs';
 import {
   isSocialCardFactComponentCompatibleWithSlot,
   renderSocialCardContentComponent,
-} from '../../../shared/rendering/social-card-content-components.mjs';
-import { normalizeSocialCardCode, parseSocialCardFencedCode } from '../../../shared/rendering/social-card-code-utils.mjs';
-import { socialCardSlotSemanticTags } from '../../../shared/rendering/social-card-page-component-contract.mjs';
+} from '../rendering/social-card-content-components.mjs';
+import { normalizeSocialCardCode, parseSocialCardFencedCode } from '../rendering/social-card-code-utils.mjs';
+import { socialCardSlotSemanticTags } from '../rendering/social-card-page-component-contract.mjs';
 import { validateInput } from '../../../platform/tools/schemas.mjs';
 import { parseModelJson } from '../../../platform/llm/model-json.mjs';
 

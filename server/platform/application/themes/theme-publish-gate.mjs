@@ -6,7 +6,7 @@ import { articleComponentDefaults, resolveArticleComponents, resolveSocialCompon
 import { enrichThemeIssues } from '../../../shared/themes/theme-issue-suggestions.mjs';
 import { COVER_TOKEN_USAGE } from '../../../shared/themes/cover-theme-compiler.mjs';
 import { mixHex } from '../../../shared/themes/color-utils.mjs';
-import { resolveSocialCardTemplateContext } from '../../../shared/rendering/social-card-template-resolver.mjs';
+import { resolveSocialCardTemplateContext } from '../../../features/social-cards/rendering/social-card-template-resolver.mjs';
 
 function issue(field,code,message,specimenNode='',details=null){return {field,code,message,specimenNode,...(details?{details}:{})};}
 function cleanDefinition(input){const value=structuredClone(input||{});delete value.hash;delete value.file;return value;}

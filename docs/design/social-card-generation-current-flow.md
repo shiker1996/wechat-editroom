@@ -303,16 +303,16 @@ PNG 截图、文案、交付门禁和产物登记
 | 责任 | 主要实现 |
 | --- | --- |
 | 图文主流程 | `server/features/social-cards/application/social-card-pipeline.mjs` |
-| 事实索引 | `server/shared/rendering/social-card-fact-index.mjs` |
-| 内容原子 | `server/shared/rendering/social-card-content-atoms.mjs` |
-| 页面组件和装箱 | `server/shared/rendering/social-card-content-components.mjs` |
+| 事实索引 | `server/features/social-cards/rendering/social-card-fact-index.mjs` |
+| 内容原子 | `server/features/social-cards/rendering/social-card-content-atoms.mjs` |
+| 页面组件和装箱 | `server/features/social-cards/rendering/social-card-content-components.mjs` |
 | 内容计划调整 | `server/features/social-cards/application/social-card-content-planner.mjs` |
-| 槽位目录 | `server/shared/rendering/social-card-supplement-slots.mjs` |
-| 槽位语义唯一来源 | `server/shared/rendering/social-card-page-component-contract.mjs` |
-| 模板容量和重排 | `server/shared/rendering/social-card-reflow.mjs` |
-| 结构修复门禁 | `server/shared/rendering/social-card-repair-policy.mjs` |
-| 主题/模板解析 | `server/shared/rendering/social-card-template-resolver.mjs` |
-| HTML 模板渲染 | `server/shared/rendering/templates/social/` |
+| 槽位目录 | `server/features/social-cards/rendering/social-card-supplement-slots.mjs` |
+| 槽位语义唯一来源 | `server/features/social-cards/rendering/social-card-page-component-contract.mjs` |
+| 模板容量和重排 | `server/features/social-cards/rendering/social-card-reflow.mjs` |
+| 结构修复门禁 | `server/features/social-cards/rendering/social-card-repair-policy.mjs` |
+| 主题/模板解析 | `server/features/social-cards/rendering/social-card-template-resolver.mjs` |
+| HTML 模板渲染 | `server/features/social-cards/rendering/templates/social/` |
 | 运行时契约 | `server/domain/social-card-prompts/runtime-contract.md` |
 
 ## 12. 相关设计文档的阅读顺序

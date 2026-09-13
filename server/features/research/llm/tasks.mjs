@@ -1,11 +1,12 @@
 import { isFreshForBatch } from '../index.mjs';
 import { isResearchEligibleHotspot } from '../domain/hotspot-pipeline-scope.mjs';
-import { selectionPrompt } from './selection-prompts.mjs';
+import { selectionPrompt } from '../../../platform/skills/skill-prompt.mjs';
 import { parseModelJson } from '../../../platform/llm/model-json.mjs';
-import { formatAccountContext } from '../../../shared/domain/account-context.mjs';
+import { formatAccountContext } from '../../../shared/domain/account-context-model.mjs';
+import { getAccountContext } from '../../../platform/application/account-context-service.mjs';
 
 function accountAwareTagPrompt({ basePrompt, workspaceRoot }) {
-  const accountContext = formatAccountContext({ workspaceRoot });
+  const accountContext = formatAccountContext(getAccountContext({ workspaceRoot }));
   return `${basePrompt}
 
 ## 当前账号上下文

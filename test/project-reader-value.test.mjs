@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   applyProjectReaderValuesToHeatRanking,
-  evaluateProjectReaderValue,
   scoreProjectReaderValue,
   selectProjectReaderValueCandidates,
 } from '../server/features/research/domain/project-reader-value.mjs';
+import { evaluateProjectReaderValue } from '../server/features/research/application/project-reader-value-service.mjs';
 
 const event = (id, title, score = 80) => ({
   event_id: id,

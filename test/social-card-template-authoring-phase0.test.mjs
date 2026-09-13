@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { SOCIAL_CARD_PAGE_ROLES } from '../server/shared/rendering/social-card-role.mjs';
-import { SOCIAL_CARD_RENDERER_BLOCK_TYPES, SOCIAL_CARD_TEMPLATE_PACKS } from '../server/shared/rendering/social-card-template-registry.mjs';
+import { SOCIAL_CARD_PAGE_ROLES } from '../server/features/social-cards/rendering/social-card-role.mjs';
+import { SOCIAL_CARD_RENDERER_BLOCK_TYPES, SOCIAL_CARD_TEMPLATE_PACKS } from '../server/features/social-cards/rendering/social-card-template-registry.mjs';
 import { matchSocialTemplate, templateMatchMetadata } from '../server/shared/themes/social-template-matcher.mjs';
 import { socialThemeDefinition } from '../server/shared/themes/social-theme-compiler.mjs';
 import { validateThemeDefinition } from '../server/shared/themes/theme-validator.mjs';

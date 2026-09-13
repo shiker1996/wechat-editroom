@@ -13,7 +13,7 @@ import { applyCatalogSchemas, registerProjectResource, resolveResourceArguments,
 import { writeSocialCardAiVisualBaseline } from './social-card-ai-visual-baseline.mjs';
 import { compileSocialTheme, socialThemeDefinition } from '../../../shared/themes/social-theme-compiler.mjs';
 import { resolveWorkspaceTheme } from '../../../platform/application/themes/user-theme-service.mjs';
-import { createSocialCardStoryboardThemeSnapshot, getSocialCardTemplateCapabilities } from '../../../shared/rendering/social-card-template-resolver.mjs';
+import { createSocialCardStoryboardThemeSnapshot, getSocialCardTemplateCapabilities } from '../rendering/social-card-template-resolver.mjs';
 import { createSocialCardAiVisualStageRecorder, writeSocialCardAiVisualSkillManifest } from './social-card-ai-visual-pipeline.mjs';
 import { AI_VISUAL_DOCUMENT_WRITE, runSocialCardAiVisualGenerationAgent } from './social-card-ai-visual-agent.mjs';
 import { generateSocialCardCopy, validateSocialCardCopy } from './social-card-copy.mjs';

@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { loadSkillBundle } from '../server/platform/llm/skill-runtime.mjs';
-import { selectionPrompt } from '../server/features/research/llm/selection-prompts.mjs';
+import { selectionPrompt } from '../server/platform/skills/skill-prompt.mjs';
 
 const workspaceRoot = process.cwd();
 
@@ -27,7 +27,7 @@ test('三个对话 agent 的技能是唯一事实源（代码不再内联 prompt
   const cases = [
     ['editorial-room-chat', 'server/features/articles/llm/editorial-room.mjs', ['cap_agent_conversation_finish', 'assistantReply', '"forbidden_claims"', 'cap_agent_form_update'], '你是公众号编辑会主持人'],
     ['tutorial-chat', 'server/features/articles/llm/tutorial-chat.mjs', ['assistantReply', '【体验】', 'cap_agent_form_update'], '你是微信公众号自主写作的策划编辑'],
-    ['custom-social-chat', 'server/features/social-cards/llm/custom-social-chat.mjs', ['cap_agent_conversation_finish', 'assistantReply', '【素材】', 'cap_agent_form_update'], '你是图文策划编辑'],
+    ['custom-social-chat', 'server/features/social-cards/application/custom-social-chat.mjs', ['cap_agent_conversation_finish', 'assistantReply', '【素材】', 'cap_agent_form_update'], '你是图文策划编辑'],
   ];
   for (const [skillName, sourceFile, markers, inlinePrefix] of cases) {
     const skillText = fs.readFileSync(path.join(workspaceRoot, 'skills', skillName, 'SKILL.md'), 'utf8');

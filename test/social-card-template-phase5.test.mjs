@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { renderStoryboardHtml } from '../server/features/social-cards/application/social-card-pipeline.mjs';
 import { compileSocialTheme, socialThemeDefinition } from '../server/shared/themes/social-theme-compiler.mjs';
-import { getSocialCardTemplatePack } from '../server/shared/rendering/social-card-template-registry.mjs';
+import { getSocialCardTemplatePack } from '../server/features/social-cards/rendering/social-card-template-registry.mjs';
 import { validateThemeDefinition } from '../server/shared/themes/theme-validator.mjs';
 
 test('Phase 5 brutalist-v1 注册并绑定野兽派 social 主题', () => {

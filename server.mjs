@@ -8,21 +8,22 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { backup as backupSqlite, DatabaseSync } from 'node:sqlite';
-import { Store } from './server/platform/core/store.mjs';
+import { configureStoreServices, Store } from './server/platform/core/store.mjs';
 import { loadConfig } from './server/platform/core/config.mjs';
 import { isInsideRoots } from './server/platform/artifacts/artifact-indexer.mjs';
 import { CollectionJobManager } from './server/features/collection/index.mjs';
+import { createMaterialService } from './server/features/materials/index.mjs';
 import { ensureStarted } from './plugins/rsshub/collector.mjs';
 import { ModelGateway } from './server/platform/llm/gateway.mjs';
 import { draftArticle } from './server/features/research/llm/tasks.mjs';
 import { AiJobManager } from './server/platform/jobs/ai-job-manager.mjs';
 import { BATCH_LEVEL_AI_JOB_TYPES, createAiJobHandlers } from './server/features/batches/index.mjs';
-import { recordResearchFailure } from './server/features/research/index.mjs';
+import { createCandidateSelectionService, recordResearchFailure } from './server/features/research/index.mjs';
 import { fetchCandidateSource } from './server/platform/integrations/source-fetcher.mjs';
 import { getImageWorkspace, saveImageMetadata, saveLocalImage, uploadImageToCdn,
   planImagePlaceholders, imageManifestFile } from './server/features/articles/index.mjs';
 import { inspectRepositoryViaRegistry as inspectRepository, repositoryFactMarkdown } from './server/platform/integrations/repository-inspector.mjs';
-import { evaluateCardGate, evaluateClassifiedCardGate, evaluateEventCardGate, evaluateCustomCardGate, eventGroupsForCandidate, resolveEventAnalysis, socialStoryboardClassForContentClass } from './server/features/social-cards/index.mjs';
+import { createSocialTemplateMetricsRepository, evaluateCardGate, evaluateClassifiedCardGate, evaluateEventCardGate, evaluateCustomCardGate, eventGroupsForCandidate, resolveEventAnalysis, socialStoryboardClassForContentClass } from './server/features/social-cards/index.mjs';
 import { loadSkillBundle, setSkillConfigurationResolver } from './server/platform/llm/skill-runtime.mjs';
 import { createZip } from './server/platform/artifacts/zip-bundle.mjs';
 import { batchArticlesDir, batchTopicsDir, candidateArticleDir, candidateSocialCardDir } from './server/platform/core/workspace-paths.mjs';
@@ -30,6 +31,8 @@ import { getBatchDeleteImpact, deleteBatchPermanently } from './server/features/
 import { SOCIAL_CARD_COMPOSITION_MODES, SOCIAL_CARD_LAYOUTS, describeCardLayouts, normalizeCardComposition } from './server/features/social-cards/index.mjs';
 import { analyzeVisualComplexity, planArticleVisuals, defaultTypesetTheme, TYPESET_THEMES } from './server/features/articles/index.mjs';
 import { handleContentRoutes } from './server/platform/http/routes/content-routes.mjs';
+import { handleContentFeedbackRoutes } from './server/platform/http/routes/content-feedback-routes.mjs';
+import { handleMaterialRoutes } from './server/platform/http/routes/material-routes.mjs';
 import { handleModelRoutes } from './server/platform/http/routes/model-routes.mjs';
 import { handleSystemRoutes } from './server/platform/http/routes/system-routes.mjs';
 import { handleMediaRoutes } from './server/platform/http/routes/media-routes.mjs';
@@ -65,6 +68,10 @@ const runtimePaths = resolveRuntimePaths({
 // Route handlers use root as the writable workspace. Built-in resources stay
 // under appRoot and are resolved by their registries or explicit resourceRoot.
 const root = runtimePaths.workspaceRoot;
+configureStoreServices({
+  candidateSelectionFactory: ({ db, repositories, candidateQueries }) => createCandidateSelectionService(db, repositories, candidateQueries),
+  socialTemplateMetricsFactory: ({ db }) => createSocialTemplateMetricsRepository({ db }),
+});
 // --demo / WORKBENCH_DEMO=1：无模型服务商时也能预览各视图，使用独立演示库，不污染真实数据。
 const demo = process.argv.includes('--demo') || process.env.WORKBENCH_DEMO === '1';
 const demoProduction = demo && (process.argv.includes('--demo-production') || process.env.WORKBENCH_DEMO_PRODUCTION === '1');
@@ -91,6 +98,7 @@ const instanceLock=acquireInstanceLock(runtimePaths.workspaceRoot,{name:demoProd
 const store = new Store(path.join(dataRoot, demoProduction ? 'demo-production.db' : demo ? 'demo.db' : 'workbench.db'), {
   preferredBatchId: demoProductionBatchId,
   referenceDate: demoProductionBatchId?.slice(0, 10) || null,
+  materialServiceFactory: ({ repository }) => createMaterialService({ repository }),
 });
 const initialSourceSeed = seedInitialCollectionSources(store);
 if (initialSourceSeed.seeded) console.log(`首次启动：已写入 ${initialSourceSeed.count} 个参考采集源（默认暂停）`);
@@ -414,6 +422,8 @@ async function api(request, response, url) {
   }
   if (await handleModelRoutes({ request, response, pathname, root, config, store, models, body, json })) return;
   if (await handleThemeRoutes({ request, response, pathname, searchParams, json, store, body, models })) return;
+  if (await handleMaterialRoutes({ request, response, pathname, store, json, body, root })) return;
+  if (await handleContentFeedbackRoutes({ request, response, pathname, searchParams, store, artifactRoots, json, body, root, models })) return;
   if (await handleContentRoutes({ request, response, pathname, searchParams, store, artifactRoots, mime, json, body, root, models })) return;
   if (await handleSystemRoutes({ request, response, pathname, searchParams, root, resourceRoot: runtimePaths.appRoot, config, store, batchWorkdir, json, body, aiJobs,
     binaryBody, createWorkbenchBackup, models, candidateEventGroups })) return;

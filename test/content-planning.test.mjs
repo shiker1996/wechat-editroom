@@ -4,16 +4,17 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { Store } from '../server/platform/core/store.mjs';
-import { parseWechatExport } from '../server/features/content-planning/wechat-export-parser.mjs';
-import { buildWechatInsights, classifyWechatArticle, matchWechatPerformance } from '../server/features/content-planning/wechat-content-insights.mjs';
-import { buildContentFeedbackSnapshot, buildContentFeedbackPromptContext, extractArticleContentFeatures } from '../server/features/content-planning/wechat-content-feedback.mjs';
-import { buildSocialContentFeedbackSnapshot, extractSocialContentFeatures } from '../server/features/content-planning/social-content-feedback.mjs';
+import { parseWechatExport } from '../server/features/content-feedback/domain/wechat-export-parser.mjs';
+import { buildWechatInsights, classifyWechatArticle, matchWechatPerformance } from '../server/features/content-feedback/domain/wechat-content-insights.mjs';
+import { buildContentFeedbackSnapshot, extractArticleContentFeatures } from '../server/features/content-feedback/domain/wechat-content-feedback.mjs';
+import { buildContentFeedbackPromptContext } from '../server/features/content-feedback/application/wechat-content-feedback-context.mjs';
+import { buildSocialContentFeedbackSnapshot, extractSocialContentFeatures } from '../server/features/content-feedback/application/social-content-feedback-service.mjs';
 import { buildContentPlanningRecommendation, sortMaterialsByPlanningRecommendation } from '../server/features/content-planning/content-planning-recommendations.mjs';
-import { buildWechatStrategyRecommendations } from '../server/features/content-planning/wechat-strategy-recommendations.mjs';
-import { buildAdjustmentDraft, buildFeedbackAdjustmentMessages, buildFeedbackAdjustmentPatchMessages, confirmAdjustmentDraft, currentSkillFile, FEEDBACK_ADJUSTMENT_VERSION, listWriterSkillCatalog, resolveTitleSkillTarget, resolveWriterSkillTarget } from '../server/features/content-planning/feedback-adjustment.mjs';
-import { buildSocialFeedbackAdjustmentDraft, buildSocialFeedbackAdjustmentPatchMessages, buildSocialFeedbackAdjustmentPlanningMessages, resolveSocialSkillTargets } from '../server/features/content-planning/social-feedback-adjustment.mjs';
+import { buildWechatStrategyRecommendations } from '../server/features/content-feedback/domain/wechat-strategy-recommendations.mjs';
+import { buildAdjustmentDraft, buildFeedbackAdjustmentMessages, buildFeedbackAdjustmentPatchMessages, confirmAdjustmentDraft, currentSkillFile, FEEDBACK_ADJUSTMENT_VERSION, listWriterSkillCatalog, resolveTitleSkillTarget, resolveWriterSkillTarget } from '../server/features/content-feedback/application/feedback-adjustment-service.mjs';
+import { buildSocialFeedbackAdjustmentDraft, buildSocialFeedbackAdjustmentPatchMessages, buildSocialFeedbackAdjustmentPlanningMessages, resolveSocialSkillTargets } from '../server/features/content-feedback/application/social-feedback-adjustment-service.mjs';
 import { loadSkillBundle } from '../server/platform/llm/skill-runtime.mjs';
-import { handleContentRoutes } from '../server/platform/http/routes/content-routes.mjs';
+import { handleContentFeedbackRoutes } from '../server/platform/http/routes/content-feedback-routes.mjs';
 
 function workspace(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'content-planning-'));
@@ -31,7 +32,6 @@ test('素材入箱会保存评估、栏目和日历计划', (t) => {
   assert.equal(store.getWritingMaterial(material.id).assessment.topic_potential.level, 'high');
   assert.equal(store.listCalendarContent({ month: '2026-09' }).find((item) => item.content_type === 'writing_plan').id, plan.id);
 });
-
 test('文章发布信息可分别关联内容计划和文章文档，并在重复保存时更新原记录', (t) => {
   const store = workspace(t);
   const material = store.createWritingMaterial({ sourceType: 'project', title: '发布关联测试', rawText: '记录一次发布关联。' });
@@ -109,7 +109,7 @@ test('公众号复盘看板按已确认产物拆分文章和图文数据轨道',
     ], growth: [], weekly: [], notified: { count: 1, reads: 1200 }, unnotified: { count: 1, reads: 800 }, channels: [], regular_readers: [], imports: [] }),
     listWechatArticleMetricMatches: () => [{ metric_id: 1, status: 'confirmed', artifact_type: '文章终稿' }, { metric_id: 2, status: 'confirmed', artifact_type: '图文发布文案' }],
   };
-  const handled = await handleContentRoutes({ request: { method: 'GET' }, response: {}, pathname: '/api/wechat/review', searchParams: new URLSearchParams(), store, artifactRoots: [], mime: {}, json: (_response, _status, value) => { responseBody = value; } });
+  const handled = await handleContentFeedbackRoutes({ request: { method: 'GET' }, response: {}, pathname: '/api/wechat/review', searchParams: new URLSearchParams(), store, artifactRoots: [], mime: {}, json: (_response, _status, value) => { responseBody = value; } });
   assert.equal(handled, true);
   assert.deepEqual(responseBody.review_tracks.article.articles.map((item) => item.id), [1]);
   assert.deepEqual(responseBody.review_tracks.social.articles.map((item) => item.id), [2]);
@@ -320,7 +320,7 @@ test('反馈调整草案可以只保存单个文件的手动修改，且不提�
   try {
     const draft = store.saveContentFeedbackAdjustmentDraft({ source: { adjustment_version: FEEDBACK_ADJUSTMENT_VERSION }, changes: [{ id: 'title-generator', kind: 'skill', path: 'writing-skills/title-generator/SKILL.md', old_content: '旧内容', new_content: 'AI 草案' }] });
     let response;
-    const handled = await handleContentRoutes({ request: { method: 'POST' }, response: {}, pathname: `/api/wechat/feedback/adjustments/${draft.id}/change/0/save`, searchParams: new URLSearchParams(), store, artifactRoots: [], root, body: async () => ({ new_content: '人工修改后的草案' }), json: (_response, status, data) => { response = { status, data }; } });
+    const handled = await handleContentFeedbackRoutes({ request: { method: 'POST' }, response: {}, pathname: `/api/wechat/feedback/adjustments/${draft.id}/change/0/save`, searchParams: new URLSearchParams(), store, artifactRoots: [], root, body: async () => ({ new_content: '人工修改后的草案' }), json: (_response, status, data) => { response = { status, data }; } });
     assert.equal(handled, true);
     assert.equal(response.status, 200);
     assert.equal(response.data.status, 'pending');
@@ -357,7 +357,7 @@ test('复盘调整接口调用模型生成草案，但生成阶段不写入技�
     fs.writeFileSync(path.join(root, 'account-context.json'), JSON.stringify({ name: '测试账号' }));
     store.saveContentFeedbackSnapshot({ confidence: 'medium', linked_article_count: 4, metricWindowStart: '2026-08-01', metricWindowEnd: '2026-08-30', writerSkillEvidence: [], recommendations: [{ type: 'title', text: '试试结果型标题' }] });
     let responseBody; let responseStatus; const calls = [];
-    const handled = await handleContentRoutes({ request: { method: 'POST' }, response: {}, pathname: '/api/wechat/feedback/adjustments/generate', searchParams: new URLSearchParams(), store, artifactRoots: [], mime: {}, root, body: async () => ({}), models: { complete: async ({ purpose, thinking }) => { calls.push({ purpose, thinking }); return purpose === 'content-feedback-adjustment-plan' ? ({ provider: 'fake', model: 'fake-plan', content: JSON.stringify({ summary: '标题和正文校准', selected_writer_skill_id: 'wechat-mp-tech-deep', writer_skill_reason: '正文反馈是原理和证据拆解。', target_intents: [{ skill_id: 'title-generator', intent: '强化结果兑现', evidence_summary: '标题需要强化结果兑现。' }, { skill_id: 'wechat-mp-tech-deep', intent: '强化原理与证据拆解', evidence_summary: '正文反馈是原理和证据拆解。' }], account_intent: { action: 'no_change' }, warnings: [] }) }) : ({ provider: 'fake', model: 'fake-patch', content: JSON.stringify({ account_patch: {}, skill_edits: [{ skill_id: 'title-generator', edits: [{ section: '标题', old_text: '# 标题技能', new_text: '# 标题技能\n\n强化结果兑现。', reason: '标题需要强化结果兑现。' }] }, { skill_id: 'wechat-mp-tech-deep', edits: [{ section: '正文', old_text: '# 技术深解', new_text: '# 技术深解\n\n强化原理与证据拆解。', reason: '正文反馈是原理和证据拆解。' }] }], warnings: [] }) }); } }, json: (_response, status, value) => { responseStatus = status; responseBody = value; } });
+    const handled = await handleContentFeedbackRoutes({ request: { method: 'POST' }, response: {}, pathname: '/api/wechat/feedback/adjustments/generate', searchParams: new URLSearchParams(), store, artifactRoots: [], mime: {}, root, body: async () => ({}), models: { complete: async ({ purpose, thinking }) => { calls.push({ purpose, thinking }); return purpose === 'content-feedback-adjustment-plan' ? ({ provider: 'fake', model: 'fake-plan', content: JSON.stringify({ summary: '标题和正文校准', selected_writer_skill_id: 'wechat-mp-tech-deep', writer_skill_reason: '正文反馈是原理和证据拆解。', target_intents: [{ skill_id: 'title-generator', intent: '强化结果兑现', evidence_summary: '标题需要强化结果兑现。' }, { skill_id: 'wechat-mp-tech-deep', intent: '强化原理与证据拆解', evidence_summary: '正文反馈是原理和证据拆解。' }], account_intent: { action: 'no_change' }, warnings: [] }) }) : ({ provider: 'fake', model: 'fake-patch', content: JSON.stringify({ account_patch: {}, skill_edits: [{ skill_id: 'title-generator', edits: [{ section: '标题', old_text: '# 标题技能', new_text: '# 标题技能\n\n强化结果兑现。', reason: '标题需要强化结果兑现。' }] }, { skill_id: 'wechat-mp-tech-deep', edits: [{ section: '正文', old_text: '# 技术深解', new_text: '# 技术深解\n\n强化原理与证据拆解。', reason: '正文反馈是原理和证据拆解。' }] }], warnings: [] }) }); } }, json: (_response, status, value) => { responseStatus = status; responseBody = value; } });
     assert.equal(handled, true); assert.equal(responseStatus, 201); assert.equal(responseBody.status, 'pending'); assert.equal(responseBody.changes.length, 1);
     assert.deepEqual(calls.map((item) => item.purpose), ['content-feedback-adjustment-plan', 'content-feedback-adjustment-patch']); assert.ok(calls.every((item) => item.thinking === true));
     assert.equal(responseBody.source.writer_skill_id, null);
@@ -483,7 +483,7 @@ test('图文反哺接口独立于文章反馈快照，并以 thinking 两阶段�
   const store = new Store(path.join(root, 'workbench.db'));
   try {
     let responseBody; let responseStatus; const calls = [];
-    const handled = await handleContentRoutes({ request: { method: 'POST' }, response: {}, pathname: '/api/wechat/feedback/adjustments/generate', searchParams: new URLSearchParams(), store, artifactRoots: [], mime: {}, root, body: async () => ({ scope: 'social' }), models: { complete: async ({ purpose, thinking }) => { calls.push({ purpose, thinking }); return { provider: 'fake', model: 'fake', content: JSON.stringify(purpose.endsWith('plan') ? { summary: '图文校准', target_intents: [], warnings: [] } : { skill_edits: [], warnings: [] }) }; } }, json: (_response, status, value) => { responseStatus = status; responseBody = value; } });
+    const handled = await handleContentFeedbackRoutes({ request: { method: 'POST' }, response: {}, pathname: '/api/wechat/feedback/adjustments/generate', searchParams: new URLSearchParams(), store, artifactRoots: [], mime: {}, root, body: async () => ({ scope: 'social' }), models: { complete: async ({ purpose, thinking }) => { calls.push({ purpose, thinking }); return { provider: 'fake', model: 'fake', content: JSON.stringify(purpose.endsWith('plan') ? { summary: '图文校准', target_intents: [], warnings: [] } : { skill_edits: [], warnings: [] }) }; } }, json: (_response, status, value) => { responseStatus = status; responseBody = value; } });
     assert.equal(handled, true); assert.equal(responseStatus, 200); assert.equal(responseBody.status, 'no_change'); assert.equal(responseBody.saved, false); assert.equal(store.listContentFeedbackAdjustmentDrafts({ limit: 10 }).length, 0);
     assert.deepEqual(calls.map((item) => item.purpose), ['social-feedback-adjustment-plan', 'social-feedback-adjustment-patch']); assert.ok(calls.every((item) => item.thinking === true));
   } finally { store.close(); fs.rmSync(root, { recursive: true, force: true }); }
@@ -494,7 +494,7 @@ test('图文反馈可以通过独立接口重新计算，不依赖文章反馈�
   const store = new Store(path.join(root, 'workbench.db'));
   try {
     let responseBody; let responseStatus;
-    const handled = await handleContentRoutes({ request: { method: 'POST' }, response: {}, pathname: '/api/wechat/feedback/rebuild-social', searchParams: new URLSearchParams(), store, artifactRoots: [], mime: {}, root, body: async () => ({}), json: (_response, status, value) => { responseStatus = status; responseBody = value; } });
+    const handled = await handleContentFeedbackRoutes({ request: { method: 'POST' }, response: {}, pathname: '/api/wechat/feedback/rebuild-social', searchParams: new URLSearchParams(), store, artifactRoots: [], mime: {}, root, body: async () => ({}), json: (_response, status, value) => { responseStatus = status; responseBody = value; } });
     assert.equal(handled, true); assert.equal(responseStatus, 200); assert.equal(responseBody.status, 'ok'); assert.equal(responseBody.count, 0);
   } finally { store.close(); fs.rmSync(root, { recursive: true, force: true }); }
 });

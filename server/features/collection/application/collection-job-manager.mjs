@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { planRepoDiscoveryQueries, filterRepositoriesByInterest } from '../llm/repo-discovery.mjs';
-import { getAccountContext } from '../../../shared/domain/account-context.mjs';
+import { getAccountContext } from '../../../platform/application/account-context-service.mjs';
 import { filterCollectedItems } from '../index.mjs';
 import { createCollectorRuntime } from '../../../platform/collectors/runtime-registry.mjs';
 import { createBuiltinCollectorRegistry } from '../../../platform/collectors/builtin-registry.mjs';

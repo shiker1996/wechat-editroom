@@ -12,8 +12,8 @@ import {
   buildSocialCardStoryboardSystemPrompt,
   toLegacySocialCardPromptInput,
 } from '../server/features/social-cards/index.mjs';
-import { continuationBadge, renderStoryboardBlock, renderTechnicalText } from '../server/shared/rendering/storyboard-html-content.mjs';
-import { sanitizeCardPlan } from '../server/shared/rendering/storyboard-content.mjs';
+import { continuationBadge, renderStoryboardBlock, renderTechnicalText } from '../server/features/social-cards/rendering/storyboard-html-content.mjs';
+import { sanitizeCardPlan } from '../server/features/social-cards/rendering/storyboard-content.mjs';
 
 const root=path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const sha256=(value)=>crypto.createHash('sha256').update(value).digest('hex');

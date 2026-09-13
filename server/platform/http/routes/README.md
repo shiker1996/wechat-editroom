@@ -2,7 +2,7 @@
 
 ## 职责
 
-HTTP 路由处理器和参数映射。
+HTTP 路由处理器和参数映射。素材查询、写入与评估由 `material-routes.mjs` 负责；内容反馈由 `content-feedback-routes.mjs` 负责；内容规划和交付路由按迁移阶段继续拆分。
 
 ## 依赖边界
 

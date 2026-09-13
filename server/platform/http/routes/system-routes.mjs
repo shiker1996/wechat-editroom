@@ -61,7 +61,7 @@ import { createRequestHarnessGateway, resolveSkillToolPolicy } from '../../skill
 import { buildRunInput, readRunInputDownload } from '../../agent/run-input.mjs';
 import { runEditorialAgentTurn } from '../../../features/articles/application/agent/editorial-adapter.mjs';
 import { extractLocalProjectPath } from '../../integrations/local-project-reader.mjs';
-import { getAccountContext, isAccountContextConfigured, saveAccountContext } from '../../../shared/domain/account-context.mjs';
+import { getAccountContext, isAccountContextConfigured, saveAccountContext } from '../../application/account-context-service.mjs';
 
 function skillsUsingCapabilities(root, capabilities) {
   const expected=new Set(capabilities);

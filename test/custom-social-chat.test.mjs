@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import {
   sanitizeFormUpdates,
   requestMessages,
-} from '../server/features/social-cards/llm/custom-social-chat.mjs';
+} from '../server/features/social-cards/application/custom-social-chat.mjs';
 
 test('自定义图文策划不再暴露普通文本 JSON 解析协议', () => {
   const source = fs.readFileSync(new URL('../server/features/social-cards/application/agent/custom-social-adapter.mjs', import.meta.url), 'utf8');

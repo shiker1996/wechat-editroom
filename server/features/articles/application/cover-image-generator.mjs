@@ -13,7 +13,7 @@ import { buildCoverHtml } from '../../../shared/themes/cover-theme-compiler.mjs'
 import { coverSpecFromTheme, fallbackCoverSpec } from '../../../shared/themes/cover-components.mjs';
 import { analyzeCoverSemantics } from './cover-semantics.mjs';
 import { resolveAutoTheme } from '../../../platform/application/themes/auto-theme-router.mjs';
-import { getAccountContext } from '../../../shared/domain/account-context.mjs';
+import { getAccountContext } from '../../../platform/application/account-context-service.mjs';
 import { candidateArticleDir, batchArticlesDir } from '../../../platform/core/workspace-paths.mjs';
 import { runAiVisualCoverJob } from './ai-visual-cover-generator.mjs';
 import { resolveSkillFile } from '../../../platform/llm/skill-runtime.mjs';

@@ -10,8 +10,8 @@ import {
   validateSocialCardContentPlannerSchema,
   validateSocialCardContentPlannerOperations,
 } from '../server/features/social-cards/application/social-card-content-planner.mjs';
-import { validateSocialCardSupplementSlotCatalog } from '../server/shared/rendering/social-card-supplement-slots.mjs';
-import { buildDeterministicSocialCardPageCapOperations, applySocialCardRestructureOperations } from '../server/shared/rendering/social-card-repair-policy.mjs';
+import { validateSocialCardSupplementSlotCatalog } from '../server/features/social-cards/rendering/social-card-supplement-slots.mjs';
+import { buildDeterministicSocialCardPageCapOperations, applySocialCardRestructureOperations } from '../server/features/social-cards/rendering/social-card-repair-policy.mjs';
 
 const sourceRefs = ['repo:readme:overview', 'repo:readme:limits'];
 const plan = [
