@@ -63,3 +63,6 @@ output/
 
 # 本地清理隔离区（确认回归通过后再人工删除）
 _delete/
+
+# CI / E2E 失败诊断产物
+test-results/
