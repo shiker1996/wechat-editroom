@@ -152,11 +152,15 @@ async function loadSubscriptions() {
   const ordinary = creatable.filter((item) => !WEB_PLUGINS.has(item.id));
   const advancedWeb = creatable.filter((item) => WEB_PLUGINS.has(item.id));
   $("#subscription-plugin").innerHTML = `<optgroup label="推荐"><option value="web-auto">网页自动采集</option>${ordinary.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join("")}</optgroup>${advancedWeb.length ? `<optgroup label="高级手动配置">${advancedWeb.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join("")}</optgroup>` : ""}`;
-  const kinds = [...new Set(allItems().map((item) => item.kind))].sort((a, b) => (TYPE_LABELS[a] || a).localeCompare(TYPE_LABELS[b] || b, "zh-CN"));
-  $("#source-type-filter").innerHTML = '<option value="all">全部类型</option>' + kinds.map((kind) => `<option value="${escapeHtml(kind)}">${escapeHtml(TYPE_LABELS[kind] || kind)}</option>`).join("");
-  updateComposer(); renderSubscriptions();
+  renderSourceTypeFilter(); updateComposer(); renderSubscriptions();
 }
-async function reloadSources() { const result = await request("/api/collection-sources"); state.collectionSources = result.items || []; renderSubscriptions(); }
+function renderSourceTypeFilter() {
+  const filter = $("#source-type-filter"), current = filter.value || "all";
+  const kinds = [...new Set(allItems().map((item) => item.kind))].sort((a, b) => (TYPE_LABELS[a] || a).localeCompare(TYPE_LABELS[b] || b, "zh-CN"));
+  filter.innerHTML = '<option value="all">全部类型</option>' + kinds.map((kind) => `<option value="${escapeHtml(kind)}">${escapeHtml(TYPE_LABELS[kind] || kind)}</option>`).join("");
+  filter.value = kinds.includes(current) ? current : "all";
+}
+async function reloadSources() { const result = await request("/api/collection-sources"); state.collectionSources = result.items || []; renderSourceTypeFilter(); renderSubscriptions(); }
 async function testSource(payload, button, id = null) {
   const output = $("#subscription-test-result"); button.disabled = true; output.className = "subscription-test-result testing"; output.textContent = "正在连接并解析采集源…";
   try { const result = await request(id ? `/api/collection-sources/${id}/test` : payload.pluginId ? "/api/collection-sources/test" : "/api/subscriptions/test", { method: "POST", body: JSON.stringify(payload) }); const items = Array.isArray(result.items) ? result.items.slice(0, 5) : []; output.className = "subscription-test-result ok"; output.innerHTML = `<strong>连接成功 · ${escapeHtml(result.title || result.sourceLabel || "采集源可用")} · ${result.itemCount ?? items.length} 条</strong>${result.matched != null ? `<small>页面匹配到 ${Number(result.matched)} 个候选元素</small>` : ""}${items.length ? `<ol>${items.map((item) => `<li><a href="${escapeHtml(item.url || "#")}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.title || "未命名条目")}</a><code>${escapeHtml(item.url || "未返回链接")}</code></li>`).join("")}</ol>` : '<small>该采集器未返回条目预览，请结合条目数量判断。</small>'}`; return result; }
