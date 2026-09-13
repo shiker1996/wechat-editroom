@@ -3,8 +3,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { matchWechatArticle, matchWechatArticles, matchWechatSocialCopy } from '../server/features/content-planning/wechat-article-matcher.mjs';
-import { fetchWechatArticleContent, linkWechatArticleContent } from '../server/features/content-planning/article-content-linker.mjs';
+import { matchWechatArticle, matchWechatArticles, matchWechatSocialCopy } from '../server/features/content-feedback/application/wechat-article-matching-service.mjs';
+import { fetchWechatArticleContent, linkWechatArticleContent, linkWechatArticlesContent } from '../server/features/content-feedback/application/article-content-linking-service.mjs';
 import { Store } from '../server/platform/core/store.mjs';
 
 function fixture(t) {
@@ -107,4 +107,36 @@ test('已确认文章优先关联本地终稿并分类证据资产，公开 URL 
   const externalMatch = store.getWechatArticleMetricMatchByMetric(Number(externalBatch.lastInsertRowid));
   const failed = await fetchWechatArticleContent(store, { matchId: externalMatch.id, root, fetchImpl: async () => ({ status: 'error', error: '测试抓取失败', content: '', fetched_at: new Date().toISOString() }) });
   assert.equal(failed.status, 'error'); assert.equal(failed.snapshot.source_kind, 'external_url'); assert.equal(failed.snapshot.error, '测试抓取失败');
+});
+
+test('已确认关联对应的本地产物缺失时降级为待获取公开正文而不是抛出异常', () => {
+  const match = { id: 41, metric_id: 7, metric_title: '历史文章', content_url: 'https://example.com/history', article_artifact_id: 999, status: 'confirmed' };
+  const result = linkWechatArticleContent({
+    getWechatArticleMetricMatch: () => match,
+    listArticleArtifacts: () => [],
+  }, { matchId: match.id });
+  assert.equal(result.status, 'needs_external');
+  assert.equal(result.source_url, match.content_url);
+});
+
+test('批量关联单条异常时继续处理并返回失败明细', () => {
+  const results = linkWechatArticlesContent({
+    listArticleContentLinks: () => [
+      { match_id: 1, metric_title: '正常记录' },
+      { match_id: 2, metric_title: '异常记录' },
+    ],
+    getWechatArticleMetricMatch: (matchId) => {
+      if (matchId === 2) throw new Error('测试单条失败');
+      return { metric_title: '正常记录', status: 'confirmed', content_url: '' };
+    },
+    listArticleArtifacts: () => [],
+  });
+  assert.deepEqual(results, {
+    total: 2,
+    linked: 0,
+    social_copy: 0,
+    needs_external: 1,
+    failed: 1,
+    failures: [{ match_id: 2, title: '异常记录', error: '测试单条失败' }],
+  });
 });

@@ -106,7 +106,7 @@ function bind() {
   });
   document.getElementById("wechat-prep-content-relink")?.addEventListener("click", async () => {
     const button = document.getElementById("wechat-prep-content-relink"); button.disabled = true; button.textContent = "关联中…";
-    try { const result = await request("/api/wechat/content-links/relink", { method: "POST", body: "{}" }); toast(`本地正文关联完成：${result.linked} 篇正文、${result.social_copy || 0} 篇图文文案${result.needs_external ? `，${result.needs_external} 篇可尝试公开 URL` : ""}`, "success"); await load(); }
+    try { const result = await request("/api/wechat/content-links/relink", { method: "POST", body: "{}" }); toast(`本地正文关联完成：${result.linked} 篇正文、${result.social_copy || 0} 篇图文文案${result.needs_external ? `，${result.needs_external} 篇可尝试公开 URL` : ""}${result.failed ? `，${result.failed} 篇关联失败` : ""}`, result.failed ? "info" : "success"); await load(); }
     catch (error) { toast(error.message, "error"); }
     finally { button.disabled = false; button.textContent = "关联本地正文"; }
   });
