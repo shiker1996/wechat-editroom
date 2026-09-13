@@ -8,7 +8,7 @@ import { Store } from '../../server/platform/core/store.mjs';
 import { setCredentialFields } from '../../server/platform/tools/remote-credentials.mjs';
 import { startFakeGitHub, startFakeModel, startFakeRssHub } from './support/fake-upstreams.mjs';
 import { runBrowserMainlineFlow, runBrowserSmoke } from './support/browser-smoke.mjs';
-import { startWorkbench, waitForJob, writeFixtureConfig } from './support/workbench-process.mjs';
+import { createRsshubFixture, startWorkbench, waitForJob, writeFixtureConfig } from './support/workbench-process.mjs';
 
 const projectRoot = path.resolve(import.meta.dirname, '../..');
 const PERFORMANCE_THRESHOLDS = Object.freeze({
@@ -23,6 +23,7 @@ test('主链路 E2E：采集、文章与图文产物均可从真实 HTTP 服务�
   const workspaceRoot = path.join(root, 'workspace');
   const configRoot = path.join(root, 'config');
   const databasePath = path.join(workspaceRoot, 'data', 'workbench.db');
+  const rsshubRoot = createRsshubFixture(root);
   assert.notEqual(path.resolve(workspaceRoot), projectRoot, 'E2E 必须使用隔离工作区');
   fs.mkdirSync(path.join(workspaceRoot, 'data', 'source-cache'), { recursive: true });
   fs.mkdirSync(path.join(workspaceRoot, 'data', 'installed-skills'), { recursive: true });
@@ -39,7 +40,7 @@ test('主链路 E2E：采集、文章与图文产物均可从真实 HTTP 服务�
   try {
     const store = new Store(databasePath);
     const batch = store.createBatch({ date: '2026-09-12', title: 'E2E 主链路固定夹具', requestedTracks: ['article', 'social_cards'] });
-    store.saveExtensionSetting({ extensionType: 'collector', extensionId: 'rsshub-collector', value: { baseUrl: rsshub.baseUrl, rootDir: path.join(projectRoot, 'RSSHub'), keepAlive: true, maxAgeHours: 168, allowUndated: true, concurrency: 2 }, configured: true, status: 'ready' });
+    store.saveExtensionSetting({ extensionType: 'collector', extensionId: 'rsshub-collector', value: { baseUrl: rsshub.baseUrl, rootDir: rsshubRoot, keepAlive: true, maxAgeHours: 168, allowUndated: true, concurrency: 2 }, configured: true, status: 'ready' });
     // Model credentials are resolved from the configured profile root (configRoot),
     // while content and the database remain isolated under workspaceRoot.
     setCredentialFields(configRoot, 'fixture', 'model-provider-fixture', { apiKey: 'fixture-key' });
@@ -49,7 +50,7 @@ test('主链路 E2E：采集、文章与图文产物均可从真实 HTTP 服务�
     assert.ok(fs.existsSync(databasePath), 'E2E 应创建临时 SQLite 数据库');
     assert.ok(!path.resolve(databasePath).toLowerCase().startsWith(`${projectRoot}${path.sep}`.toLowerCase()), '临时数据库不得落到项目目录');
 
-    writeFixtureConfig(configRoot, { workspaceRoot, rsshub: { baseUrl: rsshub.baseUrl, rootDir: path.join(projectRoot, 'RSSHub'), keepAlive: true, maxAgeHours: 168, allowUndated: true }, llm: { defaultProvider: 'fixture', providers: { fixture: { label: 'E2E Fixture', baseUrl: model.baseUrl, protocol: 'chat_completions', model: 'fixture', apiKeyEnv: 'E2E_FIXTURE_KEY', contextWindow: 32000, maxOutputTokens: 16000, supportsJsonMode: true, supportsNativeTools: true, supportsThinkingToggle: true, enabled: true } } } });
+    writeFixtureConfig(configRoot, { workspaceRoot, rsshub: { baseUrl: rsshub.baseUrl, rootDir: rsshubRoot, keepAlive: true, maxAgeHours: 168, allowUndated: true }, llm: { defaultProvider: 'fixture', providers: { fixture: { label: 'E2E Fixture', baseUrl: model.baseUrl, protocol: 'chat_completions', model: 'fixture', apiKeyEnv: 'E2E_FIXTURE_KEY', contextWindow: 32000, maxOutputTokens: 16000, supportsJsonMode: true, supportsNativeTools: true, supportsThinkingToggle: true, enabled: true } } } });
     workbench = await startWorkbench({ projectRoot, workspaceRoot, configRoot, port: 0, env: { WORKBENCH_GITHUB_API_BASE_URL: github.baseUrl } });
     const actualPort = Number(new URL(workbench.baseUrl).port);
     assert.ok(actualPort > 0);

@@ -6,24 +6,25 @@ import test from 'node:test';
 import { Store } from '../../server/platform/core/store.mjs';
 import { setCredentialFields } from '../../server/platform/tools/remote-credentials.mjs';
 import { startFakeModel, startFakeRssHub } from './support/fake-upstreams.mjs';
-import { startWorkbench, writeFixtureConfig } from './support/workbench-process.mjs';
+import { createRsshubFixture, startWorkbench, writeFixtureConfig } from './support/workbench-process.mjs';
 
 const projectRoot = path.resolve(import.meta.dirname, '../..');
 
 function prepareWorkspace(root) {
   const workspaceRoot = path.join(root, 'workspace');
   const configRoot = path.join(root, 'config');
+  const rsshubRoot = createRsshubFixture(root);
   fs.mkdirSync(path.join(workspaceRoot, 'data', 'source-cache'), { recursive: true });
   fs.mkdirSync(path.join(workspaceRoot, 'data', 'installed-skills'), { recursive: true });
   fs.writeFileSync(path.join(workspaceRoot, 'data', 'skill-packages.json'), JSON.stringify({ schemaVersion: 1, packages: {}, entryDefaults: {}, stageDefaults: {} }, null, 2));
   fs.cpSync(path.join(projectRoot, 'skills'), path.join(workspaceRoot, 'skills'), { recursive: true });
-  return { workspaceRoot, configRoot, databasePath: path.join(workspaceRoot, 'data', 'workbench.db') };
+  return { workspaceRoot, configRoot, databasePath: path.join(workspaceRoot, 'data', 'workbench.db'), rsshubRoot };
 }
 
-function fixtureConfig({ workspaceRoot, rsshub, model }) {
+function fixtureConfig({ workspaceRoot, rsshub, rsshubRoot, model }) {
   return {
     workspaceRoot,
-    rsshub: { baseUrl: rsshub.baseUrl, rootDir: path.join(projectRoot, 'RSSHub'), keepAlive: true, maxAgeHours: 168, allowUndated: true },
+    rsshub: { baseUrl: rsshub.baseUrl, rootDir: rsshubRoot, keepAlive: true, maxAgeHours: 168, allowUndated: true },
     llm: { defaultProvider: 'fixture', providers: { fixture: { label: 'E2E Fixture', baseUrl: model.baseUrl, protocol: 'chat_completions', model: 'fixture', apiKeyEnv: 'E2E_FIXTURE_KEY', contextWindow: 32000, maxOutputTokens: 16000, supportsJsonMode: true, supportsNativeTools: true, supportsThinkingToggle: true, enabled: true } } },
   };
 }
@@ -43,7 +44,7 @@ async function expectApiError(promise, pattern) {
 
 test('业务分支 E2E：综合、事件图文、每日早报、突发和自主写作路由完整', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'write-assistant-e2e-branches-'));
-  const { workspaceRoot, configRoot, databasePath } = prepareWorkspace(root);
+  const { workspaceRoot, configRoot, databasePath, rsshubRoot } = prepareWorkspace(root);
   const rsshub = await startFakeRssHub();
   const model = await startFakeModel();
   let workbench;
@@ -60,7 +61,7 @@ test('业务分支 E2E：综合、事件图文、每日早报、突发和自主�
     store.close();
     setCredentialFields(configRoot, 'fixture', 'model-provider-fixture', { apiKey: 'fixture-key' });
     setCredentialFields(configRoot, 'fixture', 'model-connection-fixture', { apiKey: 'fixture-key' });
-    writeFixtureConfig(configRoot, fixtureConfig({ workspaceRoot, rsshub, model }));
+    writeFixtureConfig(configRoot, fixtureConfig({ workspaceRoot, rsshub, rsshubRoot, model }));
     workbench = await startWorkbench({ projectRoot, workspaceRoot, configRoot, port: 0 });
 
     const loadedBatch = await workbench.api(`/api/batches/${batch.id}`);

@@ -6,6 +6,16 @@ import { spawn } from 'node:child_process';
 
 function delay(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 
+export function createRsshubFixture(root) {
+  const rsshubRoot = path.join(root, 'rsshub-fixture');
+  fs.mkdirSync(path.join(rsshubRoot, 'lib'), { recursive: true });
+  fs.mkdirSync(path.join(rsshubRoot, 'node_modules', 'tsx', 'dist'), { recursive: true });
+  fs.writeFileSync(path.join(rsshubRoot, 'package.json'), JSON.stringify({ name: 'e2e-rsshub-fixture', private: true }, null, 2));
+  fs.writeFileSync(path.join(rsshubRoot, 'lib', 'index.ts'), '// E2E only: the HTTP fixture is provided by startFakeRssHub.\n');
+  fs.writeFileSync(path.join(rsshubRoot, 'node_modules', 'tsx', 'dist', 'cli.mjs'), '// E2E only: RSSHub is already served by the local HTTP fixture.\n');
+  return rsshubRoot;
+}
+
 async function requestJson(url, options = {}) {
   const response = await fetch(url, { ...options, headers: { accept: 'application/json', ...(options.body ? { 'content-type': 'application/json' } : {}), ...(options.headers || {}) } });
   const body = await response.text();
