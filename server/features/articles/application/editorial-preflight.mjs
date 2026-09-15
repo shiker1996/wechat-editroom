@@ -22,6 +22,21 @@ const PREFLIGHT_FILE = 'editorial-preflight.json';
 const FACT_BASE_FILE = '02-fact-base.json';
 const CLAIM_REGISTER_FILE = '02-publication-claim-register.json';
 const FACT_GATE_FILE = '02-fact-gate.json';
+const PREFLIGHT_EDITORIAL_FIELDS = Object.freeze([
+  'writing_stance',
+  'confirmed_facts',
+  'research_basis',
+  'author_opinions',
+  'confirmed_experiences',
+  'rejected_angles',
+  'forbidden_claims',
+  'adopted_research_points',
+  'affected_group',
+  'reader_consequence',
+  'conflict',
+  'evidence_boundary',
+  'reader_action',
+]);
 
 function writeJson(filePath, value) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -61,6 +76,15 @@ function classificationFor(candidate) {
   };
 }
 
+function semanticEditorialInput(editorial = {}) {
+  return Object.fromEntries(PREFLIGHT_EDITORIAL_FIELDS.map((field) => [
+    field,
+    field === 'adopted_research_points'
+      ? (Array.isArray(editorial[field]) ? editorial[field] : [])
+      : text(editorial[field]),
+  ]));
+}
+
 function preflightInput({ candidate, editorial, materialBrief, sourceText, sourceUrl, classification }) {
   return {
     candidate: {
@@ -78,8 +102,15 @@ function preflightInput({ candidate, editorial, materialBrief, sourceText, sourc
       classification_evidence_json: candidate.classification_evidence_json,
       classification_features_json: candidate.classification_features_json,
       composite: Boolean(candidate.composite),
+      category: candidate.category,
+      angle: candidate.angle,
+      thesis: candidate.thesis,
+      reader_stake: candidate.reader_stake,
     },
-    editorial,
+    // material_brief / brief_status / next_action are persisted workflow state,
+    // not new editorial evidence. They are written during lock and must not
+    // invalidate the preflight produced by the editorial room.
+    editorial: semanticEditorialInput(editorial),
     materialBrief,
     sourceUrl,
     sourceText,
@@ -108,13 +139,16 @@ function persistArtifact(store, { batchId, candidateId, kind, name, filePath, st
   });
 }
 
-function cachedPreflight({ store, candidate, workdir, currentFingerprint }) {
+function cachedPreflight({ store, candidate, workdir, currentFingerprint, materialBrief, readiness, routeResult }) {
   const saved = readJson(path.join(workdir, PREFLIGHT_FILE), null);
   const factBase = readJson(path.join(workdir, FACT_BASE_FILE), null);
   if (!saved || saved.fingerprint !== currentFingerprint || !factBase) return null;
   return {
     ...saved,
     candidate: store.getCandidate(candidate.id) || candidate,
+    materialBrief,
+    readiness,
+    route: saved.route || routeResult,
     factBase,
     publicationClaimRegister: readJson(path.join(workdir, CLAIM_REGISTER_FILE), { claims: [] })?.claims || [],
     factGate: readJson(path.join(workdir, FACT_GATE_FILE), null),
@@ -122,21 +156,14 @@ function cachedPreflight({ store, candidate, workdir, currentFingerprint }) {
   };
 }
 
-/**
- * The one authoritative pre-lock check for article candidates.
- * It is intentionally callable from both the editorial agent and the lock route.
- */
-export async function runEditorialPreflight({
-  gateway,
+function buildPreflightContext({
   store,
   candidate: suppliedCandidate = null,
   candidateId,
   batchId,
-  provider,
   workspaceRoot,
   events = null,
   researchContext = null,
-  force = false,
 } = {}) {
   const candidate = suppliedCandidate || store.getCandidate(candidateId);
   if (!candidate) throw new Error('候选不存在');
@@ -169,10 +196,82 @@ export async function runEditorialPreflight({
   });
   const source = readArticleSourceInput({ candidate, workspaceRoot, store });
   const sourceUrls = source.sourceUrls.join('\n');
-  const input = preflightInput({ candidate, editorial: currentEditorial, materialBrief, sourceText: source.sourceText, sourceUrl: sourceUrls, classification });
+  const input = preflightInput({
+    candidate,
+    editorial: currentEditorial,
+    materialBrief,
+    sourceText: source.sourceText,
+    sourceUrl: sourceUrls,
+    classification,
+  });
   const currentFingerprint = fingerprint(input);
   const workdir = candidateArticleDir(workspaceRoot, store.getBatch(effectiveBatchId), candidate);
-  const saved = !force ? cachedPreflight({ store, candidate, workdir, currentFingerprint }) : null;
+  return {
+    store,
+    candidate,
+    effectiveBatchId,
+    currentEditorial,
+    readiness,
+    classification,
+    routeResult,
+    materialBrief,
+    source,
+    sourceUrls,
+    currentFingerprint,
+    workdir,
+  };
+}
+
+/**
+ * Read the editor-room preflight without generating a new fact base.
+ * The lock route uses this as a final freshness check before persisting the
+ * locked brief; a missing or stale cache must send the user back to the
+ * editorial room instead of silently running another model call.
+ */
+export function readEditorialPreflightCache(options = {}) {
+  const context = buildPreflightContext(options);
+  const saved = cachedPreflight(context);
+  return saved ? { ...saved, source: context.source } : null;
+}
+
+/**
+ * The one authoritative pre-lock check for article candidates.
+ * The editorial agent generates it; the lock route only reads its cache.
+ */
+export async function runEditorialPreflight({
+  gateway,
+  store,
+  candidate: suppliedCandidate = null,
+  candidateId,
+  batchId,
+  provider,
+  workspaceRoot,
+  events = null,
+  researchContext = null,
+  force = false,
+} = {}) {
+  const context = buildPreflightContext({
+    store,
+    candidate: suppliedCandidate,
+    candidateId,
+    batchId,
+    workspaceRoot,
+    events,
+    researchContext,
+  });
+  const {
+    candidate,
+    effectiveBatchId,
+    currentEditorial,
+    readiness,
+    routeResult,
+    materialBrief,
+    source,
+    sourceUrls,
+    currentFingerprint,
+    workdir,
+  } = context;
+  const saved = !force ? cachedPreflight(context) : null;
   if (saved) return saved;
 
   const gates = [

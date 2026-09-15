@@ -434,7 +434,7 @@ URL 规范化为裸仓库地址（https://github.com/owner/repo）；经手工�
 → 编辑室
 
 ### POST /api/candidates/:id/lock
-锁定简报（写入 article-brief.md）
+锁定简报（写入 article-brief.md）。只消费编辑室已通过且仍与当前编辑决策匹配的预检缓存；缓存缺失或过期时返回 `EDITORIAL_PREFLIGHT_REQUIRED`，不会在此接口重新生成事实基座。
 → 编辑室（确认简报）
 
 ### POST /api/candidates/:id/promote-article

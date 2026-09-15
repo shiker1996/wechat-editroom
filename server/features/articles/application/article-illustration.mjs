@@ -7,14 +7,17 @@ import { planImagePlaceholders } from './image-workflow.mjs';
 export async function illustrateArticle({
   gateway, store, provider, batchId, candidateId = null, markdown, factBase = '',
   workspaceRoot = process.cwd(), maxOutputTokens = 5000, imageSkillPrompt = '',
-  onProgress = () => {},
+  visualPolicy = 'auto', onProgress = () => {},
 }) {
   let visualPlan = { summary:'', placements:[], rejections:[] };
   let output = String(markdown || '');
-  try {
+  if (visualPolicy === 'off') {
+    visualPlan = { summary:'按写作立场策略跳过自动图表；保留手动供图规划。', placements:[], rejections:[], skipped:true, reason:'visual_policy_off' };
+    onProgress('按 visual policy=off 跳过自动 Mermaid/ECharts 规划');
+  } else try {
     visualPlan = await planArticleVisuals({
       gateway, provider, batchId, candidateId, markdown:output, factBase,
-      workspaceRoot, maxOutputTokens,
+      workspaceRoot, maxOutputTokens, visualPolicy,
     });
     if (visualPlan.placements.length) {
       output = insertVisualFences(output, visualPlan.placements);

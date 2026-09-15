@@ -36,6 +36,7 @@ description: 将已锁定文章简报或用户直接确认的热点命题编排�
 - `follow_reason`：可选，关注后可持续获得的具体价值
 - `publication_claim_register`：可选，事实主张、状态、来源、允许写法和禁止写法；由事实基座阶段生成
 - `material_brief`：锁定简报中的文章素材承接契约，包含主体动作、影响对象、读者后果、利益/责任冲突、证据边界和读者行动依据
+- `writing_stance`：`report`、`analysis` 或 `opinion`；只决定表达与来源可见策略，不改变事实状态、证据边界或禁止主张
 - `workdir`：默认 `articles/<topic-slug>/`
 - `seo`：默认开启；用户明确不需要时关闭
 - `min_visible_chars`：默认 `1300`；仅当用户在当前文章中明确要求其它长度时覆盖
@@ -99,9 +100,11 @@ brief → fact-base → planning → drafting → draft-quality-gate → title-g
 
 只有 `verified` 可以作为确定事实写入正文。`disputed` 必须呈现分歧；`unverified` 不进入正文，除非明确写成待核实线索。禁止补造数字、引语、时间、人物行为或来源。
 
+事实基座每条 claim 还应尽量保留 `source_group_id`、`source_level`、`evidence_kind`、`attribution_required`、`visible_citation`。同一来源拆出的多条主张共享稳定的 `source_group_id`；`personal_social` 来源默认使用 `source_observation`、`attribution_required: true` 和 `visible_citation: cluster`。这里的 `verified` 只表示来源正文直接支持该主张，不表示公司或多方已经独立确认。
+
 事实基座完成后生成发布主张登记。没有 URL 的外部主张不能标为 `verified`；来源 URL 存在也不等于来源直接支持主张。高影响主张没有直接证据时，必须进入 `restricted_claims`，不得在标题中使用。
 
-写入 `02-outline.md`，包括：账号定位来源、内容支柱、核心判断、目标读者、读者任务、分发池、读者利益、包装模式、内容角色、事实基座、章节推进、至少两个信息增量锚点、实用增量和增长承接。优先采用 `content_package` 的开头钩子与结构骨架；因事实核验需要调整时记录差异。开头直接进入事件，第二段前亮明立场。
+写入 `02-outline.md`，包括：账号定位来源、内容支柱、核心判断、目标读者、读者任务、分发池、读者利益、包装模式、内容角色、`article_type`、`writing_stance`、来源归因策略、事实基座、章节推进、至少两个信息增量锚点、实用增量和增长承接。优先采用 `content_package` 的开头钩子与结构骨架；因事实核验需要调整时记录差异。开头直接进入事件，第二段前亮明立场。
 
 通知池必须达到账号上下文的通知资格并在大纲中兑现 `reader_stake`；推荐池必须规划真实场景、可信证据、可获得结果和限制；实验池必须记录待验证假设。条件不成立时回到编辑会改池或收窄命题，不在成稿阶段强行包装。
 
@@ -131,13 +134,13 @@ brief → fact-base → planning → drafting → draft-quality-gate → title-g
 
 技术深解只在锁定命题明确要求原理、架构、性能、成本、公式、比较口径或可复算指标时触发；仅仅出现模型、芯片、开源或产品名称仍按技术热点快评处理。轻量八卦遇到裁员、事故、骚扰、违法、健康或劳动争议等严肃主题时降级为深度分析。
 
-类型不明确时，根据 `topic + angle + audience` 选择最接近者并在作者素材中记录 `writer_skill` 与 `writer_skill_reason`，不反问用户。将当前契约中的 `02-outline.md`、`03-titles.md` 作为上下文传给子技能，即使其文档仍写着旧文件名。
+类型不明确时，根据 `topic + angle + audience` 选择最接近者并在作者素材中记录 `writer_skill` 与 `writer_skill_reason`，不反问用户。`article_type` 负责技能路由；`writing_stance` 由锁定简报显式指定，缺失时按类型兼容推导。将当前契约中的 `02-outline.md`、`03-titles.md` 作为上下文传给子技能，即使其文档仍写着旧文件名。写作阶段接收运行时 stance overlay，不为每种 `article_type × writing_stance` 复制技能。
 
 本编排器不承接纯资讯早报、没有统一命题的快讯拼盘、依赖真实操作步骤的教程实操或工具清单。纯快讯应进入独立早报流程；教程必须先建立环境、步骤、成功标准和作者实践证据；工具清单与工具展示优先进入“工具 → 图文”流程。不得为了复用本流程把这些内容伪装成热点深度稿。
 
 写入 `04-draft.md`。要求：
 
-- 只使用事实基座允许的事实；`restricted_claims` 只能按登记的归因和限定方式出现，禁止把研判假设写成事实；每个关键事实就近标注来源
+- 只使用事实基座允许的事实；`restricted_claims` 只能按登记的归因和限定方式出现，禁止把研判假设写成事实。来源可见策略按 `writing_stance` 执行：`report` 默认逐条归因，`analysis` / `opinion` 对同一 `source_group_id` 在事实簇首次出现时集中归因；机器事实登记仍必须完整保留
 - 必须围绕 `material_brief` 的读者后果和冲突组织正文，不能只复述事件；如果 `reader_action` 为空，输出基于已核验事实的判断依据，不凭空承诺具体结果
 - 至少嵌入一个作者素材锚点
 - 遵守 `voice_guardrails`，并让正文兑现 `reader_job`，不能只在元数据里记录
@@ -159,7 +162,7 @@ brief → fact-base → planning → drafting → draft-quality-gate → title-g
 1. 使用 `humanizer-zh` 处理 `04-draft.md`，写入 `05-humanized.md`。调用时明确要求保留已核验事实、数字、引语、来源、标题和作者素材锚点；只输出改写后的文章，不附评分或修改总结。若其通用规则与这些约束冲突，以本约束为准
 2. 使用 `article-reviewer` 审阅并修订，写入 `06-reviewed.md`
 
-审稿至少检查事实支持、事实与判断混淆、逻辑跳跃、敏感与侵权风险、标题正文一致性、发布合规和增长与承接契约。必须单独检查标题、摘要、封面文案和前 200 字；逐条核对高影响主张的证据等级、来源归因、时效、争议呈现和名誉/隐私风险。核心高影响主张无法核验时不得通过；不能仅靠正文免责声明修复风险标题。确认内容角色与结构一致、实用增量具体且有依据、关注理由自然克制、具体历史内容真实存在、留言引导问题具体可答且商业词汇自然不硬插。计算关键事实引用覆盖率；低于 100% 时补来源、删除事实或降级为明确判断，不用一个模糊来源覆盖多项事实。
+审稿至少检查事实支持、事实与判断混淆、逻辑跳跃、敏感与侵权风险、标题正文一致性、发布合规和增长与承接契约。必须单独检查标题、摘要、封面文案和前 200 字；逐条核对高影响主张的证据等级、来源归因、时效、争议呈现和名誉/隐私风险。核心高影响主张无法核验时不得通过；不能仅靠正文免责声明修复风险标题。按 `writing_stance` 检查正文归因密度：不要因为观点文没有逐句来源提示而判定失败，也不要因为有来源提示就放过事实/判断混淆。确认内容角色与结构一致、实用增量具体且有依据、关注理由自然克制、具体历史内容真实存在、留言引导问题具体可答且商业词汇自然不硬插。计算基于 claim 映射的关键事实可追溯率，不以“据来源”出现次数作为质量指标。
 
 在 `06-reviewed.md` 文末审稿注释中记录 `content_role`、`expected_action`、`practical_increment`、`follow_reason` 和 `conversion_bridge_status`。转化校验失败时回到第 2 或第 4 步修订，不在终稿阶段临时追加生硬 CTA。
 

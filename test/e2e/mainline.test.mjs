@@ -31,7 +31,12 @@ test('主链路 E2E：采集、文章与图文产物均可从真实 HTTP 服务�
   // SkillRegistry treats the workspace as the source of truth; copy the checked-in
   // built-in skills into the disposable workspace so selection is tested too.
   fs.cpSync(path.join(projectRoot, 'skills'), path.join(workspaceRoot, 'skills'), { recursive: true });
-  const rsshub = await startFakeRssHub();
+  // Keep the fixture inside the event-heat freshness window so this E2E is
+  // deterministic across calendar days. Other failure fixtures retain their
+  // historical timestamps unless they explicitly opt into a different one.
+  const fixturePublishedAt = new Date(Date.now() - 60 * 60 * 1000);
+  const batchDate = fixturePublishedAt.toISOString().slice(0, 10);
+  const rsshub = await startFakeRssHub({ publishedAt: fixturePublishedAt.toISOString() });
   const github = await startFakeGitHub();
   const model = await startFakeModel();
   let workbench;
@@ -39,7 +44,7 @@ test('主链路 E2E：采集、文章与图文产物均可从真实 HTTP 服务�
   const timings = {};
   try {
     const store = new Store(databasePath);
-    const batch = store.createBatch({ date: '2026-09-12', title: 'E2E 主链路固定夹具', requestedTracks: ['article', 'social_cards'] });
+    const batch = store.createBatch({ date: batchDate, title: 'E2E 主链路固定夹具', requestedTracks: ['article', 'social_cards'] });
     store.saveExtensionSetting({ extensionType: 'collector', extensionId: 'rsshub-collector', value: { baseUrl: rsshub.baseUrl, rootDir: rsshubRoot, keepAlive: true, maxAgeHours: 168, allowUndated: true, concurrency: 2 }, configured: true, status: 'ready' });
     // Model credentials are resolved from the configured profile root (configRoot),
     // while content and the database remain isolated under workspaceRoot.

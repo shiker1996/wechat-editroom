@@ -1,4 +1,5 @@
 import { normalizeResearchPoints, researchPointsComplete } from './research-selection.mjs';
+import { WRITING_STANCES } from '../../../shared/domain/writing-stance.mjs';
 
 // 编辑室就绪判定：代码确定性校验 12 个表单项（其中 9 个参与门禁），替代模型自觉的状态声明。
 // 编辑室只是辅助作者填表：必填项填好即可成稿，选填项不参与门禁。
@@ -42,6 +43,7 @@ export function confirmedFactsDecision(value){
 // 顺序即依赖链：先明确事实、观点、角度和命题，再决定采用哪些研判拓展点，
 // 最后用 research_basis 解释这些拓展点如何服务于文章。
 export const EDITORIAL_FIELDS=Object.freeze([
+  {key:'writing_stance',label:'写作立场',required:false,scope:'editorial'},
   {key:'confirmed_facts',label:'已确认事实',required:true,scope:'editorial'},
   {key:'author_opinions',label:'明确观点',required:true,scope:'editorial'},
   {key:'angle',label:'写作角度',required:true,scope:'candidate'},
@@ -66,6 +68,7 @@ export function resolveEditorialMode(candidate={}){
 }
 
 export function editorialFieldComplete(field,value){
+  if(field.key==='writing_stance'){const normalized=String(value??'').trim().toLowerCase();return !normalized||WRITING_STANCES.includes(normalized);}
   if(field.key==='research_basis')return researchBasisDecision(value);
   if(field.key==='confirmed_facts')return confirmedFactsDecision(value);
   if(field.key==='adopted_research_points')return researchPointsComplete(value);

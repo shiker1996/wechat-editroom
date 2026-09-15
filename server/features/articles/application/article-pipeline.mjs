@@ -8,6 +8,7 @@ import { normalizeDistributionLane } from '../../../shared/domain/distribution-s
 import { parseModelJson } from '../../../platform/llm/model-json.mjs';
 import { evaluateEditorialReadiness } from '../domain/editorial-readiness.mjs';
 import { normalizeMaterialBrief } from '../../../shared/domain/material-brief.mjs';
+import { deriveWritingStance, stanceOverlay, citationPolicyForStance, visualPolicyForStance } from '../../../shared/domain/writing-stance.mjs';
 import { normalizeResearchPoints, normalizeRejectedAngles } from '../domain/research-selection.mjs';
 import { normalizeResearchCoverageResult, researchCoverageNeedsRevision } from '../domain/research-coverage.mjs';
 import { loadArticleSkillBundle, loadSkillBundle } from '../../../platform/llm/skill-runtime.mjs';
@@ -19,7 +20,7 @@ import { evaluateArticleFactEligibility } from '../domain/article-fact-eligibili
 import { readDiscussionResearchContext } from '../../research/index.mjs';
 import { callDecisionTool, DECISION_TITLE_PLAN_TOOL, decisionToolDefinition, normalizeDecisionTitlePlan } from '../../../platform/llm/decision-tools.mjs';
 import {
-  buildPublicationClaimRegister, extractArticleTitle, publicationComplianceIssue,
+  buildPublicationClaimRegister, enrichFactBaseClaims, extractArticleTitle, publicationComplianceIssue,
   publicationCompliancePrompt, publicationFactBaseIssues, scanPublicationRisk,
 } from '../domain/publication-compliance.mjs';
 import {
@@ -33,7 +34,7 @@ export {
   readArticleSourceInput, sourceCacheIssue, unverifiedFactBaseIssue, buildResearchCoveragePrompt,
 } from './article-pipeline-contract.mjs';
 export {
-  buildPublicationClaimRegister, extractArticleTitle, publicationComplianceIssue,
+  buildPublicationClaimRegister, enrichFactBaseClaims, extractArticleTitle, publicationComplianceIssue,
   publicationCompliancePrompt, publicationFactBaseIssues, scanPublicationRisk,
 } from '../domain/publication-compliance.mjs';
 
@@ -136,6 +137,10 @@ export function buildArticleStageSystem(orchestrator, stage, ...children) {
   if (!total) throw new Error('项目成稿总技能缺失，无法执行');
   const childPrompts = children.flat().filter((bundle) => bundle?.prompt).map((bundle) => bundle.prompt);
   return [total, ...childPrompts, `## 当前运行阶段\n\n只执行 \`${stage}\` 阶段，严格遵守总契约中该阶段的输入、输出和门禁；不要提前执行其它阶段。`].join('\n\n---\n\n');
+}
+
+export function buildStanceStageSystem(orchestrator, stage, stance, ...children) {
+  return `${buildArticleStageSystem(orchestrator, stage, ...children)}\n\n---\n\n${stanceOverlay(stance)}\n\n立场 overlay 只改变表达方式，不改变事实状态、来源边界、禁止主张或任何发布门禁。`;
 }
 
 export function buildPublicationComplianceRepairPrompt({ factBase = {}, claimRegister = [], article = '', issues = [], publicationScan = {}, researchPoints = [], rejectedAngles = [], preserveVisuals = false } = {}) {
@@ -265,11 +270,11 @@ export const RESEARCH_COVERAGE_TOOL = decisionToolDefinition({
   },
 });
 
-export async function aiQualityGate({gateway,store,provider,batchId,candidateId,article,factBase,sourceText='',researchPoints=[],rejectedAngles=[],publicationClaimRegister=[],publicationScan={},systemPrompt,stage,maxOutputTokens=3500}) {
+export async function aiQualityGate({gateway,store,provider,batchId,candidateId,article,factBase,sourceText='',researchPoints=[],rejectedAngles=[],publicationClaimRegister=[],publicationScan={},writingStance='analysis',citationPolicy='cluster',systemPrompt,stage,maxOutputTokens=3500}) {
   const purpose=`article-quality-gate-${stage}`;
   const messages=[
     {role:'system',protected:true,content:systemPrompt},
-    {role:'user',protected:true,content:`事实基座：${JSON.stringify(factBase)}\n\n作者采用的研判拓展点：${JSON.stringify(researchPoints)}\n\n作者明确不采用的方向：${JSON.stringify(rejectedAngles)}\n\n判定口径：正文事实只能来自事实基座中的 verified 项；来源标题、URL、模型常识和未进入事实基座的来源原文不能补充授权。第一人称作者判断或阅读动作（如“我看”“我读完后的判断”）不是亲测；只有声称本人测试、部署、使用并得到结果，且没有已确认实践证据时，才按未经核实的亲测处理。文章应保留并兑现作者采用的研判拓展点，但不得把研判假设当成已核实事实，也不得重新写入明确舍弃的方向。\n\n${publicationCompliancePrompt({factBase,claimRegister:publicationClaimRegister,scan:publicationScan})}\n\n待检查文章：\n${article}`},
+    {role:'user',protected:true,content:`事实基座：${JSON.stringify(factBase)}\n\n作者采用的研判拓展点：${JSON.stringify(researchPoints)}\n\n作者明确不采用的方向：${JSON.stringify(rejectedAngles)}\n\n判定口径：正文事实只能来自事实基座中的 verified 项；来源标题、URL、模型常识和未进入事实基座的来源原文不能补充授权。第一人称作者判断或阅读动作（如“我看”“我读完后的判断”）不是亲测；只有声称本人测试、部署、使用并得到结果，且没有已确认实践证据时，才按未经核实的亲测处理。文章应保留并兑现作者采用的研判拓展点，但不得把研判假设当成已核实事实，也不得重新写入明确舍弃的方向。\n\n${publicationCompliancePrompt({factBase,claimRegister:publicationClaimRegister,scan:publicationScan,writingStance,citationPolicy})}\n\n待检查文章：\n${article}`},
   ];
   const fallback=async()=>parseJsonResult(await gateway.complete({provider,purpose,batchId,candidateId,jsonMode:true,maxOutputTokens,messages}),store);
   const toolMessages=[
@@ -291,11 +296,11 @@ export async function aiQualityGate({gateway,store,provider,batchId,candidateId,
   return decision.value;
 }
 
-export async function aiReviewGate({gateway,store,provider,batchId,candidateId,article,factBase,outline='',researchPoints=[],rejectedAngles=[],publicationClaimRegister=[],publicationScan={},systemPrompt,maxOutputTokens=3500}) {
+export async function aiReviewGate({gateway,store,provider,batchId,candidateId,article,factBase,outline='',researchPoints=[],rejectedAngles=[],publicationClaimRegister=[],publicationScan={},writingStance='analysis',citationPolicy='cluster',systemPrompt,maxOutputTokens=3500}) {
   const purpose='article-review-gate';
   const messages=[
     {role:'system',protected:true,content:systemPrompt},
-    {role:'user',protected:true,content:`事实基座：${JSON.stringify(factBase)}\n\n文章大纲：${String(outline||'').trim()}\n\n作者采用的研判拓展点：${JSON.stringify(researchPoints)}\n\n作者明确不采用的方向：${JSON.stringify(rejectedAngles)}\n\n${publicationCompliancePrompt({factBase,claimRegister:publicationClaimRegister,scan:publicationScan})}\n\n待审文章：\n${article}`},
+    {role:'user',protected:true,content:`事实基座：${JSON.stringify(factBase)}\n\n文章大纲：${String(outline||'').trim()}\n\n作者采用的研判拓展点：${JSON.stringify(researchPoints)}\n\n作者明确不采用的方向：${JSON.stringify(rejectedAngles)}\n\n${publicationCompliancePrompt({factBase,claimRegister:publicationClaimRegister,scan:publicationScan,writingStance,citationPolicy})}\n\n待审文章：\n${article}`},
   ];
   const fallback=async()=>parseJsonResult(await gateway.complete({provider,purpose,batchId,candidateId,jsonMode:true,maxOutputTokens,messages}),store);
   const toolMessages=[
@@ -310,8 +315,8 @@ export async function aiReviewGate({gateway,store,provider,batchId,candidateId,a
   return decision.value;
 }
 
-async function repairArticleForPublicationCompliance({ gateway, orchestratorSkill, reviewerSkill, provider, batchId, candidateId, article, factBase, publicationClaimRegister, publicationScan, issues, researchPoints, rejectedAngles, preserveVisuals = false, maxOutputTokens = 6500 }) {
-  const systemPrompt = buildArticleStageSystem(orchestratorSkill, 'publication-compliance-repair', reviewerSkill);
+async function repairArticleForPublicationCompliance({ gateway, orchestratorSkill, reviewerSkill, provider, batchId, candidateId, article, factBase, publicationClaimRegister, publicationScan, issues, researchPoints, rejectedAngles, writingStance = 'analysis', preserveVisuals = false, maxOutputTokens = 6500 }) {
+  const systemPrompt = buildStanceStageSystem(orchestratorSkill, 'publication-compliance-repair', writingStance, reviewerSkill);
   const repairPrompt = buildPublicationComplianceRepairPrompt({ factBase, claimRegister: publicationClaimRegister, article, issues, publicationScan, researchPoints, rejectedAngles, preserveVisuals });
   let result = await textCall(gateway, { provider, purpose: 'article-publication-compliance-repair', batchId, candidateId }, systemPrompt, repairPrompt, maxOutputTokens);
   let repaired = cleanMarkdown(result.content).replace(/<!--\s*REVIEW[\s\S]*?-->/gi, '').trim();
@@ -388,10 +393,18 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   const requestedDistributionLane=normalizeDistributionLane(candidate.distribution_lane);
   const distributionLane=requestedDistributionLane==='通知池'&&!readerStake?'实验池':requestedDistributionLane;
   const materialBrief=normalizeMaterialBrief(editorial.material_brief);
+  const articleType=materialBrief.article_type || selectWriterSkill(candidate).skill;
+  const stanceDecision=deriveWritingStance({ articleType, materialBrief, editorial });
+  const writingStance=stanceDecision.stance;
+  const citationPolicy=citationPolicyForStance(writingStance);
+  const visualDecision=visualPolicyForStance({ stance:writingStance, articleType });
+  materialBrief.article_type=articleType;
+  materialBrief.writing_stance=writingStance;
   const brief={candidateId:candidate.candidate_id,topic:candidate.hotspot_title,sourceUrl:sourceUrls,category:candidate.category,score:candidate.f_score,
     angle:candidate.angle,thesis:candidate.thesis,researchBasis:editorial.research_basis,adoptedResearchPoints:normalizeResearchPoints(editorial.adopted_research_points),confirmedFacts:editorial.confirmed_facts,authorOpinions:editorial.author_opinions,
     confirmedExperiences:editorial.confirmed_experiences,rejectedAngles:normalizeRejectedAngles(editorial.rejected_angles),forbiddenClaims:editorial.forbidden_claims,
     experienceRequired:Boolean(editorial.experience_required),distributionLane,readerStake,composite:Boolean(candidate.composite),materialBrief,
+    articleType,writingStance,stanceSource:stanceDecision.source,citationPolicy,visualPolicy:visualDecision.policy,
     action:materialBrief.action,affectedGroup:materialBrief.affected_group,readerConsequence:materialBrief.reader_consequence,
     conflict:materialBrief.conflict,baselineChange:materialBrief.baseline_change,counterEvidence:materialBrief.counter_evidence,
     evidenceBoundary:materialBrief.evidence_boundary,readerAction:materialBrief.reader_action,materialReadiness:materialBrief.material_readiness};
@@ -422,6 +435,8 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
     'article-image-placeholders':loadSkillBundle({workspaceRoot,skillName:'article-image-placeholders'}),
     'article-visual-planner':loadSkillBundle({workspaceRoot,skillName:'article-visual-planner'}),
   };
+  const stageSystem=(stage,...children)=>buildStanceStageSystem(orchestratorSkill,stage,writingStance,...children);
+  const gateStance={writingStance,citationPolicy};
   const runtime=await prepareSkillRun({gateway,store,batchId,candidateId,purpose:'article',bundles:[writerSkillBundle,orchestratorSkill,...Object.values(stageSkills)],provider,snapshotId,
     selection:(skillSelection||stageSelections)?{...(skillSelection||{requestedSkill:'',selectedSkill:chosenWriterSkill,selectionSource:'builtin-recommendation'}),entryPoint:'hotspot-article',stages:stageSelections||{}}:null});
   gateway=bindGenerationSnapshot(gateway,runtime.snapshotId);
@@ -448,11 +463,15 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   };
   onProgress('Step 0/1 校验锁定简报并建立作者素材');
   const briefPath=path.join(workdir,'00-article-brief.md'); const sourceBrief=path.join(batchTopicsDir(workspaceRoot,batch),candidate.candidate_id,'article-brief.md');
-  writeFile(briefPath,fs.existsSync(sourceBrief)?fs.readFileSync(sourceBrief,'utf8'):`---\nbrief_status: LOCKED\ncandidate_id: ${candidate.candidate_id}\ndistribution_lane: ${brief.distributionLane}\nreader_stake: ${brief.readerStake}\nexperience_required: ${brief.experienceRequired}\ndecision_source: explicit-user\nfinal_readiness: WRITE_NOW\n---\n\n# ${brief.topic}\n\n## 采用的研判主线\n${brief.researchBasis}\n\n## 锁定命题\n${brief.thesis}\n`);
+  const sourceBriefText=fs.existsSync(sourceBrief)?fs.readFileSync(sourceBrief,'utf8'):`---\nbrief_status: LOCKED\ncandidate_id: ${candidate.candidate_id}\ndistribution_lane: ${brief.distributionLane}\nreader_stake: ${brief.readerStake}\nexperience_required: ${brief.experienceRequired}\ndecision_source: explicit-user\nfinal_readiness: WRITE_NOW\n---\n\n# ${brief.topic}\n\n## 采用的研判主线\n${brief.researchBasis}\n\n## 锁定命题\n${brief.thesis}\n`;
+  const briefWithStance=/^writing_stance\s*:/m.test(sourceBriefText)
+    ? sourceBriefText
+    : `${sourceBriefText.trimEnd()}\n\n## 写作立场\n\n- article_type: ${articleType}\n- writing_stance: ${writingStance}\n- citation_policy: ${citationPolicy}\n- visual_policy: ${visualDecision.policy}\n`;
+  writeFile(briefPath,briefWithStance);
   const researchSelectionPath=path.join(workdir,'editorial-research-selection.json');
   writeFile(researchSelectionPath,JSON.stringify({candidate_id:candidate.candidate_id,selected:brief.adoptedResearchPoints,rejected:normalizeRejectedAngles(brief.rejectedAngles),generated_at:new Date().toISOString()},null,2));
   const skillManifestPath=path.join(workdir,'00-skill-manifest.json');
-  writeFile(skillManifestPath,JSON.stringify({orchestrator:{skill:'wechat-mp-topic-to-article',hash:orchestratorSkill.hash,files:orchestratorSkill.files,fallback:orchestratorSkill.fallback},writerSkill:chosenWriterSkill,writerSkillSelection:skillSelection||{requestedSkill:'',selectedSkill:chosenWriterSkill,selectionSource:'builtin-recommendation'},stageSkillSelections:stageSelections||historicalStages,hash:skillBundle.hash,files:skillBundle.files,fallback:skillBundle.fallback,stageSkills:Object.fromEntries(Object.entries(stageSkills).map(([name,bundle])=>[name,{skill:bundle.skillName,hash:bundle.hash,files:bundle.files,fallback:bundle.fallback}])),loadedAt:new Date().toISOString()},null,2));
+  writeFile(skillManifestPath,JSON.stringify({orchestrator:{skill:'wechat-mp-topic-to-article',hash:orchestratorSkill.hash,files:orchestratorSkill.files,fallback:orchestratorSkill.fallback},writerSkill:chosenWriterSkill,writerSkillSelection:skillSelection||{requestedSkill:'',selectedSkill:chosenWriterSkill,selectionSource:'builtin-recommendation'},articleType,writingStance,stanceSource:stanceDecision.source,stanceOverlayVersion:'1',citationPolicy,visualPolicy:visualDecision.policy,stageSkillSelections:stageSelections||historicalStages,hash:skillBundle.hash,files:skillBundle.files,fallback:skillBundle.fallback,stageSkills:Object.fromEntries(Object.entries(stageSkills).map(([name,bundle])=>[name,{skill:bundle.skillName,hash:bundle.hash,files:bundle.files,fallback:bundle.fallback}])),loadedAt:new Date().toISOString()},null,2));
   recordStage('brief',orchestratorSkill,['editorial','article-brief.md','editorial-research-selection.json'],'00-article-brief.md');
   onProgress('Step 1.5 基于来源建立结构化事实基座');
   // 事实基座包含逐条主张、证据和来源映射，内容量会随素材增长。
@@ -461,14 +480,15 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   // parseModelJson 只能看到半截 JSON，后续大纲和成稿都不会开始。
   const preflightSnapshot=readJsonIfPresent(path.join(workdir,'editorial-preflight.json'),null);
   const preflightFactBase=readJsonIfPresent(path.join(workdir,'02-fact-base.json'),null);
-  const factBase=preflightSnapshot?.ready&&preflightFactBase
+  const rawFactBase=preflightSnapshot?.ready&&preflightFactBase
     ? preflightFactBase
     : parseJsonResult(await gateway.complete({provider,purpose:'article-fact-base',batchId,candidateId,jsonMode:true,messages:[
       {role:'system',protected:true,content:buildArticleStageSystem(orchestratorSkill,'fact-base')},
       {role:'user',protected:true,content:JSON.stringify({topic:brief.topic,researchBasis:brief.researchBasis,adoptedResearchPoints:brief.adoptedResearchPoints,rejectedAngles:brief.rejectedAngles,confirmedFacts:brief.confirmedFacts,authorOpinions:brief.authorOpinions,forbiddenClaims:brief.forbiddenClaims,materialBrief:brief.materialBrief,sourceUrl:brief.sourceUrl,sourceText:brief.sourceText||''})},
     ]}),store);
+  const factBase=enrichFactBaseClaims(rawFactBase,{citationPolicy});
   brief.factBase=factBase;
-  const publicationClaimRegister=buildPublicationClaimRegister(factBase);
+  const publicationClaimRegister=buildPublicationClaimRegister(factBase,{citationPolicy});
   brief.publicationClaimRegister=publicationClaimRegister;
   const writingBrief=authorizedWritingBrief(brief);
   const factBasePath=path.join(workdir,'02-fact-base.json');
@@ -484,7 +504,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   writeFile(path.join(workdir,'02-fact-gate.json'), JSON.stringify(factGate, null, 2));
   if (!factGate.eligible) throw new Error(`文章事实门禁未通过：${factGate.reason}`);
   onProgress('Step 2 建立事实基座、大纲与标题候选');
-  const PLAN_SYSTEM = `${buildArticleStageSystem(orchestratorSkill,'planning')}\n\n## 账号上下文\n${formatAccountContext(getAccountContext({ workspaceRoot }))}`;
+  const PLAN_SYSTEM = `${stageSystem('planning')}\n\n## 账号上下文\n${formatAccountContext(getAccountContext({ workspaceRoot }))}`;
   // 大纲阶段同样使用 output-budget 的 6000 -> 10000 自适应重试，
   // 由 providerMax 负责兜底，不要用调用方固定上限关闭该机制。
   const planningResult=await gateway.complete({provider,purpose:'article-planning',batchId,candidateId,jsonMode:true,
@@ -496,11 +516,11 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   const p01=path.join(workdir,'01-personal-materials.md'),p02=path.join(workdir,'02-outline.md'),p03=path.join(workdir,'03-titles.md'); writeFile(p01,materials);writeFile(p02,outline);writeFile(p03,titles);
   recordStage('planning',orchestratorSkill,['00-article-brief.md','02-fact-base.json'],['01-personal-materials.md','02-outline.md','03-titles.md']);
   onProgress(`Step 4 使用 ${chosenWriterSkill} 完整技能生成初稿`);
-  const skillPrompt = buildArticleStageSystem(orchestratorSkill,'drafting',writerSkillBundle);
+  const skillPrompt = stageSystem('drafting',writerSkillBundle);
   const draftResult=await textCall(gateway,{provider,purpose:'article-drafting-pipeline',batchId,candidateId},skillPrompt,buildDraftUserPrompt(selectedTitle, writingBrief, outline),Math.min(6500,providerConfig.maxOutputTokens));
   let draft=cleanMarkdown(draftResult.content);
-  const draftGateSystem=buildArticleStageSystem(orchestratorSkill,'draft-quality-gate',writerSkillBundle,stageSkills['article-reviewer']);
-   let draftQuality=await aiQualityGate({gateway,store,provider,batchId,candidateId,article:draft,factBase,sourceText:brief.sourceText||'',researchPoints:brief.adoptedResearchPoints,rejectedAngles:brief.rejectedAngles,publicationClaimRegister,publicationScan:scanPublicationRisk({article:draft,factBase}),systemPrompt:draftGateSystem,stage:'draft',maxOutputTokens:Math.min(3500,providerConfig.maxOutputTokens)});
+  const draftGateSystem=stageSystem('draft-quality-gate',writerSkillBundle,stageSkills['article-reviewer']);
+   let draftQuality=await aiQualityGate({gateway,store,provider,batchId,candidateId,article:draft,factBase,sourceText:brief.sourceText||'',researchPoints:brief.adoptedResearchPoints,rejectedAngles:brief.rejectedAngles,publicationClaimRegister,publicationScan:scanPublicationRisk({article:draft,factBase}),...gateStance,systemPrompt:draftGateSystem,stage:'draft',maxOutputTokens:Math.min(3500,providerConfig.maxOutputTokens)});
    if(!draftQuality.pass){
     const draftScan=scanPublicationRisk({article:draft,factBase});
     onProgress(`Step 4.2 AI 质量门禁未通过，执行定向事实与合规修订：${issueList(draftQuality.issues).join('；')}`);
@@ -518,11 +538,12 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
       issues:draftQuality.issues || [],
       researchPoints:brief.adoptedResearchPoints,
       rejectedAngles:brief.rejectedAngles,
+      writingStance,
       maxOutputTokens:Math.min(6500,providerConfig.maxOutputTokens),
     });
     draft=draftRepair.article;draftQuality={pass:false,issues:[]};
    }
-  if(!draftQuality.pass)draftQuality=await aiQualityGate({gateway,store,provider,batchId,candidateId,article:draft,factBase,sourceText:brief.sourceText||'',researchPoints:brief.adoptedResearchPoints,rejectedAngles:brief.rejectedAngles,publicationClaimRegister,publicationScan:scanPublicationRisk({article:draft,factBase}),systemPrompt:draftGateSystem,stage:'draft-recheck',maxOutputTokens:Math.min(3500,providerConfig.maxOutputTokens)});
+  if(!draftQuality.pass)draftQuality=await aiQualityGate({gateway,store,provider,batchId,candidateId,article:draft,factBase,sourceText:brief.sourceText||'',researchPoints:brief.adoptedResearchPoints,rejectedAngles:brief.rejectedAngles,publicationClaimRegister,publicationScan:scanPublicationRisk({article:draft,factBase}),...gateStance,systemPrompt:draftGateSystem,stage:'draft-recheck',maxOutputTokens:Math.min(3500,providerConfig.maxOutputTokens)});
   const draftBlockers=articleGateBlockingIssues(draftQuality);
   if(draftBlockers.length)throw new Error(`AI 成稿输出门禁未通过：${issueList(draftBlockers).join('；')}`);
   const draftGatePath=path.join(workdir,'04-quality-gate.json');writeFile(draftGatePath,JSON.stringify(draftQuality,null,2));
@@ -530,7 +551,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   recordStage('drafting',writerSkillBundle,['01-personal-materials.md','02-outline.md','03-titles.md','02-fact-base.json'],'04-draft.md');
   recordStage('draft-quality-gate',stageSkills['article-reviewer'],['04-draft.md','02-fact-base.json'],'04-quality-gate.json',draftQuality.pass?'passed':'needs_review');
   onProgress('Step 4.5 根据初稿正文生成标题');
-  const titleGenSystem = buildArticleStageSystem(orchestratorSkill,'title-generation',stageSkills['title-generator']);
+  const titleGenSystem = stageSystem('title-generation',stageSkills['title-generator']);
   const titlePurpose='article-title-generation';
   const titleMessages=[{role:'system',content:titleGenSystem,protected:true},{role:'user',content:JSON.stringify({topic:candidate.hotspot_title,
     distribution_lane:brief.distributionLane,reader_stake:brief.readerStake,draft,factBase,publicationClaimRegister,
@@ -552,7 +573,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   writeFile(selectedTitleRiskPath,JSON.stringify(selectedTitleRisk,null,2));
   recordStage('title-generation',stageSkills['title-generator'],['04-draft.md','02-fact-base.json'],['03-titles.md','03-title-risk.json'],selectedTitleRisk.titleBlockers.length?'needs_review':'passed');
   // 标题风险先保留到终稿编辑器处理；它不再阻断文章正文的生成。
-  const humanSystem=buildArticleStageSystem(orchestratorSkill,'humanize',stageSkills['humanizer-zh']);
+  const humanSystem=stageSystem('humanize',stageSkills['humanizer-zh']);
   let humanResult=await textCall(gateway,{provider,purpose:'article-humanize',batchId,candidateId},humanSystem,`作者采用的研判拓展点：${JSON.stringify(brief.adoptedResearchPoints)}\n\n作者明确不采用的方向：${JSON.stringify(brief.rejectedAngles)}\n\n请在不改动事实和作者立场的前提下保留采用点在文章中的论证位置，不要重新引入明确舍弃的方向。\n\n待自然化文章：\n${draft}`,Math.min(5000,providerConfig.maxOutputTokens));
   let human=cleanMarkdown(humanResult.content); let humanIssue=articleStageOutputIssue(human,{requireArticle:true});
   if(humanIssue){
@@ -570,7 +591,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   }
   recordStage('humanize',stageSkills['humanizer-zh'],['04-draft.md','02-fact-base.json'],'05-humanized.md');
   onProgress('Step 5 审稿与事实/逻辑/风险门禁');
-  const reviewSystem=buildArticleStageSystem(orchestratorSkill,'review',stageSkills['article-reviewer']);
+  const reviewSystem=stageSystem('review',stageSkills['article-reviewer']);
   const reviewOutputInstruction='输出契约：直接输出修订后的完整 Markdown 文章，不要输出审稿报告、结论摘要、评分、修订说明或 REVIEW 注释。审稿是否通过由独立的 decision.article_review_gate 工具返回；不要在正文中嵌入门禁结论。';
   const reviewResult=await textCall(gateway,{provider,purpose:'article-review',batchId,candidateId},reviewSystem,`事实基座:${JSON.stringify(factBase)}\n\n发布主张登记:${JSON.stringify(publicationClaimRegister)}\n\n作者采用的研判拓展点:${JSON.stringify(brief.adoptedResearchPoints)}\n\n作者明确不采用的方向:${JSON.stringify(brief.rejectedAngles)}\n\n发布风险扫描:${JSON.stringify(scanPublicationRisk({article:human,factBase}))}\n\n文章:\n${human}\n\n${reviewOutputInstruction}`,Math.min(6500,providerConfig.maxOutputTokens));
   let reviewed=cleanMarkdown(reviewResult.content);
@@ -580,7 +601,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   let reviewIssue=articleStageOutputIssue(reviewed,{requireArticle:true});
   let reviewDecision=reviewIssue
     ? {pass:false,issues:[{type:'output',message:reviewIssue,repair:'直接返回完整 Markdown 文章，不要输出审稿报告或工具操作说明'}]}
-    : await aiReviewGate({gateway,store,provider,batchId,candidateId,article:reviewed,factBase,outline,researchPoints:brief.adoptedResearchPoints,rejectedAngles:brief.rejectedAngles,publicationClaimRegister,publicationScan:scanPublicationRisk({article:reviewed,factBase}),systemPrompt:reviewSystem,maxOutputTokens:Math.min(3500,providerConfig.maxOutputTokens)});
+    : await aiReviewGate({gateway,store,provider,batchId,candidateId,article:reviewed,factBase,outline,researchPoints:brief.adoptedResearchPoints,rejectedAngles:brief.rejectedAngles,publicationClaimRegister,publicationScan:scanPublicationRisk({article:reviewed,factBase}),...gateStance,systemPrompt:reviewSystem,maxOutputTokens:Math.min(3500,providerConfig.maxOutputTokens)});
   if(reviewIssue||!reviewDecision.pass) {
     onProgress(reviewIssue?`Step 5 审稿输出异常，自动重试：${reviewIssue}`:'Step 5 审稿未通过,执行一次定向修订复审');
     if(reviewIssue)store.updateModelCall(reviewResult.callId,{status:'invalid_output',error:reviewIssue});
@@ -588,7 +609,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
       `${buildReviewRepairPrompt({factBase,outline,article:human,review:JSON.stringify(reviewDecision)})}\n\n作者采用的研判拓展点：${JSON.stringify(brief.adoptedResearchPoints)}；作者明确不采用的方向：${JSON.stringify(brief.rejectedAngles)}。修订时保留并兑现采用点，不要重新引入舍弃方向。${reviewIssue?`\n上一次响应未通过审稿输出契约：${reviewIssue}。这次必须返回完整 Markdown 文章，不能返回审稿报告或结论摘要。`:''}`,Math.min(6500,providerConfig.maxOutputTokens));
     reviewed=cleanMarkdown(repairResult.content);
     finalReviewResult=repairResult;reviewLog+=`\n\n# 定向修订复审响应\n\n${reviewed}`;writeFile(reviewLogPath,reviewLog);reviewIssue=articleStageOutputIssue(reviewed,{requireArticle:true});
-    if(!reviewIssue)reviewDecision=await aiReviewGate({gateway,store,provider,batchId,candidateId,article:reviewed,factBase,outline,researchPoints:brief.adoptedResearchPoints,rejectedAngles:brief.rejectedAngles,publicationClaimRegister,publicationScan:scanPublicationRisk({article:reviewed,factBase}),systemPrompt:reviewSystem,maxOutputTokens:Math.min(3500,providerConfig.maxOutputTokens)});
+    if(!reviewIssue)reviewDecision=await aiReviewGate({gateway,store,provider,batchId,candidateId,article:reviewed,factBase,outline,researchPoints:brief.adoptedResearchPoints,rejectedAngles:brief.rejectedAngles,publicationClaimRegister,publicationScan:scanPublicationRisk({article:reviewed,factBase}),...gateStance,systemPrompt:reviewSystem,maxOutputTokens:Math.min(3500,providerConfig.maxOutputTokens)});
   }
   const reviewBlockers=reviewIssue ? [{type:'output',message:reviewIssue}] : articleGateBlockingIssues(reviewDecision);
   if(reviewBlockers.length){
@@ -624,22 +645,22 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
     ? `\n\n关键词评分:${seoScores.map(k => `${k.keyword}=${k.seo_score??'N/A'}`).join(', ')}。相关词:${seoScores.flatMap(k=>k.related_keywords||[]).join('、')}`
     : '';
   onProgress('Step 6.2 搜一搜优化');
-  const seoResult=await textCall(gateway,{provider,purpose:'article-seo',batchId,candidateId},buildArticleStageSystem(orchestratorSkill,'seo-optimization',stageSkills['seo-content-optimizer']),`核心关键词: ${coreKw.join('、')}${seoContext}\n\n已锁定标题：${extractArticleTitle(reviewed)}\n\n事实基座：${JSON.stringify(factBase)}\n\n发布主张登记：${JSON.stringify(publicationClaimRegister)}\n\nSEO 前风险扫描：${JSON.stringify(scanPublicationRisk({article:reviewed,factBase}))}\n\nSEO 不得新增高影响事实、财经数字、负面指控或绝对化判断；若关键词与事实冲突，保留事实边界。\n\n待优化文章：\n${reviewed}`,Math.min(6500,providerConfig.maxOutputTokens));
+  const seoResult=await textCall(gateway,{provider,purpose:'article-seo',batchId,candidateId},stageSystem('seo-optimization',stageSkills['seo-content-optimizer']),`核心关键词: ${coreKw.join('、')}${seoContext}\n\n已锁定标题：${extractArticleTitle(reviewed)}\n\n事实基座：${JSON.stringify(factBase)}\n\n发布主张登记：${JSON.stringify(publicationClaimRegister)}\n\nSEO 前风险扫描：${JSON.stringify(scanPublicationRisk({article:reviewed,factBase}))}\n\nSEO 不得新增高影响事实、财经数字、负面指控或绝对化判断；不得改变 writing_stance=${writingStance} 或 citation_policy=${citationPolicy}；若关键词与事实冲突，保留事实边界。\n\n待优化文章：\n${reviewed}`,Math.min(6500,providerConfig.maxOutputTokens));
   let final=cleanMarkdown(seoResult.content).replace(/<!--\s*REVIEW[\s\S]*?-->/gi,'').trim();
-  if(visibleChars(final)<articleLengthRange.min||visibleChars(final)>articleLengthRange.max){onProgress(`终稿当前 ${visibleChars(final)} 字，调整到 ${articleLengthRange.min}–${articleLengthRange.max} 字`);final=await fitArticleLength({gateway,provider,batchId,candidateId,article:final,factBase,systemPrompt:buildArticleStageSystem(orchestratorSkill,'length-repair',writerSkillBundle),purpose:'article-length-gate',maxOutputTokens:Math.min(6500,providerConfig.maxOutputTokens),onProgress,maxAttempts:repairAttempts,range:articleLengthRange});}
+  if(visibleChars(final)<articleLengthRange.min||visibleChars(final)>articleLengthRange.max){onProgress(`终稿当前 ${visibleChars(final)} 字，调整到 ${articleLengthRange.min}–${articleLengthRange.max} 字`);final=await fitArticleLength({gateway,provider,batchId,candidateId,article:final,factBase,systemPrompt:stageSystem('length-repair',writerSkillBundle),purpose:'article-length-gate',maxOutputTokens:Math.min(6500,providerConfig.maxOutputTokens),onProgress,maxAttempts:repairAttempts,range:articleLengthRange});}
   if(visibleChars(final)<articleLengthRange.min||visibleChars(final)>articleLengthRange.max)onProgress(`字数警告：终稿有 ${visibleChars(final)} 个可见字符，不在 ${articleLengthRange.min}–${articleLengthRange.max} 字区间，可稍后在编辑器手动删减，流程继续`);
   const configuredGate=evaluateConfiguredGates(writerSkillBundle.config,{factBase,output:final,visibleChars:visibleChars(final)});
   if(!configuredGate.pass)throw new Error(`技能配置门禁未通过：${configuredGate.issues.map((item)=>item.message).join('；')}`);
-  const finalGateSystem=buildArticleStageSystem(orchestratorSkill,'final-quality-gate',writerSkillBundle,stageSkills['article-reviewer']);
+  const finalGateSystem=stageSystem('final-quality-gate',writerSkillBundle,stageSkills['article-reviewer']);
   let finalPublicationScan=scanPublicationRisk({article:final,factBase});
-  let finalQuality=await aiQualityGate({gateway,store,provider,batchId,candidateId,article:final,factBase,sourceText:brief.sourceText||'',researchPoints:brief.adoptedResearchPoints,rejectedAngles:brief.rejectedAngles,publicationClaimRegister,publicationScan:finalPublicationScan,systemPrompt:finalGateSystem,stage:'final',maxOutputTokens:Math.min(3500,providerConfig.maxOutputTokens)});
+  let finalQuality=await aiQualityGate({gateway,store,provider,batchId,candidateId,article:final,factBase,sourceText:brief.sourceText||'',researchPoints:brief.adoptedResearchPoints,rejectedAngles:brief.rejectedAngles,publicationClaimRegister,publicationScan:finalPublicationScan,...gateStance,systemPrompt:finalGateSystem,stage:'final',maxOutputTokens:Math.min(3500,providerConfig.maxOutputTokens)});
   if(!finalQuality.pass){
     onProgress(`Step 6.3 AI 终稿门禁未通过，执行定向合规修订：${issueList(finalQuality.issues).join('；')}`);
-    const finalRepair=await repairArticleForPublicationCompliance({ gateway, orchestratorSkill, reviewerSkill:stageSkills['article-reviewer'], provider, batchId, candidateId, article:final, factBase, publicationClaimRegister, publicationScan:finalPublicationScan, issues:finalQuality.issues || [], researchPoints:brief.adoptedResearchPoints, rejectedAngles:brief.rejectedAngles, maxOutputTokens:Math.min(6500,providerConfig.maxOutputTokens) });
+    const finalRepair=await repairArticleForPublicationCompliance({ gateway, orchestratorSkill, reviewerSkill:stageSkills['article-reviewer'], provider, batchId, candidateId, article:final, factBase, publicationClaimRegister, publicationScan:finalPublicationScan, issues:finalQuality.issues || [], researchPoints:brief.adoptedResearchPoints, rejectedAngles:brief.rejectedAngles, writingStance, maxOutputTokens:Math.min(6500,providerConfig.maxOutputTokens) });
     final=finalRepair.article;
-    if(visibleChars(final)<articleLengthRange.min||visibleChars(final)>articleLengthRange.max)final=await fitArticleLength({gateway,provider,batchId,candidateId,article:final,factBase,systemPrompt:buildArticleStageSystem(orchestratorSkill,'length-repair',writerSkillBundle),purpose:'article-final-repair-length',maxOutputTokens:Math.min(6500,providerConfig.maxOutputTokens),onProgress,maxAttempts:repairAttempts,range:articleLengthRange});
+    if(visibleChars(final)<articleLengthRange.min||visibleChars(final)>articleLengthRange.max)final=await fitArticleLength({gateway,provider,batchId,candidateId,article:final,factBase,systemPrompt:stageSystem('length-repair',writerSkillBundle),purpose:'article-final-repair-length',maxOutputTokens:Math.min(6500,providerConfig.maxOutputTokens),onProgress,maxAttempts:repairAttempts,range:articleLengthRange});
     finalPublicationScan=scanPublicationRisk({article:final,factBase});
-    finalQuality=await aiQualityGate({gateway,store,provider,batchId,candidateId,article:final,factBase,sourceText:brief.sourceText||'',researchPoints:brief.adoptedResearchPoints,rejectedAngles:brief.rejectedAngles,publicationClaimRegister,publicationScan:finalPublicationScan,systemPrompt:finalGateSystem,stage:'final-recheck',maxOutputTokens:Math.min(3500,providerConfig.maxOutputTokens)});
+    finalQuality=await aiQualityGate({gateway,store,provider,batchId,candidateId,article:final,factBase,sourceText:brief.sourceText||'',researchPoints:brief.adoptedResearchPoints,rejectedAngles:brief.rejectedAngles,publicationClaimRegister,publicationScan:finalPublicationScan,...gateStance,systemPrompt:finalGateSystem,stage:'final-recheck',maxOutputTokens:Math.min(3500,providerConfig.maxOutputTokens)});
   }
   if(visibleChars(final)<articleLengthRange.min||visibleChars(final)>articleLengthRange.max)onProgress(`字数警告：终稿有 ${visibleChars(final)} 个可见字符，不在 ${articleLengthRange.min}–${articleLengthRange.max} 字区间，可稍后在编辑器手动删减，流程继续`);
   const finalQualityBlockers=articleGateBlockingIssues(finalQuality);
@@ -654,7 +675,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   if (brief.adoptedResearchPoints.length) {
     const coveragePurpose='article-research-coverage';
     const coverageMessages=[
-      {role:'system',protected:true,content:buildArticleStageSystem(orchestratorSkill,'research-coverage',stageSkills['article-reviewer'])},
+      {role:'system',protected:true,content:stageSystem('research-coverage',stageSkills['article-reviewer'])},
       {role:'user',protected:true,content:buildResearchCoveragePrompt({article:final,researchPoints:brief.adoptedResearchPoints,rejectedAngles:brief.rejectedAngles})},
     ];
     const coverageFallback=async()=>normalizeResearchCoverageResult(parseJsonResult(await gateway.complete({provider,purpose:coveragePurpose,batchId,candidateId,jsonMode:true,maxOutputTokens:Math.min(4500,providerConfig.maxOutputTokens),messages:coverageMessages}),store));
@@ -675,7 +696,8 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   const illustration=await illustrateArticle({
     gateway,store,provider,batchId,candidateId,markdown:final,factBase:JSON.stringify(factBase),
     workspaceRoot,maxOutputTokens:Math.min(8000,providerConfig.maxOutputTokens),
-    imageSkillPrompt:buildArticleStageSystem(orchestratorSkill,'image-planning',stageSkills['article-image-placeholders']),
+    visualPolicy:visualDecision.policy,
+    imageSkillPrompt:stageSystem('image-planning',stageSkills['article-image-placeholders']),
     onProgress,
   });
   final=illustration.markdown;
@@ -685,17 +707,17 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   recordStage('image-planning',stageSkills['article-image-placeholders'],['08-seo-optimized.md','09-visual-plan.json'],'09-FINAL.md');
   onProgress('Step 7.2 执行发布合规专项门禁');
   let publicationScan=scanPublicationRisk({article:final,factBase});
-  let publicationQuality=await aiQualityGate({gateway,store,provider,batchId,candidateId,article:final,factBase,sourceText:brief.sourceText||'',researchPoints:brief.adoptedResearchPoints,rejectedAngles:brief.rejectedAngles,publicationClaimRegister,publicationScan,systemPrompt:buildArticleStageSystem(orchestratorSkill,'publication-safety-gate',stageSkills['article-reviewer']),stage:'publication-safety',maxOutputTokens:Math.min(3500,providerConfig.maxOutputTokens)});
+  let publicationQuality=await aiQualityGate({gateway,store,provider,batchId,candidateId,article:final,factBase,sourceText:brief.sourceText||'',researchPoints:brief.adoptedResearchPoints,rejectedAngles:brief.rejectedAngles,publicationClaimRegister,publicationScan,...gateStance,systemPrompt:stageSystem('publication-safety-gate',stageSkills['article-reviewer']),stage:'publication-safety',maxOutputTokens:Math.min(3500,providerConfig.maxOutputTokens)});
   let publicationIssues=publicationComplianceIssue({scan:publicationScan,gate:{pass:true}});
   if(publicationIssues.length)publicationQuality={...publicationQuality,pass:false,issues:[...(Array.isArray(publicationQuality.issues)?publicationQuality.issues:[]),...publicationIssues.map((message)=>({type:'publication_compliance',message,repair:'删除、降格或补充可靠来源；标题和高影响主张需重新审核'}))]};
   if(!publicationQuality.pass){
     const complianceIssues=publicationQuality.issues||[];
     onProgress(`Step 7.3 发布合规门禁未通过，执行定向合规修订：${issueList(complianceIssues).join('；')}`);
-    const complianceRepair=await repairArticleForPublicationCompliance({ gateway, orchestratorSkill, reviewerSkill:stageSkills['article-reviewer'], provider, batchId, candidateId, article:final, factBase, publicationClaimRegister, publicationScan, issues:complianceIssues, researchPoints:brief.adoptedResearchPoints, rejectedAngles:brief.rejectedAngles, preserveVisuals:true, maxOutputTokens:Math.min(6500,providerConfig.maxOutputTokens) });
+    const complianceRepair=await repairArticleForPublicationCompliance({ gateway, orchestratorSkill, reviewerSkill:stageSkills['article-reviewer'], provider, batchId, candidateId, article:final, factBase, publicationClaimRegister, publicationScan, issues:complianceIssues, researchPoints:brief.adoptedResearchPoints, rejectedAngles:brief.rejectedAngles, writingStance, preserveVisuals:true, maxOutputTokens:Math.min(6500,providerConfig.maxOutputTokens) });
     final=complianceRepair.article;
     writeFile(p09,final);
     publicationScan=scanPublicationRisk({article:final,factBase});
-    publicationQuality=await aiQualityGate({gateway,store,provider,batchId,candidateId,article:final,factBase,sourceText:brief.sourceText||'',researchPoints:brief.adoptedResearchPoints,rejectedAngles:brief.rejectedAngles,publicationClaimRegister,publicationScan,systemPrompt:buildArticleStageSystem(orchestratorSkill,'publication-safety-gate',stageSkills['article-reviewer']),stage:'publication-safety-recheck',maxOutputTokens:Math.min(3500,providerConfig.maxOutputTokens)});
+    publicationQuality=await aiQualityGate({gateway,store,provider,batchId,candidateId,article:final,factBase,sourceText:brief.sourceText||'',researchPoints:brief.adoptedResearchPoints,rejectedAngles:brief.rejectedAngles,publicationClaimRegister,publicationScan,...gateStance,systemPrompt:stageSystem('publication-safety-gate',stageSkills['article-reviewer']),stage:'publication-safety-recheck',maxOutputTokens:Math.min(3500,providerConfig.maxOutputTokens)});
     publicationIssues=publicationComplianceIssue({scan:publicationScan,gate:{pass:true}});
     if(publicationIssues.length)publicationQuality={...publicationQuality,pass:false,issues:[...(Array.isArray(publicationQuality.issues)?publicationQuality.issues:[]),...publicationIssues.map((message)=>({type:'publication_compliance',message,repair:'删除、降格或补充可靠来源；标题和高影响主张需重新审核'}))]};
   }
@@ -759,6 +781,10 @@ export async function runArticleReview({ gateway, store, batchId, candidateId = 
   const maxOutputTokens = Math.min(3500, runtime.providerConfig?.maxOutputTokens || 3500);
   const researchPoints = Array.isArray(researchSelection.selected) ? researchSelection.selected : [];
   const rejectedAngles = Array.isArray(researchSelection.rejected) ? researchSelection.rejected : [];
+  const reviewMaterialBrief = candidate?.editorial?.material_brief && typeof candidate.editorial.material_brief === 'object' ? candidate.editorial.material_brief : {};
+  const reviewStanceDecision = deriveWritingStance({ articleType: reviewMaterialBrief.article_type, materialBrief: reviewMaterialBrief, editorial: candidate?.editorial || {} });
+  const reviewWritingStance = reviewStanceDecision.stance;
+  const reviewCitationPolicy = citationPolicyForStance(reviewWritingStance);
   const publicationClaimRegister = Array.isArray(claimRegisterFile.claims) ? claimRegisterFile.claims : [];
   const publicationScan = scanPublicationRisk({ article, factBase });
   const isDraft = documentKind === 'draft' || documentKind === 'daily-draft';
@@ -770,7 +796,7 @@ export async function runArticleReview({ gateway, store, batchId, candidateId = 
   const quality = await aiQualityGate({
     gateway, store, provider: reviewProvider, batchId, candidateId, article, factBase,
     sourceText: factBase.sourceText || '', researchPoints, rejectedAngles, publicationClaimRegister,
-    publicationScan, systemPrompt: buildArticleStageSystem(orchestratorSkill, isDraft ? 'draft-quality-gate' : 'final-quality-gate', reviewerSkill),
+    publicationScan, writingStance: reviewWritingStance, citationPolicy: reviewCitationPolicy, systemPrompt: buildStanceStageSystem(orchestratorSkill, isDraft ? 'draft-quality-gate' : 'final-quality-gate', reviewWritingStance, reviewerSkill),
     stage: qualityStage, maxOutputTokens,
   });
   const qualityPath = path.join(workdir, qualityFileName);
@@ -781,7 +807,7 @@ export async function runArticleReview({ gateway, store, batchId, candidateId = 
   const reviewDecision = await aiReviewGate({
     gateway, store, provider: reviewProvider, batchId, candidateId, article, factBase, outline,
     researchPoints, rejectedAngles, publicationClaimRegister, publicationScan,
-    systemPrompt: buildArticleStageSystem(orchestratorSkill, 'review', reviewerSkill), maxOutputTokens,
+    writingStance: reviewWritingStance, citationPolicy: reviewCitationPolicy, systemPrompt: buildStanceStageSystem(orchestratorSkill, 'review', reviewWritingStance, reviewerSkill), maxOutputTokens,
   });
   const reviewPath = path.join(workdir, '06-review-quality-gate.json');
   writeFile(reviewPath, JSON.stringify({ ...reviewDecision, reviewedAt: new Date().toISOString(), reviewMode: 'manual-rerun' }, null, 2));
@@ -791,7 +817,7 @@ export async function runArticleReview({ gateway, store, batchId, candidateId = 
   let publicationQuality = await aiQualityGate({
     gateway, store, provider: reviewProvider, batchId, candidateId, article, factBase,
     sourceText: factBase.sourceText || '', researchPoints, rejectedAngles, publicationClaimRegister,
-    publicationScan, systemPrompt: buildArticleStageSystem(orchestratorSkill, 'publication-safety-gate', reviewerSkill),
+    publicationScan, writingStance: reviewWritingStance, citationPolicy: reviewCitationPolicy, systemPrompt: buildStanceStageSystem(orchestratorSkill, 'publication-safety-gate', reviewWritingStance, reviewerSkill),
     stage: 'publication-safety-review', maxOutputTokens,
   });
   const complianceIssues = publicationComplianceIssue({ scan: publicationScan, gate: { pass: true } });

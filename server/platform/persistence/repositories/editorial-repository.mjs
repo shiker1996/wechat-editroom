@@ -18,6 +18,7 @@ export class EditorialRepository {
       ...editorial,
       adopted_research_points: normalizeResearchPoints(adopted_research_points_json),
       material_brief,
+      writing_stance: material_brief.writing_stance,
       affected_group: material_brief.affected_group,
       reader_consequence: material_brief.reader_consequence,
       conflict: material_brief.conflict,
@@ -41,7 +42,7 @@ export class EditorialRepository {
           ? JSON.stringify(normalizeMaterialBrief({
             ...current.material_brief,
             ...(input.material_brief || input.materialBrief || {}),
-            ...Object.fromEntries(['affected_group', 'reader_consequence', 'conflict', 'evidence_boundary', 'reader_action'].filter((field) => Object.prototype.hasOwnProperty.call(input, field)).map((field) => [field, input[field]])),
+            ...Object.fromEntries(['affected_group', 'reader_consequence', 'conflict', 'evidence_boundary', 'reader_action', 'writing_stance'].filter((field) => Object.prototype.hasOwnProperty.call(input, field)).map((field) => [field, input[field]])),
           }))
         : input[sourceKey] ?? current[sourceKey];
       if (key === 'experience_required') return value ? 1 : 0;

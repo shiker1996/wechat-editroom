@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { runEditorialPreflight } from '../server/features/articles/application/editorial-preflight.mjs';
+import { readEditorialPreflightCache, runEditorialPreflight } from '../server/features/articles/application/editorial-preflight.mjs';
 import { readArticleSourceInput } from '../server/features/articles/application/article-pipeline-contract.mjs';
 
 function candidate() {
@@ -85,4 +85,78 @@ test('主来源 URL 不匹配只作为警告，不阻断已有正文', () => {
   const source = readArticleSourceInput({ candidate: item, workspaceRoot: root, store: { listCandidateSources: () => [] } });
   assert.equal(source.issue, null);
   assert.match(source.warning, /来源缓存与热点原文不一致/);
+});
+
+test('锁题后写入派生字段不会使编辑室预检缓存失效', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'write-assistant-preflight-cache-'));
+  const item = candidate();
+  const sourceDir = path.join(root, 'data', 'source-cache');
+  fs.mkdirSync(sourceDir, { recursive: true });
+  fs.writeFileSync(path.join(sourceDir, `${item.hotspot_id}.json`), JSON.stringify({
+    url: item.url,
+    content: '可核验的来源正文。',
+  }));
+  let calls = 0;
+  const store = {
+    getCandidate: () => item,
+    getBatch: () => ({ id: item.batch_id, batch_date: '2026-09-12' }),
+    upsertArtifact: () => {},
+  };
+  const gateway = {
+    complete: async () => {
+      calls += 1;
+      return { content: '{}' };
+    },
+  };
+  const input = {
+    gateway,
+    store,
+    candidate: item,
+    candidateId: item.id,
+    batchId: item.batch_id,
+    workspaceRoot: root,
+    events: [],
+    researchContext: {},
+  };
+
+  const first = await runEditorialPreflight(input);
+  assert.equal(first.cached, false);
+  assert.equal(calls, 1);
+
+  item.editorial = {
+    ...item.editorial,
+    brief_status: 'LOCKED',
+    next_action: 'WRITE_NOW',
+    material_brief: first.materialBrief,
+  };
+  const second = readEditorialPreflightCache(input);
+  assert.equal(second?.cached, true);
+  assert.equal(calls, 1);
+});
+
+test('编辑室核心决策变化时不会复用旧预检缓存', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'write-assistant-preflight-stale-'));
+  const item = candidate();
+  const sourceDir = path.join(root, 'data', 'source-cache');
+  fs.mkdirSync(sourceDir, { recursive: true });
+  fs.writeFileSync(path.join(sourceDir, `${item.hotspot_id}.json`), JSON.stringify({ url: item.url, content: '可核验的来源正文。' }));
+  const store = {
+    getCandidate: () => item,
+    getBatch: () => ({ id: item.batch_id, batch_date: '2026-09-12' }),
+    upsertArtifact: () => {},
+  };
+  const input = {
+    gateway: { complete: async () => ({ content: '{}' }) },
+    store,
+    candidate: item,
+    candidateId: item.id,
+    batchId: item.batch_id,
+    workspaceRoot: root,
+    events: [],
+    researchContext: {},
+  };
+
+  await runEditorialPreflight(input);
+  item.editorial = { ...item.editorial, author_opinions: '观点发生了实质变化。' };
+  assert.equal(readEditorialPreflightCache(input), null);
 });

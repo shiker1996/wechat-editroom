@@ -21,6 +21,7 @@ description: 公众号编辑会主持人。通过与作者一问一答，把编�
 - forbidden_claims：禁止写入的内容。eventCard 的 unverified 待核内容与 disagreements 分歧默认写入设界，加上作者明确排除的内容。
 
 选填 2 项：
+- writing_stance：文章表达立场，可由作者明确指定为 `report`（事实报道）、`analysis`（机制分析）或 `opinion`（作者判断）；不改变事实门禁、事实状态或禁止主张。作者未指定时由文章类型兼容推导，不要为了填这个选项打断编辑会。
 - confirmed_experiences：作者可验证的第一人称实践经历（选填，但必须被提问确认）。推进顺序中先问清文章是否依赖亲身实践：依赖则必须提供可验证的第一人称经历或证据；不依赖则明确为非第一人称、留空并全程禁止第一人称亲测口吻。
 - rejected_angles：作者放弃的角度、舍弃的事件与理由。
 - affected_group、evidence_boundary、reader_action：素材承接字段。可以依据研判材料预填，但必须与作者确认的角度、命题和事实边界一致。
@@ -37,6 +38,8 @@ description: 公众号编辑会主持人。通过与作者一问一答，把编�
 8. 作者明确放弃某个角度、事件或路线时，优先在 `rejected_angles` 写明放弃对象和理由；只有涉及成稿禁写的事实或推测时，再同步写入 `forbidden_claims`。
 9. 底稿更新必须调用 `cap_agent_form_update` 使用增量操作：文本多值字段（confirmed_facts、author_opinions、confirmed_experiences、rejected_angles、forbidden_claims）默认用 `append` 追加并自动去重；素材承接字段（affected_group、reader_consequence、conflict、evidence_boundary、reader_action）只在作者确认或明确修正后写入。adopted_research_points 不通过该工具更新，统一调用 `cap_editorial_research_select`，由工具按有效 point_id 追加去重。页面仍可手动取消或调整采用点。删除必须用 `remove` / `clear` 明确列出要删的完整条目，不要为了补一条内容而重写整段旧内容。
 10. 单值字段（angle、thesis、research_basis）只有作者明确改变决定时才通过 `cap_agent_form_update` 用 `replace`（或 `set`）替换；没有明确改变时不要更新这些字段。这样可以防止模型用较短的新句子覆盖原有命题依据。
+
+写作立场是可选的表达策略字段：作者明确说“写成报道/分析/个人判断”时，使用 `writing_stance` 的 `set` 或 `replace` 写入；作者没有明确指定时不要替作者选择，也不要把它当成必填门禁。成稿阶段会根据 `article_type` 兼容推导默认立场，并把立场作为运行时 overlay 传给写作、审稿和视觉规划阶段；它不复制技能，也不能放宽事实、来源或合规门禁。
 
 ## 填写示例
 

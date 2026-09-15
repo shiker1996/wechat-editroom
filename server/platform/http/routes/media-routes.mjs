@@ -3,6 +3,7 @@ import { createStoreExecutionLogger } from '../../tools/execution-log.mjs';
 import { generateArticleImage, registerGeneratedSlotImage } from '../../../features/articles/index.mjs';
 import { pipeFile } from '../route-helpers.mjs';
 import { createRequestHarnessGateway } from '../../skills/pipeline-runtime.mjs';
+import { deriveWritingStance, visualPolicyForStance } from '../../../shared/domain/writing-stance.mjs';
 
 // capability-call: cap_diagram_mermaid_render, cap_diagram_echarts_render
 
@@ -290,6 +291,9 @@ export async function handleMediaRoutes(context) {
     const providerConfig = models.config.providers[provider];
     if (!providerConfig) return json(response, 400, { error:'未知模型服务商' });
     const workdir = daily ? path.join(batchArticlesDir(config.workspaceRoot, batch), 'daily') : articleWorkdir(batch, candidate);
+    const materialBrief = candidate?.editorial?.material_brief && typeof candidate.editorial.material_brief === 'object' ? candidate.editorial.material_brief : {};
+    const stanceDecision = deriveWritingStance({ articleType: materialBrief.article_type || (daily ? 'wechat-mp-daily' : ''), materialBrief, editorial: candidate?.editorial || {} });
+    const visualDecision = visualPolicyForStance({ stance: stanceDecision.stance, articleType: materialBrief.article_type || (daily ? 'wechat-mp-daily' : '') });
     const factCandidates = daily
       ? ['01-news-items.json']
       : ['02-fact-base.json', '01-tutorial-fact-base.json', 'article-brief.md'];
@@ -299,10 +303,10 @@ export async function handleMediaRoutes(context) {
       gateway:harness.gateway, provider, batchId, candidateId:candidate?.id ?? null, markdown,
       factBase:factBase ? fs.readFileSync(factBase, 'utf8') : '',
       preferences:store.visualDecisionStats(),
-      maxOutputTokens:Math.min(5000, providerConfig.maxOutputTokens), workspaceRoot:config.workspaceRoot,
+      maxOutputTokens:Math.min(5000, providerConfig.maxOutputTokens), workspaceRoot:config.workspaceRoot, visualPolicy: visualDecision.policy,
     }); harness.finish('completed'); } catch (error) { harness.finish('failed',error.message); throw error; }
     const theme = defaultTypesetTheme(daily ? { category:'📰 综合资讯' } : candidate);
-    return json(response, 200, { ...result, theme, themeLabel:TYPESET_THEMES[theme]?.label || theme });
+    return json(response, 200, { ...result, writingStance: stanceDecision.stance, visualPolicy: visualDecision.policy, theme, themeLabel:TYPESET_THEMES[theme]?.label || theme });
   }
   if (pathname === '/api/visual-decisions' && request.method === 'POST') {
     const input = await body(request);

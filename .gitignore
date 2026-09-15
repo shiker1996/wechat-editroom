@@ -66,3 +66,4 @@ _delete/
 
 # CI / E2E 失败诊断产物
 test-results/
+.tmp-e2e-artifacts/

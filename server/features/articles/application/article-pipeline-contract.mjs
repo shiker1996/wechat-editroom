@@ -144,7 +144,7 @@ export function articleLengthStatus(article, range = ARTICLE_LENGTH_RANGE) {
 }
 
 export function buildDraftUserPrompt(selectedTitle, brief, outline) {
-  return `标题:${selectedTitle}\n\n锁定简报、事实基座与发布主张登记:${JSON.stringify(brief)}\n\n写作时必须优先覆盖 adoptedResearchPoints 中作者明确采用的研判拓展点，不得只复述事件摘要；将其转化为事实解释、利益/成本分析、事件间关系或可验证的观点边界。只把事实基座中 status=verified 的主张写成确定事实；disputed、unverified 和 restricted_claims 必须按明确归因、限定或删除处理。涉及 IPO、上市、估值、融资、公司/个人负面指控时，不得在标题、摘要或前 200 字中加入没有直接证据的数字、动作和结论。\n\n大纲:\n${outline}`;
+  return `标题:${selectedTitle}\n\n锁定简报、事实基座与发布主张登记:${JSON.stringify(brief)}\n\n当前写作立场：${brief.writingStance || brief.writing_stance || 'analysis'}；来源展示策略：${brief.citationPolicy || 'cluster'}。立场只改变表达方式，不改变事实状态、来源边界、禁止主张或发布门禁。\n\n写作时必须优先覆盖 adoptedResearchPoints 中作者明确采用的研判拓展点，不得只复述事件摘要；将其转化为事实解释、利益/成本分析、事件间关系或可验证的观点边界。只把事实基座中 status=verified 的主张写成确定事实；disputed、unverified 和 restricted_claims 必须按明确归因、限定或删除处理。同一 source_group_id 的连续主张按当前来源策略集中归因，不要把机器审计信息机械泄漏成逐句“据来源”。涉及 IPO、上市、估值、融资、公司/个人负面指控时，不得在标题、摘要或前 200 字中加入没有直接证据的数字、动作和结论。\n\n大纲:\n${outline}`;
 }
 
 export function buildResearchCoveragePrompt({ article = '', researchPoints = [], rejectedAngles = [] } = {}) {

@@ -141,7 +141,16 @@ export function insertVisualFences(markdown, placements = []) {
   return output;
 }
 
-export async function planArticleVisuals({ gateway, provider, batchId, candidateId, markdown, factBase, preferences = [], maxOutputTokens = 8000, workspaceRoot = process.cwd() }) {
+export async function planArticleVisuals({ gateway, provider, batchId, candidateId, markdown, factBase, preferences = [], maxOutputTokens = 8000, workspaceRoot = process.cwd(), visualPolicy = 'auto' }) {
+  if (visualPolicy === 'off') {
+    return {
+      summary: '按写作立场策略跳过自动图表；保留手动供图规划。',
+      placements: [],
+      rejections: [],
+      skipped: true,
+      reason: 'visual_policy_off',
+    };
+  }
   const skill = loadSkillBundle({ workspaceRoot, skillName:'article-visual-planner' });
   const system = skill.fallback ? FALLBACK_SYSTEM : skill.prompt;
   const messages=[

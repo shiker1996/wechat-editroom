@@ -8,5 +8,7 @@ test('编辑室互斥成稿按钮，编辑器以锁定状态或已有文稿兜�
   assert.match(editorial, /editorialRequestPending = true/);
   assert.match(editorial, /btn\.disabled = editorialRequestPending/);
   assert.match(editorial, /请等待 AI 编辑回应完成后再开始成稿/);
+  assert.match(editorial, /const lockedBeforePersist = state\.editorialCandidate\?\.brief_status === "LOCKED"/);
+  assert.match(editorial, /if \(!lockedBeforePersist\) \{[\s\S]*?\/api\/candidates\/\$\{candidateId\}\/lock/);
   assert.match(editor, /item\.status === "locked" \|\| item\.brief_status === "LOCKED" \|\| documentedCandidateIds\.has/);
 });

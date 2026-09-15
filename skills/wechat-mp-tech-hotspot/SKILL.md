@@ -13,7 +13,7 @@ description: 撰写微信公众号技术热点快评，面向开发者、技术�
 
 只使用事实基座中的 `verified` 事实；按上游要求处理 `disputed` 内容。`restricted_claims` 只能按发布主张登记中的归因和限定方式出现，不能写成作者确认的事实。禁止补造数字、引语、产品能力或公司动机。
 
-读取 `material_brief`：开头兑现 `action`、`affected_group` 和 `reader_consequence`；正文解释 `conflict` 对开发者、技术决策者或从业者意味着什么；结尾给出 `reader_action` 或基于证据的判断依据。`evidence_boundary` 优先于传播性包装，`material_readiness` 不能被写成文章结论。
+读取 `material_brief`：开头兑现 `action`、`affected_group` 和 `reader_consequence`；正文解释 `conflict` 对开发者、技术决策者或从业者意味着什么；结尾给出 `reader_action` 或基于证据的判断依据。支持运行时 `writing_stance=report|analysis|opinion`，不为不同立场复制技能；`evidence_boundary` 优先于传播性包装，`material_readiness` 不能被写成文章结论。
 
 ## 写作
 

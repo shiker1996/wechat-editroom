@@ -4,7 +4,7 @@ import { listArticleStageSkillSlots, listEntryWriterSkills, resolveArticleStageS
 import { executeCapabilityWithPreference } from '../../tools/capability-slots.mjs';
 import { getToolRegistry } from '../../tools/index.mjs';
 import { runEditorialAgentTurn } from '../../../features/articles/application/agent/editorial-adapter.mjs';
-import { runEditorialPreflight } from '../../../features/articles/application/editorial-preflight.mjs';
+import { readEditorialPreflightCache } from '../../../features/articles/application/editorial-preflight.mjs';
 import { extractLocalProjectPath } from '../../integrations/local-project-reader.mjs';
 import { createNdjsonSession } from '../route-helpers.mjs';
 import { runWithThinkingSink } from '../../llm/gateway.mjs';
@@ -208,7 +208,7 @@ export async function handleArticleRoutes(context) {
   }
   const lockMatch = pathname.match(/^\/api\/candidates\/(\d+)\/lock$/);
   if (lockMatch && request.method === 'POST') {
-    const lockInput = await body(request);
+    await body(request);
     const candidate = store.getCandidate(Number(lockMatch[1]));
     if (!candidate) return json(response, 404, { error: '候选不存在' });
     const editorial = candidate.editorial;
@@ -216,17 +216,21 @@ export async function handleArticleRoutes(context) {
     const researchContext = readDiscussionResearchContext({ workspaceRoot: root, batchId: candidate.batch_id, candidate, events });
     const readiness = evaluateEditorialReadiness({ candidate: { ...candidate, research_context: researchContext }, editorial });
     if (!readiness.ready) return json(response, 409, { error: `编辑底稿未就绪，仍缺：${readiness.missing.join('、')}` });
-    const preflight = await runEditorialPreflight({
-      gateway: models,
+    const preflight = readEditorialPreflightCache({
       store,
       candidate,
       candidateId: candidate.id,
       batchId: candidate.batch_id,
-      provider: String(lockInput.provider || models.config.defaultProvider || ''),
       workspaceRoot: root,
       events,
       researchContext,
     });
+    if (!preflight) {
+      return json(response, 409, {
+        code: 'EDITORIAL_PREFLIGHT_REQUIRED',
+        error: '编辑室预检不存在或已过期，请返回编辑室重新执行“检查成稿资格”',
+      });
+    }
     if (!preflight.ready) {
       const blockers = preflight.gates.flatMap((item) => item.passed ? [] : item.issues).filter(Boolean);
       return json(response, 409, {

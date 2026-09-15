@@ -306,7 +306,7 @@ async function openEditorial(id) {
   form.elements.angle.value = candidate.angle || "";
   form.elements.thesis.value = candidate.thesis || "";
   const editorial = candidate.editorial || {};
-  for (const key of ["editor_question", "confirmed_facts", "research_basis", "author_opinions", "confirmed_experiences", "rejected_angles", "open_questions", "forbidden_claims", "affected_group", "reader_consequence", "conflict", "evidence_boundary", "reader_action"]) {
+  for (const key of ["editor_question", "writing_stance", "confirmed_facts", "research_basis", "author_opinions", "confirmed_experiences", "rejected_angles", "open_questions", "forbidden_claims", "affected_group", "reader_consequence", "conflict", "evidence_boundary", "reader_action"]) {
     const el = form.elements[key];
     if (el) el.value = editorial[key] || editorial.material_brief?.[key] || "";
   }
@@ -613,7 +613,7 @@ async function persistEditorialForm(opts) {
     method: "PATCH",
     body: JSON.stringify({ angle: form.elements.angle.value, thesis: form.elements.thesis.value }),
   });
-  const fields = ["editor_question", "confirmed_facts", "research_basis", "author_opinions", "confirmed_experiences", "rejected_angles", "forbidden_claims", "affected_group", "reader_consequence", "conflict", "evidence_boundary", "reader_action"];
+  const fields = ["editor_question", "writing_stance", "confirmed_facts", "research_basis", "author_opinions", "confirmed_experiences", "rejected_angles", "forbidden_claims", "affected_group", "reader_consequence", "conflict", "evidence_boundary", "reader_action"];
   const editorial = Object.fromEntries(fields.map((k) => [k, form.elements[k].value]));
   editorial.adopted_research_points = selectedResearchPoints();
   await request(`/api/candidates/${candidateId}/editorial`, { method: "PUT", body: JSON.stringify(editorial) });
@@ -632,12 +632,18 @@ async function startEditorialProduction() {
   if (editorialRequestPending) return toast("请等待 AI 编辑回应完成后再开始成稿");
   const form = document.getElementById("editorial-form");
   if (!form) return;
+  const lockedBeforePersist = state.editorialCandidate?.brief_status === "LOCKED"
+    || state.editorialCandidate?.editorial?.brief_status === "LOCKED";
   const candidateId = await persistEditorialForm({ refresh: false });
   if (!candidateId) return toast("请先选择候选");
   try {
-    await request(`/api/candidates/${candidateId}/lock`, { method: "POST", body: JSON.stringify({
-      provider: document.getElementById("editorial-provider")?.value || "",
-    }) });
+    // 首次成稿需要锁定简报；已锁定候选的“重新运行”直接复用已锁定简报，
+    // 不再重复经过锁题/预检接口。
+    if (!lockedBeforePersist) {
+      await request(`/api/candidates/${candidateId}/lock`, { method: "POST", body: JSON.stringify({
+        provider: document.getElementById("editorial-provider")?.value || "",
+      }) });
+    }
     const result = await request(`/api/candidates/${candidateId}/ai/article`, { method: "POST", body: JSON.stringify({
       provider: document.getElementById("editorial-provider")?.value || "",
       skillId: document.getElementById("editorial-writer-skill")?.value || "",

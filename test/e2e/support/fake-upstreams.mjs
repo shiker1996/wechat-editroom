@@ -206,8 +206,8 @@ function replayIdForRequest(payload) {
   return 'structured-default';
 }
 
-export async function startFakeRssHub({ status = 200, routeStatus = status } = {}) {
-  const published = new Date('2026-09-12T00:00:00.000Z').toUTCString();
+export async function startFakeRssHub({ status = 200, routeStatus = status, publishedAt = '2026-09-12T00:00:00.000Z' } = {}) {
+  const published = new Date(publishedAt).toUTCString();
   const requests = [];
   const articleSummary = '固定来源文章正文，用于验证采集结果能进入文章链路。'.repeat(36);
   const repositorySummary = '固定来源仓库资料，用于验证采集结果能进入图文链路。'.repeat(12);
