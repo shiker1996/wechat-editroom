@@ -263,6 +263,7 @@ export async function runEditorialPreflight({
     candidate,
     effectiveBatchId,
     currentEditorial,
+    classification,
     readiness,
     routeResult,
     materialBrief,

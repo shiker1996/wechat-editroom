@@ -122,6 +122,10 @@ test('锁题后写入派生字段不会使编辑室预检缓存失效', async ()
   const first = await runEditorialPreflight(input);
   assert.equal(first.cached, false);
   assert.equal(calls, 1);
+  const factEligibilityGate = first.gates.find((gate) => gate.id === 'fact-eligibility');
+  assert.ok(factEligibilityGate);
+  assert.equal(factEligibilityGate.result?.contentClass, 'news_event');
+  assert.equal(factEligibilityGate.issues.some((issue) => /classification is not defined/.test(issue)), false);
 
   item.editorial = {
     ...item.editorial,
