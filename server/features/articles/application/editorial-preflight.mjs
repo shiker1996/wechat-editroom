@@ -224,9 +224,8 @@ function buildPreflightContext({
 
 /**
  * Read the editor-room preflight without generating a new fact base.
- * The lock route uses this as a final freshness check before persisting the
- * locked brief; a missing or stale cache must send the user back to the
- * editorial room instead of silently running another model call.
+ * The cache is an optional optimization for the article pipeline. A missing
+ * or stale cache is allowed to fall through to the normal pipeline run.
  */
 export function readEditorialPreflightCache(options = {}) {
   const context = buildPreflightContext(options);
@@ -235,8 +234,9 @@ export function readEditorialPreflightCache(options = {}) {
 }
 
 /**
- * The one authoritative pre-lock check for article candidates.
- * The editorial agent generates it; the lock route only reads its cache.
+ * Generate the optional editor-room preflight snapshot for article candidates.
+ * The article pipeline can regenerate the fact base when this snapshot is
+ * absent or stale.
  */
 export async function runEditorialPreflight({
   gateway,

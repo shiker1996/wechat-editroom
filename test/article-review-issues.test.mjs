@@ -126,3 +126,65 @@ test('审核接口按文稿目录兼容没有候选关联的历史产物', async
     fs.rmSync(tempRoot, { recursive: true, force: true });
   }
 });
+
+test('首次锁题没有编辑室预检缓存时仍可继续成稿', async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'editorial-lock-without-preflight-'));
+  let response = null;
+  const candidate = {
+    id: 7,
+    batch_id: 'batch-1',
+    candidate_id: 'C001',
+    hotspot_title: '测试选题',
+    content_class: 'news_event',
+    content_route: 'article',
+    article_eligible: 1,
+    editorial_mode: 'manual',
+    angle: '从责任边界分析功能上线',
+    thesis: '功能上线不等于责任边界已经解决',
+    editorial: {
+      confirmed_facts: '官方公告确认该功能已经上线。',
+      author_opinions: '真正值得讨论的是上线后的责任边界。',
+      adopted_research_points: [],
+      research_basis: '',
+      reader_consequence: '读者需要重新判断自己的使用成本。',
+      conflict: '平台扩大覆盖，用户承担迁移成本。',
+      forbidden_claims: '',
+    },
+  };
+  let savedEditorial = null;
+  try {
+    await handleArticleRoutes({
+      request: { method: 'POST' },
+      response: {},
+      pathname: '/api/candidates/7/lock',
+      body: async () => ({}),
+      root: tempRoot,
+      path,
+      candidateEventGroups: () => [],
+      lockedBrief: () => '# 测试选题\n',
+      batchWorkdir: () => tempRoot,
+      writeUtf8: (filePath, content) => {
+        fs.mkdirSync(path.dirname(filePath), { recursive: true });
+        fs.writeFileSync(filePath, content, 'utf8');
+        return { size: Buffer.byteLength(content), modifiedAt: new Date().toISOString() };
+      },
+      store: {
+        getCandidate: () => candidate,
+        getBatch: () => ({ id: 'batch-1' }),
+        saveEditorial: (_id, editorial) => {
+          savedEditorial = editorial;
+          candidate.editorial = { ...candidate.editorial, ...editorial };
+          return candidate.editorial;
+        },
+        updateCandidate: () => {},
+        updateBatch: () => {},
+        upsertArtifact: () => {},
+      },
+      json: (_response, status, data) => { response = { status, data }; },
+    });
+    assert.equal(response.status, 200);
+    assert.equal(savedEditorial.brief_status, 'LOCKED');
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+});

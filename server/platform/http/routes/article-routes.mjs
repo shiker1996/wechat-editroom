@@ -4,7 +4,6 @@ import { listArticleStageSkillSlots, listEntryWriterSkills, resolveArticleStageS
 import { executeCapabilityWithPreference } from '../../tools/capability-slots.mjs';
 import { getToolRegistry } from '../../tools/index.mjs';
 import { runEditorialAgentTurn } from '../../../features/articles/application/agent/editorial-adapter.mjs';
-import { readEditorialPreflightCache } from '../../../features/articles/application/editorial-preflight.mjs';
 import { extractLocalProjectPath } from '../../integrations/local-project-reader.mjs';
 import { createNdjsonSession } from '../route-helpers.mjs';
 import { runWithThinkingSink } from '../../llm/gateway.mjs';
@@ -216,31 +215,10 @@ export async function handleArticleRoutes(context) {
     const researchContext = readDiscussionResearchContext({ workspaceRoot: root, batchId: candidate.batch_id, candidate, events });
     const readiness = evaluateEditorialReadiness({ candidate: { ...candidate, research_context: researchContext }, editorial });
     if (!readiness.ready) return json(response, 409, { error: `编辑底稿未就绪，仍缺：${readiness.missing.join('、')}` });
-    const preflight = readEditorialPreflightCache({
-      store,
-      candidate,
-      candidateId: candidate.id,
-      batchId: candidate.batch_id,
-      workspaceRoot: root,
-      events,
-      researchContext,
-    });
-    if (!preflight) {
-      return json(response, 409, {
-        code: 'EDITORIAL_PREFLIGHT_REQUIRED',
-        error: '编辑室预检不存在或已过期，请返回编辑室重新执行“检查成稿资格”',
-      });
-    }
-    if (!preflight.ready) {
-      const blockers = preflight.gates.flatMap((item) => item.passed ? [] : item.issues).filter(Boolean);
-      return json(response, 409, {
-        code: 'EDITORIAL_PREFLIGHT_BLOCKED',
-        error: `锁题前成稿预检未通过：${blockers.join('；') || '请查看各项门禁结果'}`,
-        gates: preflight.gates,
-        preflight,
-      });
-    }
-    const materialBrief = preflight.materialBrief || buildMaterialBrief({ candidate, editorial, researchContext, events });
+    // 锁题只依赖当前已保存且通过表单门禁的编辑决策。
+    // 编辑室预检仍可提前生成事实基座，但不再要求先存在或匹配预检缓存，
+    // 避免首次点击“开始成稿”时因缓存尚未建立而被无意义地拦截。
+    const materialBrief = buildMaterialBrief({ candidate, editorial, researchContext, events });
     const lockedEditorial = { ...editorial, material_brief: materialBrief };
     const batch = store.getBatch(candidate.batch_id);
     const filePath = path.join(batchWorkdir(batch), candidate.candidate_id, 'article-brief.md');
