@@ -72,7 +72,7 @@ body.chat-immersive .tutorial-writing-workspace { animation: none; transform: no
 .editorial-chat-tools { flex-wrap:nowrap; min-width:max-content; }
 .decision-save-row { display:flex; justify-content:flex-end; margin-top:14px; }
 /* Unified collection source extensions */
-.source-plugin-fields{display:grid;gap:12px;padding:12px;border:1px dashed var(--system-palette-hex-52605c);background:var(--system-palette-hex-1f2927);color:var(--system-palette-hex-edf2ef)}
+.source-plugin-fields{display:grid;gap:12px;padding:12px;border:1px dashed var(--system-palette-hex-52605c);color:var(--system-palette-hex-edf2ef)}
 .source-plugin-fields[hidden]{display:none}
 .source-compose .source-plugin-fields b{color:var(--ink-strong)}
 .source-compose .source-plugin-fields .source-assist-button{color:var(--blue);border-color:var(--blue)}
