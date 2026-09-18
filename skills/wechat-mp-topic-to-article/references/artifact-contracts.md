@@ -17,8 +17,8 @@ articles/<topic-slug>/
   04-quality-gate.json
   05-humanized.md
   06-reviewed.md
-  07-seo-keywords.md       # SEO 关闭时不存在
-  08-seo-optimized.md      # SEO 关闭时不存在
+  07-seo-keywords.md       # SEO 未启用时保存跳过说明，便于审计
+  08-seo-optimized.md      # SEO 未启用时为 06-reviewed.md 的安全透传稿
   08-quality-gate.json
   research-coverage-review.json
   09-FINAL.md
@@ -91,9 +91,12 @@ articles/<topic-slug>/
 - `## 分发池与读者利益`
 - `## 事实基座`
 - `## 结构大纲`
+- `## 流量规划`
 - `## 信息增量`
-- `## 实用增量`
+- `## 读者收益`
 - `## 增长承接`
+
+`## 流量规划` 至少记录 `click_mechanism`、`opening_hook`、`retention_turns`、`ending_payoff` 和 `share_trigger`。所有内容角色都必须兑现这些流量字段；角色只改变包装重点。普通成稿的大纲同时落实 3–5 个 H2、至少两次推进和有限的案例/数据密度。`## 读者收益` 记录 `reader_value_type` 与 `reader_value_placement`；`standalone_h2` 不是默认值。
 
 事实基座每条记录：`id`、`claim`、`status`、`source_title`、`source_url`、`published_at`、`checked_at`。无 URL 的来源不能标为 `verified`，用户提供的内部材料除外；内部材料须标记为用户提供。
 

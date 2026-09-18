@@ -24,17 +24,17 @@ brief → fact-base → planning → drafting → draft-quality-gate → title-g
 
 ## `planning`
 
-根据锁定简报和事实基座建立作者素材、大纲与第一轮标题方向。综合选题明确多个热点之间的关联逻辑；普通选题围绕单一主线。只返回严格 JSON：
+根据锁定简报和事实基座建立作者素材、流量规划、大纲与第一轮标题方向。综合选题明确多个热点之间的关联逻辑；普通选题围绕单一主线。只返回严格 JSON：
 
 ```json
-{"distributionLane":"推荐池|通知池|实验池","readerStake":"对读者工作、收入、岗位、效率、成本或选择的具体影响","contentRole":"拉新|沉淀|搜索","expectedAction":["评论|分享|收藏|关注|搜索"],"practicalIncrement":"具体实用增量","materialsMarkdown":"作者素材补充","outlineMarkdown":"完整结构大纲","titleCandidates":[{"title":"标题","reason":"理由"}],"selectedTitle":"阶段选中标题","coreKeywords":["核心词"],"remainingRisks":["剩余风险"]}
+{"distributionLane":"推荐池|通知池|实验池","readerStake":"对读者工作、收入、岗位、效率、成本或选择的具体影响","contentRole":"拉新|沉淀|搜索","expectedAction":["评论|分享|收藏|关注|搜索"],"readerValueType":"understanding|judgment|perspective|impact|action|checklist","readerValuePlacement":"woven|standalone_h2|ending|none","clickMechanism":"真实点击理由","openingHook":"前50–80字的具体入口","retentionTurns":["推进点1","推进点2"],"endingPayoff":"结尾回收方式","shareTrigger":"分享理由","visualNeed":"auto|off|manual","practicalIncrement":"可选的具体实用增量","materialsMarkdown":"作者素材补充","outlineMarkdown":"完整结构大纲","titleCandidates":[{"title":"标题","reason":"理由"}],"selectedTitle":"阶段选中标题","coreKeywords":["核心词"],"remainingRisks":["剩余风险"]}
 ```
 
-`distributionLane` 与 `readerStake` 继承锁定简报，不得擅自换池；缺失时才根据账号上下文提出建议。`outlineMarkdown` 包含核心判断、目标读者、分发池、读者利益、内容角色、事实基座、结构大纲、信息增量、实用增量和增长承接。
+`distributionLane` 与 `readerStake` 继承锁定简报，不得擅自换池；缺失时才根据账号上下文提出建议。所有 `contentRole` 都执行点击、完读和传播基线，角色只改变包装侧重，不得让任何文章退回资料汇编。普通成稿的 `outlineMarkdown` 应规划 3–5 个 H2、至少两次中段推进、一个主案例和必要的对照，避免案例/数据堆叠；`outlineMarkdown` 还包含核心判断、目标读者、分发池、读者利益、内容角色、事实基座、结构大纲、信息增量、实用增量和增长承接。
 
 ## `drafting`
 
-同时使用总契约与选定写作子技能。只使用 `verified` 事实；`disputed` 呈现分歧，`opinion` 明确为作者判断，`unverified` 不进入正文。前三段自然完成背景、核心冲突、作者判断和阅读钩子；关键事实就近保留来源。输出完整 Markdown，第一行是唯一 H1，不附说明。
+同时使用总契约与选定写作子技能。只使用 `verified` 事实；`disputed` 呈现分歧，`opinion` 明确为作者判断，`unverified` 不进入正文。前 200 字自然完成具体入口、核心冲突、作者判断和阅读钩子；正文至少两次发生信息、情绪或判断推进；关键事实就近保留来源。输出完整 Markdown，第一行是唯一 H1，不附说明。
 
 ## `draft-quality-gate` / `final-quality-gate`
 
@@ -60,19 +60,19 @@ brief → fact-base → planning → drafting → draft-quality-gate → title-g
 
 ## `humanize`
 
-同时使用总契约与 `humanizer-zh`。保留事实、数字、引语、来源、标题、作者观点、素材锚点和风险边界；将“作者判断：”“反方边界：”等元话语标签和模板化结尾改写为自然句式。只输出完整 Markdown，不附评分或修改总结。
+同时使用总契约与 `humanizer-zh`。保留事实、数字、引语、来源、标题、作者观点、素材锚点、反差、锋芒和风险边界；只去除 AI 腔，不得主动删除有传播力的金句、人物细节、情绪推进或明确立场。将“作者判断：”“反方边界：”等元话语标签和模板化结尾改写为自然句式。只输出完整 Markdown，不附评分或修改总结。
 
 ## `review`
 
-同时使用总契约与 `article-reviewer`。依据事实基座修订，不新增事实。只输出完整可发布 Markdown；审稿通过与否由编排器单独调用 `decision.article_review_gate` 工具判断，不在文章正文中嵌入 REVIEW 注释。存在 blocker 或未解决 major 时工具返回 `pass:false` 并提供结构化问题；最多自动返工两轮。
+同时使用总契约与 `article-reviewer`。依据事实基座修订，不新增事实。除事实和发布安全外，重点检查标题点击承诺、前 200 字、冲突推进、信息增量、完读节奏、结尾回收和分享理由；不得把有观点的流量文改成中性简报，也不得为了“实用”强行增加清单章节。只输出完整可发布 Markdown；审稿通过与否由编排器单独调用 `decision.article_review_gate` 工具判断，不在文章正文中嵌入 REVIEW 注释。存在 blocker 或未解决 major 时工具返回 `pass:false` 并提供结构化问题；最多自动返工两轮。
 
 ## `seo-keyword-scoring`
 
-使用 `seo-keyword-scoring` 的确定性评分能力。输出核心词、相对搜索信号、相关词、可用来源数和数据局限；评分不是微信搜索量。
+仅在搜索型或明确要求 SEO 时使用 `seo-keyword-scoring` 的确定性评分能力。普通流量文记录跳过原因，不因缺少 SEO 报告阻断成稿。启用时输出核心词、相对搜索信号、相关词、可用来源数和数据局限；评分不是微信搜索量。
 
 ## `seo-optimization`
 
-同时使用总契约与 `seo-content-optimizer`。不改变事实、引语、作者立场、实用增量、来源或已通过审稿的转化段，不新增高影响主张、财经数字、负面指控或绝对化判断；移除 REVIEW 注释，只输出完整 Markdown。SEO 后还要通过发布合规专项门禁。
+仅在 SEO 已启用时使用总契约与 `seo-content-optimizer`。不改变事实、引语、作者立场、读者收益、来源或已通过审稿的转化段，不新增高影响主张、财经数字、负面指控或绝对化判断；不得损害标题张力、前 200 字或完读节奏。移除 REVIEW 注释，只输出完整 Markdown。SEO 后还要通过发布合规专项门禁；未启用时将 `06-reviewed.md` 安全透传为后续版本。
 
 ## `length-repair`
 

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { articleLengthStatus, articleStageOutputIssue, articleGateBlockingIssues, articleGateNeedsEditorialReview, authorizedWritingBrief, buildDraftUserPrompt, buildArticleStageSystem, buildReviewRepairPrompt, buildPublicationComplianceRepairPrompt, compositeSourceText, normalizePlanningResult, selectWriterSkill, ARTICLE_LENGTH_RANGE, ARTICLE_STAGE_CONTRACT, ARTICLE_QUALITY_GATE_TOOL, ARTICLE_REVIEW_GATE_TOOL, aiQualityGate, aiReviewGate, sourceCacheIssue, unverifiedFactBaseIssue } from '../server/features/articles/application/article-pipeline.mjs';
-import { inspectArticleQuality } from '../server/features/articles/domain/article-quality.mjs';
+import { inspectArticleQuality, inspectTrafficStructure } from '../server/features/articles/domain/article-quality.mjs';
 import { loadArticleSkillBundle, loadSkillBundle } from '../server/platform/llm/skill-runtime.mjs';
 
 test('成稿规划兼容模型把数组字段返回为字符串', () => {
@@ -167,6 +167,13 @@ test('爆款结构门禁要求钩子、3-5个章节和来源链接', () => {
 test('爆款结构门禁接受陈述式钩子，不强制使用问号', () => {
   const article = `# 标题\n\n2026年，一名研究员公开了自己离开公司的原因，并列出内部推动改革失败的经过。他写过方案、联系过管理层，也试图争取技术领袖支持，但组织最终没有改变决定。真正值得讨论的不是一次普通离职，而是研究员是否还能控制自己参与创造的技术。\n\n事件背后连接着政府合同、商业利益和技术伦理。关键在于，公开原则进入高代价项目后还能不能影响组织决定，以及个人为什么很难通过内部流程改变已经商业化的技术方向。\n\n作者的判断很明确：原则只有在利益冲突中仍然有效，才称得上组织规则。后文将沿着事实、机制和影响展开，并区分公开证据、个人叙述和作者判断。\n\n## 第一节\n\n事实与解释。[来源](https://example.com/a)\n\n进一步分析。\n\n## 第二节\n\n组织机制与现实影响。\n\n补充事实边界。\n\n## 第三节\n\n反方解释与结论。\n\n给出具体建议。`;
   assert.equal(inspectArticleQuality(article).pass, true);
+});
+
+test('所有文章共用流量结构检查，缺少章节时明确暴露而不改变读者收益放置', () => {
+  const article = '# 标题\n\n具体场景和冲突在这里展开，真正的问题是读者会承担什么代价。\n\n继续解释事实、机制和判断，给出来源与边界。';
+  const report = inspectTrafficStructure(article);
+  assert.equal(report.pass, false);
+  assert.match(report.issues.join('；'), /3-5 个 H2/);
 });
 
 test('技能运行时加载完整写作技能并记录哈希', () => {

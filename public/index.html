@@ -615,6 +615,10 @@
                 <div id="editorial-focus-research-summary" class="editorial-focus-research-summary"><span class="muted">尚未选择研判拓展点</span></div>
                 <div class="editorial-focus-brief-actions"><button type="button" class="outline-button" data-editorial-open="research">查看 / 调整研判</button><button type="button" class="text-button" data-editorial-open="decision">填写决策底稿</button></div>
               </section>
+              <details class="editorial-traffic-plan" id="editorial-traffic-plan">
+                <summary><span><span class="kicker">TRAFFIC PLAN</span><b>流量规划</b><small>先看点击承诺、完读推进和收益落点；不增加新的必填问答。</small></span><span class="detail-state">查看摘要</span></summary>
+                <div id="editorial-traffic-plan-content" class="editorial-traffic-plan-content"></div>
+              </details>
               <section class="editorial-production-gate" id="editorial-production-gate" aria-label="成稿条件">
                 <div class="production-gate-heading"><div><span class="kicker">DRAFTING GATE</span><h4 id="editorial-production-title">尚未达到成稿条件</h4></div><span class="production-gate-count" id="editorial-gate-count">0 / 9</span></div>
                 <div class="gate-strip">文章素材成熟度：<b id="editorial-material-readiness">待研判</b></div>
@@ -651,8 +655,8 @@
             <label class="question-field">当前关键问题<input name="editor_question" placeholder="一次只问一个最能改变方向的问题"></label>
             <label class="editorial-research-selection-field"><span>采用的研判拓展点</span><input type="hidden" name="adopted_research_points" value="[]"><div id="editorial-research-selection-summary" class="editorial-research-selection-summary"><span class="muted">等待编辑室 Agent 根据本篇角度和命题自动选择。</span></div><small>由 Agent 工具写入采用清单，页面只读展示；不需要作者逐条勾选。</small></label>
             <div class="form-pair"><label>已确认事实<textarea name="confirmed_facts" rows="5"></textarea></label><label>采用的研判主线<textarea name="research_basis" rows="5" placeholder="根据上方采用清单，说明这条研判如何成为文章主线"></textarea></label></div>
-            <div class="form-pair"><label>影响谁<textarea name="affected_group" rows="3" placeholder="系统会根据研判素材预填，可确认或修正"></textarea></label><label>读者会受到什么影响<textarea name="reader_consequence" rows="3" placeholder="必填：工作、收入、成本、效率或选择发生什么变化？"></textarea></label></div>
-            <div class="form-pair"><label>核心利益 / 责任冲突<textarea name="conflict" rows="3" placeholder="必填；没有明显冲突请明确写“无冲突”"></textarea></label><label>证据边界<textarea name="evidence_boundary" rows="3" placeholder="哪些可以确定表达，哪些必须限定，哪些禁止扩写？"></textarea></label></div>
+            <div class="form-pair"><label>影响谁<textarea name="affected_group" rows="3" placeholder="系统会根据研判素材预填，可确认或修正"></textarea></label><label>读者会受到什么影响<textarea name="reader_consequence" rows="3" placeholder="可由流量规划根据事实与命题生成；有具体影响时再确认"></textarea></label></div>
+            <div class="form-pair"><label>核心利益 / 责任冲突<textarea name="conflict" rows="3" placeholder="可由流量规划根据事实与命题生成；敏感指控需作者确认"></textarea></label><label>证据边界<textarea name="evidence_boundary" rows="3" placeholder="哪些可以确定表达，哪些必须限定，哪些禁止扩写？"></textarea></label></div>
             <label>读者最终获得什么<textarea name="reader_action" rows="3" placeholder="系统建议：读者读完后获得的判断或行动依据"></textarea></label>
             <div class="form-pair"><label>明确观点<textarea name="author_opinions" rows="5"></textarea></label><label>已确认实践（选填）<textarea name="confirmed_experiences" rows="4"></textarea></label></div>
             <div class="form-pair"><label>否定角度 / 反证边界（选填）<textarea name="rejected_angles" rows="4"></textarea></label><label>待完善项（由系统按必填项推导）<textarea name="open_questions" rows="3" readonly></textarea></label></div>

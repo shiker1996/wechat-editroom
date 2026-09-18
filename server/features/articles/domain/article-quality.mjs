@@ -19,7 +19,32 @@ export function inspectArticleQuality(markdown) {
   if (!/(判断|问题|意味着|真正|核心|我认为|在我看来)/.test(opening)) issues.push('第二段前后没有清晰亮明作者判断');
   if (!(links.length || rawUrls.length || footnotes.length)) issues.push('关键事实没有来源链接或脚注');
   if (/近年(?:来)?，?随着|综上所述|让我们拭目以待|在未来的格局中/.test(text)) issues.push('存在模板化表达');
-  return { pass: issues.length === 0, blocking: blockingIssues.length > 0, issues, blockingIssues, h1Count: h1.length, h2Count: h2.length, linkCount: links.length + rawUrls.length, footnoteCount:footnotes.length };
+  return { pass: issues.length === 0, blocking: blockingIssues.length > 0, issues, blockingIssues, h1Count: h1.length, h2Count: h2.length, paragraphCount: paragraphs.length, linkCount: links.length + rawUrls.length, footnoteCount:footnotes.length };
+}
+
+// 这是所有公众号文章共用的流量结构门禁。它只检查能确定判断的结构事实，
+// 不按 content_role 放宽点击入口或完读推进，也不把读者收益强行改成独立章节。
+export function inspectTrafficStructure(markdown) {
+  const report = inspectArticleQuality(markdown);
+  const structuralIssues = report.issues.filter((issue) => {
+    if (issue === '正文需要 3-5 个 H2 推进同一主线') return report.h2Count === 0;
+    if (issue !== '必须且只能有一个 H1 标题') return false;
+    return [
+    '必须且只能有一个 H1 标题',
+    '正文需要 3-5 个 H2 推进同一主线',
+    '正文段落过少，论证没有充分展开',
+    '前三段背景与冲突信息不足',
+    '前三段缺少明确的读者悬念或核心问题',
+    '第二段前后没有清晰亮明作者判断',
+    ].includes(issue);
+  });
+  return {
+    pass: structuralIssues.length === 0,
+    issues: structuralIssues,
+    h1Count: report.h1Count,
+    h2Count: report.h2Count,
+    paragraphCount: report.paragraphCount,
+  };
 }
 
 export function buildQualityRepairPrompt(report) {

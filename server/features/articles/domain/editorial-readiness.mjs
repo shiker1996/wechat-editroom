@@ -1,8 +1,8 @@
 import { normalizeResearchPoints, researchPointsComplete } from './research-selection.mjs';
 import { WRITING_STANCES } from '../../../shared/domain/writing-stance.mjs';
 
-// 编辑室就绪判定：代码确定性校验 12 个表单项（其中 9 个参与门禁），替代模型自觉的状态声明。
-// 编辑室只是辅助作者填表：必填项填好即可成稿，选填项不参与门禁。
+// 编辑室就绪判定：代码确定性校验核心表单项，替代模型自觉的状态声明。
+// 读者后果与利益/责任冲突可由规划阶段提出草案，不作为每篇文章的作者问答门禁。
 // 设计见 docs/design/conversation-agent-form-unification-design.md。
 
 // 占位符式搪塞值（"待定/未定/待确认"等）不算实质内容。
@@ -48,10 +48,11 @@ export const EDITORIAL_FIELDS=Object.freeze([
   {key:'author_opinions',label:'明确观点',required:true,scope:'editorial'},
   {key:'angle',label:'写作角度',required:true,scope:'candidate'},
   {key:'thesis',label:'锁定命题',required:true,scope:'candidate'},
-  {key:'adopted_research_points',label:'采用的研判拓展点',required:true,scope:'editorial'},
-  {key:'research_basis',label:'采用的研判主线',required:true,scope:'editorial'},
-  {key:'reader_consequence',label:'读者后果',required:true,scope:'editorial'},
-  {key:'conflict',label:'利益/责任冲突',required:true,scope:'editorial'},
+  {key:'adopted_research_points',label:'采用的研判拓展点',required:false,scope:'editorial'},
+  {key:'research_basis',label:'采用的研判主线',required:false,scope:'editorial'},
+  // 读者后果与冲突由规划阶段可依据事实和命题提出草案；只有核心事实、角度或风险不清时才需要作者补充。
+  {key:'reader_consequence',label:'读者后果',required:false,scope:'editorial'},
+  {key:'conflict',label:'利益/责任冲突',required:false,scope:'editorial'},
   // 没有额外禁写项时，空值本身就是明确边界；若填写内容仍需通过实质性校验。
   {key:'forbidden_claims',label:'禁止写入',required:true,allowEmpty:true,scope:'editorial'},
   {key:'confirmed_experiences',label:'已确认实践',required:false,scope:'editorial'},
@@ -77,7 +78,7 @@ export function editorialFieldComplete(field,value){
 
 export function evaluateEditorialReadiness({candidate={},editorial={}}={}){
   const mode=resolveEditorialMode(candidate);
-  const researchFieldsRequired=mode!=='manual';
+  // 研判拓展点服务于流量规划，不是每篇文章的成稿门禁；只有实际采用时才会被下游检查是否兑现。
   const materialBrief=editorial.material_brief&&typeof editorial.material_brief==='object'?editorial.material_brief:{};
   const fields=EDITORIAL_FIELDS.map((field)=>{
     const source=field.scope==='candidate'?candidate:editorial;
@@ -90,11 +91,10 @@ export function evaluateEditorialReadiness({candidate={},editorial={}}={}){
     const value=field.key==='adopted_research_points'
       ? rawValue.map((item)=>item.statement).join('；')
       : rawValue;
-    const required=researchFieldsRequired||!['adopted_research_points','research_basis'].includes(field.key)
-      ? field.required
-      : false;
+    const required=field.required;
     return {...field,required,value,rawValue,ok:editorialFieldComplete(field,rawValue)};
   });
   const missing=fields.filter((field)=>field.required&&!field.ok).map((field)=>field.label);
-  return {ready:missing.length===0,missing,fields,mode};
+  const recommendedMissing=fields.filter((field)=>!field.required&&!field.ok&&['reader_consequence','conflict'].includes(field.key)).map((field)=>field.label);
+  return {ready:missing.length===0,missing,recommendedMissing,fields,mode};
 }

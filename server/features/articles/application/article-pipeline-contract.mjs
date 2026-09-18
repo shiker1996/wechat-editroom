@@ -28,10 +28,18 @@ export function normalizePlanningResult(input={}) {
   const plan=input&&typeof input==='object'&&!Array.isArray(input)?{...input}:{};
   plan.expectedAction=asArray(plan.expectedAction);
   plan.coreKeywords=asArray(plan.coreKeywords);
+  plan.retentionTurns=asArray(plan.retentionTurns ?? plan.retention_turns);
   plan.remainingRisks=asArray(plan.remainingRisks,{emptyWords:true});
   plan.titleCandidates=asArray(plan.titleCandidates).map((item)=>typeof item==='string'?{title:item,reason:''}:item).filter((item)=>item&&item.title);
   plan.distributionLane=String(plan.distributionLane??plan.distribution_lane??'').trim();
   plan.readerStake=String(plan.readerStake??plan.reader_stake??'').trim();
+  plan.readerValueType=String(plan.readerValueType??plan.reader_value_type??'').trim();
+  plan.readerValuePlacement=String(plan.readerValuePlacement??plan.reader_value_placement??'').trim();
+  plan.visualNeed=String(plan.visualNeed??plan.visual_need??'auto').trim() || 'auto';
+  plan.clickMechanism=String(plan.clickMechanism??plan.click_mechanism??'').trim();
+  plan.openingHook=String(plan.openingHook??plan.opening_hook??'').trim();
+  plan.endingPayoff=String(plan.endingPayoff??plan.ending_payoff??'').trim();
+  plan.shareTrigger=String(plan.shareTrigger??plan.share_trigger??'').trim();
   return plan;
 }
 
@@ -144,7 +152,7 @@ export function articleLengthStatus(article, range = ARTICLE_LENGTH_RANGE) {
 }
 
 export function buildDraftUserPrompt(selectedTitle, brief, outline) {
-  return `标题:${selectedTitle}\n\n锁定简报、事实基座与发布主张登记:${JSON.stringify(brief)}\n\n当前写作立场：${brief.writingStance || brief.writing_stance || 'analysis'}；来源展示策略：${brief.citationPolicy || 'cluster'}。立场只改变表达方式，不改变事实状态、来源边界、禁止主张或发布门禁。\n\n写作时必须优先覆盖 adoptedResearchPoints 中作者明确采用的研判拓展点，不得只复述事件摘要；将其转化为事实解释、利益/成本分析、事件间关系或可验证的观点边界。只把事实基座中 status=verified 的主张写成确定事实；disputed、unverified 和 restricted_claims 必须按明确归因、限定或删除处理。同一 source_group_id 的连续主张按当前来源策略集中归因，不要把机器审计信息机械泄漏成逐句“据来源”。涉及 IPO、上市、估值、融资、公司/个人负面指控时，不得在标题、摘要或前 200 字中加入没有直接证据的数字、动作和结论。\n\n大纲:\n${outline}`;
+  return `标题:${selectedTitle}\n\n锁定简报、事实基座与发布主张登记:${JSON.stringify(brief)}\n\n当前写作立场：${brief.writingStance || brief.writing_stance || 'analysis'}；来源展示策略：${brief.citationPolicy || 'cluster'}。立场只改变表达方式，不改变事实状态、来源边界、禁止主张或发布门禁。\n\n所有文章都以点击、前 200 字留存、完读和可转述判断为基线；content_role 只改变包装重点，不是流量开关。必须把 click_mechanism、opening_hook、retention_turns、reader_value_placement 和 ending_payoff 落到正文，普通成稿安排 3–5 个 H2、至少两次中段推进，并控制外部案例和数据只为核心判断服务。不要把读者收益机械扩写成独立清单章节。\n\n写作时必须优先覆盖 adoptedResearchPoints 中作者明确采用的研判拓展点，不得只复述事件摘要；将其转化为事实解释、利益/成本分析、事件间关系或可验证的观点边界。只把事实基座中 status=verified 的主张写成确定事实；disputed、unverified 和 restricted_claims 必须按明确归因、限定或删除处理。同一 source_group_id 的连续主张按当前来源策略集中归因，不要把机器审计信息机械泄漏成逐句“据来源”。涉及 IPO、上市、估值、融资、公司/个人负面指控时，不得在标题、摘要或前 200 字中加入没有直接证据的数字、动作和结论。\n\n大纲:\n${outline}`;
 }
 
 export function buildResearchCoveragePrompt({ article = '', researchPoints = [], rejectedAngles = [] } = {}) {

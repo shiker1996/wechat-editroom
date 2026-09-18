@@ -40,7 +40,7 @@ test('illustrateArticle runs visual planning before manual image placeholders', 
   assert.equal(result.visualPlan.placements.length, 1);
 });
 
-test('illustrateArticle continues with image placeholders when visual planning fails', async () => {
+test('illustrateArticle skips image placeholders when visual planning has no valid placement', async () => {
   const gateway = { complete: async (input) => {
     if (input.purpose === 'article-visual-plan') return { content:'不是 JSON' };
     return { content: JSON.stringify({ placements:[] }) };
@@ -52,5 +52,7 @@ test('illustrateArticle continues with image placeholders when visual planning f
     markdown:'# 标题\n\n正文。\n', factBase:'', onProgress:(m)=>warnings.push(m),
   });
   assert.ok(warnings.some((m)=>/跳过该环节/.test(m)));
-  assert.ok(result.markdown.includes('IMAGE-PLAN:none'));
+  assert.ok(warnings.some((m)=>/没有有效视觉落点/.test(m)));
+  assert.equal(result.markdown.includes('IMAGE-PLAN:none'), false);
+  assert.equal(result.visualPlan.imagePlaceholdersSkipped, true);
 });
