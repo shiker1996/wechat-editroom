@@ -180,6 +180,8 @@ test('编辑室达到 Agent 限额时保留可见的 assistant 提示，避免 d
   assert.equal(result.reply, '本轮已达到资料读取上限，请继续对话以完成编辑决策。');
   assert.equal(store.getCandidate(candidate.id).messages.at(-1).content, result.reply);
   assert.equal(store.getAgentRun(result.agentRunId).status, 'limit');
+  assert.equal(result.resumeFrom, result.agentRunId);
+  assert.equal(store.getLatestAgentCheckpoint(result.agentRunId).state.resumable, true);
 });
 
 test('编辑室业务工具可选择有效研判拓展点，结束工具不需要再提交 JSON', async (t) => {

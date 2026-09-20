@@ -79,6 +79,27 @@ test('编辑室 URL 抓取结果写入当前候选来源表', () => {
   assert.equal(saved[0].input.content_chars, 2);
 });
 
+test('编辑室热点原文抓取结果写回热点来源表与标准缓存', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-hotspot-source-persist-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const saved = [];
+  const adaptation = buildAdaptation({
+    adaptation: { resourceSources: [{ source: 'hotspotSources' }], resultHandlers: { cap_content_url_fetch: 'candidate-source-persist' } },
+    inputs: { events: [{ event_id: 99, hotspots: [{ id: 39536, url: 'https://example.com/original', title: '热点原文', sourceDoc: { status: 'error', url: 'https://example.com/original', content: '' } }] }] },
+    workspaceRoot: root,
+    store: { saveHotspotSource: (hotspotId, input) => saved.push({ hotspotId, input }) },
+    candidateId: 42,
+  });
+  const result = adaptation.sanitizeToolResult({ status: 'ok', data: { url: 'https://example.com/original', final_url: 'https://example.com/original', title: '热点原文', content: '成功正文' } }, { capability: 'cap_content_url_fetch', arguments: { resourceId: 'source:39536' } });
+  assert.equal(result.status, 'ok');
+  assert.equal(saved.length, 1);
+  assert.equal(saved[0].hotspotId, 39536);
+  assert.equal(saved[0].input.content, '成功正文');
+  assert.equal(saved[0].input.status, 'ok');
+  assert.match(saved[0].input.cache_path, /39536\.json$/);
+  assert.equal(JSON.parse(fs.readFileSync(saved[0].input.cache_path, 'utf8')).content, '成功正文');
+});
+
 test('materials 的 limit 来自声明条目（去重 + 截断语义同 mergeMaterialUrls）',()=>{
   const inputs={materialUrls:['https://a.example.com/1','https://a.example.com/1','https://b.example.com/2'],answer:'见 https://c.example.com/3 与 https://d.example.com/4'};
   const limited=buildAdaptation({adaptation:{resourceSources:[{source:'materials',limit:3}]},inputs});

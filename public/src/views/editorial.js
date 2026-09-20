@@ -18,6 +18,7 @@ function statusLabel(value) { return editorialStatusLabels[String(value || "")] 
 let bound = false;
 let editorialDirty = false;
 let editorialRequestPending = false;
+let editorialResumeFrom = "";
 function bindEditorial() {
   if (bound) return;
   bound = true;
@@ -346,7 +347,10 @@ async function openEditorial(id) {
       : '<div class="editorial-chat-empty">尚未开始编辑会。点击"让 AI 提问"。</div>';
     messages.scrollTop = messages.scrollHeight;
   }
-  if (editorialPrepareState.candidateId !== candidate.id) editorialPrepareState = { candidateId: candidate.id, skipped: false };
+  if (editorialPrepareState.candidateId !== candidate.id) {
+    editorialPrepareState = { candidateId: candidate.id, skipped: false };
+    editorialResumeFrom = "";
+  }
   state.editorialCandidate = candidate;
   editorialDirty = false;
   renderEditorialReadiness();
@@ -610,7 +614,7 @@ async function sendEditorialAnswer() {
   try {
     await streamChat({
       url: `/api/candidates/${candidateId}/ai/editorial/stream`,
-      body: { provider: document.getElementById("editorial-provider")?.value || "", answer },
+      body: { provider: document.getElementById("editorial-provider")?.value || "", answer, ...(editorialResumeFrom ? { resumeFrom: editorialResumeFrom } : {}) },
       messages,
       button,
       busyLabel: "AI 正在回应…",
@@ -621,6 +625,7 @@ async function sendEditorialAnswer() {
       rethrow: true,
       confirmation: /[A-Za-z]:\\|(?:^|\s)\//.test(answer) ? "local-project-read" : "",
       onDone: async (data) => {
+        editorialResumeFrom = data?.limited && data?.resumeFrom ? String(data.resumeFrom) : "";
         await openEditorial(candidateId);
         toast(data?.ignoredBecauseLocked ? "简报已锁定，本次 AI 回复未覆盖成稿决策" : "编辑会决策已更新");
       },

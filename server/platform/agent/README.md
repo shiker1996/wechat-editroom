@@ -85,10 +85,10 @@ resume 租约和幂等结果读写。事件按 Run 单调编号，步骤按模�
 有持久化快照的 Facade 运行默认保存完整 checkpoint；可通过 checkpointing:false 关闭。
 checkpoint 包含本次消息、待处理模型响应、预算计数和调用指纹，属于本地运行上下文，
 普通工具审计仍只保存摘要。直接使用旧引擎默认不保存完整 checkpoint。
-工具组完成后的 checkpoint 标记为 resumable:true，可通过 `runSkill({ resumeFrom })`
-从下一模型步骤继续；恢复会使用 SQLite 租约原子占用，同一 checkpoint 的并发恢复会被拒绝。
-模型步骤中断或已完成的 checkpoint 不可恢复。恢复前可通过 restoreState 回调重建
-业务状态；回调失败会释放租约并阻断运行。跨进程幂等只适用于工具 Manifest 明确标记
+工具组完成后以及达到模型/工具预算上限时的 checkpoint 标记为 resumable:true，可通过
+`runSkill({ resumeFrom })` 从下一模型步骤继续；恢复会使用 SQLite 租约原子占用，同一 checkpoint
+的并发恢复会被拒绝。已完成的 checkpoint 不可恢复。恢复前可通过 restoreState 回调重建
+业务状态；恢复 Run 会重新计算本轮模型、工具和结果字符预算，但保留历史与调用指纹；回调失败会释放租约并阻断运行。跨进程幂等只适用于工具 Manifest 明确标记
 为 idempotent 的已完成结果。
 
 ## Pipeline 与批次 Job

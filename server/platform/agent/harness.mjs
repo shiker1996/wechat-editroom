@@ -52,6 +52,7 @@ function scopedCatalog(catalog = [], scopes = []) {
 export async function runSkill(request = {}) {
   // Top-level engine options remain accepted during the adapter migration.
   const runtime = { ...request, ...request.context };
+  const liveResumeMessages = request.resumeFrom != null && Array.isArray(runtime.messages) ? runtime.messages : null;
   let resumeClaim = null;
   const releaseResume = () => {
     if (!resumeClaim) return;
@@ -115,6 +116,10 @@ export async function runSkill(request = {}) {
   validateStringList(frozenRuntime.toolContext?.allowedCapabilities, 'snapshot.allowedCapabilities');
   if (definition.entryPoints?.length && !definition.entryPoints.includes(entryPoint)) fail('SKILL_ENTRY_NOT_ALLOWED', `技能 ${skillId} 不支持入口 ${entryPoint}`);
   const execution = { ...runtime, ...frozenRuntime };
+  // Historical snapshots restore the original prompt. A resumed interactive
+  // run may also provide a new user turn; keep that delta so the engine can
+  // append it after the persisted checkpoint history.
+  if (request.resumeFrom != null) execution.messages = liveResumeMessages || [];
   const scopes = [runtime.catalog?.map((tool) => tool.capability), runtime.toolContext?.allowedCapabilities, request.policy?.allowedCapabilities, frozenRuntime.toolContext?.allowedCapabilities].filter(Array.isArray);
   const catalog = scopedCatalog(execution.catalog, scopes);
   const missing = (definition.requiredCapabilities || []).filter((capability) => !catalog.some((tool) => tool.capability === capability));

@@ -117,7 +117,8 @@ function persistEditorialFormState(store, candidateId, state) {
 
 export async function runEditorialAgentTurn({ gateway, store, registry, candidateId, provider, answer = '', events = [], retrieve = null, workspaceRoot, projectPath = '', onEvent = () => {}, budget = {}, suppliedUrls = [], allowedCapabilities = null, signal = null, resumeFrom = '', onRunCreated = null }) {
   const candidate = store.getCandidate(candidateId); if (!candidate) throw new Error('候选不存在'); if (candidate.editorial.brief_status === 'LOCKED') throw new Error('简报已经锁定；如需改方向，请先建立新候选'); if (answer.trim()) store.addEditorialMessage(candidateId, 'user', answer.trim());
-  const current = store.getCandidate(candidateId), providerConfig = gateway.config.providers[provider || gateway.config.defaultProvider], researchContext = readDiscussionResearchContext({ workspaceRoot, batchId: current.batch_id, candidate: current, events }), baseMessages = await buildEditorialMessages({ ...current, research_context: researchContext }, answer, events, retrieve, workspaceRoot, researchContext);
+  const current = store.getCandidate(candidateId), providerConfig = gateway.config.providers[provider || gateway.config.defaultProvider], researchContext = readDiscussionResearchContext({ workspaceRoot, batchId: current.batch_id, candidate: current, events });
+  const baseMessages = await buildEditorialMessages({ ...current, research_context: researchContext }, answer, events, retrieve, workspaceRoot, researchContext);
   const adaptation = buildAdaptation({ adaptation: requireAgentAdaptation(workspaceRoot, 'agent.editorial'), inputs: { events, suppliedUrls, projectPath }, workspaceRoot, store, batchId: candidate.batch_id, candidateId, consumerId: 'agent.editorial', searchMaxResults: false });
   // 研判选择是编辑室自身的本地业务动作，不依赖技能配置中的插件白名单；
   // 外部资料工具仍严格遵循 allowedCapabilities。
@@ -132,8 +133,12 @@ export async function runEditorialAgentTurn({ gateway, store, registry, candidat
   if (projectPath && !catalog.some((item) => item.capability === 'cap_filesystem_project_read')) throw new Error('编辑室当前未启用本地项目读取能力，请在技能工具配置中启用 cap_filesystem_project_read');
   const toolInstruction = `${ENVELOPE_INSTRUCTION}\n所有工具调用必须通过 API 原生 function tool 完成；不要在文本中伪造 tool_requests JSON。`;
   const messages = [...baseMessages, { role: 'system', protected: true, content: `${toolInstruction}\n本地项目读取结果属于【素材】，只有用户明确说明本人实际安装、运行或使用后，相关陈述才能记入【体验】。\n当前业务资源：${JSON.stringify({ ...resourceSummary(events, resources), project: projectPath ? 'project:current' : null })}` }];
+  const resumeMessages = resumeFrom
+    ? [{ role: 'user', content: answer.trim() || '请从上一次 Agent checkpoint 继续执行。' }]
+    : messages;
   let lastModelResult = null;
-  const agent = await runSkill({ gateway, entryPoint: 'editorial', registry, catalog, messages, store, budget, signal, onRunCreated, ...(resumeFrom ? { resumeFrom } : {}), toolContext: { batchId: candidate.batch_id, candidateId, skillId: 'editorial-room-chat', provider: provider || gateway.config.defaultProvider, workspaceRoot, allowedRoots: buildAllowedRoots(workspaceRoot, projectPath), allowedCapabilities: catalog.map((item) => item.capability), toolHandlers: {
+  const agent = await runSkill({ gateway, entryPoint: 'editorial', registry, catalog, messages: resumeMessages, store, budget, signal, onRunCreated,
+    ...(resumeFrom ? { resumeFrom } : {}), toolContext: { batchId: candidate.batch_id, candidateId, skillId: 'editorial-room-chat', provider: provider || gateway.config.defaultProvider, workspaceRoot, allowedRoots: buildAllowedRoots(workspaceRoot, projectPath), allowedCapabilities: catalog.map((item) => item.capability), toolHandlers: {
     'cap_editorial_research_select': (input) => selectEditorialResearchPoints({ store, candidateId, researchContext, input }),
     cap_editorial_preflight: async (input) => editorialPreflightToolResult(await runEditorialPreflight({ gateway, store, candidateId, batchId: candidate.batch_id, provider: provider || gateway.config.defaultProvider, workspaceRoot, events, researchContext, force: Boolean(input?.force) })),
     [FORM_UPDATE_CAPABILITY]: formUpdateHandler,
@@ -152,7 +157,7 @@ export async function runEditorialAgentTurn({ gateway, store, registry, candidat
     // 限额不是正常 final，但它仍然是本轮需要让用户看到、并保留到下一轮上下文的结果。
     // 否则流式端收到 done 后刷新候选，会把临时提示气泡清掉，表现为“什么也没返回”。
     store.addEditorialMessage(candidateId, 'assistant', reply);
-    return { ...agent, reply, limited: true };
+    return { ...agent, reply, limited: true, resumeFrom: agent.resumeFrom || agent.agentRunId };
   }
   if (!String(agent.assistantReply || '').trim()) throw new Error('编辑室未通过结束工具提交有效回复，请重发上一条回答');
   return { ...finalizeEditorialResult({ store, candidateId, current, researchContext, reply: agent.assistantReply, result: { ...resultMeta(lastModelResult, provider), usage: lastModelResult?.usage, model: lastModelResult?.model } }), agentRunId: agent.agentRunId, toolCalls: agent.toolCalls };
