@@ -427,7 +427,7 @@ async function api(request, response, url) {
   }
   if (await handleModelRoutes({ request, response, pathname, root, config, store, models, body, json })) return;
   if (await handleThemeRoutes({ request, response, pathname, searchParams, json, store, body, models })) return;
-  if (await handleMaterialRoutes({ request, response, pathname, store, json, body, root })) return;
+  if (await handleMaterialRoutes({ request, response, pathname, searchParams, store, json, body, root })) return;
   if (await handleContentFeedbackRoutes({ request, response, pathname, searchParams, store, artifactRoots, json, body, root, models })) return;
   if (await handleContentRoutes({ request, response, pathname, searchParams, store, artifactRoots, mime, json, body, root, models })) return;
   if (await handleSystemRoutes({ request, response, pathname, searchParams, root, resourceRoot: runtimePaths.appRoot, config, store, batchWorkdir, json, body, aiJobs,

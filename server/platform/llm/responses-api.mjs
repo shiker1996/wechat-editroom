@@ -173,7 +173,14 @@ export function normalizeResponsesResponse(data, providerName = 'Responses') {
   const reasoning = outputReasoning(data);
   const status = String(data?.status || 'completed');
   const incompleteReason = data?.incomplete_details?.reason || data?.response?.incomplete_details?.reason;
-  const finishReason = status === 'completed' ? 'stop' : status === 'incomplete' ? (incompleteReason || 'length') : status;
+  // Responses API uses max_output_tokens for the same truncation condition
+  // that Chat Completions reports as finish_reason=length. Normalize it so
+  // gateway adaptive retries are not skipped.
+  const finishReason = status === 'completed'
+    ? 'stop'
+    : status === 'incomplete'
+      ? (['length', 'max_output_tokens', 'max_tokens', 'token_limit'].includes(String(incompleteReason)) ? 'length' : (incompleteReason || 'length'))
+      : status;
   if (status === 'failed' || data?.error) throw new Error(`${providerName} ${data.error?.message || 'Responses 响应失败'}`);
   if (!content.trim() && !toolCalls.length) throw new Error(`${providerName} 未返回文本内容（status=${status}）`);
   return { content, reasoning, usage: normalizeResponsesUsage(data?.usage || {}), id: data?.id || null, finishReason, toolCalls };
@@ -286,7 +293,8 @@ export async function* responsesEvents(response, { turnId = nextTurnId() } = {})
     } else if (eventType === 'response.completed') {
       finishReason = 'stop';
     } else if (eventType === 'response.incomplete') {
-      finishReason = responseData.incomplete_details?.reason || data.incomplete_details?.reason || 'length';
+      const reason = responseData.incomplete_details?.reason || data.incomplete_details?.reason || 'length';
+      finishReason = ['length', 'max_output_tokens', 'max_tokens', 'token_limit'].includes(String(reason)) ? 'length' : reason;
     } else if (eventType === 'response.failed') {
       yield emit('error', { code: 'LLM_RESPONSES_FAILED', message: data.error?.message || responseData.error?.message || 'Responses 流式响应失败', retryable: true });
       return;

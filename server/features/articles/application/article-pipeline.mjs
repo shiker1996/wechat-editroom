@@ -543,7 +543,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   onProgress('Step 1.5 基于来源建立结构化事实基座');
   // 事实基座包含逐条主张、证据和来源映射，内容量会随素材增长。
   // 不要在这里传固定 maxOutputTokens：gateway 的 article-fact-base
-  // profile 需要在 finish=length 时从 5000 自动扩容到 8000，否则
+  // profile 需要在 finish=length 时从 5000 自动扩容到供应商上限，否则
   // parseModelJson 只能看到半截 JSON，后续大纲和成稿都不会开始。
   const preflightSnapshot=readJsonIfPresent(path.join(workdir,'editorial-preflight.json'),null);
   const preflightFactBase=readJsonIfPresent(path.join(workdir,'02-fact-base.json'),null);

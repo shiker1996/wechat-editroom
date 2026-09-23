@@ -24,6 +24,17 @@ test('chunked tasks and explicitly fixed requests do not retry', () => {
   );
 });
 
+test('article fact base retry uses the provider ceiling for large evidence sets', () => {
+  assert.deepEqual(
+    outputBudgetFor({ purpose: 'article-fact-base', providerMax: 16384 }),
+    { initial: 5000, retry: 16000, adaptive: true, providerMax: 16384 },
+  );
+  assert.deepEqual(
+    outputBudgetFor({ purpose: 'article-fact-base', providerMax: 8192 }),
+    { initial: 5000, retry: 8192, adaptive: true, providerMax: 8192 },
+  );
+});
+
 test('caller output cap overrides a larger purpose profile',()=>{
   assert.deepEqual(
     outputBudgetFor({purpose:'article-planning',providerMax:12000,requested:2400}),
