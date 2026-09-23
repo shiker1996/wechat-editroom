@@ -59,7 +59,7 @@ description: 将已锁定文章简报或用户直接确认的热点命题编排�
 项目运行时按以下阶段执行并记录。阶段可以根据文章类型标记为必需、按需或跳过，但不得静默改变输入、输出和安全门禁：
 
 ```text
-brief → fact-base → planning → drafting → draft-quality-gate → title-generation → humanize → review → seo-keyword-scoring → seo-optimization → final-quality-gate → research-coverage → visual-planning → image-planning → publication-safety-gate
+brief → fact-base → planning → drafting → draft-quality-gate → title-generation → humanize → review → title-lock → seo-keyword-scoring → seo-optimization → final-quality-gate → research-coverage → visual-planning → image-planning → publication-safety-gate
 ```
 
 每个 AI 阶段都同时接收本总契约和当前阶段子技能；没有独立子技能的事实基座与规划阶段由本技能直接约束。
@@ -173,6 +173,8 @@ brief → fact-base → planning → drafting → draft-quality-gate → title-g
 审稿至少检查事实支持、事实与判断混淆、逻辑跳跃、敏感与侵权风险、标题正文一致性、点击承诺、前 200 字留存、完读节奏、结尾回收、发布合规和增长与承接契约。必须单独检查标题、摘要、封面文案和前 200 字；逐条核对高影响主张的证据等级、来源归因、时效、争议呈现和名誉/隐私风险。核心高影响主张无法核验时不得通过；不能仅靠正文免责声明修复风险标题。按 `writing_stance` 检查正文归因密度：不要因为观点文没有逐句来源提示而判定失败，也不要因为有来源提示就放过事实/判断混淆。确认标题有真实信息差或切身张力，正文没有过早结束、连续背景堆积或强行插入“影响清单/行动建议”，读者收益与题材匹配，关注理由自然克制，具体历史内容真实存在，留言引导问题具体可答且商业词汇自然不硬插。计算基于 claim 映射的关键事实可追溯率，不以“据来源”出现次数作为质量指标。
 
 在 `06-reviewed.md` 文末审稿注释中记录 `content_role`、`expected_action`、`practical_increment`、`follow_reason` 和 `conversion_bridge_status`。转化校验失败时回到第 2 或第 4 步修订，不在终稿阶段临时追加生硬 CTA。
+
+审稿完成后进入标题锁定环节：重新读取 `06-reviewed.md`，使用 `title-generator` 只确定最终发布标题，不重写正文；将标题写回 `06-reviewed.md` 的唯一 H1，并同步 `03-titles.md`、`03-title-lock.json` 和 `material_brief.title_promise`。之后的 SEO、长度修复、视觉处理和普通质量门禁必须保留该 H1；只有发布合规门禁发现标题本身有风险时，才允许定向覆盖并重新复检。
 
 审稿完成后再次运行字数门禁。若超过上限，回到第 4 步压缩重复背景、次要案例和同义结论；不得通过删除关键事实、风险边界或必要来源伪装达标。
 

@@ -3,7 +3,7 @@
 执行器在每次模型调用时加载总技能、全部 references 和当前阶段子技能，并明确当前阶段 ID。阶段顺序固定为：
 
 ```text
-brief → fact-base → planning → drafting → draft-quality-gate → title-generation → humanize → review → seo-keyword-scoring → seo-optimization → final-quality-gate → research-coverage → visual-planning → image-planning → publication-safety-gate
+brief → fact-base → planning → drafting → draft-quality-gate → title-generation → humanize → review → title-lock → seo-keyword-scoring → seo-optimization → final-quality-gate → research-coverage → visual-planning → image-planning → publication-safety-gate
 ```
 
 ## `brief`
@@ -36,6 +36,8 @@ brief → fact-base → planning → drafting → draft-quality-gate → title-g
 
 同时使用总契约与选定写作子技能。只使用 `verified` 事实；`disputed` 呈现分歧，`opinion` 明确为作者判断，`unverified` 不进入正文。前 200 字自然完成具体入口、核心冲突、作者判断和阅读钩子；正文至少两次发生信息、情绪或判断推进；关键事实就近保留来源。输出完整 Markdown，第一行是唯一 H1，不附说明。
 
+规划阶段的大纲、流量规划、证据边界和禁写项属于内部元信息。写作模型只能把结构意图转化为正文，不得原样输出“本文不写”“只能当作提问的起点”、H2 编号、写作要求或其他编辑口吻；必要的证据边界须改写成自然来源限定。
+
 ## `draft-quality-gate` / `final-quality-gate`
 
 同时使用总契约、写作技能和 `article-reviewer`，执行语义门禁，不用问号、固定词或单一引用格式作机械判断。检查标题兑现、开头、单一主线、章节推进、事实与观点边界、来源覆盖、信息增量、自然表达和发布合规。只返回严格 JSON：
@@ -65,6 +67,14 @@ brief → fact-base → planning → drafting → draft-quality-gate → title-g
 ## `review`
 
 同时使用总契约与 `article-reviewer`。依据事实基座修订，不新增事实。除事实和发布安全外，重点检查标题点击承诺、前 200 字、冲突推进、信息增量、完读节奏、结尾回收和分享理由；不得把有观点的流量文改成中性简报，也不得为了“实用”强行增加清单章节。只输出完整可发布 Markdown；审稿通过与否由编排器单独调用 `decision.article_review_gate` 工具判断，不在文章正文中嵌入 REVIEW 注释。存在 blocker 或未解决 major 时工具返回 `pass:false` 并提供结构化问题；最多自动返工两轮。
+
+## `title-lock`
+
+审稿完成后再次使用总契约与 `title-generator`，只根据最终审稿正文、事实基座、发布主张登记和流量简报确定最终发布标题。该阶段不是重新生成正文：必须把 `selectedTitle` 确定性写回文章唯一 H1，并将标题承诺同步到 `material_brief.title_promise`、`03-titles.md` 和 `03-title-lock.json`。后续 SEO、长度修复、视觉处理和普通质量门禁不得改写已锁定标题；只有发布合规门禁发现标题本身存在事实或风险问题时，才允许定向覆盖并重新复检。只返回严格 JSON：
+
+```json
+{"distributionLane":"推荐池|通知池|实验池","readerStake":"具体读者利益","titleCandidates":[{"title":"标题","reason":"理由","score":0}],"selectedTitle":"锁定标题","coreKeywords":["核心词"]}
+```
 
 ## `seo-keyword-scoring`
 

@@ -47,6 +47,18 @@ export function inspectTrafficStructure(markdown) {
   };
 }
 
+export function inspectPlanningMetaLeakage(markdown) {
+  const text = String(markdown || '');
+  const checks = [
+    { pattern: /本文(?:不写|不讨论|不展开|禁止)/, message: '正文包含“本文不写/不讨论”等编辑规划元话语，应改为自然的事实边界表达。', repair: '删除内部编辑口吻，保留必要的来源限定。' },
+    { pattern: /(?:^|\n)\s*(?:[-*]\s*)?(?:#{1,6}\s*)?(?:\*\*)?(?:写作要求|结构大纲|流量规划|读者收益)(?:\*\*)?\s*[：:]?/m, message: '正文泄漏了写作规划或内部结构术语。', repair: '将规划信息转化为自然叙述，不要把内部字段、H2 编号或检查项写给读者。' },
+    { pattern: /(?:^|\n)\s*(?:[-*]\s*)?(?:\*\*)?H2[-—]?\d+(?:\*\*)?\s+/im, message: '正文泄漏了写作规划或内部结构术语。', repair: '将规划信息转化为自然叙述，不要把内部字段、H2 编号或检查项写给读者。' },
+    { pattern: /只能当(?:作)?(?:一个|这篇文章的)?提问的起点/, message: '正文包含规划式“提问的起点”表述，疑似把大纲意图直接写入文章。', repair: '保留问题意识，但改写为自然的事实—问题过渡。' },
+  ];
+  const issues = checks.filter(({ pattern }) => pattern.test(text)).map(({ message, repair }) => ({ type: 'structure', message, repair }));
+  return { pass: issues.length === 0, issues };
+}
+
 export function buildQualityRepairPrompt(report) {
   return `以下文章未通过公众号成稿结构门禁：\n${report.issues.map((x, i) => `${i + 1}. ${x}`).join('\n')}\n\n请完整重写文章以修复问题。必须保留已核验事实、来源链接、作者立场和风险边界；不得新增日期、数字、人物行为或来源。只输出完整 Markdown。`;
 }

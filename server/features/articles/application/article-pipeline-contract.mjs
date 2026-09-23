@@ -59,6 +59,65 @@ export function compositeSourceText(candidate,{maxChars=48000,perSourceChars=400
 
 export function authorizedWritingBrief(brief) { const safe={...brief};delete safe.sourceText;return safe; }
 
+const DRAFT_OUTLINE_SECTION_ENDINGS = new Set(['流量规划','读者收益','信息增量','实用增量','增长承接','来源','剩余风险','停止原因','写作立场','文章素材简报']);
+
+function outlineHeading(line) {
+  const markdown = String(line || '').match(/^(#{2,3})\s+(.+?)\s*$/);
+  if (markdown) return { level: markdown[1].length, title: markdown[2].trim().replace(/[：:]\s*$/, '') };
+  const bold = String(line || '').match(/^\*\*(.+?)\*\*\s*[：:]?\s*$/);
+  return bold ? { level: 2, title: bold[1].trim() } : null;
+}
+
+function outlineSectionLines(outline) {
+  const lines = String(outline || '').split(/\r?\n/);
+  const start = lines.findIndex((line) => {
+    const heading = outlineHeading(line);
+    return heading && ['结构大纲', '大纲', '章节推进'].includes(heading.title);
+  });
+  if (start < 0) return [];
+  const startHeading = outlineHeading(lines[start]);
+  const result = [];
+  for (let index = start + 1; index < lines.length; index += 1) {
+    const heading = outlineHeading(lines[index]);
+    const markdownHeading = String(lines[index] || '').match(/^(#{2,3})\s+/);
+    const isContentHeading = /^\*\*H2(?:[-—:：\s]+)?/i.test(String(lines[index] || '').trim());
+    if (markdownHeading && heading && heading.level <= startHeading.level) break;
+    if (heading && DRAFT_OUTLINE_SECTION_ENDINGS.has(heading.title)) break;
+    if (isContentHeading) result.push(lines[index]);
+    else result.push(lines[index]);
+  }
+  return result;
+}
+
+/** 将完整编辑大纲压缩为写作模型可消费的结构视图。 */
+export function buildDraftOutlineView(outline = '') {
+  const lines = outlineSectionLines(outline);
+  if (!lines.length) return String(outline || '').trim();
+  const sections = [];
+  let current = null;
+  for (const line of lines) {
+    const boldHeading = String(line).match(/^\*\*H2(?:[-—:：\s]+)?(.+?)\*\*\s*$/i);
+    const structuralBold = String(line).match(/^\*\*(?!H2(?:[-—:：\s]+)?)(.+?)\*\*\s*[：:]?\s*$/i);
+    const heading = outlineHeading(line);
+    if (boldHeading || structuralBold || (heading && heading.level >= 3)) {
+      current = { heading: (boldHeading ? boldHeading[1] : structuralBold ? structuralBold[1] : heading.title).trim(), goals: [] };
+      sections.push(current);
+      continue;
+    }
+    const numbered = String(line).match(/^\s*\d+[.)、]\s+(.+?)\s*$/);
+    if (numbered) {
+      current = { heading: numbered[1].trim(), goals: [] };
+      sections.push(current);
+      continue;
+    }
+    const bullet = String(line).match(/^\s*[-*]\s+(.+?)\s*$/);
+    if (bullet && current) current.goals.push(bullet[1].trim());
+  }
+  return JSON.stringify({
+    sections: sections.filter((section) => section.heading || section.goals.length),
+  }, null, 2);
+}
+
 export function sourceCacheIssue(candidate,sourceDoc) {
   if(!sourceDoc?.content||candidate?.composite)return null;
   const expected=normalizeUrl(candidate?.url); const actual=normalizeUrl(sourceDoc.url||sourceDoc.final_url);
@@ -151,8 +210,41 @@ export function articleLengthStatus(article, range = ARTICLE_LENGTH_RANGE) {
   return {count,valid:count>=range.min&&count<=range.max,shortfall:Math.max(0,range.min-count),overflow:Math.max(0,count-range.max)};
 }
 
+export function replaceArticleTitle(article, title) {
+  const nextTitle = String(title || '').replace(/\s+/g, ' ').trim();
+  const source = String(article || '').trim();
+  if (!nextTitle) return source;
+  if (/^#\s+.+$/m.test(source)) return source.replace(/^#\s+.+$/m, `# ${nextTitle}`);
+  return `# ${nextTitle}\n\n${source}`.trim();
+}
+
 export function buildDraftUserPrompt(selectedTitle, brief, outline) {
-  return `标题:${selectedTitle}\n\n锁定简报、事实基座与发布主张登记:${JSON.stringify(brief)}\n\n当前写作立场：${brief.writingStance || brief.writing_stance || 'analysis'}；来源展示策略：${brief.citationPolicy || 'cluster'}。立场只改变表达方式，不改变事实状态、来源边界、禁止主张或发布门禁。\n\n所有文章都以点击、前 200 字留存、完读和可转述判断为基线；content_role 只改变包装重点，不是流量开关。必须把 click_mechanism、opening_hook、retention_turns、reader_value_placement 和 ending_payoff 落到正文，普通成稿安排 3–5 个 H2、至少两次中段推进，并控制外部案例和数据只为核心判断服务。不要把读者收益机械扩写成独立清单章节。\n\n写作时必须优先覆盖 adoptedResearchPoints 中作者明确采用的研判拓展点，不得只复述事件摘要；将其转化为事实解释、利益/成本分析、事件间关系或可验证的观点边界。只把事实基座中 status=verified 的主张写成确定事实；disputed、unverified 和 restricted_claims 必须按明确归因、限定或删除处理。同一 source_group_id 的连续主张按当前来源策略集中归因，不要把机器审计信息机械泄漏成逐句“据来源”。涉及 IPO、上市、估值、融资、公司/个人负面指控时，不得在标题、摘要或前 200 字中加入没有直接证据的数字、动作和结论。\n\n大纲:\n${outline}`;
+  const materialBrief = brief?.materialBrief || brief?.material_brief || {};
+  const articleTask = {
+    topic: brief?.topic,
+    angle: brief?.angle,
+    thesis: brief?.thesis,
+    audience: brief?.audience || brief?.targetAudience,
+    article_type: brief?.articleType || brief?.article_type,
+    distribution_lane: brief?.distributionLane || brief?.distribution_lane,
+    reader_stake: brief?.readerStake || brief?.reader_stake,
+    material_brief: materialBrief,
+    adopted_research_points: brief?.adoptedResearchPoints || brief?.adopted_research_points || [],
+    rejected_angles: brief?.rejectedAngles || brief?.rejected_angles || [],
+  };
+  const authority = {
+    fact_base: brief?.factBase || brief?.fact_base || {},
+    publication_claim_register: brief?.publicationClaimRegister || brief?.publication_claim_register || [],
+  };
+  const internalConstraints = {
+    writing_stance: brief?.writingStance || brief?.writing_stance || 'analysis',
+    citation_policy: brief?.citationPolicy || brief?.citation_policy || 'cluster',
+    evidence_boundary: materialBrief?.evidence_boundary || brief?.evidenceBoundary || brief?.evidence_boundary || '',
+    forbidden_claims: brief?.forbiddenClaims || brief?.forbidden_claims || [],
+    experience_required: brief?.experienceRequired ?? brief?.experience_required ?? false,
+    confirmed_experiences: brief?.confirmedExperiences || brief?.confirmed_experiences || '',
+  };
+  return `标题：${selectedTitle}\n\n文章任务（可写目标）：\n${JSON.stringify(articleTask)}\n\n事实与来源授权（只能从这里取事实）：\n${JSON.stringify(authority)}\n\n内部约束（只用于约束写作，不得逐字输出）：\n${JSON.stringify(internalConstraints)}\n\n当前写作立场只改变表达方式，不改变事实状态、来源边界、禁止主张或发布门禁。\n\n所有文章都以点击、前 200 字留存、完读和可转述判断为基线；必须把流量规划和读者收益落到正文，普通成稿安排 3–5 个 H2、至少两次中段推进，并控制外部案例和数据只为核心判断服务。不要把读者收益机械扩写成独立清单章节。\n\n写作时必须优先覆盖采用的研判拓展点，将其转化为事实解释、利益/成本分析、事件间关系或可验证的观点边界。只把事实基座中 status=verified 的主张写成确定事实；disputed、unverified 和 restricted_claims 必须按明确归因、限定或删除处理。不要把机器审计信息机械泄漏成逐句“据来源”。\n\n规划元信息隔离规则：下面的“文章结构视图”只描述章节和段落意图，不是正文素材。不要输出其中的“写作要求、禁写项、H2 编号、前置检查或内部术语”；也不要原样写出“本文不写”“只能当作提问的起点”“这不能当作行业统计”等规划式句子。需要保留证据边界时，改写成自然的来源限定和事实表述。\n\n文章结构视图（仅供执行，不得原样复述）：\n${buildDraftOutlineView(outline)}`;
 }
 
 export function buildResearchCoveragePrompt({ article = '', researchPoints = [], rejectedAngles = [] } = {}) {
