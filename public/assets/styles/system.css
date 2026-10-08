@@ -101,7 +101,8 @@ body.chat-immersive .tutorial-writing-workspace { animation: none; transform: no
 .source-ledger-filters{display:flex;justify-content:flex-end;gap:10px;padding:10px 0 14px;flex-wrap:wrap}
 .source-ledger-filters label{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted)}
 .source-ledger-filters select{min-width:130px;padding:7px 28px 7px 9px}
-.subscription-kind.reddit{background:var(--system-palette-hex-ff4500);color:var(--white)}.subscription-kind.paper{background:var(--studio-green);color:var(--white)}
+.subscription-kind.reddit{background:var(--system-palette-hex-ff4500);color:var(--white)}
+.subscription-kind.paper{background:var(--studio-green);color:var(--white)}
 .collector-plugin-panel{margin-top:18px}.collector-plugin-install{display:grid;grid-template-columns:minmax(220px,1fr) auto auto;gap:10px;align-items:end}.collector-plugin-install label{display:grid;gap:6px}
 .extension-settings-layout{display:grid;grid-template-columns:minmax(190px,280px) minmax(0,1fr);gap:14px}.extension-settings-list{display:grid;align-content:start;gap:8px}.extension-settings-list button{text-align:left;padding:12px;border:1px solid var(--line);background:var(--paper)}.extension-settings-list button.active{border-color:var(--ink);box-shadow:inset 3px 0 var(--yellow)}.extension-settings-list b,.extension-settings-list small{display:block}.extension-settings-editor{padding:14px;border:1px solid var(--line)}.extension-settings-editor form{display:grid;gap:12px}.extension-settings-editor label{display:grid;gap:6px}
 @media(max-width:720px){.source-ledger-filters{justify-content:stretch}.source-ledger-filters label,.source-ledger-filters select{flex:1}}

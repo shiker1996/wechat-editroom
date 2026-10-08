@@ -229,9 +229,9 @@ export class Store {
     return this.repositories.sourceRuns.start(batchId, source, traceContext);
   }
 
-  finishSourceRun(id, status, itemCount = 0, error = null) {
+  finishSourceRun(id, status, itemCount = 0, error = null, { indexFailure = true } = {}) {
     this.repositories.sourceRuns.finish(id, status, itemCount, error);
-    if (status === 'failed' || status === 'interrupted') {
+    if (indexFailure && (status === 'failed' || status === 'interrupted')) {
       const run = this.repositories.sourceRuns.get(id);
       if (run) this.recordPipelineFailure({ batchId: run.batch_id, stage: 'collect', objectType: 'source',
         objectKey: `source:${run.id}`, sourceRunId: run.id, title: run.source,

@@ -46,7 +46,9 @@ export class CollectionJobManager {
         const success = sourceResults.some((item) => item.status === 'ok');
         const providerResults = sourceResults.flatMap((item) => item.result?.provenance?.sourceResults || []);
         this.store.addHotspots(job.batchId, source, selected);
-        this.store.finishSourceRun(topRuns.get(source), success ? 'success' : 'failed', selected.length, success ? null : '所有具体来源均采集失败');
+        this.store.finishSourceRun(topRuns.get(source), success ? 'success' : 'failed', selected.length, success ? null : '所有具体来源均采集失败', {
+          indexFailure: sourceResults.length === 0,
+        });
         this.store.appendAgentRunEvent?.(harnessRunId, { type: success ? 'source.completed' : 'source.failed', source, stageId: `source:${source}`, status: success ? 'success' : 'failed', itemCount: selected.length,
           attempts: sourceResults.reduce((count, item) => count + (item.attempts?.length || 1), 0),
           ...(providerResults.length ? { providerResults } : {}),
