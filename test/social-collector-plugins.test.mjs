@@ -4,10 +4,11 @@ import { createAdapter as createWechatAdapter } from '../plugins/wechat-account/
 import { createAdapter as createXAdapter } from '../plugins/x-search/adapter.mjs';
 
 function response(value, status = 200) { return { ok: status >= 200 && status < 300, status, json: async () => value }; }
+function recentTimestamp() { return new Date(Date.now() - 60 * 60 * 1000).toISOString(); }
 
 test('公众号账号采集器调用 post_history 并标准化文章', async () => {
   let request;
-  const adapter = createWechatAdapter({ configuration: { endpoint: 'https://provider.example/post_history', apiKey: 'secret' }, fetchImpl: async (url, options) => { request = { url, options }; return response({ code: 0, nickname: '科技号', ghid: 'gh_demo', data: [{ sn: 'abc', title: '公众号文章', url: 'https://mp.weixin.qq.com/s/abc', digest: '摘要', post_time_str: '2026-09-30 10:00:00', read: 123 }] }); } });
+  const adapter = createWechatAdapter({ configuration: { endpoint: 'https://provider.example/post_history', apiKey: 'secret' }, fetchImpl: async (url, options) => { request = { url, options }; return response({ code: 0, nickname: '科技号', ghid: 'gh_demo', data: [{ sn: 'abc', title: '公众号文章', url: 'https://mp.weixin.qq.com/s/abc', digest: '摘要', post_time_str: recentTimestamp(), read: 123 }] }); } });
   const result = await adapter.collect({ identifier: 'gh_demo', identifierType: 'ghid', limit: 10, maxAgeHours: 168 });
   assert.equal(result.status, 'ok');
   assert.equal(result.items[0].title, '公众号文章');
@@ -18,7 +19,7 @@ test('公众号账号采集器调用 post_history 并标准化文章', async () 
 
 test('X 搜索采集器调用 TwexAPI 搜索并标准化推文', async () => {
   let request;
-  const adapter = createXAdapter({ configuration: { baseUrl: 'https://api.twexapi.io', apiKey: 'secret' }, fetchImpl: async (url, options) => { request = { url: String(url), options }; return response({ code: 200, data: [{ tweet_id: '123', text: '一条 X 动态', created_at_datetime: '2026-09-30T10:00:00.000Z', user: { name: '账号', screen_name: 'demo' }, favorite_count: 5 }] }); } });
+  const adapter = createXAdapter({ configuration: { baseUrl: 'https://api.twexapi.io', apiKey: 'secret' }, fetchImpl: async (url, options) => { request = { url: String(url), options }; return response({ code: 200, data: [{ tweet_id: '123', text: '一条 X 动态', created_at_datetime: recentTimestamp(), user: { name: '账号', screen_name: 'demo' }, favorite_count: 5 }] }); } });
   const result = await adapter.collect({ query: 'from:demo -filter:replies', searchType: 'Latest', limit: 10, maxAgeHours: 168 });
   assert.equal(result.status, 'ok');
   assert.equal(result.items[0].url, 'https://x.com/demo/status/123');
@@ -31,7 +32,7 @@ test('X 查询词池模式逐条执行条件并合并去重', async () => {
   const requested = [];
   const adapter = createXAdapter({ configuration: { baseUrl: 'https://api.twexapi.io', apiKey: 'secret' }, fetchImpl: async (url, options) => {
     requested.push(JSON.parse(options.body).searchTerms[0]);
-    return response({ code: 200, data: [{ tweet_id: requested.length === 1 ? 'same' : 'second', text: `条件 ${requested.length}`, created_at_datetime: '2026-09-30T10:00:00.000Z', user: { screen_name: 'demo' } }] });
+    return response({ code: 200, data: [{ tweet_id: requested.length === 1 ? 'same' : 'second', text: `条件 ${requested.length}`, created_at_datetime: recentTimestamp(), user: { screen_name: 'demo' } }] });
   } });
   const result = await adapter.collect({ mode: 'query-pool', query: 'AI\nOpenAI', searchType: 'Top', limit: 10, maxAgeHours: 168 });
   assert.deepEqual(requested, ['AI', 'OpenAI']);
@@ -41,7 +42,7 @@ test('X 查询词池模式逐条执行条件并合并去重', async () => {
 
 test('X 趋势模式调用 TwexAPI global-trending 并标准化热门推文', async () => {
   let request;
-  const adapter = createXAdapter({ configuration: { baseUrl: 'https://api.twexapi.io', apiKey: 'secret' }, fetchImpl: async (url, options) => { request = { url: String(url), options }; return response({ code: 200, data: [{ tweet_id: 'trend-1', full_text: '趋势驱动的推文', created_at_datetime: '2026-09-30T10:00:00.000Z', user: { name: '趋势账号', screen_name: 'trend_demo' }, retweet_count: 8 }] }); } });
+  const adapter = createXAdapter({ configuration: { baseUrl: 'https://api.twexapi.io', apiKey: 'secret' }, fetchImpl: async (url, options) => { request = { url: String(url), options }; return response({ code: 200, data: [{ tweet_id: 'trend-1', full_text: '趋势驱动的推文', created_at_datetime: recentTimestamp(), user: { name: '趋势账号', screen_name: 'trend_demo' }, retweet_count: 8 }] }); } });
   const result = await adapter.collect({ mode: 'trending', country: 'worldwide', topic: 'Technology', content: 'AI', limit: 10, maxAgeHours: 168 });
   assert.equal(result.status, 'ok');
   assert.equal(result.items[0].raw.raw.provider, 'twexapi');

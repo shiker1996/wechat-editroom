@@ -33,6 +33,7 @@ export function normalizePlanningResult(input={}) {
   plan.titleCandidates=asArray(plan.titleCandidates).map((item)=>typeof item==='string'?{title:item,reason:''}:item).filter((item)=>item&&item.title);
   plan.distributionLane=String(plan.distributionLane??plan.distribution_lane??'').trim();
   plan.readerStake=String(plan.readerStake??plan.reader_stake??'').trim();
+  plan.readerEmotion=String(plan.readerEmotion??plan.reader_emotion??'').trim();
   plan.readerValueType=String(plan.readerValueType??plan.reader_value_type??'').trim();
   plan.readerValuePlacement=String(plan.readerValuePlacement??plan.reader_value_placement??'').trim();
   plan.visualNeed=String(plan.visualNeed??plan.visual_need??'auto').trim() || 'auto';
