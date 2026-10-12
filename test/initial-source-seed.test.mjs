@@ -23,6 +23,7 @@ test('新工作区一次性写入生产参考采集源且默认暂停', (t) => {
   assert.equal(sources.every((item) => item.origin === 'initial-sample' && item.managed === false), true);
   assert.ok(sources.some((item) => item.source_key === 'reddit:r/programming'));
   assert.ok(sources.some((item) => item.source_key === 'github:search'));
+  assert.ok(sources.some((item) => item.source_key === 'paper:radar' && item.enabled === false));
 });
 
 test('参考采集源初始化幂等，已有来源不会被覆盖', (t) => {
@@ -30,6 +31,6 @@ test('参考采集源初始化幂等，已有来源不会被覆盖', (t) => {
   store.repositories.collectionSources.upsert({ pluginId: 'demo', sourceType: 'demo', sourceKey: 'demo:existing', label: '已有来源', config: {}, enabled: true });
   const result = seedInitialCollectionSources(store);
   assert.deepEqual(result, { seeded: false, reason: 'existing-sources', count: 1 });
-  assert.deepEqual(store.listCollectionSources().map((item) => item.source_key), ['demo:existing']);
-  assert.deepEqual(seedInitialCollectionSources(store), { seeded: false, reason: 'already-initialized', count: 1 });
+  assert.deepEqual(store.listCollectionSources().map((item) => item.source_key), ['demo:existing', 'paper:radar']);
+  assert.deepEqual(seedInitialCollectionSources(store), { seeded: false, reason: 'already-initialized', count: 2 });
 });

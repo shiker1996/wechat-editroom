@@ -15,7 +15,8 @@ test("批次详情提供完成、归档和重新打开操作",()=>{
 });
 
 test("当前批次选择器排除已完成和已归档批次",()=>{
-  assert.match(dashboard,/\(b\.lifecycle_status\|\|"active"\)==="active"/);
+  const activeFilter=dashboard.match(/state\.batches\.filter\(\s*\((\w+)\)\s*=>\s*\(\1\.lifecycle_status\s*\|\|\s*"active"\)\s*===\s*"active"\s*\)/);
+  assert.ok(activeFilter,"当前批次选择器应只保留 lifecycle_status 为 active（缺省时按 active 兼容）的批次");
   assert.match(batches,/completed:"已完成"/);
   assert.match(batches,/archived:"已归档"/);
 });

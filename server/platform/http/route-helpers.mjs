@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { atomicWriteUtf8 } from '../core/atomic-file.mjs';
-import { isFreshForBatch, eventGroupsForCandidate, loadStableBatchEvents, resolveEventAnalysis } from '../../features/research/index.mjs';
+import { freshnessWindowHours, isFreshForBatch, eventGroupsForCandidate, loadStableBatchEvents, resolveEventAnalysis } from '../../features/research/index.mjs';
 import { isResearchEligibleHotspot } from '../../features/research/index.mjs';
 
 export function respond(json, response, status, data) {
@@ -62,7 +62,9 @@ export function createRouteHelpers({ store, config, batchWorkdir }) {
       if (is_stale) stale += 1;
       return { ...item, is_stale };
     });
-    batch.freshness = { fresh: batch.hotspots.length - stale, stale, maxAgeHours };
+    const paperItems = batch.hotspots.filter((item) => item.source_group === 'paper' || item.source_type === 'paper');
+    const paperMaxAgeHours = Math.max(72, ...paperItems.map((item) => freshnessWindowHours(item, maxAgeHours)));
+    batch.freshness = { fresh: batch.hotspots.length - stale, stale, maxAgeHours, paperCount: paperItems.length, paperMaxAgeHours };
     if (batch.ai_status) {
       const freshItems = batch.hotspots.filter((item) => !item.is_stale && isResearchEligibleHotspot(item));
       batch.ai_status = {

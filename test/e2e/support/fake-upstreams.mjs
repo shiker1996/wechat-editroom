@@ -143,6 +143,7 @@ function synthesisJson(payload) {
 
 function jsonForRequest(payload) {
   const text = JSON.stringify(payload.messages || []);
+  if (/请判断这篇文章是否存在明显、影响阅读体验的模板化\/AI 腔/.test(text)) return { pass: true, issues: [] };
   if (/hotspot-tagging|语义打标|preScores|eventParts/i.test(text)) return hotspotTaggingJson(payload);
   if (/event-card|事件事实卡|classification_features/i.test(text)) return eventCardJson(payload);
   if (/脑暴输入规则|hotspot-brainstorm-explore/i.test(text)) return brainstormJson(payload);
@@ -189,6 +190,7 @@ function replayIdForRequest(payload) {
   const tools = Array.isArray(payload.tools) ? payload.tools : [];
   const toolName = tools[0]?.function?.name || '';
   if (toolName) return `tool:${toolName}`;
+  if (/请判断这篇文章是否存在明显、影响阅读体验的模板化\/AI 腔/.test(text)) return 'article-voice-quality-gate';
   if (/hotspot-tagging|语义打标|preScores|eventParts/i.test(text)) return 'hotspot-tagging';
   if (/event-card|事件事实卡|classification_features/i.test(text)) return 'event-card';
   if (/脑暴输入规则|hotspot-brainstorm-explore/i.test(text)) return 'hotspot-brainstorm';

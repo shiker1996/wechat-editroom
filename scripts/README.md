@@ -11,6 +11,7 @@
 | `runtime/ensure-node.ps1` / `runtime/ensure-node.sh` | Windows 与 Linux/macOS 的 Node.js 引导 |
 | `runtime/setup-workbench.ps1`、根目录 `setup-workbench.sh` | 跨平台安装入口 |
 | `runtime/start-workbench.ps1` / `runtime/start-workbench.sh` | 跨平台启动入口 |
+| `runtime/start-server.mjs` | Node 服务启动器；沿用显式代理环境变量，Windows 未设置时读取系统默认代理，并在服务启动前启用 Node 环境代理 |
 | `runtime/stop-workbench.ps1` / `runtime/stop-workbench.sh` | 跨平台停止入口 |
 | `runtime/rsshub-start.ps1` / `runtime/rsshub-stop.ps1` | RSSHub 生命周期脚本，由 RSSHub 配置和采集器调用 |
 | `runtime/install-skill-deps.mjs` | 根 `postinstall`，级联安装技能包依赖 |

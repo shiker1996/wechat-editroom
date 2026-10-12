@@ -28,7 +28,7 @@ if (-not (Test-Workbench)) {
   }
   $logDirectory = Join-Path $projectRoot 'logs'
   New-Item -ItemType Directory -Path $logDirectory -Force | Out-Null
-  $argsList = @('--disable-warning=ExperimentalWarning','server.mjs')
+  $argsList = @('scripts/runtime/start-server.mjs')
   if ($DemoProduction) { $Demo = $true }
   if ($Demo) { $argsList += '--demo' }
   if ($DemoProduction) { $argsList += '--demo-production' }

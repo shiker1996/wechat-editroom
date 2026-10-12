@@ -10,6 +10,7 @@ import { modelProfilesFromUiFields, normalizeModelProfiles, normalizeStageModels
 // 后台任务 thinking 实时进度：AiJobManager 在 run() 外层注册当前任务的接收器，
 // complete() 检测到接收器且本次 thinking 开启时，内部改用流式把 reasoning 实时转发给接收器。
 const thinkingSinkStore = new AsyncLocalStorage();
+const TOOL_ARGUMENT_RETRY_PROMPT = '工具调用参数校验失败。请重新完成上一次请求；如需调用工具，只能传递完整、合法的 JSON 对象，确保字符串中的引号、反斜杠和换行均正确转义。不要复用损坏的参数，也不要输出不完整的工具调用。';
 
 export function runWithThinkingSink(sink, fn) {
   return thinkingSinkStore.run(sink, fn);
@@ -351,32 +352,54 @@ export class ModelGateway {
   }
 
   async rawStreamComplete({ providerName, provider, apiKey, messages, maxOutputTokens, temperature = 0.2, jsonMode = false, webSearch = false, onDelta = () => {}, onEvent = () => {}, thinking, signal, tools = [], toolChoice = null, nativeTools = false }, onThinking = () => {}) {
-    let content = '';
-    let reasoning = '';
-    let usage = {};
-    let id = null;
-    let finishReason = null;
-    const toolCalls = [];
-    for await (const event of this.rawStreamEvents({ providerName, provider, apiKey, messages, maxOutputTokens, temperature, jsonMode, webSearch, thinking, signal, onEvent, tools, toolChoice, nativeTools })) {
-      if (event.type === 'text-delta') {
-        content += event.text;
-        onDelta(event.text, content);
-      } else if (event.type === 'reasoning-delta') {
-        reasoning += event.text;
-        onThinking(event.text, reasoning);
-      } else if (event.type === 'tool-call') {
-        toolCalls.push({ id: event.callId, name: event.name, input: event.input, providerExecuted: event.providerExecuted === true });
-      } else if (event.type === 'usage') {
-        usage = event.usage || usage;
-      } else if (event.type === 'finish') {
-        finishReason = event.reason || finishReason;
-        id = event.responseId || id;
-      } else if (event.type === 'error' || event.type === 'tool-error') {
-        throw Object.assign(new Error(`${provider.label || providerName} ${event.message || '流式响应失败'}`), {
-          code: event.code || 'LLM_STREAM_FAILED',
-        });
+    const retryMessages = [{ role: 'system', protected: true, content: TOOL_ARGUMENT_RETRY_PROMPT }, ...messages];
+    let result;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      let content = '';
+      let reasoning = '';
+      let usage = {};
+      let id = null;
+      let finishReason = null;
+      const toolCalls = [];
+      const pendingEvents = [];
+      const pendingText = [];
+      const pendingThinking = [];
+      const attemptMessages = attempt === 0 ? messages : retryMessages;
+      try {
+        for await (const event of this.rawStreamEvents({ providerName, provider, apiKey, messages: attemptMessages, maxOutputTokens, temperature, jsonMode, webSearch, thinking, signal,
+          onEvent: (item) => pendingEvents.push(item), tools, toolChoice, nativeTools })) {
+          if (event.type === 'text-delta') {
+            content += event.text;
+            pendingText.push(event.text);
+          } else if (event.type === 'reasoning-delta') {
+            reasoning += event.text;
+            pendingThinking.push(event.text);
+          } else if (event.type === 'tool-call') {
+            toolCalls.push({ id: event.callId, name: event.name, input: event.input, providerExecuted: event.providerExecuted === true });
+          } else if (event.type === 'usage') {
+            usage = event.usage || usage;
+          } else if (event.type === 'finish') {
+            finishReason = event.reason || finishReason;
+            id = event.responseId || id;
+          } else if (event.type === 'error' || event.type === 'tool-error') {
+            throw Object.assign(new Error(`${provider.label || providerName} ${event.message || '流式响应失败'}`), {
+              code: event.code || 'LLM_STREAM_FAILED',
+            });
+          }
+        }
+        result = { content, reasoning, usage, id, finishReason, toolCalls, pendingEvents, pendingText, pendingThinking };
+        break;
+      } catch (error) {
+        if (attempt === 0 && tools.length && error.code === 'INVALID_TOOL_ARGUMENTS') continue;
+        throw error;
       }
     }
+    for (const event of result.pendingEvents) { try { onEvent(event); } catch { /* 观测失败不应阻断模型调用 */ } }
+    let streamedContent = '';
+    for (const delta of result.pendingText) { streamedContent += delta; onDelta(delta, streamedContent); }
+    let streamedReasoning = '';
+    for (const delta of result.pendingThinking) { streamedReasoning += delta; onThinking(delta, streamedReasoning); }
+    const { content, reasoning, usage, id, finishReason, toolCalls } = result;
     if (finishReason === 'content_filter') throw new Error(`${provider.label || providerName} 输出触发内容过滤，未返回内容`);
     if (finishReason === 'insufficient_system_resource') throw new Error(`${provider.label || providerName} 服务端推理资源不足，生成被打断，请稍后重试`);
     if (!content.trim() && !toolCalls.length) {
@@ -471,6 +494,11 @@ export class ModelGateway {
           result = await this.rawCompleteMaybeStream({ providerName, provider, apiKey, messages: context.messages,
             maxOutputTokens: outputBudget.initial, temperature: input.temperature, jsonMode: input.jsonMode, thinking: false, signal:input.signal,
             tools: input.tools || [], toolChoice, nativeTools: input.nativeTools === true }, { streamThinking: false });
+        } else if (!streamThinking && input.tools?.length && error.code === 'INVALID_TOOL_ARGUMENTS') {
+          result = await this.rawCompleteMaybeStream({ providerName, provider, apiKey,
+            messages: [{ role: 'system', protected: true, content: TOOL_ARGUMENT_RETRY_PROMPT }, ...context.messages],
+            maxOutputTokens: outputBudget.initial + thinkingReserve, temperature: input.temperature, jsonMode: input.jsonMode, thinking, signal:input.signal,
+            tools: input.tools, toolChoice, nativeTools: input.nativeTools === true }, { streamThinking: false });
         } else {
           throw error;
         }

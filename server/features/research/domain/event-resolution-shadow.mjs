@@ -217,10 +217,28 @@ export function structuredMatch(left, right) {
   // 仍视为同一事件候选；后续增量状态再区分“新进展”和“持续讨论”。
   if (trigger === 0 && whoMatch === 1 && objectMatch === 1 && time >= 0.5) trigger = 0.8;
   const score = Math.round(30 * whoMatch + 25 * objectMatch + 20 * trigger + 10 * action + 10 * time + 5 * entity);
+  // 同一主体、同一对象、同一时间窗口且触发词仍有明显重合时，通常只是
+  // 不同来源对同一发布/回应事件的拆分标注。保留动作差异，交给事件状态
+  // 表达“新进展”，不要把它们拆成并列热榜事件。
+  if (whoMatch === 1 && objectMatch === 1 && time >= 0.5 && trigger >= 0.6) {
+    return { score: Math.max(score, EVENT_RESOLUTION_POLICY.autoMergeScore), method: 'structured-same-object' };
+  }
   if (isSameEventContinuity(left, right, objectMatch, trigger)) {
     return { score: Math.max(score, EVENT_RESOLUTION_POLICY.autoMergeScore), method: 'structured-continuity' };
   }
   return { score, method: score >= EVENT_RESOLUTION_POLICY.autoMergeScore ? 'structured' : score >= EVENT_RESOLUTION_POLICY.reviewScore ? 'review' : 'new' };
+}
+
+// AIHOT's useful distinction is preserved as evidence without replacing our
+// deterministic resolver: an event may have several reports, but each
+// membership can still explain whether it is the same occurrence or a direct
+// development of that occurrence.
+export const EVENT_RELATION_TYPES = Object.freeze(['SAME_OCCURRENCE', 'SAME_STORY', 'UNRELATED', 'ROUNDUP']);
+
+export function relationTypeForMatch(match = {}) {
+  if (match.method === 'exact' || match.method === 'structured-same-object') return 'SAME_OCCURRENCE';
+  if (match.method === 'structured-continuity' || match.method === 'structured' || match.method === 'review') return 'SAME_STORY';
+  return 'UNRELATED';
 }
 
 function stableValue(records, field) {
@@ -330,10 +348,12 @@ function buildGroups(reports) {
     }
     if (best?.score >= EVENT_RESOLUTION_POLICY.autoMergeScore) {
       best.group.records.push(report);
+      best.group.relationEvidence.push({ hotspotId: report.hotspotId, candidateHotspotId: best.member.hotspotId,
+        relation: relationTypeForMatch(best), score: best.score, method: best.method });
     } else {
       if (best?.score >= EVENT_RESOLUTION_POLICY.reviewScore) reviewQueue.push({ hotspotId: report.hotspotId, candidateHotspotId: best.member.hotspotId,
-        candidateScore: best.score, method: 'structured-review', reason: '结构化相似但未达到自动归并阈值' });
-      const group = { records: [report] };
+        candidateScore: best.score, method: 'structured-review', relation: relationTypeForMatch(best), reason: '结构化相似但未达到自动归并阈值' });
+      const group = { records: [report], relationEvidence: [] };
       groups.push(group);
       register(group, report);
     }
@@ -348,7 +368,7 @@ function mergeResolvedEventsById(events, { splitConflictingHistory = false } = {
   for (const [index, event] of events.entries()) {
     const current = merged.get(event.event_id);
     if (!current) {
-      merged.set(event.event_id, { ...event, hotspot_ids: [...new Set(event.hotspot_ids || [])], legacy_event_ids: [...new Set(event.legacy_event_ids || [])], new_information_hotspot_ids: [...new Set(event.new_information_hotspot_ids || [])] });
+      merged.set(event.event_id, { ...event, hotspot_ids: [...new Set(event.hotspot_ids || [])], legacy_event_ids: [...new Set(event.legacy_event_ids || [])], new_information_hotspot_ids: [...new Set(event.new_information_hotspot_ids || [])], relation_evidence: [...(event.relation_evidence || [])] });
       continue;
     }
     if (splitConflictingHistory && structuredMatch(current.normalized || {}, event.normalized || {}).score < EVENT_RESOLUTION_POLICY.autoMergeScore) {
@@ -366,6 +386,7 @@ function mergeResolvedEventsById(events, { splitConflictingHistory = false } = {
     current.hotspot_ids = [...new Set([...(current.hotspot_ids || []), ...(event.hotspot_ids || [])])];
     current.legacy_event_ids = [...new Set([...(current.legacy_event_ids || []), ...(event.legacy_event_ids || [])])];
     current.new_information_hotspot_ids = [...new Set([...(current.new_information_hotspot_ids || []), ...(event.new_information_hotspot_ids || [])])];
+    current.relation_evidence = [...(current.relation_evidence || []), ...(event.relation_evidence || [])];
     current.first_seen_at = [current.first_seen_at, event.first_seen_at].filter(Boolean).sort()[0] || null;
     current.last_seen_at = [current.last_seen_at, event.last_seen_at].filter(Boolean).sort().at(-1) || null;
     if (event.update_type === 'new_update' || current.update_type === 'new_update') current.update_type = 'new_update';
@@ -454,6 +475,8 @@ export function resolveEventShadow({ batch, hotspots = [], legacyClusters = [], 
       event_state,
       new_information_hotspot_ids: newInformationHotspotIds,
       historical_match: attachHistory ? { event_id: historicalMatch.candidate.event_id, score: historicalMatch.score, method: historicalMatch.method } : null,
+      historical_relation: attachHistory ? relationTypeForMatch(historicalMatch) : 'UNRELATED',
+      relation_evidence: group.relationEvidence || [],
       first_seen_at: group.records.map((record) => record.publishedAt).filter(Boolean).sort()[0] || null,
       last_seen_at: group.records.map((record) => record.publishedAt).filter(Boolean).sort().at(-1) || null,
     };
@@ -531,6 +554,7 @@ function repositoryMetaOfHotspot(hotspot) {
 export function materializeStableEvents({ shadowEvents = [], hotspots = [], heatByEvent = new Map() } = {}) {
   const hotspotById = new Map(hotspots.map((hotspot) => [Number(hotspot.id), hotspot]));
   return mergeResolvedEventsById(shadowEvents).events.map((stableEvent) => {
+    const relationByHotspot = new Map((stableEvent.relation_evidence || []).map((item) => [Number(item.hotspotId), item.relation]));
     const members = (stableEvent.hotspot_ids || []).map((hotspotId) => {
       const hotspot = hotspotById.get(Number(hotspotId));
       if (!hotspot) return null;
@@ -539,6 +563,7 @@ export function materializeStableEvents({ shadowEvents = [], hotspots = [], heat
       return { category_id: `G${String(hotspotId).padStart(5, '0')}`, hotspot_id: Number(hotspotId), title: hotspot.title,
         source: hotspot.source_name || hotspot.source_group || hotspot.source || '未知来源', channel: hotspot.source || '', url: hotspot.url || null,
         heat: hotspot.score ?? null, time: hotspot.published_at || hotspot.created_at || null, risk_level: tags.riskLevel || '待评估', summary: raw.summary || '', keywords: tags.keywords || [],
+        relation_type: relationByHotspot.get(Number(hotspotId)) || (Number(hotspotId) === Number(stableEvent.hotspot_ids?.[0]) ? 'SAME_OCCURRENCE' : 'SAME_STORY'),
         ...(repositoryMeta ? { repositoryMeta } : {}) };
     }).filter(Boolean);
     const lead = members[0] || {}; const leadHotspot = hotspotById.get(Number(lead.hotspot_id));

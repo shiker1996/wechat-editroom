@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light">
   <title>见字 · 公众号编辑工作台</title>
-          <link rel="stylesheet" data-base-style="common" href="/assets/styles/common.css?v=20260910-office-workspaces-3">
+          <link rel="stylesheet" data-base-style="common" href="/assets/styles/common.css?v=20261005-theme-picker-surface-1">
 </head>
 <body>
   <a class="skip-link" href="#main-content">跳到主内容</a>
@@ -204,7 +204,7 @@
           <div class="workspace-head"><div><span class="kicker">ARTICLE SHORTLIST</span><h3>文章候选</h3></div><span class="panel-count" id="candidate-count">0 条</span></div>
           <div class="scope-tabs" id="article-type-tabs" aria-label="文章类型筛选"><button type="button" class="active" data-article-type="all">全部</button><button type="button" data-article-type="hotspot">热点事件</button><button type="button" data-article-type="independent">自主写作</button></div>
           <div class="topic-pool-hint">选题请在「<a href="#overview">热点全景</a>」中操作：每个事件归纳卡片底部有「创建综合选题」按钮，可一键将整个事件簇入池。</div>
-          <details class="score-guide"><summary>评分怎么看？</summary><div><span><b>事件热度 T</b>事件热榜的热度、进展、来源扩散和时效</span><span><b>研判价值 J</b>事件内反常/利益冲突/发散，以及事件间前后/回应/对比/趋势关系</span><span><b>文章化质量 A</b>模型判断这个命题能否写成有传播力、有信息增量的文章</span><span><b>竞争扣分 C</b>同题饱和与事件重复造成的扣分</span><span><b>最终选题分 F</b>综合排序依据，低于 55 默认隐藏</span></div><small>当前公式：A = H × 60% + B × 25% + P × 15%；F = A × 55% + T × 25% + J × 20% − C。H/B/P 仅作为 A 的内部拆分。</small></details>
+          <details class="score-guide"><summary>评分怎么看？</summary><div><span><b>事件热度 T</b>事件语义价值与平台影响（最多 10 分），并看进展、来源扩散和时效；没有平台计数时沿用基础评分</span><span><b>研判价值 J</b>事件内反常/利益冲突/发散，以及事件间前后/回应/对比/趋势关系</span><span><b>文章化质量 A</b>模型判断这个命题能否写成有传播力、有信息增量的文章</span><span><b>竞争扣分 C</b>同题饱和与事件重复造成的扣分</span><span><b>最终选题分 F</b>综合排序依据，低于 55 默认隐藏</span></div><small>当前公式：A = H × 60% + B × 25% + P × 15%；F = A × 55% + T × 25% + J × 20% − C。H/B/P 仅作为 A 的内部拆分。</small></details>
           <div id="candidate-list" class="candidate-list"></div>
         </section>
       </div>
@@ -800,7 +800,7 @@
       <div class="section-intro"><div><span class="kicker">THE MORGUE</span></div><p>不是一次性热榜。按日期、来源和关键词，找回当时发生了什么。</p></div>
       <form class="filter-bar" id="hotspot-filter">
         <label class="search-field"><span>⌕</span><input name="q" placeholder="搜索公司、产品、人物或事件"></label>
-        <select name="source"><option value="">全部来源</option><option value="reddit">Reddit</option><option value="rsshub">RSSHub</option><option value="github">GitHub</option></select>
+        <select name="source"><option value="">全部来源</option><option value="reddit">Reddit</option><option value="paper">论文雷达</option><option value="rsshub">RSSHub</option><option value="github">GitHub</option></select>
         <input name="date" type="date">
         <button class="ink-button">筛选档案</button>
       </form>
@@ -1178,6 +1178,8 @@
               <option value="twitter">X 官方号 / 博主</option>
               <option value="rsshub">RSSHub 路由</option>
               <option value="reddit">Reddit 分区</option>
+              <option value="x-search">X 搜索 / 趋势</option>
+              <option value="wechat-account">微信公众号</option>
               <option value="more">更多采集器…</option>
             </select>
           </label>

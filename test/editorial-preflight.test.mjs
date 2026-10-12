@@ -60,8 +60,9 @@ test('编辑室预检在来源未备料时阻断且不调用事实基座模型',
 
   assert.equal(result.ready, false);
   assert.equal(calls, 0);
+  assert.equal(result.factBaseDeferred, true);
   assert.equal(result.gates.find((gate) => gate.id === 'source-cache').passed, false);
-  assert.equal(result.gates.length, 6);
+  assert.equal(result.gates.length, 3);
   assert.equal(artifacts.some((artifact) => artifact.name === 'editorial-preflight.json'), true);
 });
 
@@ -96,20 +97,12 @@ test('锁题后写入派生字段不会使编辑室预检缓存失效', async ()
     url: item.url,
     content: '可核验的来源正文。',
   }));
-  let calls = 0;
   const store = {
     getCandidate: () => item,
     getBatch: () => ({ id: item.batch_id, batch_date: '2026-09-12' }),
     upsertArtifact: () => {},
   };
-  const gateway = {
-    complete: async () => {
-      calls += 1;
-      return { content: '{}' };
-    },
-  };
   const input = {
-    gateway,
     store,
     candidate: item,
     candidateId: item.id,
@@ -121,11 +114,8 @@ test('锁题后写入派生字段不会使编辑室预检缓存失效', async ()
 
   const first = await runEditorialPreflight(input);
   assert.equal(first.cached, false);
-  assert.equal(calls, 1);
-  const factEligibilityGate = first.gates.find((gate) => gate.id === 'fact-eligibility');
-  assert.ok(factEligibilityGate);
-  assert.equal(factEligibilityGate.result?.contentClass, 'news_event');
-  assert.equal(factEligibilityGate.issues.some((issue) => /classification is not defined/.test(issue)), false);
+  assert.equal(first.factBaseDeferred, true);
+  assert.equal(first.gates.some((gate) => gate.id === 'fact-eligibility'), false);
 
   item.editorial = {
     ...item.editorial,
@@ -135,7 +125,6 @@ test('锁题后写入派生字段不会使编辑室预检缓存失效', async ()
   };
   const second = readEditorialPreflightCache(input);
   assert.equal(second?.cached, true);
-  assert.equal(calls, 1);
 });
 
 test('编辑室核心决策变化时不会复用旧预检缓存', async () => {
@@ -150,7 +139,6 @@ test('编辑室核心决策变化时不会复用旧预检缓存', async () => {
     upsertArtifact: () => {},
   };
   const input = {
-    gateway: { complete: async () => ({ content: '{}' }) },
     store,
     candidate: item,
     candidateId: item.id,

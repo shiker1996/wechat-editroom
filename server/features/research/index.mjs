@@ -9,6 +9,7 @@ export {
   dimensionSelections,
   ensureBatchEventCards,
   focusedCategories,
+  freshnessWindowHours,
   generateEventCards,
   isFreshForBatch,
   isSocialCardCandidate,
@@ -34,7 +35,7 @@ export { buildTopicScoreOperationsMetrics } from './application/topic-score-oper
 export { CandidateSelectionService } from './application/candidate-selection-service.mjs';
 export { createCandidateSelectionService } from './application/store-service-factory.mjs';
 export { classifyResearchFailure, recordResearchFailure } from './application/research-failure.mjs';
-export { buildEventHeatRanking, scoreClassifiedEvent, scoreEventHeat } from './domain/event-heat-ranking.mjs';
+export { EVENT_HEAT_RANKING_VERSION, buildEventHeatRanking, scoreClassifiedEvent, scoreEventHeat } from './domain/event-heat-ranking.mjs';
 export { loadPreviousEventHeatItems } from './application/event-heat-ranking-service.mjs';
 export { PROJECT_READER_VALUE_TOP_K, PROJECT_READER_VALUE_TOP_K_OPTIONS, PROJECT_READER_VALUE_WEIGHTS, applyProjectReaderValuesToHeatRanking, attachProjectReaderValues, projectReaderValueInput, resolveProjectReaderValueTopK, scoreProjectReaderValue, selectProjectReaderValueCandidates } from './domain/project-reader-value.mjs';
 export { evaluateProjectReaderValue } from './application/project-reader-value-service.mjs';
@@ -78,7 +79,7 @@ export {
 export { buildTopicCandidates, selectTopicCandidates, topicCandidatesMarkdown, discussionQuestionForContext } from './domain/topic-candidate-generation.mjs';
 export { projectStableEvents } from './domain/event-resolution-cluster-projection.mjs';
 export { duplicatePenaltyForHeat, EVENT_RESOLUTION_POLICY } from './domain/event-resolution-policy.mjs';
-export { materializeStableEvents, resolveEventShadow, structuredMatch, buildEventTitle } from './domain/event-resolution-shadow.mjs';
+export { EVENT_RELATION_TYPES, buildEventTitle, materializeStableEvents, relationTypeForMatch, resolveEventShadow, structuredMatch } from './domain/event-resolution-shadow.mjs';
 export { loadShadowHistory } from './application/event-resolution-shadow-service.mjs';
 export { clusterItems as clusterResearchItems, isFreshForBatch as isResearchItemFresh, tagsOf } from './domain/hotspot-clustering.mjs';
 export { isResearchEligibleHotspot } from './domain/hotspot-pipeline-scope.mjs';
