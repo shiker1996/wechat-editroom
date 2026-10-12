@@ -13,10 +13,9 @@ function runId(){return `agent-${Date.now().toString(36)}-${Math.random().toStri
 function withTimeout(promise,timeoutMs){return new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new AgentContractError('AGENT_BUDGET_EXCEEDED',`Agent 已超过总耗时预算（${timeoutMs}ms）`)),timeoutMs);Promise.resolve(promise).then((value)=>{clearTimeout(timer);resolve(value);},(error)=>{clearTimeout(timer);reject(error);});});}
 function completedEvent(result){const data=result?.data||{},url=data.final_url||data.url||result?.provenance?.finalUrl||result?.provenance?.requestedUrl,title=data.title||'',chars=String(data.content||data.excerpt||data.text||'').length;return {summary:chars?`已读取 ${chars} 字`:title?'资料读取完成':'工具执行完成',sources:url?[{title,url}]:[]};}
 function nativeRequestId(call,index){const value=String(call?.id||`call_${index+1}`).replace(/[^A-Za-z0-9_-]/g,'_');return `tr_native_${value}_${index+1}`.slice(0,63);}
-function nativeToolEnvelope(modelTurn,catalog,maxRequests){
+function nativeToolEnvelope(modelTurn,catalog){
   const calls=Array.isArray(modelTurn?.toolCalls)?modelTurn.toolCalls:[];
   if(!calls.length)return null;
-  if(calls.length>maxRequests)throw new AgentContractError('INVALID_AGENT_ENVELOPE',`原生工具调用数量超过上限：${calls.length}`);
   const callByRequestId=new Map();
   const requests=calls.map((call,index)=>{
     const requestId=nativeRequestId(call,index);
@@ -88,7 +87,10 @@ export async function runConversationAgent({entryPoint,modelStep,messages=[],reg
       const modelEnvelope=normalizeModelTurn(await withTimeout(modelStep({entryPoint,messages:modelHistory,catalog,step,signal:runSignal,emit,agentRunId:id,...traceContext}),remaining));
       modelSteps=step+1;
       checkpoint('model_completed',step,{modelTurn:modelEnvelope});
-      const native = nativeToolEnvelope(modelEnvelope,catalog,limits.maxParallelToolCalls);
+      // 原生 function calling 可能在同一个模型响应里返回超过本地并行度的调用。
+      // 本地并行度是执行批次大小，不应把模型响应误判成非法信封；下面的执行循环
+      // 会按 maxParallelToolCalls 自动拆批，同时仍由 maxToolCalls 控制本轮总预算。
+      const native = nativeToolEnvelope(modelEnvelope,catalog);
       // 对话 Agent 可以在没有业务工具需求时直接返回普通文本。
       // 普通文本只作为本轮回复，不再回退到旧 JSON 信封解析；若模型主动调用
       // cap_agent_conversation_finish，则仍按显式结束工具处理。

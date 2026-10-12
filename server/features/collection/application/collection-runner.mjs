@@ -31,7 +31,7 @@ export class CollectionRunner{
       }
       results.push(this.#record(batchId,source,plugin,result,started,attempts));
     }
-    return {status:results.some((item)=>item.status==='ok')?'ok':'error',results,items:results.flatMap((item)=>item.result.status==='ok'?item.result.items.map((entry)=>({...entry.raw,...entry,sourceGroup:item.sourceType==='direct'||item.sourceType==='rsshub'||item.sourceType==='twitter'?'rsshub':item.sourceType,sourceType:item.sourceType,sourceKey:item.sourceKey,sourceName:item.sourceName,collectorPlugin:item.pluginId,collectorVersion:item.pluginVersion})):[])};
+    return {status:results.some((item)=>item.status==='ok')?'ok':'error',results,items:results.flatMap((item)=>item.result.status==='ok'?item.result.items.map((entry)=>({...entry.raw,...entry,sourceGroup:['direct','rsshub','twitter'].includes(item.sourceType)?'rsshub':item.sourceType,sourceType:item.sourceType,sourceKey:item.sourceKey,sourceName:item.sourceName,collectorPlugin:item.pluginId,collectorVersion:item.pluginVersion})):[])};
   }
   #record(batchId,source,plugin,result,started,attempts=[]){const record={batchId,sourceId:source.id,sourceKey:source.source_key,sourceType:source.source_type,sourceName:source.label,
     pluginId:plugin?.manifest.id||source.plugin_id,pluginVersion:plugin?.manifest.version||source.plugin_version||'',status:result.status,itemCount:result.status==='ok'?result.items.length:0,durationMs:Date.now()-started,attempts,fallbackUsed:attempts.length>1,...(result.status==='error'?{error:result.error}:{})};

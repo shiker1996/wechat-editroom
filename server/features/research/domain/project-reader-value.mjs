@@ -97,18 +97,25 @@ export function applyProjectReaderValuesToHeatRanking(eventHeatRanking = {}, res
   const board = list(eventHeatRanking?.rankings?.github_project?.items).map((item) => {
     const value = byEvent.get(String(item?.eventId || item?.event_id || ''));
     if (!value) return { ...item, projectRankScore: finite(item?.scoreValue, 0) };
+    const baseProjectReaderValue = finite(value.projectReaderValue);
+    const platformImpact = clamp(item?.platformImpact, 0, 10);
+    const scoreValue = item?.platformImpactAvailable
+      ? Number(clamp(baseProjectReaderValue * 0.9 + platformImpact, 0, 100).toFixed(1))
+      : baseProjectReaderValue;
     return {
       ...item,
       projectDiscoveryScore: finite(item?.scoreValue, 0),
+      baseProjectDiscoveryScore: finite(item?.scoreParts?.baseScoreValue ?? item?.scoreValue, 0),
       projectReaderValue: value.projectReaderValue,
       projectReaderValueScoreParts: value.scoreParts,
       projectReaderValueReason: value.whyRead,
       projectReaderValueLimitations: value.limitations,
-      scoreValue: value.projectReaderValue,
-      eventValue: value.projectReaderValue,
-      t: value.projectReaderValue,
-      scoreModel: 'projectReaderValue-v1',
-      projectRankScore: value.projectReaderValue,
+      scoreValue,
+      eventValue: scoreValue,
+      t: scoreValue,
+      scoreModel: item?.platformImpactAvailable ? 'projectReaderValue+platformImpact-v1' : 'projectReaderValue-v1',
+      scoreParts: { ...(value.scoreParts || {}), baseScoreValue: baseProjectReaderValue, platformImpact, scoreValue },
+      projectRankScore: scoreValue,
     };
   }).sort((left, right) => right.projectRankScore - left.projectRankScore
     || finite(right.projectDiscoveryScore, 0) - finite(left.projectDiscoveryScore, 0)

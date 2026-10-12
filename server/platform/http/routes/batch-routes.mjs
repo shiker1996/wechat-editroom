@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { G_SOCIAL_CLASS_CAPS, isFreshForBatch, clusterItems, preselection, selectSocialCandidates, selectSocialPool, buildHotspotAtlas, loadStableBatchEvents } from '../../../features/research/index.mjs';
-import { buildEventHeatRanking, loadPreviousEventHeatItems, materializeStableEvents, isResearchEligibleHotspot } from '../../../features/research/index.mjs';
+import { EVENT_HEAT_RANKING_VERSION, buildEventHeatRanking, loadPreviousEventHeatItems, materializeStableEvents, isResearchEligibleHotspot } from '../../../features/research/index.mjs';
 import { buildBatchPipelineStatus } from '../../../features/batches/index.mjs';
 import { getBatchDeleteImpact, deleteBatchPermanently } from '../../../features/batches/index.mjs';
 import { buildEventResolutionOperationsMetrics, readEventResolutionReview } from '../../../features/research/index.mjs';
@@ -84,7 +84,7 @@ export async function handleBatchRoutes({ request, response, pathname, searchPar
     const input = await body(request);
     // 批次不再拥有第二套来源选择状态；来源台账中的 enabled 才是唯一准入条件。
     // 保留固定入口集合只是为了兼容旧客户端的响应字段，不采信 input.sources 的子集。
-    const requestedSources = ['reddit', 'rsshub', 'github'];
+    const requestedSources = ['reddit', 'paper', 'rsshub', 'x', 'wechat', 'github'];
     const rsshub = await inspectRsshubEnvironment(config?.rsshub || {});
     const selection = selectBatchSourceGroups(requestedSources, store.listCollectionSources(), {
       rsshubReady: rsshub.ready,
@@ -167,8 +167,9 @@ export async function handleBatchRoutes({ request, response, pathname, searchPar
     const file = path.join(batchWorkdir(batch), 'sources', 'event-heat-ranking.json');
     let ranking = null;
     try { ranking = JSON.parse(fs.readFileSync(file, 'utf8')); } catch {}
-    if (!ranking || !Array.isArray(ranking.items) || ranking.titleVersion !== 2 || ranking.scoringVersion !== 2 || ranking.scoringModels?.news_event !== 'T_account') {
-      ranking = buildEventHeatRanking({ store, batch, previousItems: loadPreviousEventHeatItems({ store, workspaceRoot: root, batch }) });
+    if (!ranking || !Array.isArray(ranking.items) || ranking.titleVersion !== 2 || ranking.scoringVersion !== EVENT_HEAT_RANKING_VERSION || ranking.scoringModels?.news_event !== 'T_account') {
+      const rankingHotspots = batch.hotspots.filter(isResearchEligibleHotspot).filter((item) => isFreshForBatch(item, batch.batch_date, batchMaxAgeHours(batch)));
+      ranking = buildEventHeatRanking({ store, batch, events: loadStableBatchEvents({ workspaceRoot: root, batch, hotspots: rankingHotspots }), previousItems: loadPreviousEventHeatItems({ store, workspaceRoot: root, batch }) });
     }
     return respond(json, response, 200, ranking);
   }
@@ -182,8 +183,8 @@ export async function handleBatchRoutes({ request, response, pathname, searchPar
       const heatFile = path.join(batchWorkdir(batch), 'sources', 'event-heat-ranking.json');
       eventHeatRanking = fs.existsSync(heatFile) ? JSON.parse(fs.readFileSync(heatFile, 'utf8')) : null;
     } catch { eventHeatRanking = null; }
-    if (!eventHeatRanking || !Array.isArray(eventHeatRanking.items) || eventHeatRanking.titleVersion !== 2 || eventHeatRanking.scoringVersion !== 2 || eventHeatRanking.scoringModels?.news_event !== 'T_account') {
-      eventHeatRanking = buildEventHeatRanking({ store, batch, previousItems: loadPreviousEventHeatItems({ store, workspaceRoot: root, batch }) });
+    if (!eventHeatRanking || !Array.isArray(eventHeatRanking.items) || eventHeatRanking.titleVersion !== 2 || eventHeatRanking.scoringVersion !== EVENT_HEAT_RANKING_VERSION || eventHeatRanking.scoringModels?.news_event !== 'T_account') {
+      eventHeatRanking = buildEventHeatRanking({ store, batch, events: loadStableBatchEvents({ workspaceRoot: root, batch, hotspots: eligible }), previousItems: loadPreviousEventHeatItems({ store, workspaceRoot: root, batch }) });
     }
     const memberships = store.listEventHotspots?.({ batchId, limit: 100000 }) || [];
     const membershipsByEvent = new Map();
@@ -204,13 +205,30 @@ export async function handleBatchRoutes({ request, response, pathname, searchPar
       missing_evidence: record.classification_missing_evidence || [],
       features: record.classification_features || {},
     } : null;
-    const stableEvents = [...membershipsByEvent.entries()].map(([eventId, eventMemberships]) => {
+    const rawStableEvents = [...membershipsByEvent.entries()].map(([eventId, eventMemberships]) => {
       const record = recordsById.get(eventId) || {};
       return { event_id: eventId, title: record.title || '', normalized: record.normalized || {}, hotspot_ids: eventMemberships.map((item) => Number(item.hotspot_id)),
         legacy_event_ids: record.legacy_ids || [], first_seen_at: record.first_seen_at || null, last_seen_at: record.last_seen_at || null,
         classification: classificationFromRecord(record) };
     });
     const heatByEvent = new Map((eventHeatRanking.items || []).map((item) => [item.eventId, item]));
+    const rankingAliases = new Map();
+    for (const item of eventHeatRanking.items || []) {
+      for (const eventId of item.mergedEventIds || []) rankingAliases.set(String(eventId), String(item.eventId));
+    }
+    const stableEventsById = new Map();
+    for (const event of rawStableEvents) {
+      const canonicalId = rankingAliases.get(String(event.event_id)) || String(event.event_id);
+      const existing = stableEventsById.get(canonicalId);
+      if (!existing) {
+        stableEventsById.set(canonicalId, { ...event, event_id: canonicalId, hotspot_ids: [...new Set(event.hotspot_ids || [])] });
+        continue;
+      }
+      existing.hotspot_ids = [...new Set([...(existing.hotspot_ids || []), ...(event.hotspot_ids || [])])];
+      existing.first_seen_at = [existing.first_seen_at, event.first_seen_at].filter(Boolean).sort()[0] || null;
+      existing.last_seen_at = [existing.last_seen_at, event.last_seen_at].filter(Boolean).sort().at(-1) || null;
+    }
+    const stableEvents = [...stableEventsById.values()];
     const atlasClusters = stableEvents.length ? materializeStableEvents({ shadowEvents: stableEvents, hotspots: eligible, heatByEvent }) : [];
     let discussionRelations = [];
     try {
@@ -218,7 +236,7 @@ export async function handleBatchRoutes({ request, response, pathname, searchPar
       discussionRelations = JSON.parse(fs.readFileSync(relationFile, 'utf8'))?.items || [];
     } catch { discussionRelations = []; }
     const atlas = buildHotspotAtlas({ clusters: atlasClusters, totalArticles: eligible.length, taggedCount, excludedStale: batch.hotspots.length - eligible.length, discussionRelations });
-    const eventByHotspot = new Map(memberships.map((membership) => [Number(membership.hotspot_id), membership.event_id]));
+    const eventByHotspot = new Map(memberships.map((membership) => [Number(membership.hotspot_id), rankingAliases.get(String(membership.event_id)) || membership.event_id]));
     for (const event of atlas.events || []) {
       const stableIds = [...new Set((event.hotspot_ids || []).map((hotspotId) => eventByHotspot.get(Number(hotspotId))).filter(Boolean))];
       event.event_record_ids = stableIds;

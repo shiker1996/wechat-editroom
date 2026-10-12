@@ -216,8 +216,7 @@ export async function handleArticleRoutes(context) {
     const readiness = evaluateEditorialReadiness({ candidate: { ...candidate, research_context: researchContext }, editorial });
     if (!readiness.ready) return json(response, 409, { error: `编辑底稿未就绪，仍缺：${readiness.missing.join('、')}` });
     // 锁题只依赖当前已保存且通过表单门禁的编辑决策。
-    // 编辑室预检仍可提前生成事实基座，但不再要求先存在或匹配预检缓存，
-    // 避免首次点击“开始成稿”时因缓存尚未建立而被无意义地拦截。
+    // 事实基座与事实/证据门禁统一在确认成稿后由 article pipeline 执行。
     const materialBrief = buildMaterialBrief({ candidate, editorial, researchContext, events });
     const lockedEditorial = { ...editorial, material_brief: materialBrief };
     const batch = store.getBatch(candidate.batch_id);

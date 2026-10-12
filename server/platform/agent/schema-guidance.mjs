@@ -33,6 +33,7 @@ const GUIDANCE = Object.freeze({
   cap_collect_rsshub: { route: 'RSSHub 路由，例如 /某平台/某账号。' },
   cap_collect_twitter: { route: 'X 账号对应的 RSSHub 路由。' },
   cap_collect_reddit: { subreddit: 'Reddit 分区名，不含 r/ 前缀。', sort: '排序方式：hot、new 或 top。', limit: '最多采集的帖子数。' },
+  cap_collect_paper: { windowDays: '只采集最近多少天发表或收录的论文。', limit: '最多返回的论文数。' },
   cap_collect_github: { createdWithinDays: '只看最近多少天创建的项目。', minStars: '项目最低 Star 数。', limit: '最多返回的项目数。' },
   cap_collect_web_page: { url: '要采集的公开静态网页地址。', itemSelector: '条目 CSS 选择器。', titleSelector: '标题 CSS 选择器。', linkSelector: '链接 CSS 选择器。', linkAttribute: '链接所在属性名，默认通常为 href。', summarySelector: '摘要 CSS 选择器。', authorSelector: '作者 CSS 选择器。', dateSelector: '日期 CSS 选择器。', dateAttribute: '日期所在属性名。', nextPageSelector: '下一页 CSS 选择器。', maxPages: '最多采集的页数。', limit: '最多返回的条目数。' },
   cap_collect_browser_page: { url: '要采集的公开网页地址。', profileId: '已配置的浏览器 Profile ID。', waitForSelector: '等待出现的 CSS 选择器。', clickSelector: '要点击的 CSS 选择器。', typeSelector: '要输入文字的 CSS 选择器。', typeValue: '要输入的文字。', waitMilliseconds: '动作后的等待毫秒数。', loginSelector: '登录完成标记 CSS 选择器。', itemSelector: '条目 CSS 选择器。', titleSelector: '标题 CSS 选择器。', linkSelector: '链接 CSS 选择器。', linkAttribute: '链接所在属性名。', summarySelector: '摘要 CSS 选择器。', authorSelector: '作者 CSS 选择器。', dateSelector: '日期 CSS 选择器。', dateAttribute: '日期所在属性名。', limit: '最多返回的条目数。' },

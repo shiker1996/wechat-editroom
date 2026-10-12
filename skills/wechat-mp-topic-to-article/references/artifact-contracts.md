@@ -96,7 +96,7 @@ articles/<topic-slug>/
 - `## 读者收益`
 - `## 增长承接`
 
-`## 流量规划` 至少记录 `click_mechanism`、`opening_hook`、`retention_turns`、`ending_payoff` 和 `share_trigger`。所有内容角色都必须兑现这些流量字段；角色只改变包装重点。普通成稿的大纲同时落实 3–5 个 H2、至少两次推进和有限的案例/数据密度。`## 读者收益` 记录 `reader_value_type` 与 `reader_value_placement`；`standalone_h2` 不是默认值。
+`## 流量规划` 可记录 `reader_emotion`、`click_mechanism`、`opening_hook`、`retention_turns`、`ending_payoff` 和 `share_trigger`。只要 `readerStake` 明确，`reader_emotion` 必填，描述读者可能的起始感受、具体处境触发点和期望的阅读后变化；它是写作规划，不是关于读者群体的事实主张。仅在没有具体受影响读者或读者后果时可省略。写作与审稿须把这一情绪路径落实为具体处境、选择或代价，不要求强烈语气或固定章节数。章节数、推进节奏和案例数量按材料决定，不设固定 H2 数或推进次数。`## 读者收益` 记录 `reader_value_type` 与 `reader_value_placement`；`standalone_h2` 不是默认值。
 
 事实基座每条记录：`id`、`claim`、`status`、`source_title`、`source_url`、`published_at`、`checked_at`。无 URL 的来源不能标为 `verified`，用户提供的内部材料除外；内部材料须标记为用户提供。
 
@@ -119,9 +119,11 @@ articles/<topic-slug>/
 
 ### 04-draft.md / 05-humanized.md
 
-第一行是唯一 H1 标题。正文引用事实时使用脚注、Markdown 链接或就近的来源括注，并保持全篇一致。
+第一行是唯一 H1 标题。读者应能从正文链接、自然归因、脚注或文末来源说明追溯关键事实，按文章选择一种清楚、轻量的方式。相同来源支撑的连续事实只在事实簇首次出现时归因；不得机械添加“来源：”或“来源：同上”，也不得逐句重复来源标签。
 
 `04-quality-gate.json` 保存初稿语义门禁结果，不进入正文。
+
+`05-voice-quality-gate.json` 保存自然化后的独立风格门禁结果、问题引文和返修轮数。门禁只记录具体、可定位且有实质影响的问题；最多返修一次，仍不通过时保留 05 文稿并标记待审，不生成后续终稿。
 
 ### 06-reviewed.md
 
@@ -145,4 +147,4 @@ articles/<topic-slug>/
 
 ### 09-FINAL.md
 
-只包含读者可见的标题、正文、必要来源说明和手动配图占位符。不得包含工作流状态、评分、审稿意见或 SEO 分析。
+只包含读者可见的标题、正文、确有必要的来源说明和手动配图占位符。不得包含工作流状态、评分、审稿意见或 SEO 分析。来源说明服务于追溯，不要求单设“来源”标签或来源清单；正文已用可点击链接清楚归因时，不重复添加说明。

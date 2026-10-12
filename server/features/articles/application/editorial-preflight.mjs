@@ -1,27 +1,14 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { parseModelJson } from '../../../platform/llm/model-json.mjs';
-import { loadSkillBundle } from '../../../platform/llm/skill-runtime.mjs';
 import { candidateArticleDir } from '../../../platform/core/workspace-paths.mjs';
 import { buildMaterialBrief } from '../../../shared/domain/material-brief.mjs';
 import { readDiscussionResearchContext } from '../../research/index.mjs';
 import { evaluateEditorialReadiness } from '../domain/editorial-readiness.mjs';
 import { evaluateArticleFactEligibility } from '../domain/article-fact-eligibility.mjs';
-import {
-  buildPublicationClaimRegister,
-  publicationFactBaseIssues,
-} from '../domain/publication-compliance.mjs';
-import { buildArticleStageSystem } from './article-pipeline.mjs';
-import {
-  readArticleSourceInput,
-  unverifiedFactBaseIssue,
-} from './article-pipeline-contract.mjs';
+import { readArticleSourceInput } from './article-pipeline-contract.mjs';
 
 const PREFLIGHT_FILE = 'editorial-preflight.json';
-const FACT_BASE_FILE = '02-fact-base.json';
-const CLAIM_REGISTER_FILE = '02-publication-claim-register.json';
-const FACT_GATE_FILE = '02-fact-gate.json';
 const PREFLIGHT_EDITORIAL_FIELDS = Object.freeze([
   'writing_stance',
   'confirmed_facts',
@@ -141,17 +128,13 @@ function persistArtifact(store, { batchId, candidateId, kind, name, filePath, st
 
 function cachedPreflight({ store, candidate, workdir, currentFingerprint, materialBrief, readiness, routeResult }) {
   const saved = readJson(path.join(workdir, PREFLIGHT_FILE), null);
-  const factBase = readJson(path.join(workdir, FACT_BASE_FILE), null);
-  if (!saved || saved.fingerprint !== currentFingerprint || !factBase) return null;
+  if (!saved || saved.fingerprint !== currentFingerprint) return null;
   return {
     ...saved,
     candidate: store.getCandidate(candidate.id) || candidate,
     materialBrief,
     readiness,
     route: saved.route || routeResult,
-    factBase,
-    publicationClaimRegister: readJson(path.join(workdir, CLAIM_REGISTER_FILE), { claims: [] })?.claims || [],
-    factGate: readJson(path.join(workdir, FACT_GATE_FILE), null),
     cached: true,
   };
 }
@@ -223,9 +206,7 @@ function buildPreflightContext({
 }
 
 /**
- * Read the editor-room preflight without generating a new fact base.
- * The cache is an optional optimization for the article pipeline. A missing
- * or stale cache is allowed to fall through to the normal pipeline run.
+ * Read a current deterministic editor-room readiness snapshot, if one exists.
  */
 export function readEditorialPreflightCache(options = {}) {
   const context = buildPreflightContext(options);
@@ -234,17 +215,15 @@ export function readEditorialPreflightCache(options = {}) {
 }
 
 /**
- * Generate the optional editor-room preflight snapshot for article candidates.
- * The article pipeline can regenerate the fact base when this snapshot is
- * absent or stale.
+ * Check whether an editorial brief, source text, and candidate route are ready
+ * to start production. Fact-base generation and evidence gates run in the
+ * article pipeline after the editor confirms the brief.
  */
 export async function runEditorialPreflight({
-  gateway,
   store,
   candidate: suppliedCandidate = null,
   candidateId,
   batchId,
-  provider,
   workspaceRoot,
   events = null,
   researchContext = null,
@@ -262,8 +241,6 @@ export async function runEditorialPreflight({
   const {
     candidate,
     effectiveBatchId,
-    currentEditorial,
-    classification,
     readiness,
     routeResult,
     materialBrief,
@@ -278,69 +255,11 @@ export async function runEditorialPreflight({
   const gates = [
     gate('editorial-readiness', readiness.ready, readiness.missing, { missing: readiness.missing }),
     gate('source-cache', !source.issue, source.issue ? [source.issue] : [], { sourceUrl: sourceUrls, warnings: source.warning ? [source.warning] : [] }),
+    gate('candidate-route', routeResult.eligible, routeResult.eligible ? [] : [routeResult.reason], { result: routeResult }),
   ];
-  const preconditionIssues = gates.flatMap((item) => item.issues);
-  let factBase = null;
-  let publicationClaimRegister = [];
-  let factGate = null;
-
-  if (!preconditionIssues.length) {
-    try {
-      const orchestratorSkill = loadSkillBundle({ workspaceRoot, skillName: 'wechat-mp-topic-to-article' });
-      const factBaseResult = await gateway.complete({
-        provider,
-        purpose: 'article-fact-base',
-        batchId: effectiveBatchId,
-        candidateId: candidate.id,
-        jsonMode: true,
-        messages: [
-          { role: 'system', protected: true, content: buildArticleStageSystem(orchestratorSkill, 'fact-base') },
-          { role: 'user', protected: true, content: JSON.stringify({
-            topic: candidate.hotspot_title,
-            researchBasis: currentEditorial.research_basis,
-            adoptedResearchPoints: currentEditorial.adopted_research_points || [],
-            rejectedAngles: currentEditorial.rejected_angles || '',
-            confirmedFacts: currentEditorial.confirmed_facts || '',
-            authorOpinions: currentEditorial.author_opinions || '',
-            forbiddenClaims: currentEditorial.forbidden_claims || '',
-            materialBrief,
-            sourceUrl: sourceUrls,
-            sourceText: source.sourceText,
-          }) },
-        ],
-      });
-      factBase = parseModelJson(factBaseResult, { store, label: '编辑室事实预检' });
-      publicationClaimRegister = buildPublicationClaimRegister(factBase);
-      factGate = evaluateArticleFactEligibility({ classification, factBase });
-      const publicationIssues = publicationFactBaseIssues(factBase);
-      const unverifiedIssue = unverifiedFactBaseIssue(factBase);
-      gates.push(gate('fact-base', Boolean(factBase && typeof factBase === 'object'), factBase ? [] : ['事实基座未生成']));
-      gates.push(gate('unverified-fact-base', !unverifiedIssue, unverifiedIssue ? [unverifiedIssue] : []));
-      gates.push(gate('publication-evidence', publicationIssues.length === 0, publicationIssues));
-      gates.push(gate('fact-eligibility', factGate.eligible, factGate.eligible ? [] : [factGate.reason], { result: factGate }));
-    } catch (error) {
-      gates.push(gate('fact-base', false, [`事实基座生成失败：${error.message}`]));
-      gates.push(gate('unverified-fact-base', false, ['事实基座未生成']));
-      gates.push(gate('publication-evidence', false, ['事实基座未生成']));
-      gates.push(gate('fact-eligibility', false, ['事实基座未生成']));
-    }
-  } else {
-    gates.push(gate('fact-base', false, ['前置门禁未通过，未生成事实基座']));
-    gates.push(gate('unverified-fact-base', false, ['前置门禁未通过，未检查']));
-    gates.push(gate('publication-evidence', false, ['前置门禁未通过，未检查']));
-    gates.push(gate('fact-eligibility', false, ['前置门禁未通过，未检查']));
-  }
 
   fs.mkdirSync(workdir, { recursive: true });
-  const factBasePath = path.join(workdir, FACT_BASE_FILE);
-  const claimRegisterPath = path.join(workdir, CLAIM_REGISTER_FILE);
-  const factGatePath = path.join(workdir, FACT_GATE_FILE);
   const preflightPath = path.join(workdir, PREFLIGHT_FILE);
-  if (factBase) {
-    persistArtifact(store, { batchId: effectiveBatchId, candidateId: candidate.id, kind: '事实基座', name: FACT_BASE_FILE, filePath: factBasePath, stat: writeJson(factBasePath, factBase) });
-    persistArtifact(store, { batchId: effectiveBatchId, candidateId: candidate.id, kind: '发布主张登记', name: CLAIM_REGISTER_FILE, filePath: claimRegisterPath, stat: writeJson(claimRegisterPath, { generatedAt: new Date().toISOString(), claims: publicationClaimRegister }) });
-    persistArtifact(store, { batchId: effectiveBatchId, candidateId: candidate.id, kind: '事实门禁', name: FACT_GATE_FILE, filePath: factGatePath, stat: writeJson(factGatePath, factGate) });
-  }
   const result = {
     ready: gates.every((item) => item.passed),
     fingerprint: currentFingerprint,
@@ -349,9 +268,7 @@ export async function runEditorialPreflight({
     readiness,
     route: routeResult,
     materialBrief,
-    factBase,
-    publicationClaimRegister,
-    factGate,
+    factBaseDeferred: true,
     cached: false,
   };
   const preflightStat = writeJson(preflightPath, {

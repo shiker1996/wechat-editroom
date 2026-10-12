@@ -12,11 +12,11 @@ import { resolveEventShadow } from '../domain/event-resolution-shadow.mjs';
 import { loadShadowHistory } from './event-resolution-shadow-service.mjs';
 import { buildEventHeatRanking } from '../domain/event-heat-ranking.mjs';
 import { loadPreviousEventHeatItems } from './event-heat-ranking-service.mjs';
-import { DISCUSSION_RESEARCH_TOP_K, buildDiscussionResearch, discussionResearchMarkdown, resolveDiscussionResearchTopK } from '../domain/discussion-research.mjs';
+import { DISCUSSION_RESEARCH_CONTENT_CLASSES, DISCUSSION_RESEARCH_SCHEMA_VERSION, DISCUSSION_RESEARCH_TOP_K, buildDiscussionResearch, discussionResearchMarkdown, resolveDiscussionResearchTopK } from '../domain/discussion-research.mjs';
 import { buildTopicCandidates, selectTopicCandidates, topicCandidatesMarkdown } from '../domain/topic-candidate-generation.mjs';
 import { materializeStableEvents } from '../domain/event-resolution-shadow.mjs';
 import { duplicatePenaltyForHeat } from '../domain/event-resolution-policy.mjs';
-import { clusterItems, isFreshForBatch, tagsOf } from '../domain/hotspot-clustering.mjs';
+import { clusterItems, freshnessWindowHours, isFreshForBatch, tagsOf } from '../domain/hotspot-clustering.mjs';
 import { DIMENSION_POOL_ROLES, dimensionPartsOf, dimensionSelections } from '../domain/hotspot-dimensions.mjs';
 import { ensureBatchEventCards, generateEventCards, overviewHtml, readEventCardsFile } from './research/event-card-stage.mjs';
 import { brainstorm, breakingSynthesis, synthesize } from './research/editorial-exploration.mjs';
@@ -34,7 +34,7 @@ import { buildResearchDigest, generateDiscussionResearchSinglePass, generateDisc
 // selectionPrompt({ workspaceRoot, skillName: 'event-card-generator' });
 
 // 兼容旧调用方：聚类和有效期判断已迁移到纯领域模块。
-export { clusterItems, isFreshForBatch };
+export { clusterItems, freshnessWindowHours, isFreshForBatch };
 export { DIMENSION_POOL_ROLES, dimensionSelections };
 export { ensureBatchEventCards, generateEventCards, overviewHtml, readEventCardsFile };
 export { brainstorm, breakingSynthesis, synthesize };
@@ -612,7 +612,7 @@ export async function runResearchPipeline({ gateway, store, batchId, provider, w
   const scopedHotspots=batch.hotspots.filter(isResearchEligibleHotspot);
   const eligibleHotspots=scopedHotspots.filter((item)=>isFreshForBatch(item,batch.batch_date,maxAgeHours));
   const staleCount=scopedHotspots.length-eligibleHotspots.length;
-  if(staleCount) onProgress(`已排除 ${staleCount} 条超过 ${maxAgeHours} 小时的旧闻；仍保留在历史档案`);
+  if(staleCount) onProgress(`已排除 ${staleCount} 条超过各自来源时效范围的内容；仍保留在历史档案`);
   if(!eligibleHotspots.length) throw new Error('当前批次没有处于有效时间窗口内的热点');
   const missing = eligibleHotspots.filter((item) => !tagsOf(item).eventKey || !tagsOf(item).preScores).length;
   if (missing) throw new Error(`仍有 ${missing} 条热点缺少完整语义标注，请先执行“打标”`);
@@ -710,7 +710,7 @@ export async function runResearchPipeline({ gateway, store, batchId, provider, w
   clusters = resolvedEvents.filter((event) => !skippedEventIds.has(event.event_id));
   writeFile(path.join(sourcesDir,'event-clusters.json'),JSON.stringify({ generated_at:new Date().toISOString(), total_articles:researchHotspots.length,excluded_stale_count:staleCount,excluded_skipped_event_count:skippedEvents.length,total_events:clusters.length,events:clusters },null,2));
   writeFile(path.join(workdir,'hotspot-overview.html'),overviewHtml(clusters));
-  // 阶段 0 只冻结 T 榜前 K 事件；语义研判交给模型，程序只做输入裁剪和输出门禁。
+  // 阶段 0 按三个非项目榜单的榜内名次均衡冻结总 Top-K；语义研判交给模型。
   const configuredDiscussionResearchTopK = store.getExtensionSetting?.('system', 'workbench')?.value?.discussionResearchTopK;
   const discussionResearchTopK = resolveDiscussionResearchTopK(configuredDiscussionResearchTopK);
   const stage3CheckpointPath = path.join(sourcesDir, 'discussion-research-stage3-input.json');
@@ -718,7 +718,8 @@ export async function runResearchPipeline({ gateway, store, batchId, provider, w
   if (resumeFrom === 'topic_generation') {
     try {
       const parsed = JSON.parse(fs.readFileSync(stage3CheckpointPath, 'utf8'));
-      if (parsed?.batch_id === batch.id && parsed?.single_pass?.reports && parsed?.base_report) resumeSnapshot = parsed;
+      if (parsed?.batch_id === batch.id && parsed?.base_report?.schema_version === DISCUSSION_RESEARCH_SCHEMA_VERSION
+        && parsed?.single_pass?.reports && parsed?.base_report) resumeSnapshot = parsed;
     } catch { /* 旧批次没有阶段 3 快照时走完整研判兼容路径。 */ }
     if (resumeSnapshot?.clusters?.length) clusters = resumeSnapshot.clusters;
     if (resumeSnapshot?.event_heat_ranking?.items?.length) eventHeatRanking = resumeSnapshot.event_heat_ranking;
@@ -735,7 +736,7 @@ export async function runResearchPipeline({ gateway, store, batchId, provider, w
     ...discussionResearchBase.policy,
     ...discussionResearchBase.scope,
   }, null, 2));
-  onProgress(`阶段 0 完成：冻结 T 榜前 ${discussionResearchBase.scope.selected_count} 个非项目事件，保留 ${discussionResearchBase.scope.items.reduce((sum, item) => sum + (item.source_refs?.length || 0), 0)} 个来源指针`);
+  onProgress(`阶段 0 完成：按榜内名次均衡冻结 ${discussionResearchBase.scope.selected_count} 个非项目事件（${DISCUSSION_RESEARCH_CONTENT_CLASSES.map((contentClass) => `${contentClass} ${discussionResearchBase.scope.content_class_counts?.[contentClass] || 0}`).join('、')}），保留 ${discussionResearchBase.scope.items.reduce((sum, item) => sum + (item.source_refs?.length || 0), 0)} 个来源指针`);
   const discussionResearchInputPath = path.join(sourcesDir, 'discussion-research-input.json');
   const discussionResearchReportsPath = path.join(sourcesDir, 'discussion-research-reports.md');
   const researchDigestPath = path.join(sourcesDir, 'research-digest.json');
@@ -943,7 +944,11 @@ export async function runResearchPipeline({ gateway, store, batchId, provider, w
       relation_count: singlePass.relations.length,
       topic_count: topicResult.topics.length,
       topic_coverage_count: (topicResult.coverage || []).length,
+      topic_coverage_mapped_count: (topicResult.coverage || []).filter((item) => item.status === 'covered').length,
       topic_coverage_uncovered_count: (topicResult.coverage || []).filter((item) => item.status === 'uncovered').length,
+      topic_coverage_unreported_count: (topicResult.coverage || []).filter((item) => item.status === 'unreported').length,
+      topic_coverage_repair_attempted: Boolean(topicResult.audit?.coverage_repair_attempted),
+      topic_coverage_repair_event_count: topicResult.audit?.coverage_repair_event_count || 0,
       relation_topic_required: topicResult.audit?.required || 0,
       relation_topic_count: topicResult.audit?.actual || 0,
       relation_topic_repair_attempted: Boolean(topicResult.audit?.repair_attempted),
@@ -960,8 +965,8 @@ export async function runResearchPipeline({ gateway, store, batchId, provider, w
   writeFile(eventRelationsPath, JSON.stringify({ generated_at: discussionResearch.generated_at, batch_id: batch.id, mode: discussionResearch.mode, items: discussionResearch.relations, reference_events: discussionResearch.reference_events || [], verified_research_materials: discussionResearch.verified_research_materials || [] }, null, 2));
   writeFile(verifiedResearchMaterialsPath, JSON.stringify({ generated_at: discussionResearch.generated_at, batch_id: batch.id, mode: discussionResearch.mode, items: discussionResearch.verified_research_materials || [] }, null, 2));
   writeFile(discussionResearchReportPath, discussionResearchMarkdown(discussionResearch));
-  onProgress(`阶段 1-3 模型讨论研判完成：T 榜前 ${discussionResearch.scope.selected_count} 个事件，形成 ${discussionResearch.verified_research_materials.length} 条研判素材和 ${discussionResearch.relations.length} 条有证据关系`);
-  onProgress('执行事件级兼容预评估，并从 Top-K 研判候选中按讨论价值选择核心8条 + 黑马2条');
+  onProgress(`阶段 1-3 模型讨论研判完成：均衡范围 ${discussionResearch.scope.selected_count} 个事件，形成 ${discussionResearch.verified_research_materials.length} 条研判素材和 ${discussionResearch.relations.length} 条有证据关系`);
+  onProgress('执行事件级兼容预评估，并按各类别独立排序选出核心8条 + 黑马2条');
   const breaking=batch.batch_type==='breaking';
   if(breaking)onProgress('执行突发事件单题研判，不参与常规 8+2 竞争');
   const accountContext = getAccountContext({workspaceRoot});
@@ -970,19 +975,32 @@ export async function runResearchPipeline({ gateway, store, batchId, provider, w
   let ranking = preselection(clusters, batch.batch_date, scoring, eventHeatRanking.items || []);
   if (appliedProjectFeedback) ranking = applyProjectDiscoveryFeedbackToRanking(ranking, appliedProjectFeedback);
   const topicCandidates = buildTopicCandidates({ events: clusters, discussionResearch, ranking });
-  const topicSelection = selectTopicCandidates(topicCandidates, { coreLimit: 8, blackLimit: 2, backupLimit: 3 });
+  const discussionContentClassCounts = discussionResearch.scope?.content_class_counts
+    || discussionResearch.scope?.items?.reduce((counts, item) => {
+      const contentClass = String(item.content_class || 'news_event');
+      counts[contentClass] = (counts[contentClass] || 0) + 1;
+      return counts;
+    }, {}) || {};
+  const topicSelection = selectTopicCandidates(topicCandidates, {
+    coreLimit: 8, blackLimit: 2, backupLimit: 3, contentClassCounts: discussionContentClassCounts,
+    contentClassOrder: discussionResearch.policy?.selection_content_class_order || [],
+  });
   const topicRoleById = new Map([...topicSelection.core, ...topicSelection.black, ...topicSelection.backup].map((item) => [item.candidate_id, item.poolRole]));
-  const topicCandidatesWithRoles = topicSelection.all.map((item) => ({ ...item, poolRole: topicRoleById.get(item.candidate_id) || '未入选' }));
+  const topicCandidatesWithRoles = topicSelection.all.map((item) => ({
+    ...item,
+    poolRole: topicRoleById.get(item.candidate_id) || '未入选',
+    selection_rejection_reasons: topicSelection.unselectedReasons[item.candidate_id] || [],
+  }));
   const topicCandidatePath = path.join(sourcesDir, 'topic-candidate-generation.json');
   const topicPreselectionPath = path.join(sourcesDir, 'topic-preselection-ranking.json');
   const topicCoveragePath = path.join(sourcesDir, 'topic-candidate-coverage.json');
   const topicCandidateReportPath = path.join(workdir, 'topic-candidate-report.md');
   const topicCoverage = topicResult.coverage || [];
-  writeFile(topicCandidatePath, JSON.stringify({ generated_at: new Date().toISOString(), batch_id: batch.id, policy: { source_scope: 'event-heat-ranking-top-k', t_unchanged: true, final_f_unchanged: true }, coverage: topicCoverage, items: topicCandidatesWithRoles }, null, 2));
-  writeFile(topicPreselectionPath, JSON.stringify({ generated_at: new Date().toISOString(), batch_id: batch.id, core: topicSelection.core, black: topicSelection.black, backup: topicSelection.backup, items: topicCandidatesWithRoles }, null, 2));
-  writeFile(topicCoveragePath, JSON.stringify({ schema_version: 1, generated_at: new Date().toISOString(), batch_id: batch.id, event_count: topicCoverage.length, covered_count: topicCoverage.filter((item) => item.status === 'covered').length, uncovered_count: topicCoverage.filter((item) => item.status === 'uncovered').length, unreported_count: topicCoverage.filter((item) => item.status === 'unreported').length, items: topicCoverage }, null, 2));
+  writeFile(topicCandidatePath, JSON.stringify({ generated_at: new Date().toISOString(), batch_id: batch.id, policy: { source_scope: 'event-heat-ranking-top-k', candidate_limit: 30, t_unchanged: true, final_f_unchanged: true }, coverage: topicCoverage, items: topicCandidatesWithRoles }, null, 2));
+  writeFile(topicPreselectionPath, JSON.stringify({ generated_at: new Date().toISOString(), batch_id: batch.id, selection_summary: topicSelection.summary, core: topicSelection.core, black: topicSelection.black, backup: topicSelection.backup, items: topicCandidatesWithRoles }, null, 2));
+  writeFile(topicCoveragePath, JSON.stringify({ schema_version: 2, generated_at: new Date().toISOString(), batch_id: batch.id, event_count: topicCoverage.length, covered_count: topicCoverage.filter((item) => item.status === 'covered').length, uncovered_count: topicCoverage.filter((item) => item.status === 'uncovered').length, unreported_count: topicCoverage.filter((item) => item.status === 'unreported').length, coverage_repair_attempted: Boolean(topicResult.audit?.coverage_repair_attempted), coverage_repair_event_count: topicResult.audit?.coverage_repair_event_count || 0, items: topicCoverage }, null, 2));
   writeFile(topicCandidateReportPath, topicCandidatesMarkdown({ candidates: topicCandidatesWithRoles, selection: topicSelection, coverage: topicCoverage }));
-  if (topicCoverage.length) onProgress(`阶段 3 事件覆盖：${topicCoverage.filter((item) => item.status === 'covered').length}/${topicCoverage.length} 个事件形成候选，${topicCoverage.filter((item) => item.status === 'uncovered').length} 个明确未形成`);
+  if (topicCoverage.length) onProgress(`阶段 3 事件覆盖：${topicCoverage.filter((item) => item.status === 'covered').length} 个有候选，${topicCoverage.filter((item) => item.status === 'uncovered').length} 个明确未形成，${topicCoverage.filter((item) => item.status === 'unreported').length} 个未报告或关联无效`);
   onProgress(`阶段 3 候选生成完成：${topicSelection.all.length} 条（核心 ${topicSelection.core.length}、黑马 ${topicSelection.black.length}、候补 ${topicSelection.backup.length}）`);
   const projectReaderValueCandidates = selectProjectReaderValueCandidates({ clusters, eventHeatRanking, topK: discussionResearchTopK });
   const projectReaderValue = await evaluateProjectReaderValue({ gateway, workspaceRoot, projects: projectReaderValueCandidates,
@@ -1112,7 +1130,7 @@ export async function runResearchPipeline({ gateway, store, batchId, provider, w
     }
   } else {
     store.saveSocialPreselection(batchId, socialPool);
-    if (topicSelection.selected.length) onProgress(`已生成 ${topicSelection.selected.length} 个讨论导向选题候选：${topicSelection.selected.map((group) => `${group.poolRole}·${group.title}`).join('、')}`);
+    if (topicSelection.selected.length) onProgress(`已生成 ${topicSelection.selected.length} 个讨论导向选题候选（按类别分别排序）：${topicSelection.selected.map((group) => `${group.selectionContentClass}·${group.poolRole}·${group.title}`).join('、')}`);
     if (briefPool.length) onProgress(`已生成 ${briefPool.length} 个早报维度组：${briefPool.map((group) => group.title).join('、')}`);
   }
   const artifacts = [

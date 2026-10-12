@@ -144,7 +144,7 @@ test('主链路 E2E：采集、文章与图文产物均可从真实 HTTP 服务�
     const articleRows = articleArtifacts.filter((item) => Number(item.candidate_row_id) === articleCandidate.id);
     const requiredArticleArtifacts = [
       '00-article-brief.md', '02-fact-base.json', '02-outline.md', '04-draft.md',
-      '05-humanized.md', '06-reviewed.md', '07-seo-keywords.md', '08-seo-optimized.md',
+      '05-humanized.md', '05-voice-quality-gate.json', '06-reviewed.md', '07-seo-keywords.md', '08-seo-optimized.md',
       '09-visual-plan.json', '09-FINAL.md', '10-publication-compliance.json',
     ];
     for (const name of requiredArticleArtifacts) {
@@ -175,6 +175,7 @@ test('主链路 E2E：采集、文章与图文产物均可从真实 HTTP 服务�
     assert.ok(replayIds.has('hotspot-brainstorm'), `脑暴 Replay 未命中：${[...replayIds].join(', ')}`);
     assert.ok(replayIds.has('hotspot-synthesis'), `综合复排 Replay 未命中：${[...replayIds].join(', ')}`);
     assert.ok([...replayIds].some((id) => id === 'article-markdown'), `文章 Replay 未命中：${[...replayIds].join(', ')}`);
+    assert.ok(replayIds.has('article-voice-quality-gate'), `文章风格门禁 Replay 未命中：${[...replayIds].join(', ')}`);
     assert.ok(replayIds.has('social-card-editorial'), `图文故事板 Replay 未命中：${[...replayIds].join(', ')}`);
     assert.ok(model.requests.every((request) => request.replayId), '每次模型请求都必须可追踪到 Replay');
     const socialArtifacts = await workbench.api(`/api/artifacts?batch_id=${encodeURIComponent(batch.id)}`);

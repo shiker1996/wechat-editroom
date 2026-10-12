@@ -67,14 +67,31 @@ function safeKey(value, id) {
 }
 
 export function isFreshForBatch(item, batchDate, maxAgeHours = 168) {
-  const published = Date.parse(item?.published_at || '');
+  let raw = {};
+  try { raw = JSON.parse(item?.raw_json || '{}'); } catch {}
+  const maxAge = freshnessWindowHours(item, maxAgeHours);
+  const isPaper = item?.source_group === 'paper' || item?.source_type === 'paper' || raw.sourceType === 'paper';
+  const isHuggingFaceDailyPaper = isPaper && Array.isArray(raw.discoverySources) && raw.discoverySources.includes('huggingface_papers');
+  // HF Daily Papers reports the original arXiv publication date. The paper's
+  // appearance in the dated Daily Papers feed is the relevant discovery time.
+  const discoveredAt = raw.discoveredAt || (isHuggingFaceDailyPaper ? item?.created_at : null);
+  const published = Date.parse(discoveredAt || item?.published_at || '');
   if (!Number.isFinite(published)) return true;
   // 优先按实际抓取时间划定有效窗口；缺失抓取时间时回退到批次日期。
   const collected = Date.parse(item?.created_at || '');
   const reference = Number.isFinite(collected) ? collected : Date.parse(`${batchDate}T23:59:59+08:00`);
   if (!Number.isFinite(reference)) return true;
-  return published >= reference - maxAgeHours * 60 * 60 * 1000
+  return published >= reference - maxAge * 60 * 60 * 1000
     && published <= reference + 6 * 60 * 60 * 1000;
+}
+
+export function freshnessWindowHours(item, maxAgeHours = 168) {
+  const baseWindowHours = Number.isFinite(Number(maxAgeHours)) && Number(maxAgeHours) > 0 ? Number(maxAgeHours) : 168;
+  let raw = {};
+  try { raw = JSON.parse(item?.raw_json || '{}'); } catch {}
+  const isPaper = item?.source_group === 'paper' || item?.source_type === 'paper' || raw.sourceType === 'paper';
+  if (!isPaper) return baseWindowHours;
+  return Math.max(baseWindowHours, 72, Number(raw.discoveryWindowDays) > 0 ? Number(raw.discoveryWindowDays) * 24 : 0);
 }
 
 export function clusterItems(items = []) {

@@ -136,7 +136,7 @@ test('阶段 0 主链路：素材入箱到规划、候选、文稿、产物和�
   fs.mkdirSync(path.dirname(articlePath), { recursive: true });
   fs.writeFileSync(articlePath, '# 自动化流程的人工边界\n\n正文。', 'utf8');
   const document = store.saveDocument({ batchId: batch.id, candidateId: candidate.id, kind: 'final', title: '自动化流程的人工边界', content: '# 自动化流程的人工边界\n\n正文。', filePath: articlePath, status: 'finalized' });
-  const articles = await requestJson(baseUrl, '/api/articles?month=2026-09');
+  const articles = await requestJson(baseUrl, '/api/articles');
   assert.equal(articles.response.status, 200);
   assert.ok(articles.data.some((item) => item.id === document.id));
 

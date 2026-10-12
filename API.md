@@ -4,6 +4,7 @@
 
 - `GET /api/security/session`：建立当前进程内的本地会话并返回随机 CSRF token。
 - `POST /api/security/confirmation`：在 CSRF 校验通过后签发 60 秒、一次性、绑定操作类型的敏感操作确认 token。
+- `POST /api/ingest/items`：外部采集入口。请求头使用 `Authorization: Bearer <token>`；token 从 `collection.ingestToken` 或环境变量 `WORKBENCH_INGEST_TOKEN` 配置。JSON 正文为 `{ "batchId", "channel": "x|wechat", "sourceId", "sourceName?", "items": [{ "title", "url?", "summary?", "author?", "publishedAt?", "externalId?", "raw?" }] }`，`items` 每次 1–50 条，重复 URL/标题会在本批次内去重。成功返回 `202`，包含 `accepted`、`duplicates`、`batchId`、`channel`、`sourceKey`、`sourceName` 和 `sourceRunId`；无效 token 返回 `401`，未配置 token 返回 `503`，批次或条目无效返回 `400`。
 - `GET /api/system/log-governance`：读取模型调用和工具审计的留存配置。
 - `PUT /api/system/log-governance`：保存留存配置；可附带 `cleanup:true` 立即清理过期记录并将其压缩归档到 `data/audit-archive/`（需管理员确认）。字段为 `modelCallsLimit`、`modelCallsDays`、`toolExecutionsDays`、`archiveEnabled`。
 
@@ -434,7 +435,7 @@ URL 规范化为裸仓库地址（https://github.com/owner/repo）；经手工�
 → 编辑室
 
 ### POST /api/candidates/:id/lock
-锁定简报（写入 article-brief.md）。只校验当前已保存的编辑决策是否完整；编辑室预检缓存可选，缺失或过期时不再阻断首次成稿。成稿链会在后续阶段按当前简报重新建立事实基座并执行事实门禁。
+锁定简报（写入 article-brief.md）。只校验当前已保存的编辑决策是否完整。确认成稿后，成稿链会重新生成事实基座并执行事实与证据门禁；编辑室预检只检查底稿、来源可用性和文章路线，不生成或复用事实基座。
 → 编辑室（确认简报）
 
 ### POST /api/candidates/:id/promote-article
