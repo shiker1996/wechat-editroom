@@ -1,9 +1,21 @@
 import { dimensionPartsOf } from './hotspot-dimensions.mjs';
 
-export const DISCUSSION_RESEARCH_SCHEMA_VERSION = 3;
-// 讨论研判只处理 T 榜前若干个非项目事件；其余事件保留在热榜和普通流程中。
+export const DISCUSSION_RESEARCH_SCHEMA_VERSION = 4;
+// 讨论研判在非项目的三个榜单间按榜内名次均衡分配总名额；不同类别的 T 不直接比较。
 export const DISCUSSION_RESEARCH_TOP_K_OPTIONS = Object.freeze([5, 8, 10]);
 export const DISCUSSION_RESEARCH_TOP_K = 8;
+export const DISCUSSION_RESEARCH_CONTENT_CLASSES = Object.freeze(['news_event', 'open_source_technology', 'open_source_trend']);
+const DISCUSSION_RESEARCH_CONTENT_CLASS_LABELS = Object.freeze({
+  news_event: '普通事件',
+  open_source_technology: '开源技术',
+  open_source_trend: '开源趋势',
+});
+
+function contentClassOrderForBatch(batchId) {
+  const offset = [...String(batchId || '')].reduce((sum, character) => sum + character.charCodeAt(0), 0)
+    % DISCUSSION_RESEARCH_CONTENT_CLASSES.length;
+  return [...DISCUSSION_RESEARCH_CONTENT_CLASSES.slice(offset), ...DISCUSSION_RESEARCH_CONTENT_CLASSES.slice(0, offset)];
+}
 
 export function resolveDiscussionResearchTopK(value) {
   const normalized = Number(value);
@@ -79,11 +91,14 @@ function sourceRefs(event) {
   }));
 }
 
-function eventScope(event, heat, rank, reason) {
+function eventScope(event, heat, rank, selectionRank, boardRank, contentClass, reason) {
   const sources = sourceRefs(event);
   return {
     event_id: idOf(event),
     rank,
+    selection_rank: selectionRank,
+    board_rank: boardRank,
+    content_class: contentClass,
     t: finite(heat?.t ?? heat?.eventValue ?? event?.t),
     event_value: finite(heat?.eventValue ?? event?.eventValue ?? event?.t),
     event_heat_score: finite(heat?.heatScore ?? event?.eventHeatScore),
@@ -322,14 +337,60 @@ function trendRelations(selected) {
 
 export function buildDiscussionResearch({ events = [], eventHeatRanking = {}, topK = DISCUSSION_RESEARCH_TOP_K, batchId = '', generatedAt = new Date().toISOString() } = {}) {
   const heatByEvent = new Map(list(eventHeatRanking.items).map((item) => [String(item.eventId || item.event_id), item]));
-  const heatEligible = events.map((event) => ({ event, heat: heatByEvent.get(idOf(event)) })).filter(({ event, heat }) => idOf(event) && heat && finite(heat.rank) != null && heat.state !== 'stale');
-  const ranked = heatEligible.filter(({ event, heat }) =>
-    !DISCUSSION_RESEARCH_EXCLUDED_CONTENT_CLASSES.includes(contentClassOf(event, heat)))
-    .sort((a, b) => (finite(a.heat?.rank, 999999) - finite(b.heat?.rank, 999999))
-      || (finite(b.heat?.t ?? b.event?.t, 0) - finite(a.heat?.t ?? a.event?.t, 0))
-      || idOf(a.event).localeCompare(idOf(b.event)));
-  const selected = ranked.slice(0, Math.max(0, Number(topK) || DISCUSSION_RESEARCH_TOP_K));
-  const scope = selected.map(({ event, heat }, index) => eventScope(event, heat, finite(heat?.rank, index + 1), 'T 榜前 K 事件，进入阶段 0 研判范围'));
+  const boardHeatByEvent = new Map();
+  for (const contentClass of DISCUSSION_RESEARCH_CONTENT_CLASSES) {
+    for (const item of list(eventHeatRanking.rankings?.[contentClass]?.items)) {
+      const eventId = String(item.eventId || item.event_id || '');
+      if (!eventId) continue;
+      boardHeatByEvent.set(eventId, {
+        ...(heatByEvent.get(eventId) || {}), ...item,
+        globalRank: heatByEvent.get(eventId)?.rank ?? heatByEvent.get(eventId)?.globalRank,
+        contentClass,
+        boardRank: finite(item.boardRank ?? item.rank),
+      });
+    }
+  }
+  const heatAvailable = events.map((event) => {
+    const eventId = idOf(event);
+    const heat = boardHeatByEvent.get(eventId) || heatByEvent.get(eventId);
+    const contentClass = contentClassOf(event, heat) || 'news_event';
+    return { event, heat, contentClass };
+  }).filter(({ event, heat }) => idOf(event) && heat && heat.state !== 'stale');
+  const heatEligible = heatAvailable.filter(({ contentClass }) =>
+    !DISCUSSION_RESEARCH_EXCLUDED_CONTENT_CLASSES.includes(contentClass)
+    && DISCUSSION_RESEARCH_CONTENT_CLASSES.includes(contentClass));
+  const byClass = new Map(DISCUSSION_RESEARCH_CONTENT_CLASSES.map((contentClass) => [contentClass, []]));
+  for (const entry of heatEligible) byClass.get(entry.contentClass).push(entry);
+  for (const entries of byClass.values()) entries.sort((a, b) => {
+    const rankA = finite(a.heat?.boardRank ?? a.heat?.board_rank);
+    const rankB = finite(b.heat?.boardRank ?? b.heat?.board_rank);
+    if (rankA != null && rankB != null && rankA !== rankB) return rankA - rankB;
+    if (rankA != null && rankB == null) return -1;
+    if (rankA == null && rankB != null) return 1;
+    return finite(b.heat?.scoreValue ?? b.heat?.t ?? b.heat?.eventValue ?? b.event?.t, 0)
+      - finite(a.heat?.scoreValue ?? a.heat?.t ?? a.heat?.eventValue ?? a.event?.t, 0)
+      || idOf(a.event).localeCompare(idOf(b.event));
+  });
+  const topKLimit = Math.max(0, Number(topK) || DISCUSSION_RESEARCH_TOP_K);
+  const selectionClassOrder = contentClassOrderForBatch(batchId);
+  const selected = [];
+  let boardRank = 1;
+  while (selected.length < topKLimit) {
+    let added = false;
+    for (const contentClass of selectionClassOrder) {
+      const entry = byClass.get(contentClass)[boardRank - 1];
+      if (!entry) continue;
+      selected.push({ ...entry, boardRank: finite(entry.heat?.boardRank ?? entry.heat?.board_rank, boardRank) ?? boardRank });
+      added = true;
+      if (selected.length >= topKLimit) break;
+    }
+    if (!added) break;
+    boardRank += 1;
+  }
+  const scope = selected.map(({ event, heat, contentClass, boardRank: localRank }, index) => eventScope(
+    event, heat, finite(heat?.globalRank ?? heat?.rank, index + 1), index + 1, localRank, contentClass,
+    `按${DISCUSSION_RESEARCH_CONTENT_CLASS_LABELS[contentClass] || contentClass}榜内第 ${localRank} 名纳入均衡研判范围`,
+  ));
   // 阶段 0 只负责冻结研判范围。不要在这里根据关键词、维度或时间
   // 直接生成反常、利益冲突、发散方向或事件关系；这些都由阶段 1 的
   // 单事件模型联网交互完成。
@@ -339,16 +400,22 @@ export function buildDiscussionResearch({ events = [], eventHeatRanking = {}, to
     batch_id: String(batchId || ''),
     mode: 'phase0_scope',
     policy: {
-      top_k: Number(topK) || DISCUSSION_RESEARCH_TOP_K,
+      top_k: topKLimit,
+      selection_policy: 'balanced_board_rank_round_robin',
+      included_content_classes: [...DISCUSSION_RESEARCH_CONTENT_CLASSES],
+      selection_content_class_order: selectionClassOrder,
       excluded_content_classes: [...DISCUSSION_RESEARCH_EXCLUDED_CONTENT_CLASSES],
       t_unchanged: true, f_unchanged: true, pool_unchanged: true,
       semantic_judgement: 'model_only',
       phase0_outputs: ['scope', 'source_refs'],
     },
     scope: {
-      eligible_count: ranked.length,
-      excluded_count: heatEligible.length - ranked.length,
+      eligible_count: heatEligible.length,
+      excluded_count: heatAvailable.length - heatEligible.length,
       selected_count: selected.length,
+      content_class_counts: Object.fromEntries(DISCUSSION_RESEARCH_CONTENT_CLASSES.map((contentClass) => [
+        contentClass, scope.filter((item) => item.content_class === contentClass).length,
+      ])),
       items: scope,
     },
     internal_signals: [],
@@ -367,17 +434,17 @@ export function discussionResearchMarkdown(report) {
   const lines = [
     '# 高热事件讨论研判报告',
     '',
-    `模式：${report?.mode || 'phase0_observation'}；范围：T 榜前 ${report?.policy?.top_k || DISCUSSION_RESEARCH_TOP_K}；本次纳入 ${scope.length} 个事件。`,
+    `模式：${report?.mode || 'phase0_observation'}；范围：三个非项目榜单按榜内名次均衡选取 ${report?.policy?.top_k || DISCUSSION_RESEARCH_TOP_K} 个事件；本次纳入 ${scope.length} 个事件。`,
     '',
     report?.research_source === 'model'
       ? '本报告由模型按事件逐个联网研判并直接返回 Markdown；程序只负责范围裁剪、调用审计、来源整理、结构索引和去重，研判价值 J 在候选评分阶段计算。'
       : report?.mode === 'phase0_scope'
-        ? '阶段 0 只冻结 T 榜前 K 的非项目事件和来源指针；尚未进行事件内或事件间语义研判，页面不会在此阶段展示程序猜出的关系。'
+        ? '阶段 0 只按榜内名次均衡冻结三个非项目榜单的研判范围和来源指针；尚未进行事件内或事件间语义研判，页面不会在此阶段展示程序猜出的关系。'
         : '本报告只整理已有事件卡、事件维度和时间关系，不改变 T、F、候选池，也不把观察信号直接当作选题命题。',
     '',
     '## Top-K 研判范围',
     '',
-    ...scope.map((item) => `- #${item.rank} · T ${item.t ?? '—'} · ${item.title}（${item.event_id}）`),
+    ...scope.map((item) => `- #${item.selection_rank ?? item.rank} · ${DISCUSSION_RESEARCH_CONTENT_CLASS_LABELS[item.content_class] || item.content_class || '事件'}榜第 ${item.board_rank ?? '—'} 名 · T ${item.t ?? '—'} · ${item.title}（${item.event_id}）`),
     '',
     '## 事件内研判',
     '',

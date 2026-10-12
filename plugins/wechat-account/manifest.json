@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "id": "wechat-account-collector",
+  "name": "微信公众号账号",
+  "version": "1.0.0",
+  "kind": "collector",
+  "entry": "./adapter.mjs",
+  "riskLevel": "network-read",
+  "credentialProfile": "wechat-account",
+  "configurationRenderer": "key-value-secret",
+  "configuration": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "endpoint": { "type": "string", "title": "公众号接口地址", "format": "url", "default": "https://www.dajiala.com/fbmain/monitor/v3/post_history" },
+      "apiKey": { "type": "string", "title": "极致了 / 大佳拉 API Key", "secret": true, "format": "password" },
+      "verifycode": { "type": "string", "title": "附加验证码", "format": "password", "secret": true, "default": "" },
+      "timeoutMs": { "type": "integer", "title": "请求超时（毫秒）", "minimum": 5000, "maximum": 120000, "default": 30000 }
+    },
+    "required": ["apiKey"]
+  },
+  "capabilities": ["cap_collect_wechat"],
+  "inputSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["identifier"],
+    "properties": {
+      "identifier": { "type": "string", "minLength": 1, "maxLength": 300, "title": "公众号标识" },
+      "identifierType": { "type": "string", "title": "标识类型", "enum": ["ghid", "nickname", "wxid", "url"], "default": "ghid" },
+      "limit": { "type": "integer", "title": "单次条数", "minimum": 1, "maximum": 50, "default": 30 },
+      "maxAgeHours": { "type": "integer", "title": "内容有效期（小时）", "minimum": 1, "maximum": 8760, "default": 168 }
+    }
+  },
+  "outputSchema": { "type": "object", "required": ["items"], "properties": { "items": { "type": "array", "items": { "type": "object" } } } },
+  "runtime": { "timeoutMs": 120000, "concurrency": "parallel" },
+  "collector": {
+    "sourceTypes": ["wechat"],
+    "sourceConfigSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identifier"],
+      "properties": {
+        "identifier": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "identifierType": { "type": "string", "enum": ["ghid", "nickname", "wxid", "url"], "default": "ghid" },
+        "limit": { "type": "integer", "minimum": 1, "maximum": 50, "default": 30 },
+        "maxAgeHours": { "type": "integer", "minimum": 1, "maximum": 8760, "default": 168 }
+      }
+    }
+  }
+}

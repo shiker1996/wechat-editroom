@@ -93,3 +93,23 @@ test('不同内容类型使用独立评分模型，并生成四类榜单', () =>
   assert.deepEqual(Object.keys(ranking.rankings), ['news_event', 'open_source_technology', 'open_source_trend', 'github_project']);
   assert.equal(ranking.rankings.open_source_trend.items[0].scoreModel, 'open_source_trend');
 });
+
+test('热榜兼容旧事件产物：同主体同对象事件只保留一个排名位', () => {
+  const rows = [
+    membership('S-OLD-A', 1, '2026-08-23T10:00:00Z'),
+    membership('S-OLD-B', 2, '2026-08-23T11:00:00Z'),
+  ];
+  const common = { whoKey: 'openai', objectKey: 'gpt-61sol', timeWindow: '2026-08', actionType: '发布', entityKeys: ['openai', 'gpt-61sol'], eventKey: '' };
+  const events = [
+    { event_id: 'S-OLD-A', normalized: { ...common, triggerKey: '推出模型' }, articles: [{ hotspot_id: 1 }], report_count: 1, classification: { content_class: 'news_event' } },
+    { event_id: 'S-OLD-B', normalized: { ...common, triggerKey: '发布模型' }, articles: [{ hotspot_id: 2 }], report_count: 1, classification: { content_class: 'news_event' } },
+  ];
+  const store = {
+    listEventHotspots: ({ batchId } = {}) => batchId ? rows : rows,
+    listEventRecords: () => events.map((event) => ({ id: event.event_id, title: event.event_id, event_state: 'new_event' })),
+  };
+  const ranking = buildEventHeatRanking({ store, batch: { id: 'B1', hotspots: [hotspot(1), hotspot(2)] }, events, asOf });
+  assert.equal(ranking.rankings.news_event.items.length, 1);
+  assert.deepEqual(ranking.items[0].hotspotIds, [1, 2]);
+  assert.deepEqual(ranking.items[0].mergedEventIds, ['S-OLD-A', 'S-OLD-B']);
+});

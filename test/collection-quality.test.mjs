@@ -1,28 +1,31 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import { filterCollectedItems, hasMeaningfulCollectedContent } from '../server/features/collection/index.mjs';
+import { canonicalCollectedUrl, collectedItemIdentity, dedupeCollectedItems, filterCollectedItems } from '../server/features/collection/index.mjs';
 
-test('采集质量门丢弃只有链接但标题和正文均为空的记录', () => {
-  assert.equal(hasMeaningfulCollectedContent({ url:'https://x.com/example/1', title:'', summary:'' }), false);
-  const result = filterCollectedItems([
-    { url:'https://x.com/example/1', title:'', summary:'' },
-    { url:'https://example.com/2', title:'有效标题' },
-    { url:'https://example.com/3', title:'', description:'有效描述' },
-  ]);
-  assert.equal(result.kept.length, 2);
+test('采集 URL 身份会移除跟踪参数、片段并规范主机名', () => {
+  assert.equal(
+    canonicalCollectedUrl('HTTPS://Example.COM/news/123/?utm_source=rss&b=2&a=1#comments'),
+    'https://example.com/news/123?a=1&b=2',
+  );
+});
+
+test('同一规范化 URL 只保留一条，并保留重复来源审计信息', () => {
+  const items = [
+    { title: '简短标题', url: 'https://example.com/news/1?utm_source=a', sourceKey: 'rsshub:/a', summary: '短摘要' },
+    { title: '更完整标题', url: 'https://EXAMPLE.com/news/1#top', sourceKey: 'rsshub:/b', summary: '更完整的摘要和正文' },
+  ];
+  const result = dedupeCollectedItems(filterCollectedItems(items).kept);
+  assert.equal(result.kept.length, 1);
   assert.equal(result.dropped.length, 1);
+  assert.equal(result.kept[0].title, '更完整标题');
+  assert.deepEqual(result.kept[0].duplicateSourceKeys.sort(), ['rsshub:/a', 'rsshub:/b']);
+  assert.equal(result.kept[0].duplicateCount, 1);
 });
 
-test('采集质量门兼容正文类字段并拒绝空白内容', () => {
-  assert.equal(hasMeaningfulCollectedContent({ title:'  ', content:'正文' }), true);
-  assert.equal(hasMeaningfulCollectedContent({ title:'\n', text:'\t', selftext:' ' }), false);
-  assert.deepEqual(filterCollectedItems(null), { kept:[], dropped:[] });
-});
-
-test('Reddit 与 RSSHub 采集结果均在入库前经过统一质量门', () => {
-  const manager = fs.readFileSync(new URL('../server/features/collection/application/collection-job-manager.mjs', import.meta.url), 'utf8');
-  assert.match(manager, /runner\.run[\s\S]*filterCollectedItems\(run\.items\)[\s\S]*addHotspots\(job\.batchId,\s*source,\s*selected\)/);
-  assert.match(manager, /createCollectorRuntime/);
-  assert.match(manager, /过滤空内容|采集质量过滤/);
+test('没有 URL 的正文指纹按来源隔离，避免误吞独立报道', () => {
+  const first = { title: '同标题', content: '相同的正文', sourceKey: 'rsshub:/a' };
+  const second = { title: '同标题', content: '相同的正文', sourceKey: 'rsshub:/b' };
+  assert.notEqual(collectedItemIdentity(first), collectedItemIdentity(second));
+  assert.equal(dedupeCollectedItems([first, { ...first }]).kept.length, 1);
+  assert.equal(dedupeCollectedItems([first, second]).kept.length, 2);
 });

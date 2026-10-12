@@ -117,6 +117,16 @@ test('Responses 联网搜索请求加入 DeepSeek web_search 工具并强制选�
   assert.equal(body.text, undefined);
 });
 
+test("Responses 将 max_output_tokens 归一为可重试的 length", async () => {
+  const { normalizeResponsesResponse } = await import("../server/platform/llm/responses-api.mjs");
+  const result = normalizeResponsesResponse({
+    id: "resp-truncated",
+    status: "incomplete",
+    incomplete_details: { reason: "max_output_tokens" },
+    output_text: "partial"
+  }, "DeepSeek");
+  assert.equal(result.finishReason, "length");
+});
 test('Responses 响应保留服务端执行的 web_search_call', async () => {
   const { normalizeResponsesResponse } = await import('../server/platform/llm/responses-api.mjs');
   const result = normalizeResponsesResponse({

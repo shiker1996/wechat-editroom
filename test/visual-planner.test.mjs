@@ -84,3 +84,15 @@ test('oversized Mermaid automatically retries as mobile-readable split diagrams'
   assert.equal(plan.placements.length,2);
   assert.equal(plan.placements.every((item)=>item.complexity.mobileReady),true);
 });
+
+test('visual policy off skips model planning and returns an auditable reason', async () => {
+  let calls = 0;
+  const plan = await planArticleVisuals({
+    gateway: { complete: async () => { calls += 1; return { content: '{}' }; } },
+    provider: 'test', batchId: 'b', candidateId: 1, markdown: '# 标题', factBase: '{}', visualPolicy: 'off',
+  });
+  assert.equal(calls, 0);
+  assert.equal(plan.skipped, true);
+  assert.equal(plan.reason, 'visual_policy_off');
+  assert.deepEqual(plan.placements, []);
+});

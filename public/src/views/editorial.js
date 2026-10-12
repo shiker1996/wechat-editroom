@@ -18,6 +18,7 @@ function statusLabel(value) { return editorialStatusLabels[String(value || "")] 
 let bound = false;
 let editorialDirty = false;
 let editorialRequestPending = false;
+let editorialResumeFrom = "";
 function bindEditorial() {
   if (bound) return;
   bound = true;
@@ -306,7 +307,7 @@ async function openEditorial(id) {
   form.elements.angle.value = candidate.angle || "";
   form.elements.thesis.value = candidate.thesis || "";
   const editorial = candidate.editorial || {};
-  for (const key of ["editor_question", "confirmed_facts", "research_basis", "author_opinions", "confirmed_experiences", "rejected_angles", "open_questions", "forbidden_claims", "affected_group", "reader_consequence", "conflict", "evidence_boundary", "reader_action"]) {
+  for (const key of ["editor_question", "writing_stance", "confirmed_facts", "research_basis", "author_opinions", "confirmed_experiences", "rejected_angles", "open_questions", "forbidden_claims", "affected_group", "reader_consequence", "conflict", "evidence_boundary", "reader_action"]) {
     const el = form.elements[key];
     if (el) el.value = editorial[key] || editorial.material_brief?.[key] || "";
   }
@@ -337,6 +338,7 @@ async function openEditorial(id) {
   const events = candidate.events || [];
   renderEventCards(events);
   renderEditorialResearch(candidate.research_context, adoptedResearchPoints);
+  renderTrafficPlan();
   // Messages
   const messages = document.getElementById("editorial-messages");
   if (messages) {
@@ -345,12 +347,41 @@ async function openEditorial(id) {
       : '<div class="editorial-chat-empty">尚未开始编辑会。点击"让 AI 提问"。</div>';
     messages.scrollTop = messages.scrollHeight;
   }
-  if (editorialPrepareState.candidateId !== candidate.id) editorialPrepareState = { candidateId: candidate.id, skipped: false };
+  if (editorialPrepareState.candidateId !== candidate.id) {
+    editorialPrepareState = { candidateId: candidate.id, skipped: false };
+    editorialResumeFrom = "";
+  }
   state.editorialCandidate = candidate;
   editorialDirty = false;
   renderEditorialReadiness();
   updateEditorialPrepareGate(candidate);
   loadSimilarArticles(id);
+}
+
+function renderTrafficPlan() {
+  const root = document.getElementById("editorial-traffic-plan-content");
+  const form = document.getElementById("editorial-form");
+  if (!root || !form) return;
+  const brief = state.editorialCandidate?.editorial?.material_brief || {};
+  const value = (name, fallback = "") => String(form.elements[name]?.value || brief[name] || fallback).trim();
+  const angle = value("angle", "当前角度");
+  const conflict = value("conflict", "待编辑会确认");
+  const consequence = value("reader_consequence", "待编辑会确认");
+  const action = value("reader_action");
+  const placement = value("reader_value_placement", action ? "ending" : "woven");
+  const type = value("reader_value_type", action ? "judgment + action" : "judgment");
+  const hook = value("opening_hook", `从“${angle}”对应的具体场景或反差切入，前 200 字亮明问题。`);
+  const retention = Array.isArray(brief.retention_turns) ? brief.retention_turns : [];
+  const turns = retention.length ? retention : ["每 300～500 字推进一次事实、冲突或判断", "中段补一个反常细节或立场转折", "结尾回收标题承诺，不另起空泛总结"];
+  const ending = value("ending_payoff", "结尾回收标题承诺，并把判断落回读者真正关心的影响");
+  root.innerHTML = `<div class="traffic-plan-grid">
+    <div><b>点击承诺</b><p>${escapeHtml(value("click_mechanism", `“${angle}”与“${conflict}”形成的反差或利益冲突`))}</p></div>
+    <div><b>开头钩子</b><p>${escapeHtml(hook)}</p></div>
+    <div><b>读者收益</b><p>${escapeHtml(type)} · ${escapeHtml(placement)}${consequence ? `：${escapeHtml(consequence)}` : ""}</p></div>
+    <div><b>完读推进</b><ul>${turns.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div>
+    <div><b>结尾回收</b><p>${escapeHtml(ending)}</p></div>
+    ${action ? `<div><b>行动依据</b><p>${escapeHtml(action)}</p></div>` : ""}
+  </div><small class="muted">这是由当前简报字段生成的规划摘要；读者收益是否单独成节，取决于 placement，不是固定模板。</small>`;
 }
 
 function renderEditorialResearch(context, selected = []) {
@@ -468,6 +499,7 @@ function renderEditorialReadiness() {
   const form = document.getElementById("editorial-form");
   if (!form) return;
   const text = (name) => form.elements[name]?.value?.trim() || "";
+  renderTrafficPlan();
   const adoptedPoints = parseResearchPoints(form.elements.adopted_research_points?.value || "[]");
   const manualMode = state.editorialCandidate?.editorial_mode === "manual";
   const checks = [
@@ -475,10 +507,10 @@ function renderEditorialReadiness() {
     { label: "明确观点", field: "author_opinions", ok: substantive(text("author_opinions")) },
     { label: "写作角度", field: "angle", ok: substantive(text("angle")) },
     { label: "锁定命题", field: "thesis", ok: substantive(text("thesis")) },
-    { label: manualMode ? "采用的研判拓展点（手动模式可跳过）" : "采用的研判拓展点", field: "adopted_research_points", ok: adoptedPoints.length > 0, optional: manualMode },
-    { label: manualMode ? "采用的研判主线（手动模式可跳过）" : "采用的研判主线", field: "research_basis", ok: researchBasisComplete(text("research_basis")), optional: manualMode },
-    { label: "读者后果", field: "reader_consequence", ok: substantive(text("reader_consequence")) },
-    { label: "利益/责任冲突", field: "conflict", ok: substantive(text("conflict")) },
+    { label: "采用的研判拓展点（可选）", field: "adopted_research_points", ok: adoptedPoints.length > 0, optional: true },
+    { label: "采用的研判主线（可选）", field: "research_basis", ok: researchBasisComplete(text("research_basis")), optional: true },
+    { label: "读者后果（可由规划生成）", field: "reader_consequence", ok: substantive(text("reader_consequence")), optional: true },
+    { label: "利益/责任冲突（可由规划生成）", field: "conflict", ok: substantive(text("conflict")), optional: true },
     { label: "禁止写入", field: "forbidden_claims", ok: forbiddenClaimsComplete(text("forbidden_claims")) },
     { label: "已确认实践（选填）", field: "confirmed_experiences", ok: substantive(text("confirmed_experiences")), optional: true },
     { label: "否定角度/反证边界（选填）", field: "rejected_angles", ok: substantive(text("rejected_angles")), optional: true },
@@ -582,7 +614,7 @@ async function sendEditorialAnswer() {
   try {
     await streamChat({
       url: `/api/candidates/${candidateId}/ai/editorial/stream`,
-      body: { provider: document.getElementById("editorial-provider")?.value || "", answer },
+      body: { provider: document.getElementById("editorial-provider")?.value || "", answer, ...(editorialResumeFrom ? { resumeFrom: editorialResumeFrom } : {}) },
       messages,
       button,
       busyLabel: "AI 正在回应…",
@@ -593,6 +625,7 @@ async function sendEditorialAnswer() {
       rethrow: true,
       confirmation: /[A-Za-z]:\\|(?:^|\s)\//.test(answer) ? "local-project-read" : "",
       onDone: async (data) => {
+        editorialResumeFrom = data?.limited && data?.resumeFrom ? String(data.resumeFrom) : "";
         await openEditorial(candidateId);
         toast(data?.ignoredBecauseLocked ? "简报已锁定，本次 AI 回复未覆盖成稿决策" : "编辑会决策已更新");
       },
@@ -613,7 +646,7 @@ async function persistEditorialForm(opts) {
     method: "PATCH",
     body: JSON.stringify({ angle: form.elements.angle.value, thesis: form.elements.thesis.value }),
   });
-  const fields = ["editor_question", "confirmed_facts", "research_basis", "author_opinions", "confirmed_experiences", "rejected_angles", "forbidden_claims", "affected_group", "reader_consequence", "conflict", "evidence_boundary", "reader_action"];
+  const fields = ["editor_question", "writing_stance", "confirmed_facts", "research_basis", "author_opinions", "confirmed_experiences", "rejected_angles", "forbidden_claims", "affected_group", "reader_consequence", "conflict", "evidence_boundary", "reader_action"];
   const editorial = Object.fromEntries(fields.map((k) => [k, form.elements[k].value]));
   editorial.adopted_research_points = selectedResearchPoints();
   await request(`/api/candidates/${candidateId}/editorial`, { method: "PUT", body: JSON.stringify(editorial) });
@@ -632,12 +665,18 @@ async function startEditorialProduction() {
   if (editorialRequestPending) return toast("请等待 AI 编辑回应完成后再开始成稿");
   const form = document.getElementById("editorial-form");
   if (!form) return;
+  const lockedBeforePersist = state.editorialCandidate?.brief_status === "LOCKED"
+    || state.editorialCandidate?.editorial?.brief_status === "LOCKED";
   const candidateId = await persistEditorialForm({ refresh: false });
   if (!candidateId) return toast("请先选择候选");
   try {
-    await request(`/api/candidates/${candidateId}/lock`, { method: "POST", body: JSON.stringify({
-      provider: document.getElementById("editorial-provider")?.value || "",
-    }) });
+    // 首次成稿需要锁定简报；已锁定候选的“重新运行”直接复用已锁定简报，
+    // 不再重复经过锁题/预检接口。
+    if (!lockedBeforePersist) {
+      await request(`/api/candidates/${candidateId}/lock`, { method: "POST", body: JSON.stringify({
+        provider: document.getElementById("editorial-provider")?.value || "",
+      }) });
+    }
     const result = await request(`/api/candidates/${candidateId}/ai/article`, { method: "POST", body: JSON.stringify({
       provider: document.getElementById("editorial-provider")?.value || "",
       skillId: document.getElementById("editorial-writer-skill")?.value || "",

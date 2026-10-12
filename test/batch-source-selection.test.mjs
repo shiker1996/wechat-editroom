@@ -10,7 +10,10 @@ test('批次采集能力只把已启用的来源类型标记为可执行', () =>
   ]);
   assert.deepEqual(groups.map((item) => [item.id, item.ready, item.enabledSourceCount]), [
     ['reddit', false, 0],
+    ['paper', false, 0],
     ['rsshub', true, 1],
+    ['x', false, 0],
+    ['wechat', false, 0],
     ['github', false, 0],
   ]);
 });
@@ -21,6 +24,18 @@ test('旧客户端仍发送全量来源时，后端只选择有启用实例的�
   ]);
   assert.deepEqual(result.selected, ['rsshub']);
   assert.deepEqual(result.skipped, ['reddit', 'github']);
+});
+
+test('X 和微信公众号来源进入独立批次组，不被 RSSHub 合并', () => {
+  const result = selectBatchSourceGroups(['rsshub', 'x', 'wechat'], [
+    { source_type: 'rsshub', enabled: true },
+    { source_type: 'x', enabled: true },
+    { source_type: 'wechat', enabled: true },
+  ]);
+  assert.deepEqual(result.selected, ['rsshub', 'x', 'wechat']);
+  assert.equal(result.available.find((item) => item.id === 'rsshub')?.enabledSourceCount, 1);
+  assert.equal(result.available.find((item) => item.id === 'x')?.enabledSourceCount, 1);
+  assert.equal(result.available.find((item) => item.id === 'wechat')?.enabledSourceCount, 1);
 });
 
 test('没有已启用来源时不允许创建采集任务', () => {

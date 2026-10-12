@@ -368,6 +368,11 @@ ${candidate.angle.trim() || '未单独填写，以锁定命题为准。'}
 - 分发池：${candidate.distribution_lane || '推荐池'}
 - 读者利益：${candidate.reader_stake || '待明确'}
 
+## 写作路由与立场
+
+- article_type：${materialLine(materialBrief.article_type, '按内容类型自动推导')}
+- writing_stance：${materialLine(materialBrief.writing_stance, '按 article_type 自动推导')}
+
 ## 文章素材简报
 
 JSON:
@@ -422,7 +427,7 @@ async function api(request, response, url) {
   }
   if (await handleModelRoutes({ request, response, pathname, root, config, store, models, body, json })) return;
   if (await handleThemeRoutes({ request, response, pathname, searchParams, json, store, body, models })) return;
-  if (await handleMaterialRoutes({ request, response, pathname, store, json, body, root })) return;
+  if (await handleMaterialRoutes({ request, response, pathname, searchParams, store, json, body, root })) return;
   if (await handleContentFeedbackRoutes({ request, response, pathname, searchParams, store, artifactRoots, json, body, root, models })) return;
   if (await handleContentRoutes({ request, response, pathname, searchParams, store, artifactRoots, mime, json, body, root, models })) return;
   if (await handleSystemRoutes({ request, response, pathname, searchParams, root, resourceRoot: runtimePaths.appRoot, config, store, batchWorkdir, json, body, aiJobs,

@@ -477,7 +477,7 @@ function renderEventHotlist() {
     return;
   }
   const stateLabels = { new_event: "新事件", new_update: "有增量", continuing: "持续", stale: "过时" };
-  const modelLabels = { news_event: "T_news", open_source_technology: "T_technology", open_source_trend: "T_trend", github_project: "projectReaderValue" };
+  const modelLabels = { news_event: "T_account", open_source_technology: "T_technology", open_source_trend: "T_trend", github_project: "projectReaderValue" };
   const contentClass = state.atlasFilters.contentClass || "news_event";
   const summary = `<div class="event-hotlist-summary">${escapeHtml(modelLabels[contentClass] || "分类评分")} 独立排序；默认展示前 ${Math.min(HOTLIST_DISPLAY_LIMIT, allItems.length)} 条，共 ${allItems.length} 条符合当前筛选。`;
   container.innerHTML = summary + items.map((item) => {
@@ -485,9 +485,14 @@ function renderEventHotlist() {
     const delta = item.rankDelta == null ? "新上榜" : (item.rankDelta > 0 ? `↑${item.rankDelta}` : item.rankDelta < 0 ? `↓${Math.abs(item.rankDelta)}` : "—");
     const scopes = (item.marketScopes || []).join(" / ") || "待标注";
     const reason = (item.reason || []).slice(0, 3).map((value) => `<span>${escapeHtml(value)}</span>`).join("");
+    const platformLabels = { x: "X", techtwitter: "TechTwitter", wechat: "公众号", reddit: "Reddit", huggingface: "Hugging Face", github: "GitHub" };
+    const platformDetail = (item.platformImpactByPlatform || []).map((entry) => `${platformLabels[entry.platform] || entry.platform} ${entry.score}`).join(" · ");
+    const platformImpact = item.platformImpactAvailable
+      ? `<span title="${escapeHtml(platformDetail)}">平台影响 +${Number(item.platformImpact || 0).toFixed(1)}/10</span>`
+      : '<span title="当前事件没有可用的平台计数">平台指标缺失</span>';
     return `<article class="event-hotlist-item event-hotlist-${escapeHtml(item.state || "continuing")}" data-event-detail="${escapeHtml(item.eventId)}" tabindex="0" aria-label="查看事件详情：${escapeHtml(item.title || item.eventId)}">
       <div class="event-hotlist-rank"><b>${item.rank}</b><span>${escapeHtml(delta)}</span></div>
-      <div class="event-hotlist-main"><h4>${classificationHtml(item)} ${escapeHtml(item.title || item.eventId)}</h4><div class="event-hotlist-meta"><span class="event-state">${escapeHtml(stateLabel)}</span><span>评分 ${item.scoreValue ?? item.heatScore}</span><span>${item.reportCount} 条报道</span><span>${item.sourceCount} 个来源</span><span>${escapeHtml(scopes)}</span></div><div class="event-hotlist-reasons">${reason}</div></div>
+      <div class="event-hotlist-main"><h4>${classificationHtml(item)} ${escapeHtml(item.title || item.eventId)}</h4><div class="event-hotlist-meta"><span class="event-state">${escapeHtml(stateLabel)}</span><span>评分 ${item.scoreValue ?? item.heatScore}</span>${platformImpact}<span>${item.reportCount} 条报道</span><span>${item.sourceCount} 个来源</span><span>${escapeHtml(scopes)}</span></div><div class="event-hotlist-reasons">${reason}</div></div>
       <div class="event-hotlist-score"><strong>${item.scoreValue ?? item.heatScore}</strong><button class="ink-button" data-event-hotlist-pool="${escapeHtml(item.eventId)}" data-event-tracks="article">加入文章池</button><button class="outline-button" data-event-hotlist-pool="${escapeHtml(item.eventId)}" data-event-tracks="social_cards">加入图文池</button></div>
     </article>`;
   }).join("");

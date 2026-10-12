@@ -25,7 +25,7 @@ test('每个内置 Collector 目录都由 Manifest 自描述',()=>{
       const manifestFile=path.join(pluginRoot,directory.name,'manifest.json');
       return fs.existsSync(manifestFile)&&JSON.parse(fs.readFileSync(manifestFile,'utf8')).kind==='collector';
     });
-  assert.deepEqual(collectorDirectories.map((item)=>item.name).sort(),['browser-web-page','declarative-web-page','feed','github-discovery','reddit','rsshub']);
+  assert.deepEqual(collectorDirectories.map((item)=>item.name).sort(),['browser-web-page','declarative-web-page','feed','github-discovery','paper-radar','reddit','rsshub','tech-twitter','wechat-account','x-search']);
   for(const directory of collectorDirectories){
     const manifestFile=path.join(pluginRoot,directory.name,'manifest.json');
     const manifest=JSON.parse(fs.readFileSync(manifestFile,'utf8'));

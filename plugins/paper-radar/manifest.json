@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "id": "paper-radar-collector",
+  "name": "学术论文雷达",
+  "version": "1.0.0",
+  "kind": "collector",
+  "entry": "./adapter.mjs",
+  "riskLevel": "network-read",
+  "capabilities": ["cap_collect_paper"],
+  "configuration": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": { "type": "boolean", "title": "启用论文采集", "default": true },
+      "huggingFaceEnabled": { "type": "boolean", "title": "Hugging Face Daily Papers", "description": "huggingface.co/api/daily_papers · 热度发现信号", "default": true },
+      "arxivEnabled": { "type": "boolean", "title": "arXiv 新论文", "description": "export.arxiv.org/api/query · 预印本主采集源", "default": true },
+      "windowDays": { "type": "integer", "title": "采集时间范围（天）", "minimum": 1, "maximum": 30, "default": 7 },
+      "maxItems": { "type": "integer", "title": "每个来源最多保留论文数", "description": "Hugging Face Daily Papers、arXiv 分别按此上限采集，再合并去重", "minimum": 1, "maximum": 100, "default": 10 },
+      "categories": { "type": "string", "title": "arXiv 分类（逗号分隔）", "default": "cs.AI,cs.LG,cs.CL,cs.HC,cs.SE,cs.CY" }
+    }
+  },
+  "inputSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "windowDays": { "type": "integer", "minimum": 1, "maximum": 30, "default": 7, "title": "采集最近几天" },
+      "limit": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20, "title": "最多保留论文数" }
+    }
+  },
+  "outputSchema": {
+    "type": "object",
+    "required": ["items"],
+    "properties": { "items": { "type": "array", "items": { "type": "object" } } }
+  },
+  "runtime": { "timeoutMs": 120000, "concurrency": "parallel" },
+  "collector": {
+    "sourceTypes": ["paper"],
+    "sourceConfigSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "windowDays": { "type": "integer", "minimum": 1, "maximum": 30, "default": 7 },
+      "limit": { "type": "integer", "minimum": 1, "maximum": 100, "default": 10, "title": "每个来源最多保留论文数" }
+      }
+    }
+  }
+}

@@ -223,6 +223,12 @@
   background: var(--blue-soft);
 }
 #view-sources .source-form-step::after { background: var(--line-strong); }
+#view-sources .subscription-test-result,
+#view-sources .subscription-test-result.ok { color: var(--ink); background: var(--surface); }
+#view-sources .subscription-test-result.ok { border-color: var(--green); }
+#view-sources .subscription-test-result > small { color: var(--muted); opacity: 1; }
+#view-sources .subscription-test-result a { color: var(--blue-dark); }
+#view-sources .subscription-test-result code { color: var(--muted); }
 #view-system .runtime-commandbar small,
 #view-system .maintenance-panel p { color: var(--muted); }
 #view-system .maintenance-panel .kicker,

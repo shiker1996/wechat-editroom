@@ -2,8 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { articleLengthStatus, articleStageOutputIssue, articleGateBlockingIssues, articleGateNeedsEditorialReview, authorizedWritingBrief, buildDraftUserPrompt, buildArticleStageSystem, buildReviewRepairPrompt, buildPublicationComplianceRepairPrompt, compositeSourceText, normalizePlanningResult, selectWriterSkill, ARTICLE_LENGTH_RANGE, ARTICLE_STAGE_CONTRACT, ARTICLE_QUALITY_GATE_TOOL, ARTICLE_REVIEW_GATE_TOOL, aiQualityGate, aiReviewGate, sourceCacheIssue, unverifiedFactBaseIssue } from '../server/features/articles/application/article-pipeline.mjs';
-import { inspectArticleQuality } from '../server/features/articles/domain/article-quality.mjs';
+import { articleLengthStatus, articleStageOutputIssue, articleGateBlockingIssues, articleGateNeedsEditorialReview, authorizedWritingBrief, buildDraftUserPrompt, buildDraftOutlineView, replaceArticleTitle, buildArticleStageSystem, buildReviewRepairPrompt, buildPublicationComplianceRepairPrompt, compositeSourceText, normalizePlanningResult, selectWriterSkill, ARTICLE_LENGTH_RANGE, ARTICLE_STAGE_CONTRACT, ARTICLE_QUALITY_GATE_TOOL, ARTICLE_REVIEW_GATE_TOOL, aiQualityGate, aiReviewGate, sourceCacheIssue, unverifiedFactBaseIssue } from '../server/features/articles/application/article-pipeline.mjs';
+import { inspectPlanningMetaLeakage } from '../server/features/articles/domain/article-quality.mjs';
+import { inspectArticleQuality, inspectTrafficStructure } from '../server/features/articles/domain/article-quality.mjs';
 import { loadArticleSkillBundle, loadSkillBundle } from '../server/platform/llm/skill-runtime.mjs';
 
 test('成稿规划兼容模型把数组字段返回为字符串', () => {
@@ -70,10 +71,40 @@ test('成稿规划保留结构化数组并接纳单个风险对象', () => {
 
 test('成稿提示词展开真实标题、简报和大纲', () => {
   const prompt = buildDraftUserPrompt('真实标题', { thesis: '真实命题' }, '# 真实大纲');
-  assert.match(prompt, /标题:真实标题/);
+  assert.match(prompt, /标题：真实标题/);
   assert.match(prompt, /\"thesis\":\"真实命题\"/);
-  assert.match(prompt, /大纲:\n# 真实大纲/);
+  assert.match(prompt, /文章结构视图（仅供执行，不得原样复述）：\n# 真实大纲/);
+  assert.match(prompt, /规划元信息隔离规则/);
   assert.doesNotMatch(prompt, /\$\{(?:selectedTitle|outline|JSON\.stringify\(brief\))\}/);
+});
+
+test('写作模型只接收结构大纲视图，不接收流量规划和剩余风险段', () => {
+  const view = buildDraftOutlineView(`# 文章大纲\n\n## 结构大纲\n\n**H2-1 一条自述**\n- 交代来源性质\n- 自然转化为问题入口\n\n## 流量规划\n- 本文不写进正文\n\n## 剩余风险\n- 风险`);
+  assert.match(view, /一条自述/);
+  assert.match(view, /来源性质/);
+  assert.doesNotMatch(view, /流量规划|本文不写进正文|剩余风险/);
+});
+
+test('结构视图兼容加粗结构标题和编号式章节，不会丢失完读推进', () => {
+  const view = buildDraftOutlineView(`**核心判断**：岗位内能力形成被压缩\n\n**结构大纲**：\n1. 开头：具体自述与数据反差\n2. 中段：拆解训练端和入口端\n3. 结尾：回收标题并给出自查判断\n\n**增长承接**：\n- 不应进入正文`);
+  assert.match(view, /具体自述与数据反差/);
+  assert.match(view, /拆解训练端和入口端/);
+  assert.match(view, /回收标题并给出自查判断/);
+  assert.doesNotMatch(view, /增长承接|不应进入正文/);
+});
+
+test('最终标题锁定只替换唯一 H1，不改正文结构', () => {
+  const article = '# 旧标题\n\n第一段。\n\n## 第一节\n\n正文。';
+  assert.equal(replaceArticleTitle(article, '新标题'), '# 新标题\n\n第一段。\n\n## 第一节\n\n正文。');
+  assert.equal(replaceArticleTitle('没有标题的正文', '新标题'), '# 新标题\n\n没有标题的正文');
+});
+
+test('规划元话语泄漏检查拦截 S001 类型的内部说明，但不拦截自然来源限定', () => {
+  const leaked = inspectPlanningMetaLeakage('本文不写涉事公司，所以它只能当作提问的起点。');
+  assert.equal(leaked.pass, false);
+  assert.ok(leaked.issues.length >= 2);
+  assert.equal(inspectPlanningMetaLeakage('这是一条单一来源的个人陈述，不能据此代表行业整体。').pass, true);
+  assert.equal(inspectPlanningMetaLeakage('我会借助见字平台分析它能给读者带来什么收益（读者收益维度）。').pass, true);
 });
 
 test('审稿返工提示词直接携带事实基座、大纲、去AI稿和结构化审稿结果', () => {
@@ -145,6 +176,32 @@ test('文章质量门禁开关开启时消费 decision tool，且仍保持内部
   assert.deepEqual(calls[0].tools, [ARTICLE_QUALITY_GATE_TOOL]);
 });
 
+test('文章质量门禁在模型判定通过后仍拦截规划元话语泄漏', async () => {
+  const gateway = {
+    config: { defaultProvider: 'mock', providers: { mock: { supportsNativeTools: true } } },
+    async complete() {
+      return { callId: 42, toolCalls: [{ id: 'call-gate', name: 'decision.article_quality_gate', input: { pass: true, issues: [] }, providerExecuted: false }] };
+    },
+  };
+  const store = { repositories: { extensionSettings: { get() { return { value: { decisionToolsEnabled: true } }; } } } };
+  const result = await aiQualityGate({ gateway, store, provider: 'mock', batchId: 'b1', candidateId: 'c1',
+    article: '# 标题\n\n本文不写公司，所以只能当作提问的起点。', factBase: { claims: [] }, systemPrompt: '质量门禁', stage: 'draft' });
+  assert.equal(result.pass, false);
+  assert.ok(result.issues.some((issue) => issue.type === 'structure'));
+});
+
+test('仅修复规划元话语时要求保留标题、开头和结构', () => {
+  const source = fs.readFileSync(new URL('../server/features/articles/application/article-pipeline.mjs', import.meta.url), 'utf8');
+  assert.match(source, /若本次门禁只指出规划元话语问题，必须保留原标题、前 200 字、开头钩子/);
+});
+
+test('文章管线在审稿后增加最终标题锁定，并让后续阶段读取锁定标题', () => {
+  const source = fs.readFileSync(new URL('../server/features/articles/application/article-pipeline.mjs', import.meta.url), 'utf8');
+  assert.match(source, /recordStage\('title-lock'/);
+  assert.match(source, /已锁定标题：\$\{lockedTitle\}/);
+  assert.match(source, /replaceArticleTitle\(illustration\.markdown,extractArticleTitle\(final\)\|\|lockedTitle\)/);
+});
+
 test('终稿与发布安全门禁失败后都会进入定向合规修订并复检', () => {
   const source=fs.readFileSync(new URL('../server/features/articles/application/article-pipeline.mjs',import.meta.url),'utf8');
   assert.match(source,/purpose: 'article-publication-compliance-repair'/);
@@ -167,6 +224,13 @@ test('爆款结构门禁要求钩子、3-5个章节和来源链接', () => {
 test('爆款结构门禁接受陈述式钩子，不强制使用问号', () => {
   const article = `# 标题\n\n2026年，一名研究员公开了自己离开公司的原因，并列出内部推动改革失败的经过。他写过方案、联系过管理层，也试图争取技术领袖支持，但组织最终没有改变决定。真正值得讨论的不是一次普通离职，而是研究员是否还能控制自己参与创造的技术。\n\n事件背后连接着政府合同、商业利益和技术伦理。关键在于，公开原则进入高代价项目后还能不能影响组织决定，以及个人为什么很难通过内部流程改变已经商业化的技术方向。\n\n作者的判断很明确：原则只有在利益冲突中仍然有效，才称得上组织规则。后文将沿着事实、机制和影响展开，并区分公开证据、个人叙述和作者判断。\n\n## 第一节\n\n事实与解释。[来源](https://example.com/a)\n\n进一步分析。\n\n## 第二节\n\n组织机制与现实影响。\n\n补充事实边界。\n\n## 第三节\n\n反方解释与结论。\n\n给出具体建议。`;
   assert.equal(inspectArticleQuality(article).pass, true);
+});
+
+test('所有文章共用流量结构检查，缺少章节时明确暴露而不改变读者收益放置', () => {
+  const article = '# 标题\n\n具体场景和冲突在这里展开，真正的问题是读者会承担什么代价。\n\n继续解释事实、机制和判断，给出来源与边界。';
+  const report = inspectTrafficStructure(article);
+  assert.equal(report.pass, false);
+  assert.match(report.issues.join('；'), /3-5 个 H2/);
 });
 
 test('技能运行时加载完整写作技能并记录哈希', () => {

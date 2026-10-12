@@ -26,7 +26,7 @@
 |---|---:|---|
 | 模型步骤 | `maxModelSteps: 6` | `config.local.json` 的 `conversationAgent`；运行启动后冻结到 generation snapshot |
 | 工具调用 | `maxToolCalls: 10` | 同上 |
-| 并行工具调用 | `maxParallelToolCalls: 3` | 同上，硬上限为 4 |
+| 并行工具调用 | `maxParallelToolCalls: 3` | 同上，硬上限为 4；模型一次返回更多原生调用时，运行器按该值拆批执行，不再因单个响应的调用数超过并行度而整轮失败 |
 | 单次工具结果 | `maxToolResultChars: 12000` | 同上 |
 | 工具结果总量 | `maxTotalToolResultChars: 64000` | 同上 |
 | 对话超时 | `timeoutMs: 180000`（3 分钟） | 同上 |

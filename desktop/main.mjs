@@ -5,6 +5,7 @@ import net from 'node:net';
 import { spawn } from 'node:child_process';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { nodeProxyEnvironment } from '../server/platform/network/node-proxy-environment.mjs';
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const serverEntry = path.join(appRoot, 'server.mjs');
@@ -239,7 +240,7 @@ function startServer({ port, workspaceRoot, logDirectory }) {
   const stderrPath = path.join(logDirectory, 'desktop-workbench.error.log');
   const stdout = fs.createWriteStream(stdoutPath, { flags: 'a' });
   const stderr = fs.createWriteStream(stderrPath, { flags: 'a' });
-  const env = {
+  const env = nodeProxyEnvironment({
     ...process.env,
     NODE_ENV: 'production',
     WORKBENCH_RESOURCE_ROOT: appRoot,
@@ -251,7 +252,7 @@ function startServer({ port, workspaceRoot, logDirectory }) {
     WORKBENCH_RSSHUB_SOURCE_ROOT: fs.existsSync(path.join(process.resourcesPath || '', 'rsshub-source'))
       ? path.join(process.resourcesPath, 'rsshub-source')
       : path.join(appRoot, 'RSSHub'),
-  };
+  });
   serverProcess = spawn(nodePath, ['--disable-warning=ExperimentalWarning', serverEntry], {
     cwd: appRoot,
     env,

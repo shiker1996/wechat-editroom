@@ -143,6 +143,59 @@ test('可恢复 checkpoint 原子占用并从下一模型步骤继续，重复�
   assert.equal(f.store.getAgentRun(resumed.agentRunId).status, 'completed');
 });
 
+test('模型步骤上限会保存完整历史并可通过 resumeFrom 开启下一组预算', async (t) => {
+  const f = fixture(t), capability = 'cap_resume_limit_read';
+  const tool = { capability, inputSchema: { type: 'object' }, outputSchema: { type: 'object' } };
+  const registry = { execute: async () => ({ status: 'ok', data: { text: '上限前的资料' }, artifacts: [], warnings: [], provenance: {} }) };
+  const limited = await runSkill({ skillId: 'demo', entryPoint: 'test', definition, store: f.store,
+    gateway: gateway(), registry, catalog: [tool], messages: [{ role: 'user', content: '开始' }], budget: { maxModelSteps: 1 },
+    modelStep: () => ({ type: 'tool_requests', requests: [{ requestId: 'tr_limit', capability, arguments: {}, reason: '读取' }] }),
+  });
+  assert.equal(limited.type, 'limit');
+  assert.equal(limited.resumeFrom, limited.agentRunId);
+  assert.equal(limited.resumable, true);
+  const checkpoint = f.store.getLatestAgentCheckpoint(limited.agentRunId);
+  assert.equal(checkpoint.state.phase, 'limit');
+  assert.equal(checkpoint.state.nextStep, 1);
+  assert.equal(checkpoint.state.modelSteps, 1);
+  assert.ok(checkpoint.state.history.some((item) => String(item.content || '').includes('上限前的资料')));
+
+  const resumed = await runSkill({ skillId: 'demo', entryPoint: 'test', definition, store: f.store,
+    resumeFrom: limited.resumeFrom, gateway: gateway(), registry, catalog: [tool],
+    messages: [{ role: 'user', content: '继续处理' }],
+    modelStep: ({ step, messages }) => {
+      assert.equal(step, 1);
+      assert.equal(messages.at(-1).content, '继续处理');
+      return { type: 'final', assistantReply: '已从上限 checkpoint 继续' };
+    },
+  });
+  assert.equal(resumed.assistantReply, '已从上限 checkpoint 继续');
+  assert.equal(f.store.getAgentRun(resumed.agentRunId).status, 'completed');
+});
+
+test('从工具预算上限恢复后，新的 Run 可以再次执行工具', async (t) => {
+  const f = fixture(t), capability = 'cap_resume_fresh_tool_budget';
+  const tool = { capability, inputSchema: { type: 'object' }, outputSchema: { type: 'object' } };
+  const registry = { execute: async () => ({ status: 'ok', data: { text: '再次读取成功' }, artifacts: [], warnings: [], provenance: {} }) };
+  const first = await runSkill({ skillId: 'demo', entryPoint: 'test', definition, store: f.store,
+    gateway: gateway(), registry, catalog: [tool], messages: [{ role: 'user', content: '开始' }],
+    budget: { maxModelSteps: 1, maxToolCalls: 1 },
+    modelStep: () => ({ type: 'tool_requests', requests: [{ requestId: 'tr_budget_1', capability, arguments: { query: 'first' }, reason: '读取' }] }),
+  });
+  assert.equal(first.type, 'limit');
+
+  const resumed = await runSkill({ skillId: 'demo', entryPoint: 'test', definition, store: f.store,
+    resumeFrom: first.resumeFrom, gateway: gateway(), registry, catalog: [tool],
+    modelStep: ({ step }) => {
+      assert.equal(step, 1);
+      return { type: 'tool_requests', requests: [{ requestId: 'tr_budget_2', capability, arguments: { query: 'second' }, reason: '重试读取' }] };
+    },
+  });
+  assert.equal(resumed.type, 'limit');
+  assert.equal(resumed.toolCalls, 1);
+  assert.equal(f.store.listAgentToolCalls(resumed.agentRunId)[0].status, 'ok');
+});
+
 test('等待确认的 checkpoint 可安全恢复，确认能力只对指定工具生效', async (t) => {
   const f = fixture(t), capability = 'cap_resume_write';
   const tool = { capability, riskLevel: 'external-write', inputSchema: { type: 'object' }, outputSchema: { type: 'object' } };

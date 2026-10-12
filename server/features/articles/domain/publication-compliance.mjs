@@ -10,6 +10,21 @@ const NUMBER_PATTERN = /\d+(?:\.\d+)?\s*(?:万亿美元|亿美元|万亿|亿元|
 function text(value) { return String(value ?? '').trim(); }
 function unique(values) { return [...new Set(values.filter(Boolean))]; }
 
+function normalizedSourceKey(item) {
+  return text(item?.sourceGroupId || item?.source_group_id || item?.sourceUrl || item?.source_url || item?.sourceTitle || item?.source_title || item?.sourceType || item?.source_type).toLowerCase();
+}
+
+function sourceLevelOf(item) {
+  const explicit = text(item?.sourceLevel || item?.source_level);
+  if (explicit) return explicit;
+  const source = `${text(item?.sourceType || item?.source_type)} ${text(item?.sourceUrl || item?.source_url)}`.toLowerCase();
+  if (/x\.com|twitter|个人|social|社交/.test(source)) return 'personal_social';
+  if (/github|arxiv|paper|技术文档|technical/.test(source)) return 'technical_primary';
+  if (/官方|公告|财报|政府|监管|official/.test(source)) return 'official';
+  if (/媒体|news|报|记者|reliable/.test(source)) return 'reliable_media';
+  return explicit || 'community';
+}
+
 export function extractArticleTitle(article = '') {
   return text(text(article).match(/^#\s+(.+)$/m)?.[1] || '');
 }
@@ -35,8 +50,32 @@ function numberTokens(value) {
   return [...text(value).matchAll(NUMBER_PATTERN)].map((match) => text(match[0]).replace(/\s+/g, ''));
 }
 
-export function buildPublicationClaimRegister(factBase = {}) {
-  return claimsOf(factBase).map((item, index) => {
+export function enrichFactBaseClaims(factBase = {}, { citationPolicy = 'cluster' } = {}) {
+  const claims = claimsOf(factBase);
+  const groups = new Map();
+  return {
+    ...factBase,
+    claims: claims.map((item, index) => {
+      const sourceKey = normalizedSourceKey(item) || `claim-${index + 1}`;
+      if (!groups.has(sourceKey)) groups.set(sourceKey, `source-group-${groups.size + 1}`);
+      const status = text(item?.status || (typeof item === 'string' ? 'unverified' : 'unverified')) || 'unverified';
+      const sourceLevel = sourceLevelOf(item);
+      const sourceUrl = text(item?.sourceUrl || item?.source_url);
+      const evidenceKind = text(item?.evidenceKind || item?.evidence_kind) || (status === 'opinion' ? 'author_material' : 'source_observation');
+      return {
+        ...(typeof item === 'object' && item ? item : { claim: item }),
+        source_group_id: text(item?.sourceGroupId || item?.source_group_id) || groups.get(sourceKey),
+        source_level: sourceLevel,
+        evidence_kind: evidenceKind,
+        attribution_required: item?.attributionRequired ?? item?.attribution_required ?? Boolean(sourceUrl || sourceLevel === 'personal_social'),
+        visible_citation: text(item?.visibleCitation || item?.visible_citation) || citationPolicy,
+      };
+    }),
+  };
+}
+
+export function buildPublicationClaimRegister(factBase = {}, { citationPolicy = 'cluster' } = {}) {
+  return enrichFactBaseClaims(factBase, { citationPolicy }).claims.map((item, index) => {
     const claim = claimText(item);
     const status = text(item?.status || (typeof item === 'string' ? 'unverified' : 'unverified')) || 'unverified';
     return {
@@ -49,6 +88,11 @@ export function buildPublicationClaimRegister(factBase = {}) {
       sourceType: text(item?.sourceType || item?.source_type),
       publishedAt: text(item?.publishedAt || item?.published_at),
       boundary: text(item?.boundary),
+      sourceGroupId: text(item?.sourceGroupId || item?.source_group_id) || `source-group-${index + 1}`,
+      sourceLevel: sourceLevelOf(item),
+      evidenceKind: text(item?.evidenceKind || item?.evidence_kind) || 'source_observation',
+      attributionRequired: item?.attributionRequired ?? item?.attribution_required ?? Boolean(item?.sourceUrl),
+      visibleCitation: text(item?.visibleCitation || item?.visible_citation) || citationPolicy,
       publicationRule: status === 'verified' ? '可作为确定事实，但仍需保留来源归因' : '不得作为确定事实；只能降格、归因或删除',
     };
   }).filter((item) => item.claim);
@@ -111,8 +155,9 @@ export function scanPublicationRisk({ article = '', title = '', factBase = {} } 
   };
 }
 
-export function publicationCompliancePrompt({ factBase = {}, claimRegister = [], scan = {} } = {}) {
+export function publicationCompliancePrompt({ factBase = {}, claimRegister = [], scan = {}, writingStance = 'analysis', citationPolicy = 'cluster' } = {}) {
   return `发布合规专项要求：
+- 当前写作立场为 ${writingStance}，来源展示策略为 ${citationPolicy}。立场只影响正文表达与来源露出密度，不改变事实门禁；观点文不因没有逐句“据来源”而自动失败，但每个关键事实仍必须能回指发布主张登记。
 - 不能把传闻、匿名爆料、单方说法、模型推断或搜索摘要写成确定事实。
 - IPO、上市、估值、融资、破产、违法、诈骗、造假、压榨、性骚扰等高影响主张，必须检查直接证据、日期和归因；证据不足时必须删除、降格或停止发布。来源质量要区分硬阻塞和改进建议：已核验主张有可追溯 sourceUrl、文章明确归因时，聚合平台或二手媒体不是单独的失败理由；应要求正文说明“据某平台汇总”或其所引用的公告/财报，而不是要求模型自行补找原始链接。
 - 标题、摘要和前 200 字单独审核；正文中的限定语不能自动修复一个已经把传闻写成事实的标题。

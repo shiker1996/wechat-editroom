@@ -17,11 +17,35 @@ export const INITIAL_COLLECTION_SOURCES = Object.freeze([
   { pluginId: 'feed-collector', pluginVersion: '1.0.0', sourceType: 'direct', sourceKey: 'direct:https://wechat2rss.xlab.app/feed/7131b577c61365cb47e81000738c10d872685908.xml', label: '示例 · 量子位', config: { url: 'https://wechat2rss.xlab.app/feed/7131b577c61365cb47e81000738c10d872685908.xml' } },
   { pluginId: 'feed-collector', pluginVersion: '1.0.0', sourceType: 'direct', sourceKey: 'direct:https://wechat2rss.xlab.app/feed/51e92aad2728acdd1fda7314be32b16639353001.xml', label: '示例 · 机器之心', config: { url: 'https://wechat2rss.xlab.app/feed/51e92aad2728acdd1fda7314be32b16639353001.xml' } },
   { pluginId: 'feed-collector', pluginVersion: '1.0.0', sourceType: 'direct', sourceKey: 'direct:https://tldr.tech/api/rss/ai', label: '示例 · TLDR AI', config: { url: 'https://tldr.tech/api/rss/ai' } },
+  { pluginId: 'paper-radar-collector', pluginVersion: '1.0.0', sourceType: 'paper', sourceKey: 'paper:radar', label: '示例 · 学术论文雷达', config: { windowDays: 7, limit: 10 } },
 ]);
 
 const MARKER_TYPE = 'system';
 const MARKER_ID = 'initial-collection-sources';
 const MARKER_VERSION = 1;
+const PAPER_SOURCE_MARKER_ID = 'initial-paper-radar-source';
+const PAPER_LIMIT_MIGRATION_MARKER_ID = 'paper-radar-per-source-limit-v2';
+
+function ensurePaperRadarSource(repository, settings) {
+  let changed = false;
+  if (!settings.get(MARKER_TYPE, PAPER_SOURCE_MARKER_ID)) {
+    if (!repository.getByKey('paper:radar')) repository.upsert({
+      pluginId: 'paper-radar-collector', pluginVersion: '1.0.0', sourceType: 'paper', sourceKey: 'paper:radar',
+      label: '示例 · 学术论文雷达', config: { windowDays: 7, limit: 10 }, enabled: false, managed: false, origin: 'initial-sample',
+    });
+    settings.save({ extensionType: MARKER_TYPE, extensionId: PAPER_SOURCE_MARKER_ID, value: { version: 1, status: 'seeded' }, configured: true, status: 'ready' });
+    changed = true;
+  }
+  if (!settings.get(MARKER_TYPE, PAPER_LIMIT_MIGRATION_MARKER_ID)) {
+    const source = repository.getByKey('paper:radar');
+    if (source?.plugin_id === 'paper-radar-collector' && Number(source.config?.limit) > 10) {
+      repository.update(source.id, { config: { ...source.config, limit: 10 } });
+      changed = true;
+    }
+    settings.save({ extensionType: MARKER_TYPE, extensionId: PAPER_LIMIT_MIGRATION_MARKER_ID, value: { version: 1, status: 'migrated' }, configured: true, status: 'ready' });
+  }
+  return changed;
+}
 
 export function seedInitialCollectionSources(store) {
   const repository = store?.repositories?.collectionSources;
@@ -29,12 +53,16 @@ export function seedInitialCollectionSources(store) {
   if (!repository || !settings) throw new TypeError('初始化采集源需要有效的 Store');
 
   const marker = settings.get(MARKER_TYPE, MARKER_ID);
-  if (marker) return { seeded: false, reason: 'already-initialized', count: repository.list().length };
+  if (marker) {
+    ensurePaperRadarSource(repository, settings);
+    return { seeded: false, reason: 'already-initialized', count: repository.list().length };
+  }
 
   // 迁移过来的旧库、已有用户配置的库和生产库都不接受示例覆盖。
   const existing = Number(store.db.prepare('SELECT COUNT(*) AS count FROM collection_sources').get()?.count || 0);
   if (existing > 0) {
     settings.save({ extensionType: MARKER_TYPE, extensionId: MARKER_ID, value: { version: MARKER_VERSION, status: 'skipped-existing', count: existing }, configured: true, status: 'ready' });
+    ensurePaperRadarSource(repository, settings);
     return { seeded: false, reason: 'existing-sources', count: existing };
   }
 
@@ -42,10 +70,12 @@ export function seedInitialCollectionSources(store) {
   try {
     for (const source of INITIAL_COLLECTION_SOURCES) repository.upsert({ ...source, enabled: false, managed: false, origin: 'initial-sample' });
     settings.save({ extensionType: MARKER_TYPE, extensionId: MARKER_ID, value: { version: MARKER_VERSION, status: 'seeded', count: INITIAL_COLLECTION_SOURCES.length }, configured: true, status: 'ready' });
+    settings.save({ extensionType: MARKER_TYPE, extensionId: PAPER_SOURCE_MARKER_ID, value: { version: 1, status: 'seeded' }, configured: true, status: 'ready' });
     store.db.exec('COMMIT');
   } catch (error) {
     store.db.exec('ROLLBACK');
     throw error;
   }
+  ensurePaperRadarSource(repository, settings);
   return { seeded: true, count: INITIAL_COLLECTION_SOURCES.length };
 }

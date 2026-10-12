@@ -72,10 +72,11 @@ export class EventResolutionRepository {
         const legacyIds = mergeIds(parseJson(previous?.legacy_ids_json, []), event.legacy_event_ids || []);
         const historicalMatch = event.historical_match || null;
         const eventState = event.event_state || (historicalMatch ? (event.update_type === 'new_update' ? 'new_update' : 'continuing') : 'new_event');
+        const normalizedForStorage = { ...normalized, relationEvidence: event.relation_evidence || [], historicalRelation: event.historical_relation || 'UNRELATED' };
         upsertEvent.run(event.event_id, event.canonical_key || '', event.title || '', normalized.whoKey || '', normalized.actionType || '其他',
           normalized.objectKey || '', event.first_seen_at || null, event.last_seen_at || null,
           eventState === 'new_update' || eventState === 'new_event' ? event.last_seen_at || null : null, 'active', confidenceOf(event), eventState,
-          JSON.stringify(legacyIds), JSON.stringify(normalized), shadow.resolver_version || '', shadow.algorithm_version || '',
+          JSON.stringify(legacyIds), JSON.stringify(normalizedForStorage), shadow.resolver_version || '', shadow.algorithm_version || '',
           'news_event', null, '', '[]', '{}', '[]', 1, 1, 'editorial_review', 'needs_review', now, now);
         const method = historicalMatch?.method || ((event.hotspot_ids || []).length > 1 ? 'structured' : 'exact');
         const matchConfidence = historicalMatch ? Math.min(1, Math.max(0, Number(historicalMatch.score || 0) / 100)) : ((event.hotspot_ids || []).length > 1 ? 0.82 : 0.5);

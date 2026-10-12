@@ -33,7 +33,7 @@ test('手动补选模式没有研判点时不阻断编辑底稿锁定', () => {
   assert.equal(result.fields.find((field) => field.key === 'research_basis').required, false);
 });
 
-test('研判驱动模式仍要求研判点和研判主线', () => {
+test('研判驱动模式没有合适拓展点时也不阻断成稿', () => {
   const candidate = {
     editorial_mode: 'research',
     pool_role: '核心8条',
@@ -44,8 +44,8 @@ test('研判驱动模式仍要求研判点和研判主线', () => {
   };
   const result = evaluateEditorialReadiness({ candidate, editorial: editorial() });
   assert.equal(resolveEditorialMode(candidate), 'research');
-  assert.equal(result.ready, false);
-  assert.deepEqual(result.missing, ['采用的研判拓展点', '采用的研判主线']);
+  assert.equal(result.ready, true);
+  assert.deepEqual(result.missing, []);
 });
 
 test('研判分不参与模式判断，只认候选覆盖关系', () => {
@@ -60,7 +60,7 @@ test('研判分不参与模式判断，只认候选覆盖关系', () => {
   };
   const result = evaluateEditorialReadiness({ candidate, editorial: editorial() });
   assert.equal(resolveEditorialMode(candidate), 'research');
-  assert.equal(result.ready, false);
+  assert.equal(result.ready, true);
 });
 
 test('未命中研判报告候选覆盖关系时按手动模式', () => {
