@@ -33,7 +33,7 @@ if ! health_ok; then
     exit 1
   fi
   mkdir -p logs
-  NODE_ARGS=(--disable-warning=ExperimentalWarning server.mjs)
+  NODE_ARGS=(scripts/runtime/start-server.mjs)
   if [ "$DEMO" -eq 1 ]; then NODE_ARGS+=(--demo); fi
   if [ "$DEMO_PRODUCTION" -eq 1 ]; then NODE_ARGS+=(--demo-production); fi
   nohup node "${NODE_ARGS[@]}" >>logs/workbench.log 2>>logs/workbench.error.log &

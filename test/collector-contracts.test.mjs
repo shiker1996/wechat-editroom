@@ -22,9 +22,11 @@ test('Collector Manifest、来源配置和标准输出执行严格校验',()=>{
 
 test('阶段 0 注册全部内置采集器清单但不提前切换执行实现',()=>{
   const registry=createBuiltinCollectorRegistry();
-  assert.deepEqual(registry.list().map((item)=>item.id),['browser-web-page','declarative-web-page','feed-collector','github-discovery-collector','reddit-collector','rsshub-collector']);
+  assert.deepEqual(registry.list().map((item)=>item.id),['browser-web-page','declarative-web-page','feed-collector','github-discovery-collector','paper-radar-collector','reddit-collector','rsshub-collector','tech-twitter-collector','wechat-account-collector','x-search-collector']);
   assert.equal(registry.resolveSourceType('reddit').manifest.id,'reddit-collector');
   assert.equal(registry.resolveSourceType('twitter').manifest.id,'rsshub-collector');
+  assert.equal(registry.resolveSourceType('wechat').manifest.id,'wechat-account-collector');
+  assert.equal(registry.resolveSourceType('x').manifest.id,'tech-twitter-collector');
 });
 
 test('采集能力按启用状态和优先级解析，并在绑定实现停用时选择兼容兜底',async t=>{
@@ -122,9 +124,9 @@ test('统一采集源服务规范化 Reddit 配置并支持启停与更新',t=>{
 });
 
 test('采集源页面保留旧入口并接入 Reddit、动态表单和统一 API',()=>{
-  const html=fs.readFileSync(path.resolve('public/index.html'),'utf8');const view=fs.readFileSync(path.resolve('public/src/views/subscriptions.js'),'utf8');const css=readStyles();
+  const html=fs.readFileSync(path.resolve('public/index.html'),'utf8');const view=fs.readFileSync(path.resolve('public/src/views/subscriptions.js'),'utf8');const css=readStyles();const officeCss=fs.readFileSync(path.resolve('public/styles/office-workspaces.css'),'utf8');
   assert.match(html,/option value="reddit"/);assert.match(html,/id="source-plugin-fields"/);assert.match(html,/id="source-status-filter"/);
-  assert.match(css,/\.source-plugin-fields\{[^}]*background:var\(--system-palette-hex-1f2927\);color:var\(--system-palette-hex-edf2ef\)/);
+  assert.match(officeCss,/#view-system \.source-plugin-fields,[\s\S]*?color: var\(--ink\);[\s\S]*?background: var\(--surface-subtle\);/);
   assert.match(css,/\.source-compose \.source-plugin-fields input[^}]*color:var\(--ink\);[^}]*background:var\(--white\)/);
   assert.match(view,/\/api\/collection-sources/);assert.match(view,/sourceConfigSchema/);assert.match(view,/\/api\/subscriptions/);
 });

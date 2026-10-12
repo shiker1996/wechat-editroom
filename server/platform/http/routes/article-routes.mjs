@@ -4,7 +4,6 @@ import { listArticleStageSkillSlots, listEntryWriterSkills, resolveArticleStageS
 import { executeCapabilityWithPreference } from '../../tools/capability-slots.mjs';
 import { getToolRegistry } from '../../tools/index.mjs';
 import { runEditorialAgentTurn } from '../../../features/articles/application/agent/editorial-adapter.mjs';
-import { runEditorialPreflight } from '../../../features/articles/application/editorial-preflight.mjs';
 import { extractLocalProjectPath } from '../../integrations/local-project-reader.mjs';
 import { createNdjsonSession } from '../route-helpers.mjs';
 import { runWithThinkingSink } from '../../llm/gateway.mjs';
@@ -170,7 +169,7 @@ export async function handleArticleRoutes(context) {
     try {
       const result=await runWithThinkingSink((delta)=>send({type:'thinking',text:delta}),async()=>runEditorialAgentTurn({gateway:models,store,registry:await getToolRegistry(),candidateId,provider:input.provider,answer,events:candidateEventGroups(candidate,12000),retrieve:await editorialRetrieve(candidate),workspaceRoot:root,projectPath,budget:agentBudget(),resumeFrom:String(input.resumeFrom||''),suppliedUrls:extractSuppliedUrls(answer),allowedCapabilities:(await resolveSkillToolPolicy({workspaceRoot:root,skillId:'editorial-room-chat'})).allowedCapabilities,onEvent:send,signal:stream.signal}));
       if(result.reply)send({type:'assistant.delta',text:result.reply});
-      send({type:'done',data:{candidate:result.candidate,editorial:result.editorial,usage:result.usage,model:result.model,agentRunId:result.agentRunId,toolCalls:result.toolCalls,ignoredBecauseLocked:Boolean(result.ignoredBecauseLocked)}});
+      send({type:'done',data:{candidate:result.candidate,editorial:result.editorial,usage:result.usage,model:result.model,agentRunId:result.agentRunId,toolCalls:result.toolCalls,resumeFrom:result.resumeFrom||null,limited:Boolean(result.limited),ignoredBecauseLocked:Boolean(result.ignoredBecauseLocked)}});
     } catch(error) {
       const message=error instanceof Error?error.message:String(error||'编辑会调用失败');
       send({type:'error',code:error?.code||'EDITORIAL_AGENT_FAILED',message,error:message});
@@ -208,7 +207,7 @@ export async function handleArticleRoutes(context) {
   }
   const lockMatch = pathname.match(/^\/api\/candidates\/(\d+)\/lock$/);
   if (lockMatch && request.method === 'POST') {
-    const lockInput = await body(request);
+    await body(request);
     const candidate = store.getCandidate(Number(lockMatch[1]));
     if (!candidate) return json(response, 404, { error: '候选不存在' });
     const editorial = candidate.editorial;
@@ -216,27 +215,9 @@ export async function handleArticleRoutes(context) {
     const researchContext = readDiscussionResearchContext({ workspaceRoot: root, batchId: candidate.batch_id, candidate, events });
     const readiness = evaluateEditorialReadiness({ candidate: { ...candidate, research_context: researchContext }, editorial });
     if (!readiness.ready) return json(response, 409, { error: `编辑底稿未就绪，仍缺：${readiness.missing.join('、')}` });
-    const preflight = await runEditorialPreflight({
-      gateway: models,
-      store,
-      candidate,
-      candidateId: candidate.id,
-      batchId: candidate.batch_id,
-      provider: String(lockInput.provider || models.config.defaultProvider || ''),
-      workspaceRoot: root,
-      events,
-      researchContext,
-    });
-    if (!preflight.ready) {
-      const blockers = preflight.gates.flatMap((item) => item.passed ? [] : item.issues).filter(Boolean);
-      return json(response, 409, {
-        code: 'EDITORIAL_PREFLIGHT_BLOCKED',
-        error: `锁题前成稿预检未通过：${blockers.join('；') || '请查看各项门禁结果'}`,
-        gates: preflight.gates,
-        preflight,
-      });
-    }
-    const materialBrief = preflight.materialBrief || buildMaterialBrief({ candidate, editorial, researchContext, events });
+    // 锁题只依赖当前已保存且通过表单门禁的编辑决策。
+    // 事实基座与事实/证据门禁统一在确认成稿后由 article pipeline 执行。
+    const materialBrief = buildMaterialBrief({ candidate, editorial, researchContext, events });
     const lockedEditorial = { ...editorial, material_brief: materialBrief };
     const batch = store.getBatch(candidate.batch_id);
     const filePath = path.join(batchWorkdir(batch), candidate.candidate_id, 'article-brief.md');

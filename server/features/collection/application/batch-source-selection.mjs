@@ -1,13 +1,19 @@
-// 批次采集面板只暴露三类稳定入口；每类入口再映射到实际的采集源类型。
-// RSSHub 入口也承接 direct / twitter / 其他订阅型来源，保持现有批次语义。
+// 批次采集面板暴露稳定入口；每类入口再映射到实际的采集源类型。
 export const BATCH_SOURCE_GROUPS = Object.freeze([
   Object.freeze({ id: 'reddit', label: 'Reddit', sourceTypes: Object.freeze(['reddit']) }),
+  Object.freeze({ id: 'paper', label: '论文雷达', sourceTypes: Object.freeze(['paper']) }),
   Object.freeze({ id: 'rsshub', label: 'RSSHub', sourceTypes: Object.freeze(['rsshub', 'twitter', 'direct']) }),
+  Object.freeze({ id: 'x', label: 'X', sourceTypes: Object.freeze(['x']) }),
+  Object.freeze({ id: 'wechat', label: '微信公众号', sourceTypes: Object.freeze(['wechat']) }),
   Object.freeze({ id: 'github', label: 'GitHub', sourceTypes: Object.freeze(['github']) }),
 ]);
 
 function sourceBelongsToGroup(source, group) {
-  if (group.id === 'rsshub') return source.source_type !== 'reddit' && source.source_type !== 'github';
+  if (group.id === 'rsshub') {
+    // Keep the compatibility bucket for existing custom/direct collectors,
+    // but do not hide dedicated X/WeChat collectors inside RSSHub.
+    return !['reddit', 'github', 'x', 'wechat', 'paper'].includes(source.source_type);
+  }
   return group.sourceTypes.includes(source.source_type);
 }
 

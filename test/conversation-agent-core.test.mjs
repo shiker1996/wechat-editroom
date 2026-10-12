@@ -10,9 +10,9 @@ import { AgentContractError, validateAgentEnvelope } from '../server/platform/ag
 import { ToolRegistry } from '../server/platform/tools/registry.mjs';
 import { Store } from '../server/platform/core/store.mjs';
 
-function registry(){
+function registry(onRead=()=>{}){
   const value=new ToolRegistry();
-  value.register({manifest:{id:'read-demo',name:'只读演示',version:'1.0.0',capabilities:['cap_content_demo_read'],riskLevel:'read-only',inputSchema:{type:'object',additionalProperties:false,properties:{query:{type:'string'}},required:['query']},outputSchema:{type:'object',properties:{answer:{type:'string'}},required:['answer']}},adapter:{async execute(input){return {status:'ok',data:{answer:`result:${input.query}`},artifacts:[],warnings:[],provenance:{},metrics:{durationMs:0}};}}});
+  value.register({manifest:{id:'read-demo',name:'只读演示',version:'1.0.0',capabilities:['cap_content_demo_read'],riskLevel:'read-only',inputSchema:{type:'object',additionalProperties:false,properties:{query:{type:'string'}},required:['query']},outputSchema:{type:'object',properties:{answer:{type:'string'}},required:['answer']}},adapter:{async execute(input){onRead(input.query);return {status:'ok',data:{answer:`result:${input.query}`},artifacts:[],warnings:[],provenance:{},metrics:{durationMs:0}};}}});
   value.register({manifest:{id:'write-demo',name:'写入演示',version:'1.0.0',capabilities:['cap_content_demo_write'],riskLevel:'external-write',inputSchema:{type:'object'},outputSchema:{type:'object'}},adapter:{async execute(){return {status:'ok',data:{written:true},artifacts:[],warnings:[],provenance:{},metrics:{durationMs:0}};}}});
   return value;
 }
@@ -66,6 +66,17 @@ test('Agent 将原生工具调用转换为可关联的 assistant/tool 历史并�
   const assistant=nextHistory.find((message)=>message.role==='assistant'&&Array.isArray(message.tool_calls));
   const tool=nextHistory.find((message)=>message.role==='tool'&&message.tool_call_id==='call_native_1');
   assert.equal(assistant.tool_calls[0].function.name,'cap_content_demo_read');assert.ok(tool.content.includes('result:native'));
+});
+
+test('Agent 将超过并行度的原生工具调用拆批执行，而不是直接失败',async()=>{
+  const executed=[],tools=registry((query)=>executed.push(query)),catalog=buildConversationToolCatalog({registry:tools,entryCapabilities:['cap_content_demo_read']});
+  const result=await runConversationAgent({entryPoint:'editorial',registry:tools,catalog,budget:{maxParallelToolCalls:3,maxToolCalls:10},modelStep:async({step})=>step===0?{
+    nativeTools:true,
+    toolCalls:Array.from({length:8},(_,index)=>({id:`native_${index+1}`,name:'cap_content_demo_read',input:{query:`q${index+1}`}})),
+  }:{type:'final',assistantReply:'完成',output:{}}});
+  assert.equal(result.type,'final');
+  assert.equal(result.toolCalls,8);
+  assert.deepEqual(executed,['q1','q2','q3','q4','q5','q6','q7','q8']);
 });
 
 test('Agent 历史上下文超限时保留事实读取和最近审计并压缩旧轮次',()=>{

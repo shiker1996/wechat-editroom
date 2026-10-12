@@ -276,7 +276,7 @@ export function buildAdaptation({adaptation={},inputs={},workspaceRoot,store,bat
     sanitizeToolResult:(result,request,{agentRunId}={})=>{
       const handler=RESULT_HANDLERS[resultHandlers[request.capability]||defaultResultHandler];
       if(!handler)throw new Error(`未知结果处理器：${resultHandlers[request.capability]||defaultResultHandler}`);
-      return handler(result,request,{store,batchId,candidateId,agentRunId,state,options:handlerOptions,inputs,resources});
+      return handler(result,request,{store,batchId,candidateId,workspaceRoot,agentRunId,state,options:handlerOptions,inputs,resources});
     },
   };
 }
@@ -292,17 +292,29 @@ function backfillResourceContent(result,request,resources) {
   return trimmed;
 }
 
-function persistCandidateSource(result, request, { store, candidateId, resources } = {}) {
+function writeSourceCache(workspaceRoot, hotspotId, record) {
+  if (!workspaceRoot || hotspotId == null) return '';
+  const cachePath = path.join(workspaceRoot, 'data', 'source-cache', `${hotspotId}.json`);
+  fs.mkdirSync(path.dirname(cachePath), { recursive: true });
+  const temporary = `${cachePath}.${process.pid}.${Date.now()}.tmp`;
+  fs.writeFileSync(temporary, JSON.stringify(record, null, 2), 'utf8');
+  fs.renameSync(temporary, cachePath);
+  return cachePath;
+}
+
+function persistCandidateSource(result, request, { store, candidateId, workspaceRoot, resources } = {}) {
   const trimmed = backfillResourceContent(result, request, resources);
-  if (trimmed?.status !== 'ok' || !store || candidateId == null) return trimmed;
+  if (trimmed?.status !== 'ok' || !store) return trimmed;
   const resourceId = String(request.arguments?.resourceId || '');
-  if (!resourceId.startsWith('candidate-source:')) return trimmed;
+  const candidateSourceMatch = /^candidate-source:(\d+)$/.exec(resourceId);
+  const hotspotSourceMatch = /^source:(\d+)$/.exec(resourceId);
+  if (!candidateSourceMatch && !hotspotSourceMatch) return trimmed;
   const resource = resources?.get(resourceId);
   const data = trimmed.data || {};
   const content = String(data.content || data.text || data.excerpt || '');
   const url = String(data.url || resource?.url || '').trim();
   if (!url) return trimmed;
-  store.saveCandidateSource(candidateId, {
+  const sourceRecord = {
     url,
     final_url: data.final_url || data.url || url,
     status: data.status || 'ok',
@@ -317,7 +329,16 @@ function persistCandidateSource(result, request, { store, candidateId, resources
     fetch_method: data.fetch_method || 'editorial-room',
     quality: data.quality,
     evidence_level: data.evidence_level || '',
-  });
+  };
+  if (candidateSourceMatch) {
+    if (candidateId == null) return trimmed;
+    store.saveCandidateSource(candidateId, sourceRecord);
+    return trimmed;
+  }
+
+  const hotspotId = Number(hotspotSourceMatch[1]);
+  const cachePath = writeSourceCache(workspaceRoot, hotspotId, sourceRecord);
+  store.saveHotspotSource(hotspotId, { ...sourceRecord, cache_path: cachePath });
   return trimmed;
 }
 

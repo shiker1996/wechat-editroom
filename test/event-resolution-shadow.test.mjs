@@ -27,6 +27,7 @@ test('阶段0影子归并：同一争议的不同标题合并且报道守恒', (
   assert.equal(result.conservation.ok, true);
   assert.equal(result.differences.merges.length, 1);
   assert.deepEqual(result.differences.review_queue, []);
+  assert.equal(result.events[0].relation_evidence[0].relation, 'SAME_OCCURRENCE');
 });
 
 test('阶段0影子归并：同主体不同对象不自动合并', () => {
@@ -104,6 +105,24 @@ test('结构化匹配输出自动合并、复核和新事件三个区间', () =>
   assert.ok(structuredMatch(base, { ...base }).score >= 82);
   assert.ok(structuredMatch(base, { ...base, triggerKey: 'z', entityKeys: ['a', 'x'] }).score >= 65);
   assert.ok(structuredMatch(base, { ...base, whoKey: 'b', objectKey: 'z', triggerKey: 'q', entityKeys: ['b', 'z'] }).score < 65);
+});
+
+test('同一主体同一对象同一时间的不同动作标注不会拆成重复事件', () => {
+  const result = resolveEventShadow({
+    batch: { id: 'batch-same-object', batch_date: '2026-09-30' },
+    hotspots: [
+      hotspot(30, 'OpenAI发布GPT-6.1 Sol', { who: 'OpenAI', what: '发布GPT-6.1 Sol模型', actionType: '发布', object: 'GPT-6.1 Sol', date: '2026-09-30' }),
+      hotspot(31, 'OpenAI回应GPT-6.1 Sol', { who: 'OpenAI', what: 'GPT-6.1 Sol模型价格与性能', actionType: '产品更新', object: 'GPT-6.1 Sol', date: '2026-09-30' }),
+    ],
+  });
+  assert.equal(result.shadow.event_count, 1);
+  assert.deepEqual(result.events[0].hotspot_ids, [30, 31]);
+  assert.equal(result.conservation.ok, true);
+  assert.equal(result.events[0].relation_evidence[0].relation, 'SAME_OCCURRENCE');
+  assert.equal(materializeStableEvents({ hotspots: [
+    hotspot(30, 'OpenAI发布GPT-6.1 Sol', { who: 'OpenAI', what: '发布GPT-6.1 Sol模型', actionType: '发布', object: 'GPT-6.1 Sol', date: '2026-09-30' }),
+    hotspot(31, 'OpenAI回应GPT-6.1 Sol', { who: 'OpenAI', what: 'GPT-6.1 Sol模型价格与性能', actionType: '产品更新', object: 'GPT-6.1 Sol', date: '2026-09-30' }),
+  ], shadowEvents: result.events })[0].articles[1].relation_type, 'SAME_OCCURRENCE');
 });
 
 test('事件标题来自主体、动作和对象，不继承报道噱头标题', () => {

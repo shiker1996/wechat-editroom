@@ -442,9 +442,9 @@ test('阶段3记录聚合候选与未覆盖事件，不强行生成低质量选�
     researchReports: events.map((item) => ({ event_id: item.event_id, report_markdown: `报告 ${item.event_id}` })),
   });
   assert.deepEqual(result.coverage, [
-    { event_id: 'E1', title: '事件 E1', status: 'covered', candidate_ids: ['MR-T-001'], candidate_indexes: [1], reason: '' },
-    { event_id: 'E2', title: '事件 E2', status: 'covered', candidate_ids: ['MR-T-001'], candidate_indexes: [1], reason: '' },
-    { event_id: 'E3', title: '事件 E3', status: 'uncovered', candidate_ids: [], candidate_indexes: [], reason: '研判信号不足以形成独立文章角度' },
+    { event_id: 'E1', title: '事件 E1', status: 'covered', candidate_ids: ['MR-T-001'], candidate_indexes: [1], reported_candidate_indexes: [1], coverage_consistent: true, reason: '' },
+    { event_id: 'E2', title: '事件 E2', status: 'covered', candidate_ids: ['MR-T-001'], candidate_indexes: [1], reported_candidate_indexes: [1], coverage_consistent: true, reason: '' },
+    { event_id: 'E3', title: '事件 E3', status: 'uncovered', candidate_ids: [], candidate_indexes: [], reported_candidate_indexes: [], coverage_consistent: true, reason: '研判信号不足以形成独立文章角度' },
   ]);
 });
 

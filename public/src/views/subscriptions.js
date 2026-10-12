@@ -4,9 +4,9 @@ import { escapeHtml, toast, confirmAction } from "../core/ui.js";
 import { state } from "../core/state.js";
 
 const LEGACY_KINDS = new Set(["direct", "twitter", "rsshub", "github"]);
-const CREATABLE_PLUGINS = new Set(["reddit-collector", "feed-collector", "rsshub-collector", "declarative-web-page", "browser-web-page"]);
-const LABELS = { direct: "DIRECT", twitter: "X / TWITTER", rsshub: "RSSHUB", github: "GITHUB", reddit: "REDDIT" };
-const TYPE_LABELS = { direct: "直连 RSS / Atom", twitter: "X", rsshub: "RSSHub", reddit: "Reddit", github: "GitHub", "web-page": "静态网页", "browser-page": "动态网页" };
+const CREATABLE_PLUGINS = new Set(["reddit-collector", "feed-collector", "rsshub-collector", "x-search-collector", "tech-twitter-collector", "wechat-account-collector", "paper-radar-collector", "declarative-web-page", "browser-web-page"]);
+const LABELS = { direct: "DIRECT", twitter: "X / TWITTER", x: "X / SOCIAL", wechat: "WECHAT", rsshub: "RSSHUB", github: "GITHUB", reddit: "REDDIT", paper: "PAPERS" };
+const TYPE_LABELS = { direct: "直连 RSS / Atom", twitter: "X（RSSHub）", x: "X 精选 / 搜索 / 趋势", wechat: "微信公众号", rsshub: "RSSHub", reddit: "Reddit", github: "GitHub", paper: "学术论文" , "web-page": "静态网页", "browser-page": "动态网页" };
 const WEB_PLUGINS = new Set(["declarative-web-page", "browser-web-page"]);
 const BASIC_WEB_FIELDS = new Set(["url", "itemSelector", "titleSelector", "linkSelector"]);
 const FIELD_HELP = {
@@ -15,6 +15,10 @@ const FIELD_HELP = {
   linkAttribute: ["链接所在的 HTML 属性，通常保持 href", "href"], summarySelector: ["条目内部的摘要元素，可不填", ".summary"],
   authorSelector: ["条目内部的作者元素，可不填", ".author"], dateSelector: ["条目内部的发布时间元素，可不填", "time"],
   dateAttribute: ["时间所在属性；time 元素通常使用 datetime", "datetime"], nextPageSelector: ["下一页按钮或链接，用于有限分页", "a.next"],
+  identifier: ["公众号名称、ghid、wxid 或文章主页链接", "gh_xxxxx"], identifierType: ["公众号标识类型", "ghid"],
+  query: ["固定搜索条件；查询词池模式下每行一个条件；趋势模式可不填", "from:OpenAI\nAI OR agent lang:zh"], searchType: ["X 搜索结果排序方式", "Latest"],
+  country: ["TwexAPI 趋势国家或地区 slug；例如 worldwide、united-states", "worldwide"], topic: ["TwexAPI 趋势话题筛选，可不填", "Technology"], content: ["TwexAPI 趋势内容标签筛选，可不填", "AI"],
+  maxAgeHours: ["只保留最近多少小时内发布的内容", "72"],
   maxPages: ["单次最多翻页数，建议先用 1 测试", "1"], limit: ["单次最多保留的有效条目数", "30"],
   profileId: ["保存该网站登录状态的隔离浏览器身份", "example-news"], waitForSelector: ["等待这个元素出现后再采集", "main article"],
   clickSelector: ["采集前需要点击一次的元素，例如“加载更多”", "button.load-more"], typeSelector: ["采集前需要填写的输入框；多数页面无需配置", "input[type=search]"],
@@ -27,13 +31,15 @@ const WEB_GUIDANCE = {
 };
 
 function pluginById(id) { return (state.collectorPlugins || []).find((item) => item.id === id); }
-function unifiedValue(item) { return item.config?.subreddit ? `r/${item.config.subreddit}` : item.config?.url || item.config?.route || item.source_key; }
+function unifiedValue(item) { return item.config?.subreddit ? `r/${item.config.subreddit}` : item.config?.identifier || item.config?.query || item.config?.url || item.config?.route || item.source_key; }
 function unifiedItems() {
-  return (state.collectionSources || []).map((item) => ({
+  return (state.collectionSources || []).map((item) => {
+    const plugin = pluginById(item.plugin_id);
+    return {
     id: item.id, kind: item.source_type, value: unifiedValue(item), label: item.label,
     enabled: Boolean(item.enabled), managed: item.origin === "managed", pluginId: item.plugin_id,
-    unified: true, pluginAvailable: pluginById(item.plugin_id)?.available !== false, health: item.health || (item.last_test_status ? { status: item.last_test_status, error: item.last_test_error } : null),
-  }));
+    unified: true, pluginAvailable: plugin?.available !== false, pluginNeedsConfiguration: plugin?.executionStatus === "needs_configuration", health: item.health || (item.last_test_status ? { status: item.last_test_status, error: item.last_test_error } : null),
+  };});
 }
 function allItems() {
   const unified = unifiedItems();
@@ -43,6 +49,8 @@ function allItems() {
 function currentPluginId() {
   const kind = $("#subscription-kind").value;
   if (kind === "reddit") return "reddit-collector";
+  if (kind === "x-search") return "x-search-collector";
+  if (kind === "wechat-account") return "wechat-account-collector";
   if (kind === "more") return $("#subscription-plugin").value;
   return null;
 }
@@ -54,7 +62,8 @@ function schemaField(name, schema, required) {
   const requiredMark = required ? " required" : "";
   const [help, placeholder] = FIELD_HELP[name] || ["", ""];
   const heading = `<span class="source-field-title">${escapeHtml(title)}${required ? '<em>必填</em>' : '<i>可选</i>'}</span>`;
-  if (schema.enum) return `<label>${heading}<select data-plugin-field="${escapeHtml(name)}"${requiredMark}>${schema.enum.map((value) => `<option value="${escapeHtml(value)}" ${value === schema.default ? "selected" : ""}>${escapeHtml(value)}</option>`).join("")}</select>${help ? `<small>${escapeHtml(help)}</small>` : ""}</label>`;
+  if (schema.enum) return `<label>${heading}<select data-plugin-field="${escapeHtml(name)}"${requiredMark}>${schema.enum.map((value, index) => `<option value="${escapeHtml(value)}" ${value === schema.default ? "selected" : ""}>${escapeHtml(schema.enumNames?.[index] || value)}</option>`).join("")}</select>${help ? `<small>${escapeHtml(help)}</small>` : ""}</label>`;
+  if (schema.format === "textarea") return `<label>${heading}<textarea data-plugin-field="${escapeHtml(name)}" rows="4" maxlength="${schema.maxLength || ""}"${requiredMark} placeholder="${escapeHtml(placeholder)}">${escapeHtml(schema.default ?? "")}</textarea>${help ? `<small>${escapeHtml(help)}</small>` : ""}</label>`;
   const type = schema.type === "integer" ? "number" : schema.format === "url" ? "url" : "text";
   const bounds = `${schema.minimum != null ? ` min="${schema.minimum}"` : ""}${schema.maximum != null ? ` max="${schema.maximum}"` : ""}`;
   return `<label>${heading}<input data-plugin-field="${escapeHtml(name)}" type="${type}"${bounds}${requiredMark} value="${escapeHtml(schema.default ?? "")}"${placeholder ? ` placeholder="${escapeHtml(placeholder)}"` : ""}>${help ? `<small>${escapeHtml(help)}</small>` : ""}</label>`;
@@ -101,12 +110,12 @@ async function assistStaticSource(button) {
 }
 function updateComposer() {
   const kind = $("#subscription-kind").value;
-  const dynamic = kind === "more" || kind === "reddit";
+  const dynamic = kind === "more" || kind === "reddit" || kind === "x-search" || kind === "wechat-account";
   $("#subscription-plugin-wrap").hidden = kind !== "more";
   $("#subscription-value-label").hidden = dynamic;
   $("#subscription-value").disabled = dynamic;
   $("#subscription-value").required = !dynamic;
-  $("#subscription-label-wrap").hidden = kind === "twitter" || kind === "rsshub";
+  $("#subscription-label-wrap").hidden = kind === "twitter" || kind === "rsshub" || kind === "x-search" || kind === "wechat-account";
   if (!dynamic) {
     const input = $("#subscription-value");
     const settings = kind === "twitter" ? ["X 用户名", "text", "@OpenAI 或 OpenAI"] : kind === "rsshub" ? ["RSSHub 路由", "text", "/twitter/user/OpenAI"] : ["订阅地址", "url", "https://example.com/feed.xml"];
@@ -140,7 +149,7 @@ function renderSubscriptions() {
   $("#source-filter-count").textContent = filtered ? `显示 ${items.length} / ${all.length}` : `共 ${all.length} 个来源`;
   $("#subscription-list").innerHTML = items.length ? items.map((item, index) => {
     const status = itemStatus(item), hc = status === "success" ? "ok" : status === "failed" ? "bad" : "idle";
-    const healthText = item.pluginAvailable === false ? "插件不可用 · 来源配置已保留" : status === "disabled" ? "已暂停" : status === "success" ? `最近成功 · ${item.health?.item_count || 0} 条` : status === "failed" ? `最近失败 · ${item.health?.error || "未返回详情"}` : "尚无采集记录";
+    const healthText = item.pluginAvailable === false ? item.pluginNeedsConfiguration ? "请先在系统配置中完成该采集器设置" : "插件不可用 · 来源配置已保留" : status === "disabled" ? "已暂停" : status === "success" ? `最近成功 · ${item.health?.item_count || 0} 条` : status === "failed" ? `最近失败 · ${item.health?.error || "未返回详情"}` : "尚无采集记录";
     const identity = item.unified ? `data-source-id="${item.id}"` : `data-kind="${escapeHtml(item.kind)}" data-value="${escapeHtml(item.value)}"`;
     return `<article class="subscription-row health-${hc} ${item.enabled ? "" : "disabled"}" style="--row:${index}"><span class="subscription-kind ${escapeHtml(item.kind)}">${escapeHtml(LABELS[item.kind] || item.kind)}</span><div class="subscription-identity"><b>${escapeHtml(item.label)}</b><code>${escapeHtml(item.value)}</code><small>${escapeHtml(pluginById(item.pluginId)?.name || (item.unified ? item.pluginId : "内置兼容来源"))}</small><small class="source-health ${hc}">${escapeHtml(healthText)}</small></div>${item.managed ? '<span class="story-meta">系统采集入口</span>' : `<label class="source-switch"><input type="checkbox" data-source-toggle ${identity} ${item.enabled ? "checked" : ""}><i></i><span>${item.enabled ? "启用" : "暂停"}</span></label>`}<div class="subscription-actions">${item.managed ? '<span class="story-meta">随系统任务执行</span>' : `<button class="text-button" data-source-test ${identity}>测试</button><button class="source-remove" data-source-remove ${identity} aria-label="删除订阅源：${escapeHtml(item.label)}">×</button>`}</div></article>`;
   }).join("") : `<div class="empty-state source-empty"><b>${all.length ? "没有匹配的订阅源" : "还没有订阅源"}</b><span>${all.length ? "换个关键词，或清除当前筛选条件。" : "从左侧选择一种来源并完成首次添加。"}</span>${filtered ? '<button type="button" class="text-button" data-clear-source-filters>清除筛选</button>' : ""}</div>`;
@@ -156,7 +165,7 @@ async function loadSubscriptions() {
 }
 function renderSourceTypeFilter() {
   const filter = $("#source-type-filter"), current = filter.value || "all";
-  const kinds = [...new Set(allItems().map((item) => item.kind))].sort((a, b) => (TYPE_LABELS[a] || a).localeCompare(TYPE_LABELS[b] || b, "zh-CN"));
+  const kinds = [...new Set([...allItems().map((item) => item.kind), "x", "wechat"])].sort((a, b) => (TYPE_LABELS[a] || a).localeCompare(TYPE_LABELS[b] || b, "zh-CN"));
   filter.innerHTML = '<option value="all">全部类型</option>' + kinds.map((kind) => `<option value="${escapeHtml(kind)}">${escapeHtml(TYPE_LABELS[kind] || kind)}</option>`).join("");
   filter.value = kinds.includes(current) ? current : "all";
 }

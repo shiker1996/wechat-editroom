@@ -49,7 +49,7 @@ import { ExtensionConfigurationService, LEGACY_CONFIGURATION_FALLBACK_REMOVAL_VE
 import { writeCollectorToolSetting } from '../../collectors/settings.mjs';
 import { buildConfigurationCatalog, findConfigurationResource } from '../../extensions/configuration-catalog.mjs';
 import { createBuiltinCollectorRegistry } from '../../collectors/builtin-registry.mjs';
-import { CollectionSourceService, sourceInputForPlugin, assistStaticPage } from '../../../features/collection/index.mjs';
+import { CollectionSourceService, sourceInputForPlugin, assistStaticPage, normalizeExternalIngest } from '../../../features/collection/index.mjs';
 import { describeBatchSourceGroups } from '../../../features/collection/application/batch-source-selection.mjs';
 import { createCollectorRuntime, listCollectorPluginStates } from '../../collectors/runtime-registry.mjs';
 import { confirmCollectorPluginFirstRun, installCollectorPlugin, listCollectorPluginEvents, listCollectorPluginVersions, readCollectorPluginCatalog, rollbackCollectorPlugin, setCollectorPluginStatus, uninstallCollectorPlugin, validateCollectorPluginDirectory } from '../../collectors/package-manager.mjs';
@@ -76,6 +76,18 @@ function skillsUsingCapabilities(root, capabilities) {
 
 function requirePluginAdmin(request){
   if(!request.localSecurity?.consume(request,'plugin-admin'))throw new Error('缺少有效的本地管理员操作确认');
+}
+
+function validIngestToken(request, config) {
+  const expected = String(config?.collection?.ingestToken || process.env.WORKBENCH_INGEST_TOKEN || '').trim();
+  if (!expected) return { ok: false, status: 503, error: '外部采集入口尚未配置 WORKBENCH_INGEST_TOKEN' };
+  const match = String(request.headers.authorization || '').match(/^Bearer\s+(.+)$/i);
+  const supplied = match?.[1] || '';
+  const left = Buffer.from(supplied);
+  const right = Buffer.from(expected);
+  return left.length === right.length && crypto.timingSafeEqual(left, right)
+    ? { ok: true }
+    : { ok: false, status: 401, error: '外部采集令牌无效' };
 }
 
 function failedToolRunIds(trace = {}) {
@@ -105,6 +117,28 @@ export async function handleSystemRoutes(context) {
   const collectorRuntime=()=>createCollectorRuntime({root,config,configurationResolver:(manifest)=>extensionConfiguration.resolve({extensionType:'collector',extensionId:manifest.id,manifest})});
   const configurationCatalog=()=>buildConfigurationCatalog({root,config});
   const resourceFallback=()=>({});
+  if (request.method === 'POST' && pathname === '/api/ingest/items') {
+    const auth = validIngestToken(request, config);
+    if (!auth.ok) { json(response, auth.status, { code: 'INGEST_AUTH_FAILED', error: auth.error }); return true; }
+    try {
+      const input = await body(request);
+      const batchId = String(input.batchId || '').trim();
+      if (!batchId || !store.getBatch(batchId)) throw new Error('batchId 不存在');
+      const normalized = normalizeExternalIngest(input);
+      const runId = store.startSourceRun(batchId, normalized.sourceKey, { stageId: `external:${normalized.channel}` });
+      try {
+        store.addHotspots(batchId, normalized.channel, normalized.items);
+        store.finishSourceRun(runId, 'success', normalized.items.length);
+      } catch (error) {
+        store.finishSourceRun(runId, 'failed', 0, error.message);
+        throw error;
+      }
+      json(response, 202, { accepted: normalized.items.length, duplicates: normalized.duplicates, batchId, channel: normalized.channel, sourceKey: normalized.sourceKey, sourceName: normalized.sourceName, sourceRunId: runId });
+    } catch (error) {
+      json(response, 400, { code: 'INGEST_INVALID', error: error.message });
+    }
+    return true;
+  }
   const writeRsshubInstallLog = (event, details = {}) => {
     try {
       const logDir = path.join(root, 'logs');

@@ -7,6 +7,7 @@ const text = (value, max = 500) => String(value ?? '').replace(/\s+/g, ' ').trim
 const list = (value) => Array.isArray(value) ? value : [];
 const idOf = (event) => String(event?.event_id || event?.eventId || '').trim();
 const SOURCE_LIMIT = 8;
+const TOPIC_CANDIDATE_LIMIT = 30;
 const RELATION_KINDS = new Set(['sequence', 'response', 'comparison', 'trend', 'counterexample']);
 const SOURCE_LEVELS = new Set(['full_text', 'summary_only', 'repository_meta', 'title_only']);
 const TOPIC_DIGEST_VERSION = 'research-digest-v1';
@@ -309,7 +310,9 @@ function compactEvent(event, scopeItem, store, searchEvidence = [], { includeCon
     title: text(event?.representative_title, 240),
     latest_time: text(event?.latest_time, 60),
     event_value: scopeItem?.event_value ?? event?.eventValue ?? event?.t ?? null,
-    event_rank: scopeItem?.rank ?? event?.eventHeatRank ?? null,
+    event_rank: scopeItem?.board_rank ?? event?.eventHeatRank ?? null,
+    event_content_class: scopeItem?.content_class || event?.classification?.content_class || event?.classification?.contentClass || null,
+    selection_rank: scopeItem?.selection_rank ?? scopeItem?.rank ?? null,
     event_parts: dimensionPartsOf(event),
     event_card: compactCard(event?.card),
     sources,
@@ -417,11 +420,10 @@ export function buildDiscussionRelationCandidateGroups({ events = [], baseReport
 }
 
 function buildExternalRelationAnchors(events = [], baseReport = {}, limit = 8) {
-  const rankByEvent = new Map(list(baseReport.scope?.items).map((item) => [String(item.event_id), Number(item.rank) || 999999]));
+  const rankByEvent = new Map(list(baseReport.scope?.items).map((item) => [String(item.event_id), Number(item.selection_rank ?? item.rank) || 999999]));
   return list(events)
     .slice()
     .sort((left, right) => (rankByEvent.get(idOf(left)) || 999999) - (rankByEvent.get(idOf(right)) || 999999)
-      || Number(right.t || right.eventValue || 0) - Number(left.t || left.eventValue || 0)
       || idOf(left).localeCompare(idOf(right)))
     .slice(0, Math.max(0, Number(limit) || 8))
     .map((event) => ({
@@ -493,7 +495,8 @@ function compactPeerEvent(event, scopeItem = {}) {
     title: text(event?.representative_title, 220),
     latest_time: text(event?.latest_time, 60),
     t: scopeItem?.t ?? event?.t ?? event?.eventValue ?? null,
-    rank: scopeItem?.rank ?? event?.eventHeatRank ?? null,
+    rank: scopeItem?.board_rank ?? event?.eventHeatRank ?? null,
+    selection_rank: scopeItem?.selection_rank ?? scopeItem?.rank ?? null,
     who: text(parts.who, 120),
     object: text(parts.object || parts.what, 160),
     action: text(parts.actionType || parts.action, 160),
@@ -516,7 +519,7 @@ function independentSourceCount(event = {}) {
  */
 export function shouldEnableNativeSearch({ event = {}, scopeItem = {}, index = 0 } = {}) {
   const sourceCount = independentSourceCount(event);
-  const rank = Number(scopeItem?.rank ?? event?.eventHeatRank ?? index + 1);
+  const rank = Number(scopeItem?.selection_rank ?? scopeItem?.rank ?? index + 1);
   const t = Number(scopeItem?.t ?? event?.t ?? event?.eventValue);
   if (sourceCount < 2) return { enabled: true, reason: 'insufficient_independent_local_sources', source_count: sourceCount, rank, t };
   if (Number.isFinite(rank) && rank <= 5) return { enabled: true, reason: 'top_rank_event', source_count: sourceCount, rank, t };
@@ -986,23 +989,44 @@ function normalizeTopic(raw, selectedIds, allSources, allowedRelations, index, a
 function normalizeTopicCoverage(raw, events = [], topics = []) {
   const rawCoverage = list(raw?.event_coverage || raw?.topic_coverage || raw?.coverage);
   const byEvent = new Map(rawCoverage.map((item) => [text(item?.event_id, 100), item]).filter(([id]) => id));
+  const byIndex = new Map(list(topics).map((topic) => {
+    const match = String(topic?.candidate_id || '').match(/^MR-T-(\d+)$/);
+    return match ? [Number(match[1]), topic] : null;
+  }).filter(Boolean));
   return list(events).map((event) => {
     const eventId = idOf(event);
-    const candidateIds = topics.filter((topic) => list(topic?.event_ids).map(String).includes(eventId)).map((topic) => topic.candidate_id);
+    const linkedTopics = list(topics).filter((topic) => list(topic?.event_ids).map(String).includes(eventId));
+    const candidateIds = linkedTopics.map((topic) => topic.candidate_id);
     const rawItem = byEvent.get(eventId) || {};
     const rawStatus = rawItem.status === 'uncovered' ? 'uncovered' : rawItem.status === 'covered' ? 'covered' : 'unreported';
-    const status = candidateIds.length ? 'covered' : rawStatus;
-    const reason = candidateIds.length
-      ? ''
-      : text(rawItem.reason || rawItem.uncovered_reason, 240) || (status === 'uncovered' ? '模型未形成可讨论的文章选题' : '模型未返回该事件的覆盖说明');
-    const candidateIndexes = list(rawItem.candidate_indexes)
+    const status = candidateIds.length ? 'covered' : rawStatus === 'uncovered' ? 'uncovered' : 'unreported';
+    const reportedCandidateIndexes = list(rawItem.candidate_indexes)
       .map((item) => Number(item)).filter((item) => Number.isInteger(item) && item > 0).slice(0, 12);
+    const candidateIndexes = linkedTopics.map((topic) => Number(String(topic.candidate_id || '').match(/^MR-T-(\d+)$/)?.[1]))
+      .filter((item) => Number.isInteger(item) && item > 0);
+    const indexMismatch = reportedCandidateIndexes.some((index) => {
+      const topic = byIndex.get(index);
+      return !topic || !list(topic.event_ids).map(String).includes(eventId);
+    });
+    const statusMismatch = (rawStatus === 'covered' && !candidateIds.length)
+      || (rawStatus === 'uncovered' && candidateIds.length > 0)
+      || !byEvent.has(eventId);
+    let reason = '';
+    if (status === 'uncovered') reason = text(rawItem.reason || rawItem.uncovered_reason, 240) || '模型未形成可讨论的文章选题';
+    else if (status === 'unreported') reason = rawStatus === 'covered' || reportedCandidateIndexes.length
+      ? '模型覆盖声明未映射到保留且关联本事件的候选（索引越界或事件 ID 不一致）'
+      : text(rawItem.reason || rawItem.uncovered_reason, 240) || '模型未返回该事件的覆盖说明';
+    else if (statusMismatch || indexMismatch) reason = !byEvent.has(eventId)
+      ? '候选引用了该事件，但模型没有返回对应覆盖说明'
+      : '模型覆盖说明与候选事件关联不一致';
     return {
       event_id: eventId,
       title: text(event.title || event.representative_title, 220),
       status,
       candidate_ids: candidateIds,
       candidate_indexes: candidateIndexes,
+      reported_candidate_indexes: reportedCandidateIndexes,
+      coverage_consistent: !indexMismatch && !statusMismatch,
       reason,
     };
   }).filter((item) => item.event_id);
@@ -1046,7 +1070,7 @@ export function normalizeDiscussionResearchModel(raw, { events = [], baseReport 
   const allowedSignals = new Set(internal.flatMap((item) => [
     ...item.anomalies, ...item.conflicts, ...item.divergences,
   ].map((signal) => signal.signal_id)));
-  const topics = list(raw.topic_candidates).map((item, index) => normalizeTopic(item, selectedIds, allSources, allowedRelations, index, allowedSignals, sourceMap, { requireBasis: requireTopicBasis })).filter(Boolean).slice(0, 12);
+  const topics = list(raw.topic_candidates).map((item, index) => normalizeTopic(item, selectedIds, allSources, allowedRelations, index, allowedSignals, sourceMap, { requireBasis: requireTopicBasis })).filter(Boolean).slice(0, TOPIC_CANDIDATE_LIMIT);
   const topicCoverage = normalizeTopicCoverage(raw, input.events, topics);
   return {
     ...baseReport,
@@ -1139,7 +1163,7 @@ function normalizeTopicPhaseOutput(raw, input) {
   const allowedSignals = new Set(list(normalizationContext?.internalResearch || input?.internal_research).flatMap((item) => [
     ...list(item.anomalies), ...list(item.conflicts), ...list(item.divergences),
   ].map((signal) => signal.signal_id)));
-  const topics = list(raw?.topic_candidates).map((item, index) => normalizeTopic(item, selectedIds, allSources, allowedRelations, index, allowedSignals, sourceMap, { requireBasis: false, allowedMaterials, materialMap })).filter(Boolean).slice(0, 12);
+  const topics = list(raw?.topic_candidates).map((item, index) => normalizeTopic(item, selectedIds, allSources, allowedRelations, index, allowedSignals, sourceMap, { requireBasis: false, allowedMaterials, materialMap })).filter(Boolean).slice(0, TOPIC_CANDIDATE_LIMIT);
   return { topics, coverage: normalizeTopicCoverage(raw, events, topics) };
 }
 
@@ -1163,10 +1187,10 @@ function mergeTopicOutputs(primary, supplemental) {
     if (seen.has(key)) return false;
     seen.add(key); return true;
   });
-  // 关系候选优先保留，避免模型第一次返回 12 条事件内选题时把补充关系挤掉。
+  // 关系候选优先保留，但保留量需覆盖 8+2+3 个预选名额及类别内备选。
   const relationTopics = unique.filter((topic) => relationIdsOfTopic(topic).length);
   const internalTopics = unique.filter((topic) => !relationIdsOfTopic(topic).length);
-  return [...relationTopics, ...internalTopics].slice(0, 12).map((topic, index) => ({
+  return [...relationTopics, ...internalTopics].slice(0, TOPIC_CANDIDATE_LIMIT).map((topic, index) => ({
     ...topic,
     candidate_id: `MR-T-${String(index + 1).padStart(3, '0')}`,
   }));
@@ -1879,17 +1903,99 @@ export async function generateDiscussionResearchTopics({ gateway, store, events 
   const usableMaterials = verifiedResearchMaterials.filter((item) => ['verified', 'needs_review', 'model_reported'].includes(item.status));
   const usableReports = researchReports.filter((item) => item?.report_markdown && !item?.error);
   if (!topicInput.events.length || (!usableMaterials.length && !usableReports.length)) {
-    return { topics: [], coverage: normalizeTopicCoverage({}, topicInput.events, []), topicInput, audit: { required: 0, actual: 0, repair_attempted: false, status: 'no_research_materials' } };
+    const coverage = normalizeTopicCoverage({}, selectedEvents, []);
+    return { topics: [], coverage, topicInput, audit: {
+      required: 0, actual: 0, repair_attempted: false, repair_relation_count: 0, status: 'optional',
+      coverage_required: selectedEvents.length, coverage_mapped: 0,
+      coverage_uncovered: coverage.filter((item) => item.status === 'uncovered').length,
+      coverage_unreported: coverage.filter((item) => item.status === 'unreported').length,
+      coverage_repair_attempted: false, coverage_repair_event_count: 0,
+      no_research_materials: true,
+    } };
   }
   const providerConfig = gateway?.config?.providers?.[provider || gateway?.config?.defaultProvider] || {};
   onProgress('第 3 阶段：基于已验证研判素材生成候选选题');
   const raw = await completeDiscussionPhase({ gateway, provider, batchId, workspaceRoot, store, phase: 'topic_generation', input: topicInput, providerConfig, onProgress, onModelRequest, onModelResponse });
   const normalized = normalizeTopicPhaseOutput(raw, topicInput);
-  const topics = normalized.topics;
+  let topics = normalized.topics;
+  let coverage = normalizeTopicCoverage(raw, selectedEvents, topics);
+  let coverageRepairAttempted = false;
+  let coverageRepairEventCount = 0;
+  const unreportedIds = new Set(coverage.filter((item) => item.status === 'unreported').map((item) => item.event_id));
+  const repairEvents = selectedEvents.filter((event) => unreportedIds.has(idOf(event)));
+  if (repairEvents.length) {
+    coverageRepairAttempted = true;
+    coverageRepairEventCount = repairEvents.length;
+    onProgress(`第 3 阶段覆盖补生成：${repairEvents.length} 个事件没有可验证的候选关联`);
+    const repairIds = new Set(repairEvents.map(idOf));
+    const repairScopeItems = list(baseReport.scope?.items).filter((item) => repairIds.has(String(item.event_id)));
+    const repairBaseReport = {
+      ...baseReport,
+      scope: {
+        ...baseReport.scope,
+        selected_count: repairScopeItems.length,
+        items: repairScopeItems,
+        content_class_counts: repairScopeItems.reduce((counts, item) => {
+          const contentClass = String(item.content_class || 'news_event');
+          counts[contentClass] = (counts[contentClass] || 0) + 1;
+          return counts;
+        }, {}),
+      },
+    };
+    const repairInternalResearch = internalResearch.filter((item) => repairIds.has(String(item.event_id)));
+    const repairReports = researchReports.filter((item) => repairIds.has(String(item.event_id || item.anchor_event_id)));
+    const repairMaterials = verifiedResearchMaterials.filter((item) => (
+      !String(item.material_type || '').startsWith('inter_event_')
+      && list(item.anchor_event_ids).some((eventId) => repairIds.has(String(eventId)))
+    ));
+    const repairTopicInput = buildTopicResearchModelInput({
+      events: repairEvents,
+      baseReport: repairBaseReport,
+      internalResearch: repairInternalResearch,
+      relations: [],
+      verifiedResearchMaterials: repairMaterials,
+      researchReports: repairReports,
+      internalSearchEvidence: Object.fromEntries([...repairIds].map((eventId) => [eventId, list(internalSearchEvidence?.[eventId])])),
+      relationSearchEvidence: {},
+      relationSearchTasks: [],
+      referenceEvents: [],
+      store,
+    });
+    repairTopicInput.policy = {
+      ...repairTopicInput.policy,
+      coverage_repair: true,
+      target_event_ids: [...repairIds],
+    };
+    Object.defineProperty(repairTopicInput, '__normalization_context', {
+      value: { internalResearch: repairInternalResearch, relations: [], verifiedResearchMaterials: repairMaterials, researchReports: repairReports },
+      enumerable: false,
+    });
+    if (repairTopicInput.events.length) {
+      const repairRaw = await completeDiscussionPhase({ gateway, provider, batchId, workspaceRoot, store, phase: 'topic_generation', input: repairTopicInput, providerConfig, onProgress, onModelRequest, onModelResponse });
+      const repaired = normalizeTopicPhaseOutput(repairRaw, repairTopicInput);
+      const mergedTopics = mergeTopicOutputs(topics, repaired.topics);
+      const coverageHints = new Map([...coverage, ...repaired.coverage].map((item) => [item.event_id, {
+        event_id: item.event_id,
+        status: item.status,
+        reason: item.reason,
+      }]));
+      const mergedCoverage = normalizeTopicCoverage({ event_coverage: [...coverageHints.values()] }, selectedEvents, mergedTopics);
+      const coverageSources = new Map([...coverage, ...repaired.coverage].map((item) => [item.event_id, item]));
+      coverage = mergedCoverage.map((item) => {
+        const source = coverageSources.get(item.event_id);
+        return {
+          ...item,
+          reported_candidate_indexes: source?.reported_candidate_indexes || source?.candidate_indexes || [],
+          coverage_consistent: source?.coverage_consistent ?? item.coverage_consistent,
+        };
+      });
+      topics = mergedTopics;
+    }
+  }
   const actualRelationTopicCount = topics.filter((topic) => relationIdsOfTopic(topic).length).length;
   return {
     topics,
-    coverage: normalized.coverage,
+    coverage,
     topicInput,
     audit: {
       // 关系型选题只做结果统计，不再作为阶段 3 的硬门禁或补生成条件。
@@ -1898,6 +2004,12 @@ export async function generateDiscussionResearchTopics({ gateway, store, events 
       repair_attempted: false,
       repair_relation_count: 0,
       status: 'optional',
+      coverage_required: selectedEvents.length,
+      coverage_mapped: coverage.filter((item) => item.status === 'covered').length,
+      coverage_uncovered: coverage.filter((item) => item.status === 'uncovered').length,
+      coverage_unreported: coverage.filter((item) => item.status === 'unreported').length,
+      coverage_repair_attempted: coverageRepairAttempted,
+      coverage_repair_event_count: coverageRepairEventCount,
     },
   };
 }

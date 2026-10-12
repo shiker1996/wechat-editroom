@@ -19,7 +19,44 @@ export function inspectArticleQuality(markdown) {
   if (!/(判断|问题|意味着|真正|核心|我认为|在我看来)/.test(opening)) issues.push('第二段前后没有清晰亮明作者判断');
   if (!(links.length || rawUrls.length || footnotes.length)) issues.push('关键事实没有来源链接或脚注');
   if (/近年(?:来)?，?随着|综上所述|让我们拭目以待|在未来的格局中/.test(text)) issues.push('存在模板化表达');
-  return { pass: issues.length === 0, blocking: blockingIssues.length > 0, issues, blockingIssues, h1Count: h1.length, h2Count: h2.length, linkCount: links.length + rawUrls.length, footnoteCount:footnotes.length };
+  return { pass: issues.length === 0, blocking: blockingIssues.length > 0, issues, blockingIssues, h1Count: h1.length, h2Count: h2.length, paragraphCount: paragraphs.length, linkCount: links.length + rawUrls.length, footnoteCount:footnotes.length };
+}
+
+// 这是所有公众号文章共用的流量结构门禁。它只检查能确定判断的结构事实，
+// 不按 content_role 放宽点击入口或完读推进，也不把读者收益强行改成独立章节。
+export function inspectTrafficStructure(markdown) {
+  const report = inspectArticleQuality(markdown);
+  const structuralIssues = report.issues.filter((issue) => {
+    if (issue === '正文需要 3-5 个 H2 推进同一主线') return report.h2Count === 0;
+    if (issue !== '必须且只能有一个 H1 标题') return false;
+    return [
+    '必须且只能有一个 H1 标题',
+    '正文需要 3-5 个 H2 推进同一主线',
+    '正文段落过少，论证没有充分展开',
+    '前三段背景与冲突信息不足',
+    '前三段缺少明确的读者悬念或核心问题',
+    '第二段前后没有清晰亮明作者判断',
+    ].includes(issue);
+  });
+  return {
+    pass: structuralIssues.length === 0,
+    issues: structuralIssues,
+    h1Count: report.h1Count,
+    h2Count: report.h2Count,
+    paragraphCount: report.paragraphCount,
+  };
+}
+
+export function inspectPlanningMetaLeakage(markdown) {
+  const text = String(markdown || '');
+  const checks = [
+    { pattern: /本文(?:不写|不讨论|不展开|禁止)/, message: '正文包含“本文不写/不讨论”等编辑规划元话语，应改为自然的事实边界表达。', repair: '删除内部编辑口吻，保留必要的来源限定。' },
+    { pattern: /(?:^|\n)\s*(?:[-*]\s*)?(?:#{1,6}\s*)?(?:\*\*)?(?:写作要求|结构大纲|流量规划|读者收益)(?:\*\*)?\s*[：:]?/m, message: '正文泄漏了写作规划或内部结构术语。', repair: '将规划信息转化为自然叙述，不要把内部字段、H2 编号或检查项写给读者。' },
+    { pattern: /(?:^|\n)\s*(?:[-*]\s*)?(?:\*\*)?H2[-—]?\d+(?:\*\*)?\s+/im, message: '正文泄漏了写作规划或内部结构术语。', repair: '将规划信息转化为自然叙述，不要把内部字段、H2 编号或检查项写给读者。' },
+    { pattern: /只能当(?:作)?(?:一个|这篇文章的)?提问的起点/, message: '正文包含规划式“提问的起点”表述，疑似把大纲意图直接写入文章。', repair: '保留问题意识，但改写为自然的事实—问题过渡。' },
+  ];
+  const issues = checks.filter(({ pattern }) => pattern.test(text)).map(({ message, repair }) => ({ type: 'structure', message, repair }));
+  return { pass: issues.length === 0, issues };
 }
 
 export function buildQualityRepairPrompt(report) {

@@ -1,7 +1,11 @@
 const PROFILES = [
   [/tagging|event-card/i, { adaptive: false }],
   [/article-planning/i, { initial: 6000, retry: 10000 }],
-  [/article-fact-base|article-title-generation/i, { initial: 5000, retry: 8000 }],
+  // 事实基座会为每条主张附带证据、来源和边界，素材较多时 8K
+  // 很容易在 claims 数组末尾截断。让第一次重试尽量使用供应商已配置
+  // 的输出上限；outputBudgetFor 仍会按 providerMax 做最终封顶。
+  [/article-fact-base/i, { initial: 5000, retry: 16000 }],
+  [/article-title-generation/i, { initial: 5000, retry: 8000 }],
   [/quality-gate/i, { initial: 3500, retry: 6000 }],
   [/article-image-plan/i, { initial: 3000, retry: 5000 }],
   [/article-visual-plan/i, { initial: 5000, retry: 8000 }],

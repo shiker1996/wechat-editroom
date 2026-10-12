@@ -1,7 +1,10 @@
-const ARRAY_FIELDS = new Set(['event_ids', 'research_material_ids', 'counter_evidence']);
+import { deriveWritingStance } from './writing-stance.mjs';
+
+const ARRAY_FIELDS = new Set(['event_ids', 'research_material_ids', 'counter_evidence', 'retention_turns']);
 const TEXT_FIELDS = [
   'action', 'affected_group', 'reader_consequence', 'conflict', 'baseline_change', 'thesis',
-  'evidence_boundary', 'title_promise', 'reader_action', 'article_type', 'material_readiness',
+  'evidence_boundary', 'title_promise', 'reader_action', 'article_type', 'writing_stance', 'material_readiness',
+  'click_mechanism', 'opening_hook', 'reader_value_type', 'reader_value_placement', 'ending_payoff', 'share_trigger',
 ];
 
 function text(value) { return String(value ?? '').trim(); }
@@ -77,6 +80,7 @@ export function buildMaterialBrief({ candidate = {}, editorial = {}, researchCon
     evidence_boundary: firstText(stored.evidence_boundary, researchContext?.evidence_boundary?.note),
     article_type: firstText(stored.article_type, derivedArticleType),
   });
+  draft.writing_stance = deriveWritingStance({ articleType: draft.article_type, materialBrief: stored, editorial }).stance;
   draft.material_readiness = stored.material_readiness || deriveMaterialReadiness({ researchContext, materialBrief: draft });
   return draft;
 }

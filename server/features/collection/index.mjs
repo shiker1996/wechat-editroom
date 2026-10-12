@@ -1,7 +1,8 @@
 // 内容采集业务垂直入口。
 // 采集器本身属于基础设施/插件层，批次业务只从这里取得统一质量规则。
-export { filterCollectedItems, hasMeaningfulCollectedContent } from './domain/collection-quality.mjs';
+export { canonicalCollectedUrl, collectedItemIdentity, dedupeCollectedItems, filterCollectedItems, hasMeaningfulCollectedContent } from './domain/collection-quality.mjs';
 export { CollectionSourceService, sourceInputForPlugin } from './application/source-service.mjs';
+export { normalizeExternalIngest } from './application/external-ingest.mjs';
 export { CollectionRunner } from './application/collection-runner.mjs';
 export { createStoreCollectionRunner } from './application/store-collection-runner.mjs';
 export { analyzeStaticPage, assistStaticPage } from './application/static-page-assistant.mjs';

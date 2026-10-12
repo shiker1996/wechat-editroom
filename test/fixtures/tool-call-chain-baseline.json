@@ -167,6 +167,16 @@
       "riskLevel": "network-read"
     },
     {
+      "id": "paper-radar-collector",
+      "name": "学术论文雷达",
+      "version": "1.0.0",
+      "kind": "collector",
+      "capabilities": [
+        "cap_collect_paper"
+      ],
+      "riskLevel": "network-read"
+    },
+    {
       "id": "reddit-collector",
       "name": "Reddit 热门分区",
       "version": "1.0.0",
@@ -184,6 +194,36 @@
       "capabilities": [
         "cap_collect_rsshub",
         "cap_collect_twitter"
+      ],
+      "riskLevel": "network-read"
+    },
+    {
+      "id": "tech-twitter-collector",
+      "name": "TechTwitter 全面精选",
+      "version": "1.1.0",
+      "kind": "collector",
+      "capabilities": [
+        "cap_collect_x"
+      ],
+      "riskLevel": "network-read"
+    },
+    {
+      "id": "wechat-account-collector",
+      "name": "微信公众号账号",
+      "version": "1.0.0",
+      "kind": "collector",
+      "capabilities": [
+        "cap_collect_wechat"
+      ],
+      "riskLevel": "network-read"
+    },
+    {
+      "id": "x-search-collector",
+      "name": "X 搜索 / 趋势",
+      "version": "2.0.0",
+      "kind": "collector",
+      "capabilities": [
+        "cap_collect_x"
       ],
       "riskLevel": "network-read"
     }

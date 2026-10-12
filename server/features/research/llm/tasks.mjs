@@ -96,7 +96,7 @@ export async function tagBatch({ gateway, store, batchId, provider, limit, hotsp
   const scoped = batch.hotspots.filter(isResearchEligibleHotspot);
   const fresh = scoped.filter((item) => isFreshForBatch(item, batch.batch_date, maxAgeHours));
   const staleCount = scoped.length - fresh.length;
-  if (staleCount) onProgress(`已跳过 ${staleCount} 条超过 ${maxAgeHours} 小时的旧闻，不再打标；仍保留在历史档案`);
+  if (staleCount) onProgress(`已跳过 ${staleCount} 条超过各自来源时效范围的内容，不再打标；仍保留在历史档案`);
   const requestedIds=Array.isArray(hotspotIds)?new Set(hotspotIds.map(Number)):null;
   const targeted=requestedIds?fresh.filter((item)=>requestedIds.has(item.id)):fresh;
   const available = force ? targeted : targeted.filter((item) => !hasResearchTags(item));

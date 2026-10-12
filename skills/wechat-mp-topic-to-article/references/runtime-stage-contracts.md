@@ -3,7 +3,7 @@
 执行器在每次模型调用时加载总技能、全部 references 和当前阶段子技能，并明确当前阶段 ID。阶段顺序固定为：
 
 ```text
-brief → fact-base → planning → drafting → draft-quality-gate → title-generation → humanize → review → seo-keyword-scoring → seo-optimization → final-quality-gate → research-coverage → visual-planning → image-planning → publication-safety-gate
+brief → fact-base → planning → drafting → draft-quality-gate → title-generation → humanize → voice-quality-gate → review → title-lock → seo-keyword-scoring → seo-optimization → final-quality-gate → research-coverage → visual-planning → image-planning → publication-safety-gate
 ```
 
 ## `brief`
@@ -24,21 +24,23 @@ brief → fact-base → planning → drafting → draft-quality-gate → title-g
 
 ## `planning`
 
-根据锁定简报和事实基座建立作者素材、大纲与第一轮标题方向。综合选题明确多个热点之间的关联逻辑；普通选题围绕单一主线。只返回严格 JSON：
+根据锁定简报和事实基座建立作者素材、流量规划、大纲与第一轮标题方向。综合选题明确多个热点之间的关联逻辑；普通选题围绕单一主线。只返回严格 JSON：
 
 ```json
-{"distributionLane":"推荐池|通知池|实验池","readerStake":"对读者工作、收入、岗位、效率、成本或选择的具体影响","contentRole":"拉新|沉淀|搜索","expectedAction":["评论|分享|收藏|关注|搜索"],"practicalIncrement":"具体实用增量","materialsMarkdown":"作者素材补充","outlineMarkdown":"完整结构大纲","titleCandidates":[{"title":"标题","reason":"理由"}],"selectedTitle":"阶段选中标题","coreKeywords":["核心词"],"remainingRisks":["剩余风险"]}
+{"distributionLane":"推荐池|通知池|实验池","readerStake":"对读者工作、收入、岗位、效率、成本或选择的具体影响","contentRole":"拉新|沉淀|搜索","expectedAction":[],"readerValueType":"understanding|judgment|perspective|impact|action|checklist","readerValuePlacement":"woven|standalone_h2|ending|none","readerEmotion":"由具体读者利益触发的可能感受、具体触发处境，以及读完后希望转成的感受；readerStake 明确时必填，不得为缺少亲历而返回 null","clickMechanism":"真实点击理由或 null","openingHook":"适合本文的开头入口或 null","retentionTurns":[],"endingPayoff":"自然收束方式或 null","shareTrigger":null,"visualNeed":"auto|off|manual","practicalIncrement":"可选的具体实用增量","materialsMarkdown":"作者素材补充","outlineMarkdown":"依材料组织的结构大纲","titleCandidates":[{"title":"标题","reason":"理由"}],"selectedTitle":"阶段选中标题","coreKeywords":["核心词"],"remainingRisks":["剩余风险"]}
 ```
 
-`distributionLane` 与 `readerStake` 继承锁定简报，不得擅自换池；缺失时才根据账号上下文提出建议。`outlineMarkdown` 包含核心判断、目标读者、分发池、读者利益、内容角色、事实基座、结构大纲、信息增量、实用增量和增长承接。
+`distributionLane` 与 `readerStake` 继承锁定简报，不得擅自换池；缺失时才根据账号上下文提出建议。只要 `readerStake` 明确，`readerEmotion` 必须给出从读者利害推导的克制情绪路径；它规划的是可能的感受，不是声称读者实际都如此，也不要求强烈情绪或作者亲历。仅当没有具体受影响读者、没有可说明的读者后果时才可为 `null`。点击理由、开头入口、推进点、结尾回收和分享理由是规划参考，不是每篇文章都必须出现的清单。按材料与论证决定章节数、案例数量和节奏；不得为了满足固定小标题数、推进频率、主案例或互动指标而补写空段。`outlineMarkdown` 记录核心判断、目标读者、证据与风险边界，以及确有依据的信息/实用增量。
 
 ## `drafting`
 
-同时使用总契约与选定写作子技能。只使用 `verified` 事实；`disputed` 呈现分歧，`opinion` 明确为作者判断，`unverified` 不进入正文。前三段自然完成背景、核心冲突、作者判断和阅读钩子；关键事实就近保留来源。输出完整 Markdown，第一行是唯一 H1，不附说明。
+同时使用总契约与选定写作子技能。只使用 `verified` 事实；`disputed` 呈现分歧，`opinion` 明确为作者判断，`unverified` 不进入正文。前 200 字尽早进入具体议题；信息与判断随论证自然推进，不设最低推进次数。只要上游 `readerStake` 明确，正文就要让读者看见至少一个具体处境、选择或代价，并把它推进到新的判断或掌控感；可用条件句或明确标记的假设场景，不得虚构亲历、对话或把假设写成真实事件。不得用情绪词替代事实。来源按事实簇归因：同一来源支撑的连续事实在首次出现时清楚归因并尽量链接原文，后续不重复加来源标签；只有切换来源、归属可能混淆或涉及争议/高影响主张时再补归因。禁止“来源：同上”和逐句来源标签。未核实状态、单方说法和未知机制只保留对读者判断必要的一句限定，不把内部证据边界扩写成免责声明段落。输出完整 Markdown，第一行是唯一 H1，不附说明。
+
+规划阶段的大纲、流量规划、证据边界和禁写项属于内部元信息。写作模型只能把结构意图转化为正文，不得原样输出“本文不写”“只能当作提问的起点”、H2 编号、写作要求或其他编辑口吻；必要的证据边界须改写成自然来源限定，且只说一次，不重复解释“来源说了什么、还没核实什么、没有说明什么”。大纲是建议而非逐项验收清单，章节数、推进节奏、案例与结尾按实际材料决定。
 
 ## `draft-quality-gate` / `final-quality-gate`
 
-同时使用总契约、写作技能和 `article-reviewer`，执行语义门禁，不用问号、固定词或单一引用格式作机械判断。检查标题兑现、开头、单一主线、章节推进、事实与观点边界、来源覆盖、信息增量、自然表达和发布合规。只返回严格 JSON：
+同时使用总契约、写作技能和 `article-reviewer`，执行语义门禁，不用问号、固定词或单一引用格式作机械判断。检查标题兑现、开头、单一主线、章节是否服务论证、事实与观点边界、来源覆盖、信息增量、自然表达和发布合规。若 `readerStake` 明确，但文章只有抽象概念、成本数字或作者结论，读者看不出具体选择和代价，应指出情绪没有进入正文并要求定向修复；不得要求感叹词、虚构案例或固定情绪强度。不得因章节数量或固定推进频率判失败。只返回严格 JSON：
 
 ```json
 {"pass":true,"issues":[{"type":"fact|structure|opening|citation|voice|title","message":"具体问题","repair":"具体修复要求"}],"strengths":["有效优点"],"citationCoverage":100,"summary":"一句总评"}
@@ -60,19 +62,31 @@ brief → fact-base → planning → drafting → draft-quality-gate → title-g
 
 ## `humanize`
 
-同时使用总契约与 `humanizer-zh`。保留事实、数字、引语、来源、标题、作者观点、素材锚点和风险边界；将“作者判断：”“反方边界：”等元话语标签和模板化结尾改写为自然句式。只输出完整 Markdown，不附评分或修改总结。
+同时使用总契约与 `humanizer-zh`。保留事实、数字、引语、来源、标题承诺、作者观点和风险边界；允许删除重复论点、合并或重排章节、改变段落节奏、重写结尾。不得把大纲结构、推进点、分享触发、金句或留言提问当成必做项。删掉没有信息增量的口号、空泛比喻、重复总结、机械转折和硬加互动；不虚构亲历、人物细节或作者观点。保留有事实/分析作用的修辞，避免为了“像人”刻意口语化。只输出完整 Markdown，不附评分或修改总结。
+
+## `voice-quality-gate`
+
+在人类审稿前独立检查自然化稿。只报告具体、可在原文定位且明显损害阅读真实感的问题，例如重复论点、机械对称结构、空泛口号/比喻、没有信息增量的过场、每节重复同一模板、硬加互动句、抽象判断缺少文章材料支撑。不得依赖 AI 检测器，不因单个词、修辞偏好、缺少第一人称或正常论证结构判失败。每个问题须附原文短引文和可执行修法；无实质问题时通过。未通过时最多结构性返修一次并复检；仍不通过则保存 `05-humanized.md` 与 `05-voice-quality-gate.json`，标记待审并阻止后续终稿阶段。
 
 ## `review`
 
-同时使用总契约与 `article-reviewer`。依据事实基座修订，不新增事实。只输出完整可发布 Markdown；审稿通过与否由编排器单独调用 `decision.article_review_gate` 工具判断，不在文章正文中嵌入 REVIEW 注释。存在 blocker 或未解决 major 时工具返回 `pass:false` 并提供结构化问题；最多自动返工两轮。
+同时使用总契约与 `article-reviewer`。依据事实基座修订，不新增事实。除事实和发布安全外，重点检查标题点击承诺、前 200 字、冲突推进、信息增量、完读节奏、结尾回收和分享理由；不得把有观点的流量文改成中性简报，也不得为了“实用”强行增加清单章节。只输出完整可发布 Markdown；审稿通过与否由编排器单独调用 `decision.article_review_gate` 工具判断，不在文章正文中嵌入 REVIEW 注释。存在 blocker 或未解决 major 时工具返回 `pass:false` 并提供结构化问题；最多自动返工两轮。
+
+## `title-lock`
+
+审稿完成后再次使用总契约与 `title-generator`，只根据最终审稿正文、事实基座、发布主张登记和流量简报确定最终发布标题。该阶段不是重新生成正文：必须把 `selectedTitle` 确定性写回文章唯一 H1，并将标题承诺同步到 `material_brief.title_promise`、`03-titles.md` 和 `03-title-lock.json`。后续 SEO、长度修复、视觉处理和普通质量门禁不得改写已锁定标题；只有发布合规门禁发现标题本身存在事实或风险问题时，才允许定向覆盖并重新复检。只返回严格 JSON：
+
+```json
+{"distributionLane":"推荐池|通知池|实验池","readerStake":"具体读者利益","titleCandidates":[{"title":"标题","reason":"理由","score":0}],"selectedTitle":"锁定标题","coreKeywords":["核心词"]}
+```
 
 ## `seo-keyword-scoring`
 
-使用 `seo-keyword-scoring` 的确定性评分能力。输出核心词、相对搜索信号、相关词、可用来源数和数据局限；评分不是微信搜索量。
+仅在搜索型或明确要求 SEO 时使用 `seo-keyword-scoring` 的确定性评分能力。普通流量文记录跳过原因，不因缺少 SEO 报告阻断成稿。启用时输出核心词、相对搜索信号、相关词、可用来源数和数据局限；评分不是微信搜索量。
 
 ## `seo-optimization`
 
-同时使用总契约与 `seo-content-optimizer`。不改变事实、引语、作者立场、实用增量、来源或已通过审稿的转化段，不新增高影响主张、财经数字、负面指控或绝对化判断；移除 REVIEW 注释，只输出完整 Markdown。SEO 后还要通过发布合规专项门禁。
+仅在 SEO 已启用时使用总契约与 `seo-content-optimizer`。不改变事实、引语、作者立场、读者收益、来源或已通过审稿的转化段，不新增高影响主张、财经数字、负面指控或绝对化判断；不得损害标题张力、前 200 字或完读节奏。移除 REVIEW 注释，只输出完整 Markdown。SEO 后还要通过发布合规专项门禁；未启用时将 `06-reviewed.md` 安全透传为后续版本。
 
 ## `length-repair`
 
