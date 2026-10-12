@@ -27,20 +27,20 @@ brief → fact-base → planning → drafting → draft-quality-gate → title-g
 根据锁定简报和事实基座建立作者素材、流量规划、大纲与第一轮标题方向。综合选题明确多个热点之间的关联逻辑；普通选题围绕单一主线。只返回严格 JSON：
 
 ```json
-{"distributionLane":"推荐池|通知池|实验池","readerStake":"对读者工作、收入、岗位、效率、成本或选择的具体影响","contentRole":"拉新|沉淀|搜索","expectedAction":[],"readerValueType":"understanding|judgment|perspective|impact|action|checklist","readerValuePlacement":"woven|standalone_h2|ending|none","clickMechanism":"真实点击理由或 null","openingHook":"适合本文的开头入口或 null","retentionTurns":[],"endingPayoff":"自然收束方式或 null","shareTrigger":null,"visualNeed":"auto|off|manual","practicalIncrement":"可选的具体实用增量","materialsMarkdown":"作者素材补充","outlineMarkdown":"依材料组织的结构大纲","titleCandidates":[{"title":"标题","reason":"理由"}],"selectedTitle":"阶段选中标题","coreKeywords":["核心词"],"remainingRisks":["剩余风险"]}
+{"distributionLane":"推荐池|通知池|实验池","readerStake":"对读者工作、收入、岗位、效率、成本或选择的具体影响","contentRole":"拉新|沉淀|搜索","expectedAction":[],"readerValueType":"understanding|judgment|perspective|impact|action|checklist","readerValuePlacement":"woven|standalone_h2|ending|none","readerEmotion":"由具体读者利益触发的可能感受、具体触发处境，以及读完后希望转成的感受；readerStake 明确时必填，不得为缺少亲历而返回 null","clickMechanism":"真实点击理由或 null","openingHook":"适合本文的开头入口或 null","retentionTurns":[],"endingPayoff":"自然收束方式或 null","shareTrigger":null,"visualNeed":"auto|off|manual","practicalIncrement":"可选的具体实用增量","materialsMarkdown":"作者素材补充","outlineMarkdown":"依材料组织的结构大纲","titleCandidates":[{"title":"标题","reason":"理由"}],"selectedTitle":"阶段选中标题","coreKeywords":["核心词"],"remainingRisks":["剩余风险"]}
 ```
 
-`distributionLane` 与 `readerStake` 继承锁定简报，不得擅自换池；缺失时才根据账号上下文提出建议。点击理由、开头入口、推进点、结尾回收和分享理由是规划参考，不是每篇文章都必须出现的清单。按材料与论证决定章节数、案例数量和节奏；不得为了满足固定小标题数、推进频率、主案例或互动指标而补写空段。`outlineMarkdown` 记录核心判断、目标读者、证据与风险边界，以及确有依据的信息/实用增量。
+`distributionLane` 与 `readerStake` 继承锁定简报，不得擅自换池；缺失时才根据账号上下文提出建议。只要 `readerStake` 明确，`readerEmotion` 必须给出从读者利害推导的克制情绪路径；它规划的是可能的感受，不是声称读者实际都如此，也不要求强烈情绪或作者亲历。仅当没有具体受影响读者、没有可说明的读者后果时才可为 `null`。点击理由、开头入口、推进点、结尾回收和分享理由是规划参考，不是每篇文章都必须出现的清单。按材料与论证决定章节数、案例数量和节奏；不得为了满足固定小标题数、推进频率、主案例或互动指标而补写空段。`outlineMarkdown` 记录核心判断、目标读者、证据与风险边界，以及确有依据的信息/实用增量。
 
 ## `drafting`
 
-同时使用总契约与选定写作子技能。只使用 `verified` 事实；`disputed` 呈现分歧，`opinion` 明确为作者判断，`unverified` 不进入正文。前 200 字尽早进入具体议题；信息与判断随论证自然推进，不设最低推进次数。来源按事实簇归因：同一来源支撑的连续事实在首次出现时清楚归因并尽量链接原文，后续不重复加来源标签；只有切换来源、归属可能混淆或涉及争议/高影响主张时再补归因。禁止“来源：同上”和逐句来源标签。未核实状态、单方说法和未知机制只保留对读者判断必要的一句限定，不把内部证据边界扩写成免责声明段落。输出完整 Markdown，第一行是唯一 H1，不附说明。
+同时使用总契约与选定写作子技能。只使用 `verified` 事实；`disputed` 呈现分歧，`opinion` 明确为作者判断，`unverified` 不进入正文。前 200 字尽早进入具体议题；信息与判断随论证自然推进，不设最低推进次数。只要上游 `readerStake` 明确，正文就要让读者看见至少一个具体处境、选择或代价，并把它推进到新的判断或掌控感；可用条件句或明确标记的假设场景，不得虚构亲历、对话或把假设写成真实事件。不得用情绪词替代事实。来源按事实簇归因：同一来源支撑的连续事实在首次出现时清楚归因并尽量链接原文，后续不重复加来源标签；只有切换来源、归属可能混淆或涉及争议/高影响主张时再补归因。禁止“来源：同上”和逐句来源标签。未核实状态、单方说法和未知机制只保留对读者判断必要的一句限定，不把内部证据边界扩写成免责声明段落。输出完整 Markdown，第一行是唯一 H1，不附说明。
 
 规划阶段的大纲、流量规划、证据边界和禁写项属于内部元信息。写作模型只能把结构意图转化为正文，不得原样输出“本文不写”“只能当作提问的起点”、H2 编号、写作要求或其他编辑口吻；必要的证据边界须改写成自然来源限定，且只说一次，不重复解释“来源说了什么、还没核实什么、没有说明什么”。大纲是建议而非逐项验收清单，章节数、推进节奏、案例与结尾按实际材料决定。
 
 ## `draft-quality-gate` / `final-quality-gate`
 
-同时使用总契约、写作技能和 `article-reviewer`，执行语义门禁，不用问号、固定词或单一引用格式作机械判断。检查标题兑现、开头、单一主线、章节是否服务论证、事实与观点边界、来源覆盖、信息增量、自然表达和发布合规；不得因章节数量或固定推进频率判失败。只返回严格 JSON：
+同时使用总契约、写作技能和 `article-reviewer`，执行语义门禁，不用问号、固定词或单一引用格式作机械判断。检查标题兑现、开头、单一主线、章节是否服务论证、事实与观点边界、来源覆盖、信息增量、自然表达和发布合规。若 `readerStake` 明确，但文章只有抽象概念、成本数字或作者结论，读者看不出具体选择和代价，应指出情绪没有进入正文并要求定向修复；不得要求感叹词、虚构案例或固定情绪强度。不得因章节数量或固定推进频率判失败。只返回严格 JSON：
 
 ```json
 {"pass":true,"issues":[{"type":"fact|structure|opening|citation|voice|title","message":"具体问题","repair":"具体修复要求"}],"strengths":["有效优点"],"citationCoverage":100,"summary":"一句总评"}

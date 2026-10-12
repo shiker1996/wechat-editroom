@@ -48,6 +48,7 @@ async function requestHistory(source, configuration, fetchImpl = fetch) {
     const code = providerCode === 10002 || providerCode === 104 ? 'AUTH_REQUIRED' : providerCode === -1 || providerCode === 103 ? 'RATE_LIMITED' : 'NETWORK_ERROR';
     throw apiError(`公众号接口失败${payload?.msg ? `：${payload.msg}` : ''}（${String(payload?.code ?? 'unknown')}）`, code);
   }
+  if (!Array.isArray(payload?.data)) throw apiError('公众号接口返回成功，但文章列表 data 格式异常', 'OUTPUT_INVALID');
   return payload;
 }
 
@@ -76,7 +77,13 @@ export async function collectWeChatAccount(source, configuration = {}, onProgres
   onProgress(`正在读取微信公众号：${source.identifier}`);
   const payload = await requestHistory(source, configuration, fetchImpl);
   const items = normalizeItems(payload, source);
-  if (!items.length) throw apiError('公众号接口返回成功，但没有符合时间范围的文章', 'OUTPUT_INVALID');
+  if (!items.length) {
+    const maxAgeHours = Math.max(1, Number(source.maxAgeHours || 168));
+    const reason = payload.data.length
+      ? `${payload.data.length} 篇记录经时间范围、标题和链接校验后没有可采集文章`
+      : '接口返回的历史文章列表为空';
+    onProgress(`微信公众号本次无可用文章：${reason}（范围：最近 ${maxAgeHours} 小时）；按 0 条成功继续采集`);
+  }
   return items;
 }
 

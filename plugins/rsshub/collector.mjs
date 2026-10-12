@@ -73,9 +73,9 @@ export function normalizeGitHubTrendingItem(item,route){const period=githubTrend
 async function probe(url, timeoutMs = 5000) {
   try {
     const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
-    return response.ok;
-  } catch {
-    return false;
+    return { ok: response.status >= 200 && response.status < 500, status: response.status };
+  } catch (error) {
+    return { ok: false, error: String(error?.cause?.message || error?.message || error) };
   }
 }
 
@@ -159,19 +159,18 @@ function runPowerShell(scriptPath, args = [], timeoutMs = 190000) {
 
 export async function ensureStarted(config, onProgress) {
   config = normalizeRssHubLifecycleConfig(config);
-  if (await probe(config.baseUrl)) return false;
+  const initialProbe = await probe(config.baseUrl);
+  if (initialProbe.ok) return false;
   onProgress('RSSHub 未运行，正在启动本地服务');
   const port=String(new URL(config.baseUrl).port||1200);
   const startArgs = ['-RsshubDir',config.rootDir,'-PidFile',config.pidFile,'-Port',port,'-StartupTimeoutSeconds',String(Math.ceil(config.startupTimeoutMs/1000))];
   if (process.env.WORKBENCH_NODE_PATH) startArgs.push('-NodePath', process.env.WORKBENCH_NODE_PATH);
   await runPowerShell(config.startScript, startArgs, config.startupTimeoutMs + 10000);
-  onProgress('RSSHub 进程已拉起，正在等待健康检查');
-  const deadline = Date.now() + config.startupTimeoutMs;
-  while (Date.now() < deadline) {
-    if (await probe(config.baseUrl)) return true;
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-  }
-  throw new Error('RSSHub 启动后未通过根地址健康检查');
+  onProgress('RSSHub 启动脚本已确认服务健康，正在验证采集连接');
+  const finalProbe = await probe(config.baseUrl);
+  if (finalProbe.ok) return true;
+  const detail = finalProbe.error ? `（${finalProbe.error}）` : `（HTTP ${finalProbe.status}）`;
+  throw new Error(`RSSHub 启动脚本确认服务可用，但采集进程无法访问 ${config.baseUrl}${detail}`);
 }
 
 export async function stopRssHub(config) {
@@ -271,5 +270,6 @@ export async function collectRssHub(config, onProgress = () => {}, onSourceResul
 }
 
 export async function checkRssHub(config) {
-  return { ok: await probe(config.baseUrl), baseUrl: config.baseUrl };
+  const result = await probe(config.baseUrl);
+  return { ...result, baseUrl: config.baseUrl };
 }

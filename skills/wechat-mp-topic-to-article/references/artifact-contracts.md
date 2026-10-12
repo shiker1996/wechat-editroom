@@ -96,7 +96,7 @@ articles/<topic-slug>/
 - `## 读者收益`
 - `## 增长承接`
 
-`## 流量规划` 可记录 `click_mechanism`、`opening_hook`、`retention_turns`、`ending_payoff` 和 `share_trigger` 作为参考，不要求正文逐项兑现。章节数、推进节奏和案例数量按材料决定，不设固定 H2 数或推进次数。`## 读者收益` 记录 `reader_value_type` 与 `reader_value_placement`；`standalone_h2` 不是默认值。
+`## 流量规划` 可记录 `reader_emotion`、`click_mechanism`、`opening_hook`、`retention_turns`、`ending_payoff` 和 `share_trigger`。只要 `readerStake` 明确，`reader_emotion` 必填，描述读者可能的起始感受、具体处境触发点和期望的阅读后变化；它是写作规划，不是关于读者群体的事实主张。仅在没有具体受影响读者或读者后果时可省略。写作与审稿须把这一情绪路径落实为具体处境、选择或代价，不要求强烈语气或固定章节数。章节数、推进节奏和案例数量按材料决定，不设固定 H2 数或推进次数。`## 读者收益` 记录 `reader_value_type` 与 `reader_value_placement`；`standalone_h2` 不是默认值。
 
 事实基座每条记录：`id`、`claim`、`status`、`source_title`、`source_url`、`published_at`、`checked_at`。无 URL 的来源不能标为 `verified`，用户提供的内部材料除外；内部材料须标记为用户提供。
 
