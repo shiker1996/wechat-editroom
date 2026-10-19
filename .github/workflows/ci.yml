@@ -51,8 +51,8 @@ jobs:
       - name: 主链路 E2E 门禁
         run: node --disable-warning=ExperimentalWarning --test --test-reporter=tap --test-reporter=junit --test-reporter-destination=stdout --test-reporter-destination=test-results/junit/e2e.xml test/e2e/**/*.test.mjs
 
-      - name: 全量测试
-        run: node --disable-warning=ExperimentalWarning --test --test-reporter=tap --test-reporter=junit --test-reporter-destination=stdout --test-reporter-destination=test-results/junit/unit.xml test/**/*.test.mjs
+      - name: 单元与集成测试
+        run: node --disable-warning=ExperimentalWarning --test --test-reporter=tap --test-reporter=junit --test-reporter-destination=stdout --test-reporter-destination=test-results/junit/unit.xml test/*.test.mjs
         # 覆盖浏览器渲染层（布局审计、ECharts、浏览器内联化），Chromium 来自 postinstall 下载，
         # 不依赖真实 API Key、用户 Chrome Profile、RSSHub 常驻进程或外部 CDN 写入。
 
