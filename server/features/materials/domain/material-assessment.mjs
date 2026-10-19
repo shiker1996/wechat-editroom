@@ -4,7 +4,7 @@ export function assessMaterial(material = {}, columns = [], context = {}, histor
   const text = `${material.title || ''}\n${material.raw_text || ''}`.trim();
   const contextWords = [...(context.contentPillars || []), context.readerProfile, context.description].filter(Boolean);
   const fitHits = contextWords.filter((word) => String(word).length > 1 && text.includes(String(word))).length;
-  const accountFit = fitHits >= 2 ? 'high' : fitHits ? 'medium' : 'medium';
+  const accountFit = fitHits >= 2 ? 'high' : fitHits ? 'medium' : 'low';
   const completeHits = ['我', '问题', '结果', '所以', '但是', '后来', '判断', '建议'].filter((word) => text.includes(word)).length;
   const completeness = text.length >= 260 && completeHits >= 3 ? 'high' : text.length >= 100 && completeHits >= 1 ? 'medium' : 'low';
   const potentialHits = ['为什么', '如何', '踩坑', '失败', '成本', '效率', '选择', '变化', '对比', '影响', '反而', '没想到'].filter((word) => text.includes(word)).length;
