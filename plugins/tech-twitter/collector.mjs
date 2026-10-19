@@ -11,15 +11,6 @@ function boundedLimit(source) {
   return Math.min(20, Math.max(1, Number(source.limit) || 20));
 }
 
-function decodeHtml(value) {
-  return String(value || '')
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'")
-    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
-    .replace(/\s+/g, ' ').trim();
-}
-
 function collectionRows(payload, keys) {
   for (const key of keys) {
     if (Array.isArray(payload?.[key])) return payload[key];
@@ -71,34 +62,13 @@ function mapArticle(article) {
   };
 }
 
-function mapThreadsPage(html, limit) {
-  const records = [];
-  const seen = new Set();
-  const anchor = /<a\b[^>]*href=["']([^"']*\/threads\/[^"'#?]+)["'][^>]*>([\s\S]*?)<\/a>/gi;
-  for (const match of String(html || '').matchAll(anchor)) {
-    const href = match[1].startsWith('http') ? match[1] : new URL(match[1], BASE_URL).href;
-    if (seen.has(href)) continue;
-    seen.add(href);
-    const title = decodeHtml(match[2]);
-    if (!title || /^(threads|read more|view thread)$/i.test(title)) continue;
-    records.push({
-      externalId: href, title: title.slice(0, 500), url: href,
-      summary: `TechTwitter Threads 专题：${title}`,
-      author: 'TechTwitter 编辑精选', publishedAt: null,
-      metrics: {}, raw: { provider: 'techtwitter', surface: 'threads', contentType: 'thread-edition', sourceUrl: href, access: 'public listing; subscriber-only remainder is not fetched' },
-    });
-    if (records.length >= limit) break;
-  }
-  return records;
-}
-
-async function request(source, path, options, responseType = 'json') {
+async function request(source, path, options) {
   const endpoint = new URL(path, BASE_URL);
   let response;
   try {
     response = await options.fetchImpl(endpoint, {
       signal: AbortSignal.timeout(Number(source.timeoutMs) || 30000),
-      headers: { accept: responseType === 'json' ? 'application/json' : 'text/html' },
+      headers: { accept: 'application/json' },
     });
   } catch (error) {
     if (error?.name === 'TimeoutError' || error?.name === 'AbortError') throw failure('TechTwitter 请求超时', 'TIMEOUT');
@@ -111,13 +81,12 @@ async function request(source, path, options, responseType = 'json') {
   if (response.status === 400) throw failure('TechTwitter API 参数无效', 'INVALID_SOURCE_CONFIG');
   if (response.status === 503) throw failure('TechTwitter 服务暂不可用');
   if (!response.ok) throw failure(`TechTwitter 返回 HTTP ${response.status}`);
-  try { return responseType === 'json' ? await response.json() : await response.text(); }
-  catch { throw failure(`TechTwitter ${responseType === 'json' ? 'API' : 'Threads 页面'}返回内容无法解析`); }
+  try { return await response.json(); }
+  catch { throw failure('TechTwitter API 返回内容无法解析'); }
 }
 
-async function collectSurface(source, options, surface, path, mapper, responseType = 'json') {
-  const payload = await request(source, path, options, responseType);
-  if (surface === 'threads') return mapThreadsPage(payload, boundedLimit(source));
+async function collectSurface(source, options, surface, path, mapper) {
+  const payload = await request(source, path, options);
   return collectionRows(payload, surface === 'articles' ? ['articles', 'items', 'results'] : ['tweets', 'items', 'results'])
     .map((row) => mapper(row, surface))
     .filter((item) => item.title && item.url)
@@ -130,14 +99,13 @@ export async function collectTechTwitter(source = {}, { fetchImpl = fetch, onPro
     ['trending', `/api/tweets/trending?limit=${limit}`, (row) => mapTweet(row, 'trending')],
     ...STREAM_CATEGORIES.map((category) => [`streams:${category}`, `/api/command/streams?category=${category}&limit=${limit}`, (row) => mapTweet(row, 'streams', category)]),
     ['articles', `/api/articles?limit=${limit}`, mapArticle],
-    ['threads', '/threads', null, 'html'],
   ];
   const items = [];
   const failures = [];
-  for (const [surface, path, mapper, responseType] of tasks) {
+  for (const [surface, path, mapper] of tasks) {
     onProgress(`正在读取 TechTwitter ${surface}`);
     try {
-      const rows = await collectSurface(source, { fetchImpl }, surface === 'threads' ? 'threads' : surface.split(':')[0], path, mapper, responseType);
+      const rows = await collectSurface(source, { fetchImpl }, surface.split(':')[0], path, mapper);
       items.push(...rows);
     } catch (error) {
       failures.push({ surface, message: error.message, code: error.code || 'NETWORK_ERROR' });
@@ -166,7 +134,7 @@ export async function testTechTwitter(source = {}, options = {}) {
   const testSource = { ...source, limit: Math.min(5, Number(source.limit) || 5) };
   const items = await collectTechTwitter(testSource, options);
   return {
-    ok: true, title: 'TechTwitter · Trending / Streams / Articles / Threads', itemCount: items.length,
+    ok: true, title: 'TechTwitter · Trending / Streams / Articles', itemCount: items.length,
     items, failedSurfaces: items.collectionInfo?.failedSurfaces || [],
   };
 }

@@ -19,7 +19,7 @@ const tweet = {
   slug: 'tweet-slug', quality_score: 9, content_type: 'tweet', keywords: ['developer tools'],
 };
 
-test('TechTwitter 一批采集覆盖 Trending、5 类 Streams、Articles、Threads，并保留内容面', async () => {
+test('TechTwitter 一批采集覆盖 Trending、5 类 Streams 和 Articles，并保留内容面', async () => {
   const requested = [];
   const adapter = createAdapter({ fetchImpl: async (url) => {
     const parsed = new URL(url);
@@ -30,22 +30,21 @@ test('TechTwitter 一批采集覆盖 Trending、5 类 Streams、Articles、Threa
       return response({ tweets: [{ ...tweet, id: `stream-${category}`, tweet_url: category === 'ai-ml' ? tweet.tweet_url : `https://x.com/dev/${category}` }], count: 1 });
     }
     if (parsed.pathname === '/api/articles') return response({ articles: [{ id: 'article-id', slug: 'long-form-ai', title: 'AI 工程实践', summary: '一篇值得细看的长文', author_name: '作者', published_at: '2026-10-01T10:00:00Z' }] });
-    if (parsed.pathname === '/threads') return response('<main><a href="/threads/gemini-release"><h2>Google Preps Gemini 4 Release</h2></a></main>');
     throw new Error(`Unexpected endpoint: ${parsed.href}`);
   } });
 
   const result = await adapter.collect({ limit: 12 });
   assert.equal(result.status, 'ok');
-  assert.equal(requested.length, 8);
+  assert.equal(requested.length, 7);
   assert.deepEqual(requested.filter((url) => url.pathname === '/api/command/streams').map((url) => url.searchParams.get('category')).sort(), ['ai-ml', 'coding', 'platform', 'product', 'startups']);
   assert.equal(requested.find((url) => url.pathname === '/api/tweets/trending').searchParams.get('limit'), '12');
-  assert.deepEqual(new Set(result.items.map((item) => item.raw.raw.surface)), new Set(['trending', 'streams', 'articles', 'threads']));
+  assert.deepEqual(new Set(result.items.map((item) => item.raw.raw.surface)), new Set(['trending', 'streams', 'articles']));
   assert.ok(result.items.some((item) => item.raw.raw.category === 'coding'));
   const crossListed = result.items.find((item) => item.url === tweet.tweet_url);
   assert.deepEqual(crossListed.raw.raw.surfaces, ['trending', 'streams']);
   assert.deepEqual(crossListed.raw.raw.categories, ['ai-ml']);
   assert.equal(result.items.find((item) => item.raw.raw.surface === 'articles').url, 'https://www.techtwitter.com/articles/long-form-ai');
-  assert.equal(result.items.find((item) => item.raw.raw.surface === 'threads').url, 'https://www.techtwitter.com/threads/gemini-release');
+  assert.equal(requested.some((url) => url.pathname === '/threads'), false);
   assert.equal(result.items.find((item) => item.raw.raw.surface === 'trending').discussionUrl, 'https://www.techtwitter.com/tweet/tweet-slug');
 });
 
@@ -55,12 +54,12 @@ test('TechTwitter 单个内容面失败时保留其他采集结果并报告失�
     if (path === '/api/tweets/trending') return response({ tweets: [tweet] });
     if (path === '/api/command/streams') return response({}, 503);
     if (path === '/api/articles') return response({ articles: [] });
-    return response('<a href="/threads/example">Example thread</a>');
+    throw new Error(`Unexpected endpoint: ${url}`);
   } });
   const result = await adapter.collect({ limit: 5 });
   assert.equal(result.status, 'ok');
   assert.ok(result.items.some((item) => item.raw.raw.surface === 'trending'));
-  assert.ok(result.items.some((item) => item.raw.raw.surface === 'threads'));
+  assert.equal(result.items.some((item) => item.raw.raw.surface === 'threads'), false);
   assert.equal(result.provenance.failedSurfaces.length, 5);
 });
 
@@ -72,7 +71,7 @@ test('TechTwitter 429 保留 Retry-After，并继续尝试其他内容面而不�
     if (path === '/api/tweets/trending') return response({ error: { code: 'rate_limited', message: '慢一点', hint: '稍后重试' } }, 429, '90');
     if (path === '/api/command/streams') return response({ tweets: [] });
     if (path === '/api/articles') return response({ articles: [] });
-    return response('<a href="/threads/example">Example thread</a>');
+    return response({ articles: [] });
   } });
   const result = await adapter.collect({ limit: 10 });
   assert.equal(result.status, 'ok');

@@ -28,9 +28,9 @@ X 采集器现在统一调用 TwexAPI。搜索模式使用 `POST /twitter/advanc
 
 ## TechTwitter 全面精选
 
-TechTwitter 作为独立只读采集器接入，和 TwexAPI 并行，不需要 API Key。每个批次会依次读取 Trending (`/api/tweets/trending`)、五类 Streams (`/api/command/streams`：`ai-ml`、`startups`、`coding`、`product`、`platform`)、Articles (`/api/articles`) 和 Threads 专题列表 (`/threads`)；每个内容面按配置的 limit 限制最多条数（1–20）。前三类使用 TechTwitter 文档化的 JSON 接口，Threads 则只解析公开列表页上的专题标题和链接，不抓订阅解锁内容。单个内容面失败会记录在采集批次 provenance 中，并继续收集其他面；若所有内容面都没有有效结果才判定采集失败。
+TechTwitter 作为独立只读采集器接入，和 TwexAPI 并行，不需要 API Key。每个批次会依次读取 Trending (`/api/tweets/trending`)、五类 Streams (`/api/command/streams`：`ai-ml`、`startups`、`coding`、`product`、`platform`) 和 Articles (`/api/articles`)；每个内容面按配置的 limit 限制最多条数（1–20）。这些内容面使用 TechTwitter 的 JSON 接口。单个内容面失败会记录在采集批次 provenance 中，并继续收集其他面；若所有内容面都没有有效结果才判定采集失败。
 
-采集记录进入现有 X 流程，并在 `raw.surface` / `raw.category` 中保留 Trending、Streams、Articles、Threads 来源面，便于区分与后续筛选；推文保留原始 X 地址，文章和专题保留 TechTwitter 阅读链接。该源覆盖的是 TechTwitter 已监测并发布的精选内容，不代表全量 X。遇到 429 会遵从 `Retry-After` 提示且不做紧密重试。
+采集记录进入现有 X 流程，并在 `raw.surface` / `raw.category` 中保留 Trending、Streams、Articles 来源面，便于区分与后续筛选；推文保留原始 X 地址，文章保留 TechTwitter 阅读链接。该源覆盖的是 TechTwitter 已监测并发布的精选内容，不代表全量 X。遇到 429 会遵从 `Retry-After` 提示且不做紧密重试。
 
 ## 运行失败处理
 
