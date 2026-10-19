@@ -70,12 +70,17 @@ test('TechTwitter 429 保留 Retry-After，并继续尝试其他内容面而不�
     callsByPath.set(path, (callsByPath.get(path) || 0) + 1);
     if (path === '/api/tweets/trending') return response({ error: { code: 'rate_limited', message: '慢一点', hint: '稍后重试' } }, 429, '90');
     if (path === '/api/command/streams') return response({ tweets: [] });
-    if (path === '/api/articles') return response({ articles: [] });
-    return response({ articles: [] });
+    if (path === '/api/articles') return response({ articles: [{ id: 'fallback-article', slug: 'fallback-article', title: '备用内容面成功' }] });
+    throw new Error(`Unexpected endpoint: ${url}`);
   } });
   const result = await adapter.collect({ limit: 10 });
   assert.equal(result.status, 'ok');
   assert.equal(callsByPath.get('/api/tweets/trending'), 1);
+  assert.equal(callsByPath.get('/api/command/streams'), 5);
+  assert.equal(callsByPath.get('/api/articles'), 1);
+  assert.equal(result.items.some((item) => item.raw.raw.surface === 'articles'), true);
+  assert.equal(result.provenance.failedSurfaces[0].surface, 'trending');
+  assert.equal(result.provenance.failedSurfaces[0].code, 'RATE_LIMITED');
   assert.equal(result.provenance.failedSurfaces[0].message.includes('90 秒后再试'), true);
 });
 
