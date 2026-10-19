@@ -12,6 +12,7 @@ concurrency:
 
 permissions:
   contents: read
+  checks: write
 
 jobs:
   verify:
@@ -37,6 +38,10 @@ jobs:
       - name: 安装依赖（含技能级联）
         run: npm ci
 
+      - name: 准备 JUnit 报告目录
+        shell: pwsh
+        run: New-Item -ItemType Directory -Force -Path test-results/junit | Out-Null
+
       - name: 生成样式 bundle
         run: npm run build:styles
 
@@ -44,12 +49,20 @@ jobs:
         run: npm run build
 
       - name: 主链路 E2E 门禁
-        run: npm run test:e2e
+        run: node --disable-warning=ExperimentalWarning --test --test-reporter=tap --test-reporter=junit --test-reporter-destination=stdout --test-reporter-destination=test-results/junit/e2e.xml test/e2e/**/*.test.mjs
 
       - name: 全量测试
-        run: npm test
+        run: node --disable-warning=ExperimentalWarning --test --test-reporter=tap --test-reporter=junit --test-reporter-destination=stdout --test-reporter-destination=test-results/junit/unit.xml test/**/*.test.mjs
         # 覆盖浏览器渲染层（布局审计、ECharts、浏览器内联化），Chromium 来自 postinstall 下载，
         # 不依赖真实 API Key、用户 Chrome Profile、RSSHub 常驻进程或外部 CDN 写入。
+
+      - name: 发布 JUnit 测试报告
+        uses: mikepenz/action-junit-report@v6
+        if: always()
+        with:
+          report_paths: test-results/junit/*.xml
+          check_name: Node.js test report
+          annotate_only: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
 
       - name: 消费者—能力治理门禁
         run: npm run capability:gates
