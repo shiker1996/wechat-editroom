@@ -73,8 +73,10 @@ test('成稿提示词展开真实标题、简报和大纲', () => {
   const prompt = buildDraftUserPrompt('真实标题', { thesis: '真实命题' }, '# 真实大纲');
   assert.match(prompt, /标题：真实标题/);
   assert.match(prompt, /\"thesis\":\"真实命题\"/);
-  assert.match(prompt, /文章结构视图（仅供执行，不得原样复述）：\n# 真实大纲/);
-  assert.match(prompt, /规划元信息隔离规则/);
+  assert.match(prompt, /文章大纲（仅作为文章结构）：\n# 真实大纲/);
+  assert.match(prompt, /简报确定文章写什么，事实基座限定哪些事实可以写，大纲确定文章如何展开/);
+  assert.match(prompt, /必要来源自然归因一次即可/);
+  assert.match(prompt, /不罗列其他证据缺项/);
   assert.doesNotMatch(prompt, /\$\{(?:selectedTitle|outline|JSON\.stringify\(brief\))\}/);
 });
 
@@ -113,7 +115,8 @@ test('审稿返工提示词直接携带事实基座、大纲、去AI稿和结构
   assert.match(prompt, /文章大纲（对应 02-outline\.md）：[\s\S]*# 大纲/);
   assert.match(prompt, /待修订文章（对应 05-humanized\.md）：[\s\S]*# 去AI稿/);
   assert.match(prompt, /首次审稿门禁结果与修订要求：[\s\S]*缺少来源/);
-  assert.match(prompt, /不要要求读取文件/);
+  assert.match(prompt, /未涉及的正文必须逐字保留/);
+  assert.match(prompt, /不要输出审阅过程、审稿报告、文件缺失说明或 REVIEW 注释/);
 });
 
 test('合规修订提示词要求 AI 直接修订标题、归因和来源展示', () => {
@@ -126,7 +129,7 @@ test('合规修订提示词要求 AI 直接修订标题、归因和来源展示'
     rejectedAngles: ['不得断言主动退市'],
     article: '# 标题30%\n\n正文。',
   });
-  assert.match(prompt, /标题单独审核/);
+  assert.match(prompt, /只在门禁明确指出标题问题时修改标题/);
   assert.match(prompt, /明确归因/);
   assert.match(prompt, /具体来源/);
   assert.match(prompt, /只输出修订后的完整 Markdown 文章/);
@@ -153,7 +156,10 @@ test('质量门禁只授权 verified 事实并区分观点与亲测', () => {
   const source=fs.readFileSync(new URL('../server/features/articles/application/article-pipeline.mjs',import.meta.url),'utf8');
   assert.match(source,/正文事实只能来自事实基座中的 verified 项/);
   assert.match(source,/第一人称作者判断或阅读动作/);
-  assert.match(source,/不能用相邻主张、模型常识或计算结果替代/);
+  assert.match(source,/作者判断或阅读动作（如“我看”“我读完后的判断”）不是亲测/);
+  assert.match(source,/大纲只按主线安排章节/);
+  assert.match(source,/SEO 只做关键词自然布局和搜索意图优化/);
+  assert.doesNotMatch(source,/特别检查证据限定是否叠加|SEO 不负责扩写证据边界/);
   assert.doesNotMatch(source,/事实基座可能未穷尽其中数据/);
 });
 
@@ -191,8 +197,13 @@ test('文章质量门禁在模型判定通过后仍拦截规划元话语泄漏',
 });
 
 test('仅修复规划元话语时要求保留标题、开头和结构', () => {
-  const source = fs.readFileSync(new URL('../server/features/articles/application/article-pipeline.mjs', import.meta.url), 'utf8');
-  assert.match(source, /若本次门禁只指出规划元话语问题，必须保留原标题、前 200 字、开头钩子/);
+  const prompt = buildPublicationComplianceRepairPrompt({
+    issues: [{ type: 'structure', message: '存在编辑规划元话语“本文不写”' }],
+    article: '# 标题\n\n开头与正文。',
+  });
+  assert.match(prompt, /本次仅修复编辑规划元话语/);
+  assert.match(prompt, /保留标题、开头、章节顺序、事实、来源、作者判断和结尾/);
+  assert.match(prompt, /只改对应句子/);
 });
 
 test('文章管线在审稿后增加最终标题锁定，并让后续阶段读取锁定标题', () => {
@@ -279,17 +290,20 @@ test('热点文章契约明确拒绝伪装教程、工具清单和纯快讯',()=
   assert.match(skill,/reader_stake/);
 });
 
-test('成稿执行器将分发池和读者利益写入规划、标题与锁定简报',()=>{
+test('成稿执行器只把文章结构写入大纲，并在标题阶段读取分发与读者信息',()=>{
   const pipeline=fs.readFileSync(new URL('../server/features/articles/application/article-pipeline.mjs',import.meta.url),'utf8');
   const server=fs.readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
-  assert.match(pipeline,/distribution_lane:\$\{brief\.distributionLane\}/);
-  assert.match(pipeline,/reader_stake:\$\{brief\.readerStake/);
+  assert.match(pipeline,/只做文章结构设计：不生成作者素材、标题候选、分发信息、流量规划、读者收益说明、来源清单、风险清单/);
+  assert.match(pipeline,/大纲只按主线安排章节/);
+  assert.match(pipeline,/const p02=path\.join\(workdir,'02-outline\.md'\),p03=path\.join\(workdir,'03-titles\.md'\)/);
   assert.match(pipeline,/distribution_lane:brief\.distributionLane,reader_stake:brief\.readerStake/);
+  assert.match(pipeline,/writeFile\(p03,updatedTitles\)/);
+  assert.match(pipeline,/writeFile\(p03,lockedTitleMarkdown\)/);
   assert.match(server,/distribution_lane: \$\{candidate\.distribution_lane/);
   assert.match(server,/reader_stake: \$\{candidate\.reader_stake/);
   assert.match(pipeline,/researchBasis:editorial\.research_basis/);
   assert.match(pipeline,/researchBasis:brief\.researchBasis/);
-  assert.match(pipeline,/research_basis:\$\{brief\.researchBasis/);
+  assert.match(pipeline,/## 采用的研判主线\\n\$\{brief\.researchBasis\}/);
   assert.match(server,/采用的研判主线/);
 });
 

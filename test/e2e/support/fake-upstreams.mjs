@@ -144,6 +144,7 @@ function synthesisJson(payload) {
 function jsonForRequest(payload) {
   const text = JSON.stringify(payload.messages || []);
   if (/请判断这篇文章是否存在明显、影响阅读体验的模板化\/AI 腔/.test(text)) return { pass: true, issues: [] };
+  if (/文章简报和事实基座整理成一份文章大纲/.test(text)) return { outlineMarkdown: '## 背景\n\n## 验证步骤\n\n## 完成标准' };
   if (/hotspot-tagging|语义打标|preScores|eventParts/i.test(text)) return hotspotTaggingJson(payload);
   if (/event-card|事件事实卡|classification_features/i.test(text)) return eventCardJson(payload);
   if (/脑暴输入规则|hotspot-brainstorm-explore/i.test(text)) return brainstormJson(payload);
@@ -291,7 +292,7 @@ export async function startFakeModel({ mode = 'normal' } = {}) {
       ? { role: 'assistant', content: '{invalid fixture json' }
       : toolName
       ? { role: 'assistant', content: null, tool_calls: [{ id: 'fixture-call-1', type: 'function', function: { name: toolName, arguments: JSON.stringify(toolResponse(toolName, payload)) } }] }
-      : { role: 'assistant', content: payload.response_format ? JSON.stringify(jsonForRequest(payload)) : /social-card|social cards|hashtag|话题标签|小红书|公众号图文文案/i.test(JSON.stringify(payload.messages || [])) ? '固定测试图文文案。\n\n#E2E测试 #固定夹具 #主链路验证 #可追踪输出 #功能回归' : articleMarkdown() };
+      : { role: 'assistant', content: payload.response_format ? JSON.stringify(jsonForRequest(payload)) : /social-card|social cards|hashtag|话题标签|小红书|公众号图文文案/i.test(JSON.stringify(payload.messages || [])) ? '公众号发布标题：E2E 固定图文测试：验证内容如何交付\n\n固定测试图文文案。\n\n#E2E测试 #固定夹具 #主链路验证 #可追踪输出 #功能回归' : articleMarkdown() };
     if (payload.stream) {
       response.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-cache' });
       const delta = toolName ? { role: 'assistant', tool_calls: [{ index: 0, id: 'fixture-call-1', type: 'function', function: { name: toolName, arguments: JSON.stringify(toolResponse(toolName, payload)) } }] } : { role: 'assistant', content: message.content };

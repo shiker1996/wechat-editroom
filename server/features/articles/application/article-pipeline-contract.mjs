@@ -254,7 +254,7 @@ export function buildDraftUserPrompt(selectedTitle, brief, outline) {
     experience_required: brief?.experienceRequired ?? brief?.experience_required ?? false,
     confirmed_experiences: brief?.confirmedExperiences || brief?.confirmed_experiences || '',
   };
-  return `当前标题：${selectedTitle}\n\n写作简报（确定文章要回答的问题、判断和读者影响）：\n${JSON.stringify(articleTask)}\n\n事实与来源授权（事实只能来自这里）：\n${JSON.stringify(authority)}\n\n必要边界（不得逐字写进正文）：\n${JSON.stringify(internalConstraints)}\n\n请按文章大纲的顺序和章节意图写成连贯的文章。简报确定文章写什么，事实基座限定哪些事实可以写，大纲确定文章如何展开。不要把大纲说明、机器审计字段或来源清单改写进正文。只把 fact_base 中 status=verified 的主张写成确定事实；disputed、unverified 和 restricted_claims 必须明确归因、限定或删除。采用的研判拓展点应自然进入论证；不要为了覆盖字段而增加无关章节。\n\n文章大纲（仅作为文章结构）：\n${buildDraftOutlineView(outline)}`;
+  return `当前标题：${selectedTitle}\n\n写作简报（确定文章要回答的问题、判断和读者影响）：\n${JSON.stringify(articleTask)}\n\n事实与来源授权（事实只能来自这里）：\n${JSON.stringify(authority)}\n\n必要边界（不得逐字写进正文）：\n${JSON.stringify(internalConstraints)}\n\n请按文章大纲的顺序和章节意图写成连贯的文章。简报确定文章写什么，事实基座限定哪些事实可以写，大纲确定文章如何展开。不要把大纲说明、机器审计字段或来源清单改写进正文。只把 fact_base 中 status=verified 的主张写成确定事实；其余事实性主张明确归因或删除。作者推断可以保留，但要让读者看出这是推断。必要来源自然归因一次即可；只在会改变核心判断时补一句最短限定，不罗列其他证据缺项。采用的研判拓展点应自然进入论证；不要为了覆盖字段而增加无关章节。\n\n文章大纲（仅作为文章结构）：\n${buildDraftOutlineView(outline)}`;
 }
 
 export function buildResearchCoveragePrompt({ article = '', researchPoints = [], rejectedAngles = [] } = {}) {

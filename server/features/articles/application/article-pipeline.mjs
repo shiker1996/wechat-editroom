@@ -647,7 +647,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   writeFile(path.join(workdir,'02-fact-gate.json'), JSON.stringify(factGate, null, 2));
   if (!factGate.eligible) throw new Error(`文章事实门禁未通过：${factGate.reason}`);
   onProgress('Step 2 根据锁定简报和事实基座生成文章大纲');
-  const OUTLINE_SYSTEM = `你负责把已经锁定的文章简报和事实基座整理成一份文章大纲。简报中的写作角度、命题、主线、读者影响和冲突是写作条件；事实基座是可用事实的边界。\n\n只输出 JSON：{"outlineMarkdown":"..."}。outlineMarkdown 只包含按论证顺序排列的章节标题，每节用一两句话说明本节要讲的内容及其与主线的关系。\n\n只做文章结构设计：不生成作者素材、标题候选、分发信息、流量规划、读者收益说明、来源清单、风险清单、写作指令或正文段落；这些信息若对文章结构有用，只体现在章节安排中。不要设置固定章节数或固定推进次数。不要补充简报和事实基座没有支持的新事实、新判断或新角度。`;
+  const OUTLINE_SYSTEM = `你负责把已经锁定的文章简报和事实基座整理成一份文章大纲。简报中的写作角度、命题、主线、读者影响和冲突是写作条件；事实基座是可用事实的边界。\n\n只输出 JSON：{"outlineMarkdown":"..."}。outlineMarkdown 只包含按论证顺序排列的章节标题，每节用一两句话说明本节要讲的内容及其与主线的关系。\n\n只做文章结构设计：不生成作者素材、标题候选、分发信息、流量规划、读者收益说明、来源清单、风险清单、写作指令或正文段落；这些信息若对文章结构有用，只体现在章节安排中。不要设置固定章节数或固定推进次数。大纲只按主线安排章节；如需交代来源或边界，将其放在对应事实所在章节，不单设一节。不要补充简报和事实基座没有支持的新事实、新判断或新角度。`;
   // 大纲阶段同样使用 output-budget 的 6000 -> 10000 自适应重试，
   // 由 providerMax 负责兜底，不要用调用方固定上限关闭该机制。
   const planningResult=await gateway.complete({provider,purpose:'article-planning',batchId,candidateId,jsonMode:true,
@@ -663,7 +663,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   const retentionTurns=brief.materialBrief.retention_turns||[];
   const endingPayoff=String(brief.materialBrief.ending_payoff||'').trim();
   const shareTrigger=String(brief.materialBrief.share_trigger||'').trim();
-  const p02=path.join(workdir,'02-outline.md'); writeFile(p02,outline);
+  const p02=path.join(workdir,'02-outline.md'),p03=path.join(workdir,'03-titles.md'); writeFile(p02,outline);
   recordStage('planning',orchestratorSkill,['00-article-brief.md','02-fact-base.json'],['02-outline.md']);
   onProgress(`Step 4 使用 ${chosenWriterSkill} 完整技能生成初稿`);
   const skillPrompt = `${stageSystem('drafting',writerSkillBundle)}\n\n## 本次成稿任务边界\n只按锁定简报与事实基座确定文章写什么、按 02-outline.md 确定文章结构，然后写出完整文章。不要重新规划标题、流量、读者收益或来源清单；不要补充大纲以外的结构要求，也不要按固定章节数或固定推进次数扩写。`;
@@ -848,7 +848,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   let final=reviewed;
   if(seoEnabled){
     onProgress('Step 6.2 搜一搜优化');
-    const seoResult=await textCall(gateway,{provider,purpose:'article-seo',batchId,candidateId},stageSystem('seo-optimization',stageSkills['seo-content-optimizer']),`核心关键词: ${coreKw.join('、')}${seoContext}\n\n已锁定标题：${lockedTitle}\n\n事实基座：${JSON.stringify(factBase)}\n\n发布主张登记：${JSON.stringify(publicationClaimRegister)}\n\nSEO 前风险扫描：${JSON.stringify(scanPublicationRisk({article:reviewed,factBase}))}\n\nSEO 不得新增高影响事实、财经数字、负面指控或绝对化判断；不得改变 writing_stance=${writingStance} 或 citation_policy=${citationPolicy}；若关键词与事实冲突，保留事实边界；若改写损害标题张力、前 200 字或完读节奏，保留原句；不得改写已锁定的 H1 标题。\n\n待优化文章：\n${reviewed}`,Math.min(6500,providerConfig.maxOutputTokens));
+    const seoResult=await textCall(gateway,{provider,purpose:'article-seo',batchId,candidateId},stageSystem('seo-optimization',stageSkills['seo-content-optimizer']),`核心关键词: ${coreKw.join('、')}${seoContext}\n\n已锁定标题：${lockedTitle}\n\n事实基座：${JSON.stringify(factBase)}\n\n发布主张登记：${JSON.stringify(publicationClaimRegister)}\n\nSEO 前风险扫描：${JSON.stringify(scanPublicationRisk({article:reviewed,factBase}))}\n\nSEO 只做关键词自然布局和搜索意图优化；不得新增事实、改变作者观点或来源归因，不改已锁定 H1。关键词与事实冲突，或改写损害标题兑现和阅读节奏时，保留原文。\n\n待优化文章：\n${reviewed}`,Math.min(6500,providerConfig.maxOutputTokens));
     final=replaceArticleTitle(cleanMarkdown(seoResult.content).replace(/<!--\s*REVIEW[\s\S]*?-->/gi,'').trim(),lockedTitle);
   }
   if(visibleChars(final)<articleLengthRange.min||visibleChars(final)>articleLengthRange.max){onProgress(`终稿当前 ${visibleChars(final)} 字，调整到 ${articleLengthRange.min}–${articleLengthRange.max} 字`);final=await fitArticleLength({gateway,provider,batchId,candidateId,article:final,factBase,systemPrompt:stageSystem('length-repair',writerSkillBundle),purpose:'article-length-gate',maxOutputTokens:Math.min(6500,providerConfig.maxOutputTokens),onProgress,maxAttempts:repairAttempts,range:articleLengthRange,lockedTitle});}

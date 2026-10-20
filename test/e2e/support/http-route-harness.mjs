@@ -74,6 +74,10 @@ export function createHttpRouteHarness({ root, store, models = null, aiJobs: pro
     articleWorkdir: () => root,
     socialCardWorkdir,
     socialCardFiles,
+    socialChannelMode: (candidate) => {
+      const mode = candidate?.tracks?.find((item) => item.track === 'social_cards')?.output_mode || '';
+      return mode.startsWith('xiaohongshu') ? 'xiaohongshu' : 'wechat';
+    },
     isInsideRoots,
     batchMaxAgeHours: () => 72,
     writeUtf8: async (filePath, content) => fs.writeFileSync(filePath, content, 'utf8'),
