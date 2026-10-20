@@ -73,6 +73,9 @@ function titleFromText(text, extension, metadata) {
 }
 
 function titleFromSocialCopy(text) {
+  const explicitTitle = String(text || '').split(/\r?\n/, 1)[0]
+    .match(/^(?:公众号发布标题|小红书笔记标题)\s*[:：]\s*(.+)$/)?.[1];
+  if (explicitTitle) return stripMarkup(explicitTitle);
   const lines = String(text || '').split(/\r?\n/).map((line) => stripMarkup(line.replace(/^#+\s*/, ''))).filter((line) => line && !/^[-*_]{3,}$/.test(line));
   const heading = String(text || '').split(/\r?\n/).map((line) => line.match(/^#{1,6}\s+(.+?)\s*$/)?.[1] || '').map(stripMarkup).find(Boolean);
   if (heading) return heading;

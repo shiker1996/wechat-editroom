@@ -17,7 +17,7 @@ import { configuredRepairAttempts, evaluateConfiguredGates } from '../../../plat
 import { batchTopicsDir, candidateArticleDir } from '../../../platform/core/workspace-paths.mjs';
 import { resolveArticleLength } from '../../../platform/core/config.mjs';
 import { evaluateArticleFactEligibility } from '../domain/article-fact-eligibility.mjs';
-import { inspectTrafficStructure, inspectPlanningMetaLeakage } from '../domain/article-quality.mjs';
+import { inspectPlanningMetaLeakage } from '../domain/article-quality.mjs';
 import { readDiscussionResearchContext } from '../../research/index.mjs';
 import { callDecisionTool, DECISION_TITLE_PLAN_TOOL, decisionToolDefinition, normalizeDecisionTitlePlan } from '../../../platform/llm/decision-tools.mjs';
 import {
@@ -76,22 +76,6 @@ function issueList(value) { return asArray(value).map((item)=>typeof item==='str
 function issueMessage(issue) { return typeof issue === 'string' ? issue : String(issue?.message || ''); }
 function issueType(issue) { return typeof issue === 'string' ? '' : String(issue?.type || '').trim().toLowerCase(); }
 function gateMentionsTitle(issues = []) { return issues.some((issue) => /标题|title|headline/i.test(issueMessage(issue)) || issueType(issue) === 'title'); }
-
-function attachTrafficStructureGate(gate = {}, article = '') {
-  const trafficStructure = inspectTrafficStructure(article);
-  if (trafficStructure.pass) return { ...gate, trafficStructure };
-  const issues = trafficStructure.issues.map((message) => ({
-    type: 'traffic_structure',
-    message,
-    repair: '补足具体开头、3-5 个 H2 推进和中段判断；保持读者收益融入正文，不要为了修结构强行新增清单章节',
-  }));
-  return {
-    ...gate,
-    pass: false,
-    issues: [...(Array.isArray(gate.issues) ? gate.issues : []), ...issues],
-    trafficStructure,
-  };
-}
 
 // 文章内容问题与“模型没有产出文章”分开处理：前者可以把终稿交给编辑器修订，
 // 后者说明当前阶段没有可供编辑的文章，仍然需要终止流水线。
@@ -195,7 +179,9 @@ ${String(article || '').trim()}
 首次审稿门禁结果与修订要求：
 ${String(review || '').trim()}
 
-请依据以上实际内容完成定向修订。对 IPO、上市、估值、融资、违法、造假、压榨、骚扰、事故伤亡以及公司/个人负面主张，若事实基座没有直接可靠证据，必须删除、降格并明确归因；不要用免责声明掩盖标题中的强断言。若文章把编辑规划写成正文（例如“本文不写”“只能当作提问的起点”、H2 编号或写作要求），请改成自然的来源限定和事实—问题过渡；若本次门禁只指出规划元话语问题，必须保留原标题、前 200 字、开头钩子、H2 结构、事实、来源、作者判断和结尾回收，只做句级改写。直接输出修订后的完整 Markdown 文章，不要要求读取文件，不要输出审阅过程、审稿报告、文件缺失说明或 REVIEW 注释。`;
+请逐条处理审稿门禁指出的问题。先判断每条问题针对的是可核验事实、来源说法、基于事实的作者推断，还是价值判断：只有可核验事实需要事实基座中的直接证据；来源说法要明确归因；作者推断只要推理依据在文中可见，就保留其判断和语气，不要统一改成“可能”“笔者认为”等免责声明。对 IPO、上市、估值、融资、违法、造假、压榨、骚扰、事故伤亡以及公司/个人负面事实主张，若缺少直接可靠证据，只修改对应主张，删除或准确归因；不能把风险扩大到同段其他观点。
+
+只修改门禁明确指出的句子及理解该句所必需的最小上下文。其余段落、标题、论证顺序、作者推断、修辞和结尾原样保留；除非门禁明确指出相应内容，否则不得重写或调整。若问题是编辑规划元话语（例如“本文不写”“只能当作提问的起点”、H2 编号或写作要求），只改对应句子。输出完整 Markdown 文章以供保存，但未涉及的正文必须逐字保留。不要输出审阅过程、审稿报告、文件缺失说明或 REVIEW 注释。`;
 }
 
 function artifact(store,batchId,kind,name,filePath,trace={}) { const stat=fs.statSync(filePath); store.upsertArtifact({batchId,candidateId:trace.candidateId??null,kind,name,path:filePath,size:stat.size,modifiedAt:stat.mtime.toISOString(),rootRunId:trace.rootRunId??null,workflowRunId:trace.workflowRunId??null,stageId:trace.stageId??null}); }
@@ -240,27 +226,26 @@ export function buildPublicationComplianceRepairPrompt({ factBase = {}, claimReg
     return type === 'structure' && /规划|结构|提问的起点|编辑/.test(issueMessage(issue));
   });
   const preservationRule = planningOnly
-    ? '- 本次仅修复编辑规划元话语。必须保留原标题、前 200 字、开头钩子、H2 数量与顺序、事实、来源、作者判断、结尾回收和原有长度；只做必要的句级改写，不得借机重写文章。'
+    ? '- 本次仅修复编辑规划元话语。保留标题、开头、章节顺序、事实、来源、作者判断和结尾；只改对应句子。'
     : '';
   return `你是公众号文章的合规修订编辑。请直接修订文章，不要输出审阅报告、修订说明、工具操作过程或 JSON。
 
-修订目标：解决门禁列出的发布风险，同时尽量保留作者已经确认的事实、观点、角度、命题和研判拓展点。只能使用事实基座中已有的信息，不得新增事实、数字、日期、人物行为、来源、引语或作者经历。
+修订目标：只解决门禁明确指出的发布风险，保留作者已经确认的事实、观点、角度、命题和研判拓展点。只能使用事实基座中已有的信息，不得新增事实、数字、日期、人物行为、来源、引语或作者经历。输出完整文章时，未被问题涉及的句段必须原样保留。
 
 必须执行的修订规则：
-- 标题单独审核。高影响财经数字、负面主张和绝对化判断若没有在已核验事实中得到直接支持，必须从标题删除或改为克制的定性表达；优先把标题改成不含具体财经数字、不使用“失效”“失败”等绝对化结论的表述。
-- 标题或正文中的未核实判断必须改成明确的分析表达，例如“从……看”“本文关注的是……”或“这可能意味着……”，不能伪装成事实。
-- 争议、负面和动机判断必须明确归因到公告、公司、员工、媒体或作者分析；不得把作者解读写成公司已经承认的事实。
+- 只在门禁明确指出标题问题时修改标题。标题中的事实主张按事实证据核验；标题中的作者判断按观点表达处理。不得仅因标题有判断、数字或修辞，就默认改成中性标题。
+- 先区分可核验事实、来源说法、作者推断和价值判断。可核验事实缺少支持时，修正对应事实；来源说法要准确归因；有事实依据且推理链可理解的作者推断和价值判断可以保留，不要求统一添加“笔者认为”“从……看”“这可能意味着”等标记。
+- 只有当作者推断被写成了可核验的客观事实，且门禁指出具体句子时，才在该句作最小修改；不要把限定扩展到邻近观点或全篇。
+- 争议、负面和动机事实主张要准确归因；不得把作者解读写成公司已经承认的事实。作者对动机的推断可作为推断保留，但不得伪装成当事方已确认事实。
 - 事实中的数字、折价率、营收、分红和时间信息，必须就近使用事实基座登记的具体来源。保留数字时，在对应句末使用登记中的具体来源标题和 URL，例如“（来源：[登记中的来源标题](登记中的 sourceUrl)）”；不得只写“据媒体”“据市场观察”或其他无法追溯的笼统来源。登记中没有 sourceUrl 的数字或高影响事实必须删除、改成不含数字的概括，不能自行补 URL、来源名称或外部事实。
 - 严格遵守作者明确不采用的方向和禁写边界，不得为了增强冲突补写退市、挤压投入、价格高估/低估、管理层动机或未披露时间表等结论。
 - 保留并兑现作者采用的研判拓展点，但不得把研判假设改写成已核验事实。
 ${preserveVisuals ? '- 保留现有全部 Markdown 图片、图片占位 HTML 注释、Mermaid/ECharts 产物和相关链接，只修改必要的文字与标题，不得删除或重排这些视觉产物。' : ''}
 ${preservationRule}
 
-这是强制修订，不是提出建议。门禁问题中指出的每一个标题或正文风险都必须在输出中实际改写，不能原样保留被指出的词句。若标题使用了事实基座中的 opinion 主张，标题也不能把该观点包装成结论；应改为“已核验事件事实 + 开放问题/中性分析对象”，不要在标题中使用“结构性解法”“结构性困境”“通道失效”“清算”“终结”“边缘化”“低效”等未经直接核验的定性词。高影响数字即使有 verified 主张，标题也必须保留“拟”“上限”“不超过”等事实限定；如果数字和分析判断放在一起会制造确定性暗示，直接从标题删除数字。
+这是定向修订，不是整篇重写。门禁明确指出的具体风险必须修复；没有指出的问题不应自行扩大。标题仅在标题问题被明确指出时修改。观点标题可直接表达作者判断，只要不把未核实事实伪装成事实。事实基座没有对应 claim 的计算结果、经济后果、历史动作或动机不得写成已发生事实；若作者以明确推理表达观点，可保留推断并保留原有表达力度。
 
-正文中的 opinion 只能以“笔者认为”“从机制上看”“这可能意味着”等明确的分析表达出现；不能把“主动收缩”“暴露了……困境”“EPS/净资产得以增厚”等模型推导或作者判断写成已经发生的客观事实。事实基座没有对应 claim 的计算结果、经济后果、历史动作或动机必须删除，不能以“常识”补足。
-
-逐项修订顺序：先通读门禁问题和文章，列出文章中所有需要保留的数字/高影响事实；逐一在“发布主张登记”中寻找直接匹配的 verified 主张和 sourceUrl。找不到的就删除或降格，不能用相邻主张、模型常识或计算结果替代。再逐项处理标题、开头和正文中的绝对化、贬损化及动机推断，最后检查每个保留的关键数字是否紧邻具体来源链接。
+逐项修订顺序：对照每条门禁问题定位对应句段；标记其类别（事实、来源说法、作者推断、价值判断）；只核验事实和归因；只修改确有问题的句段；最后确认其余段落、观点力度和文章结构保持不变。不得把门禁没有指出的内容扩展成修订任务。
 
 门禁问题：
 ${JSON.stringify(issues)}
@@ -563,8 +548,19 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   const historicalSnapshot=snapshotId?store.getGenerationSnapshot?.(snapshotId):null;
   const historicalWriter=historicalSnapshot?.snapshot?.selection?.selectedSkill
     ||historicalSnapshot?.snapshot?.skills?.[0]?.id;
-  const writerDecision=skillSelection || selectWriterSkill(candidate);
+  const writerDecision=selectWriterSkill({...candidate,article_type:articleType});
   const chosenWriterSkill = historicalWriter || skillSelection?.selectedSkill || writerDecision.skill;
+  const writerSelection={
+    ...(skillSelection||{}),
+    requestedSkill:skillSelection?.requestedSkill||'',
+    selectedSkill:chosenWriterSkill,
+    selectionSource:historicalWriter?'historical-snapshot':skillSelection?.selectionSource||'builtin-recommendation',
+    articleType,
+    recommendation:{skill:writerDecision.skill,reason:writerDecision.reason},
+    selectionReason:historicalWriter?'复用历史生成快照中的写作技能'
+      :skillSelection?.selectionSource==='user'?'用户手动指定写作技能'
+        :writerDecision.reason,
+  };
   const orchestratorSkill = loadSkillBundle({ workspaceRoot, skillName:'wechat-mp-topic-to-article' });
   const writerSkillBundle = loadSkillBundle({ workspaceRoot, skillName:chosenWriterSkill });
   const skillBundle = loadArticleSkillBundle({ workspaceRoot, writerSkill: chosenWriterSkill });
@@ -587,7 +583,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   const stageSystem=(stage,...children)=>buildStanceStageSystem(orchestratorSkill,stage,writingStance,...children);
   const gateStance={writingStance,citationPolicy};
   const runtime=await prepareSkillRun({gateway,store,batchId,candidateId,purpose:'article',bundles:[writerSkillBundle,orchestratorSkill,...Object.values(stageSkills)],provider,snapshotId,
-    selection:(skillSelection||stageSelections)?{...(skillSelection||{requestedSkill:'',selectedSkill:chosenWriterSkill,selectionSource:'builtin-recommendation'}),entryPoint:'hotspot-article',stages:stageSelections||{}}:null});
+    selection:(skillSelection||stageSelections)?{...writerSelection,entryPoint:'hotspot-article',stages:stageSelections||{}}:null});
   gateway=bindGenerationSnapshot(gateway,runtime.snapshotId);
   gateway=bindPipelineHarnessGateway(gateway,{store,batchId,candidateId,provider,
     generationSnapshotId:runtime.snapshotId,rootRunId:rootRunId||`batch:${batchId}`,workflowRunId:workflowRunId||`article:${batchId}:${candidateId??'batch'}`,entryPoint:'article-pipeline'});
@@ -610,7 +606,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
     if(!expected||expected.id!==stage||expectedSkill!==actualSkill)throw new Error(`成稿契约阶段不一致：期望 ${expected?.id||'结束'}/${expectedSkill||'-'}，实际 ${stage}/${actualSkill}`);
     stageExecutions.push({stage,skill:actualSkill,skillHash:bundle.hash,skillFiles:bundle.files,inputArtifacts,outputArtifact,gate,fallback:bundle.fallback});
   };
-  onProgress('Step 0/1 校验锁定简报并建立作者素材');
+  onProgress('Step 0/1 校验锁定简报');
   const briefPath=path.join(workdir,'00-article-brief.md'); const sourceBrief=path.join(batchTopicsDir(workspaceRoot,batch),candidate.candidate_id,'article-brief.md');
   const sourceBriefText=fs.existsSync(sourceBrief)?fs.readFileSync(sourceBrief,'utf8'):`---\nbrief_status: LOCKED\ncandidate_id: ${candidate.candidate_id}\ndistribution_lane: ${brief.distributionLane}\nreader_stake: ${brief.readerStake}\nexperience_required: ${brief.experienceRequired}\ndecision_source: explicit-user\nfinal_readiness: WRITE_NOW\n---\n\n# ${brief.topic}\n\n## 采用的研判主线\n${brief.researchBasis}\n\n## 锁定命题\n${brief.thesis}\n`;
   const briefWithStance=/^writing_stance\s*:/m.test(sourceBriefText)
@@ -620,7 +616,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   const researchSelectionPath=path.join(workdir,'editorial-research-selection.json');
   writeFile(researchSelectionPath,JSON.stringify({candidate_id:candidate.candidate_id,selected:brief.adoptedResearchPoints,rejected:normalizeRejectedAngles(brief.rejectedAngles),generated_at:new Date().toISOString()},null,2));
   const skillManifestPath=path.join(workdir,'00-skill-manifest.json');
-  writeFile(skillManifestPath,JSON.stringify({orchestrator:{skill:'wechat-mp-topic-to-article',hash:orchestratorSkill.hash,files:orchestratorSkill.files,fallback:orchestratorSkill.fallback},writerSkill:chosenWriterSkill,writerSkillSelection:skillSelection||{requestedSkill:'',selectedSkill:chosenWriterSkill,selectionSource:'builtin-recommendation'},articleType,writingStance,stanceSource:stanceDecision.source,stanceOverlayVersion:'1',citationPolicy,visualPolicy:visualDecision.policy,stageSkillSelections:stageSelections||historicalStages,hash:skillBundle.hash,files:skillBundle.files,fallback:skillBundle.fallback,stageSkills:Object.fromEntries(Object.entries(stageSkills).map(([name,bundle])=>[name,{skill:bundle.skillName,hash:bundle.hash,files:bundle.files,fallback:bundle.fallback}])),loadedAt:new Date().toISOString()},null,2));
+  writeFile(skillManifestPath,JSON.stringify({orchestrator:{skill:'wechat-mp-topic-to-article',hash:orchestratorSkill.hash,files:orchestratorSkill.files,fallback:orchestratorSkill.fallback},writerSkill:chosenWriterSkill,writerSkillSelection:writerSelection,articleType,writingStance,stanceSource:stanceDecision.source,stanceOverlayVersion:'1',citationPolicy,visualPolicy:visualDecision.policy,stageSkillSelections:stageSelections||historicalStages,hash:skillBundle.hash,files:skillBundle.files,fallback:skillBundle.fallback,stageSkills:Object.fromEntries(Object.entries(stageSkills).map(([name,bundle])=>[name,{skill:bundle.skillName,hash:bundle.hash,files:bundle.files,fallback:bundle.fallback}])),loadedAt:new Date().toISOString()},null,2));
   recordStage('brief',orchestratorSkill,['editorial','article-brief.md','editorial-research-selection.json'],'00-article-brief.md');
   onProgress('Step 1.5 基于来源建立结构化事实基座');
   // 事实基座包含逐条主张、证据和来源映射，内容量会随素材增长。
@@ -650,40 +646,27 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   const factGate = evaluateArticleFactEligibility({ classification, factBase });
   writeFile(path.join(workdir,'02-fact-gate.json'), JSON.stringify(factGate, null, 2));
   if (!factGate.eligible) throw new Error(`文章事实门禁未通过：${factGate.reason}`);
-  onProgress('Step 2 建立事实基座、大纲与标题候选');
-  const PLAN_SYSTEM = `${stageSystem('planning')}\n\n## 账号上下文\n${formatAccountContext(getAccountContext({ workspaceRoot }))}`;
+  onProgress('Step 2 根据锁定简报和事实基座生成文章大纲');
+  const OUTLINE_SYSTEM = `你负责把已经锁定的文章简报和事实基座整理成一份文章大纲。简报中的写作角度、命题、主线、读者影响和冲突是写作条件；事实基座是可用事实的边界。\n\n只输出 JSON：{"outlineMarkdown":"..."}。outlineMarkdown 只包含按论证顺序排列的章节标题，每节用一两句话说明本节要讲的内容及其与主线的关系。\n\n只做文章结构设计：不生成作者素材、标题候选、分发信息、流量规划、读者收益说明、来源清单、风险清单、写作指令或正文段落；这些信息若对文章结构有用，只体现在章节安排中。不要设置固定章节数或固定推进次数。不要补充简报和事实基座没有支持的新事实、新判断或新角度。`;
   // 大纲阶段同样使用 output-budget 的 6000 -> 10000 自适应重试，
   // 由 providerMax 负责兜底，不要用调用方固定上限关闭该机制。
   const planningResult=await gateway.complete({provider,purpose:'article-planning',batchId,candidateId,jsonMode:true,
-    messages:[{role:'system',content:PLAN_SYSTEM,protected:true},{role:'user',content:JSON.stringify(writingBrief),protected:true}]});
-  const plan=normalizePlanningResult(parseJsonResult(planningResult,store));
-  if(!plan.readerEmotion&&String(brief.readerStake||'').trim()){
-    plan.readerEmotion=`围绕“${brief.readerStake}”写出读者可能面对的一项具体选择或代价，说明它可能带来的犹豫、担心或挫败，再给出能帮助读者判断的依据；这是写作路径，不得断言群体真实感受。`;
-  }
-  const selectedTitle=String(plan.selectedTitle||candidate.hotspot_title).trim();
-  // 规划字段回写到同一份简报对象，后续写作、标题、审稿和视觉阶段读取同一份流量契约。
-  brief.materialBrief = { ...brief.materialBrief,
-    click_mechanism: plan.clickMechanism,
-    opening_hook: plan.openingHook,
-    reader_emotion: plan.readerEmotion || null,
-    retention_turns: plan.retentionTurns,
-    reader_value_type: plan.readerValueType,
-    reader_value_placement: plan.readerValuePlacement,
-    ending_payoff: plan.endingPayoff,
-    share_trigger: plan.shareTrigger,
-  };
-  // 规划是锁题后的运行时产物，但仍回写到同一份 material_brief，确保编辑会重新打开时看到实际采用的规划，而不是 UI 默认值。
-  store.saveEditorial(candidateId, { material_brief: brief.materialBrief });
-  writingBrief.materialBrief = brief.materialBrief;
-  const materials=`# 作者素材\n\n- topic:${brief.topic}\n- angle:${brief.angle}\n- adopted_research_points:${JSON.stringify(brief.adoptedResearchPoints)}\n- rejected_angles:${JSON.stringify(brief.rejectedAngles)}\n- research_basis:${brief.researchBasis||'未提供'}\n- material_brief:${JSON.stringify(brief.materialBrief)}\n- article_brief_path:${briefPath}\n- brief_status:LOCKED\n- distribution_lane:${brief.distributionLane}\n- reader_stake:${brief.readerStake||'待明确'}\n- experience_required:${brief.experienceRequired}\n- experience:${brief.confirmedExperiences||'无;公共资料分析,不得使用第一人称亲测'}\n- author_opinion:${brief.authorOpinions||'未提供'}\n- avoid:${brief.forbiddenClaims||'不得虚构事实与经历'}\n- writer_skill:${chosenWriterSkill}\n- writer_skill_reason:${writerDecision.reason}\n- content_role:${plan.contentRole}\n- expected_action:${(plan.expectedAction||[]).join('、')}\n- reader_value_type:${plan.readerValueType||'judgment'}\n- reader_value_placement:${plan.readerValuePlacement||'woven'}\n- click_mechanism:${plan.clickMechanism||'未提供'}\n- opening_hook:${plan.openingHook||'未提供'}\n- reader_emotion:${plan.readerEmotion||'未提供；不强行制造情绪'}\n- retention_turns:${JSON.stringify(plan.retentionTurns||[])}\n- ending_payoff:${plan.endingPayoff||'回收标题承诺'}\n- share_trigger:${plan.shareTrigger||'未提供'}\n- practical_increment:${plan.practicalIncrement||'按题材决定，不强制独立章节'}\n\n${plan.materialsMarkdown||''}`;
-  const trafficPlan=`## 流量规划（仅供参考，不要求正文逐项兑现）\n- click_mechanism: ${plan.clickMechanism||'未提供'}\n- opening_hook: ${plan.openingHook||'未提供'}\n- reader_emotion: ${plan.readerEmotion||'未提供；不强行制造情绪'}\n- retention_turns:\n${(plan.retentionTurns||[]).map((x)=>`  - ${x}`).join('\n')||'  - 未提供'}\n- ending_payoff: ${plan.endingPayoff||'按正文自然收束'}\n- share_trigger: ${plan.shareTrigger||'无则不设置'}`;
-  const readerValue=`## 读者收益\n- reader_value_type: ${plan.readerValueType||'judgment'}\n- reader_value_placement: ${plan.readerValuePlacement||'woven'}\n- practical_increment: ${plan.practicalIncrement||'按题材决定，不强制独立章节'}`;
-  const outline=`# 文章大纲\n\n## 分发与读者利益\n- 分发池：${brief.distributionLane}\n- 读者利益：${brief.readerStake||'待明确'}\n\n${trafficPlan}\n\n${readerValue}\n\n结构按材料和论证需要决定：不设固定 H2 数、推进次数、主案例、分享触发或互动提问指标；删掉不服务核心判断的章节。\n\n${plan.outlineMarkdown||''}\n\n## 来源\n- [原始热点来源](${brief.sourceUrl||''})\n\n## 剩余风险\n${plan.remainingRisks.map((x)=>`- ${typeof x==='string'?x:(x?.message||JSON.stringify(x))}`).join('\n')||'- 无'}`;
-  const titles=`# 标题候选\n\ndistribution_lane: ${brief.distributionLane}\nreader_stake: ${brief.readerStake||'待明确'}\ncore_keywords: ${(plan.coreKeywords||[]).join('、')}\n\n${(plan.titleCandidates||[]).map((x,i)=>`${i+1}. ${x.title} - ${x.reason}`).join('\n')}\n\nSELECTED_TITLE: ${selectedTitle}\nwriter_skill: ${chosenWriterSkill}`;
-  const p01=path.join(workdir,'01-personal-materials.md'),p02=path.join(workdir,'02-outline.md'),p03=path.join(workdir,'03-titles.md'); writeFile(p01,materials);writeFile(p02,outline);writeFile(p03,titles);
-  recordStage('planning',orchestratorSkill,['00-article-brief.md','02-fact-base.json'],['01-personal-materials.md','02-outline.md','03-titles.md']);
+    messages:[{role:'system',content:`${OUTLINE_SYSTEM}\n\n## 账号上下文\n${formatAccountContext(getAccountContext({ workspaceRoot }))}`,protected:true},{role:'user',content:JSON.stringify(writingBrief),protected:true}]});
+  const outlineResult=parseJsonResult(planningResult,store);
+  const outlineMarkdown=String(outlineResult?.outlineMarkdown||outlineResult?.outline_markdown||'').trim();
+  if(!outlineMarkdown)throw new Error('大纲阶段未返回 outlineMarkdown');
+  const outline=`# 文章大纲\n\n${outlineMarkdown}`;
+  const selectedTitle=String(brief.materialBrief.title_promise||candidate.hotspot_title).trim();
+  const contentRole=String(brief.materialBrief.content_role||'').trim();
+  const clickMechanism=String(brief.materialBrief.click_mechanism||'').trim();
+  const openingHook=String(brief.materialBrief.opening_hook||'').trim();
+  const retentionTurns=brief.materialBrief.retention_turns||[];
+  const endingPayoff=String(brief.materialBrief.ending_payoff||'').trim();
+  const shareTrigger=String(brief.materialBrief.share_trigger||'').trim();
+  const p02=path.join(workdir,'02-outline.md'); writeFile(p02,outline);
+  recordStage('planning',orchestratorSkill,['00-article-brief.md','02-fact-base.json'],['02-outline.md']);
   onProgress(`Step 4 使用 ${chosenWriterSkill} 完整技能生成初稿`);
-  const skillPrompt = stageSystem('drafting',writerSkillBundle);
+  const skillPrompt = `${stageSystem('drafting',writerSkillBundle)}\n\n## 本次成稿任务边界\n只按锁定简报与事实基座确定文章写什么、按 02-outline.md 确定文章结构，然后写出完整文章。不要重新规划标题、流量、读者收益或来源清单；不要补充大纲以外的结构要求，也不要按固定章节数或固定推进次数扩写。`;
   const draftResult=await textCall(gateway,{provider,purpose:'article-drafting-pipeline',batchId,candidateId},skillPrompt,buildDraftUserPrompt(selectedTitle, writingBrief, outline),Math.min(6500,providerConfig.maxOutputTokens));
   let draft=cleanMarkdown(draftResult.content);
   const draftGateSystem=stageSystem('draft-quality-gate',writerSkillBundle,stageSkills['article-reviewer']);
@@ -715,19 +698,19 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   if(draftBlockers.length)throw new Error(`AI 成稿输出门禁未通过：${issueList(draftBlockers).join('；')}`);
   const draftGatePath=path.join(workdir,'04-quality-gate.json');writeFile(draftGatePath,JSON.stringify(draftQuality,null,2));
   const p04=path.join(workdir,'04-draft.md');writeFile(p04,draft);
-  recordStage('drafting',writerSkillBundle,['01-personal-materials.md','02-outline.md','03-titles.md','02-fact-base.json'],'04-draft.md');
+  recordStage('drafting',writerSkillBundle,['00-article-brief.md','02-outline.md','02-fact-base.json'],'04-draft.md');
   recordStage('draft-quality-gate',stageSkills['article-reviewer'],['04-draft.md','02-fact-base.json'],'04-quality-gate.json',draftQuality.pass?'passed':'needs_review');
   onProgress('Step 4.5 根据初稿正文生成标题');
   const titleGenSystem = stageSystem('title-generation',stageSkills['title-generator']);
   const titlePurpose='article-title-generation';
   let titleGen=await generateTitlePlan({gateway,store,provider,batchId,candidateId,systemPrompt:titleGenSystem,purpose:titlePurpose,fallbackTitle:selectedTitle,maxOutputTokens:Math.min(5000,providerConfig.maxOutputTokens),payload:{topic:candidate.hotspot_title,
-    content_role:plan.contentRole,packaging_mode:candidate.packaging_mode,distribution_lane:brief.distributionLane,reader_stake:brief.readerStake,click_mechanism:plan.clickMechanism,opening_hook:plan.openingHook,retention_turns:plan.retentionTurns,ending_payoff:plan.endingPayoff,share_trigger:plan.shareTrigger,draft,factBase,publicationClaimRegister,
+    content_role:contentRole,packaging_mode:candidate.packaging_mode,distribution_lane:brief.distributionLane,reader_stake:brief.readerStake,click_mechanism:clickMechanism,opening_hook:openingHook,retention_turns:retentionTurns,ending_payoff:endingPayoff,share_trigger:shareTrigger,draft,factBase,publicationClaimRegister,
     hotspotAnchorRule:'从 topic 中选一个具体且可识别的主体/话题作为 hotspotAnchor；selectedTitle 与至少一条 titleCandidates 必须原样包含这个锚点（忽略大小写和标点）。不要用“AI/科技/公司”等泛词充当锚点。',
     materialBrief:brief.materialBrief,forbiddenClaims:brief.forbiddenClaims,publicationRiskRules:'高影响财经、名誉和敏感主张必须有已核验事实与明确归因；标题不得把传闻、推断或绝对化判断写成事实。'}});
   const finalSelectedTitle=String(titleGen.selectedTitle||selectedTitle).trim();
   brief.materialBrief.title_promise=String(brief.materialBrief.title_promise||finalSelectedTitle).trim();
   titleGen=normalizePlanningResult(titleGen);
-  const finalTitleCandidates=titleGen.titleCandidates; const finalCoreKeywords=titleGen.coreKeywords.length?titleGen.coreKeywords:plan.coreKeywords;
+  const finalTitleCandidates=titleGen.titleCandidates; const finalCoreKeywords=titleGen.coreKeywords;
   const updatedTitles='# 标题候选\n\ndistribution_lane: '+brief.distributionLane+'\nreader_stake: '+(brief.readerStake||'待明确')+'\nmaterial_title_promise: '+brief.materialBrief.title_promise+'\ncore_keywords: '+finalCoreKeywords.join('、')+'\n\n'+finalTitleCandidates.map((x,i)=>(i+1)+'. '+x.title+' - '+x.reason+(x.score!=null?' (得分:'+x.score+'/12)':'')).join('\n')+'\n\nSELECTED_TITLE: '+finalSelectedTitle+'; // 初稿正文重生成\nwriter_skill: '+chosenWriterSkill;
   writeFile(p03,updatedTitles);
   const selectedTitleRisk=scanPublicationRisk({title:finalSelectedTitle,article:draft,factBase});
@@ -738,14 +721,14 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   recordStage('title-generation',stageSkills['title-generator'],['04-draft.md','02-fact-base.json'],['03-titles.md','03-title-risk.json'],selectedTitleRisk.titleBlockers.length||!selectedTitleRisk.hotspotAnchor.preserved?'needs_review':'passed');
   // 标题风险先保留到终稿编辑器处理；它不再阻断文章正文的生成。
   const humanSystem=stageSystem('humanize',stageSkills['humanizer-zh']);
-  const humanizeInstruction=`作者采用的研判拓展点：${JSON.stringify(brief.adoptedResearchPoints)}\n\n作者明确不采用的方向：${JSON.stringify(brief.rejectedAngles)}\n\n请在保留核心判断、已核验事实、引语、来源链接、风险边界和作者立场的前提下自然化。允许删掉重复段落、合并或重排章节、改变段落节奏和重写结尾；大纲结构、每节推进、金句、读者提问、分享理由都只是参考，不必逐项兑现。删去没有信息增量的口号、空泛比喻、重复总结、机械转折和硬加的互动句。不得虚构亲历、人物细节、事实或作者观点；没有作者亲历素材时不要写成亲测。保留有事实/分析作用的修辞，不要为了“像人”刻意口语化。只输出完整 Markdown 文章，不附说明。\n\n待自然化文章：\n${draft}`;
+  const humanizeInstruction=`作者采用的研判拓展点：${JSON.stringify(brief.adoptedResearchPoints)}\n\n作者明确不采用的方向：${JSON.stringify(brief.rejectedAngles)}\n\n本阶段只处理明确可定位的 AI 套话、重复表达和机械连接。先保留原文，只修改确有问题的句子；不要删段、合并、重排章节或重写结尾。保留作者的事实判断、推理链、观点力度、标题承诺、修辞和结尾余味；不要把作者推断改写成客观事实，也不要给观点句统一添加“可能”“笔者认为”等限定。不得新增事实、数字、来源、经历或作者观点；没有作者亲历素材时不要写成亲测。输出完整 Markdown 文章以供保存，未涉及的段落和句子必须逐字保留，不附说明。\n\n待自然化文章：\n${draft}`;
   let humanResult=await textCall(gateway,{provider,purpose:'article-humanize',batchId,candidateId},humanSystem,humanizeInstruction,Math.min(5000,providerConfig.maxOutputTokens));
   let human=cleanMarkdown(humanResult.content); let humanIssue=articleStageOutputIssue(human,{requireArticle:true});
   if(humanIssue){
     store.updateModelCall(humanResult.callId,{status:'invalid_output',error:humanIssue});
     onProgress(`Step 4 自然化输出异常，自动重试：${humanIssue}`);
     humanResult=await textCall(gateway,{provider,purpose:'article-humanize-repair',batchId,candidateId},humanSystem,
-      `上一次输出无效：${humanIssue}。不要读取文件、调用工具、解释过程或复述任务。请按以下要求直接输出完整 Markdown 文章：保留核心判断、事实、来源和风险边界；允许删重、合并与重排，不必保留原结构；不得虚构亲历或细节。\n\n${humanizeInstruction}`,Math.min(5000,providerConfig.maxOutputTokens));
+      `上一次输出无效：${humanIssue}。不要读取文件、调用工具、解释过程或复述任务。请按以下要求直接输出完整 Markdown 文章：仅修改明确的问题句；其余内容逐字保留；不得删段、合并、重排、改写观点或新增内容。\n\n${humanizeInstruction}`,Math.min(5000,providerConfig.maxOutputTokens));
     human=cleanMarkdown(humanResult.content);humanIssue=articleStageOutputIssue(human,{requireArticle:true});
   }
   const p05=path.join(workdir,'05-humanized.md');writeFile(p05,human);
@@ -760,9 +743,9 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   let voiceGate=await aiVoiceQualityGate({gateway,store,provider,batchId,candidateId,article:human,systemPrompt:voiceGateSystem,maxOutputTokens:Math.min(2500,providerConfig.maxOutputTokens)});
   let voiceRepairResult=null;
   if(!voiceGate.pass){
-    onProgress(`风格门禁发现具体问题，执行一次结构性返修：${issueList(voiceGate.issues).join('；')}`);
+    onProgress(`风格门禁发现具体问题，执行一次局部表达修订：${issueList(voiceGate.issues).join('；')}`);
     voiceRepairResult=await textCall(gateway,{provider,purpose:'article-humanize-voice-repair',batchId,candidateId},humanSystem,
-      `请按独立风格门禁指出的问题，对下文进行一次实质性返修。问题必须逐项解决，可删段、合并、重排或重写；不得只替换近义词，也不必保留原结构。保留事实、来源、风险边界和作者立场，不得编造经历或事实。只输出完整 Markdown 文章。\n\n门禁问题：\n${JSON.stringify(voiceGate.issues)}\n\n文章：\n${human}`,Math.min(6000,providerConfig.maxOutputTokens));
+      `只修复风格门禁列出的具体句子，不做结构性返修。保留事实、来源、推理链、作者判断力度、修辞和其余原文；不得删段、合并、重排、改写结尾或新增观点。输出完整 Markdown 文章，未涉及内容逐字保留。\n\n门禁问题：\n${JSON.stringify(voiceGate.issues)}\n\n文章：\n${human}`,Math.min(6000,providerConfig.maxOutputTokens));
     const repairedHuman=cleanMarkdown(voiceRepairResult.content);
     const repairIssue=articleStageOutputIssue(repairedHuman,{requireArticle:true});
     if(!repairIssue){human=repairedHuman;writeFile(p05,human);voiceGate=await aiVoiceQualityGate({gateway,store,provider,batchId,candidateId,article:human,systemPrompt:voiceGateSystem,maxOutputTokens:Math.min(2500,providerConfig.maxOutputTokens)});}
@@ -778,23 +761,22 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   }
   onProgress('Step 5 审稿与事实/逻辑/风险门禁');
   const reviewSystem=stageSystem('review',stageSkills['article-reviewer']);
-  const reviewOutputInstruction='输出契约：直接输出修订后的完整 Markdown 文章，不要输出审稿报告、结论摘要、评分、修订说明或 REVIEW 注释。审稿是否通过由独立的 decision.article_review_gate 工具返回；不要在正文中嵌入门禁结论。';
-  const reviewResult=await textCall(gateway,{provider,purpose:'article-review',batchId,candidateId},reviewSystem,`事实基座:${JSON.stringify(factBase)}\n\n发布主张登记:${JSON.stringify(publicationClaimRegister)}\n\n作者采用的研判拓展点:${JSON.stringify(brief.adoptedResearchPoints)}\n\n作者明确不采用的方向:${JSON.stringify(brief.rejectedAngles)}\n\n发布风险扫描:${JSON.stringify(scanPublicationRisk({article:human,factBase}))}\n\n文章:\n${human}\n\n${reviewOutputInstruction}`,Math.min(6500,providerConfig.maxOutputTokens));
-  let reviewed=cleanMarkdown(reviewResult.content);
   const reviewLogPath=path.join(workdir,'06-review-gate.md');
-  let reviewLog=`# 首次审稿响应\n\n${reviewed}`;writeFile(reviewLogPath,reviewLog);
-  let finalReviewResult=reviewResult;
-  let reviewIssue=articleStageOutputIssue(reviewed,{requireArticle:true});
-  let reviewDecision=reviewIssue
-    ? {pass:false,issues:[{type:'output',message:reviewIssue,repair:'直接返回完整 Markdown 文章，不要输出审稿报告或工具操作说明'}]}
-    : await aiReviewGate({gateway,store,provider,batchId,candidateId,article:reviewed,factBase,outline,researchPoints:brief.adoptedResearchPoints,rejectedAngles:brief.rejectedAngles,publicationClaimRegister,publicationScan:scanPublicationRisk({article:reviewed,factBase}),...gateStance,systemPrompt:reviewSystem,maxOutputTokens:Math.min(3500,providerConfig.maxOutputTokens)});
-  if(reviewIssue||!reviewDecision.pass) {
-    onProgress(reviewIssue?`Step 5 审稿输出异常，自动重试：${reviewIssue}`:'Step 5 审稿未通过,执行一次定向修订复审');
-    if(reviewIssue)store.updateModelCall(reviewResult.callId,{status:'invalid_output',error:reviewIssue});
+  let reviewed=human;
+  let reviewDecision=await aiReviewGate({gateway,store,provider,batchId,candidateId,article:human,factBase,outline,researchPoints:brief.adoptedResearchPoints,rejectedAngles:brief.rejectedAngles,publicationClaimRegister,publicationScan:scanPublicationRisk({article:human,factBase}),...gateStance,systemPrompt:reviewSystem,maxOutputTokens:Math.min(3500,providerConfig.maxOutputTokens)});
+  let reviewIssue=null;
+  let finalReviewResult=null;
+  let reviewLog=`# 审稿门禁结果\n\n${JSON.stringify(reviewDecision,null,2)}`;
+  writeFile(reviewLogPath,reviewLog);
+  if(!reviewDecision.pass) {
+    onProgress(`Step 5 审稿发现明确问题，执行一次局部修订：${issueList(reviewDecision.issues).join('；')}`);
     const repairResult=await textCall(gateway,{provider,purpose:'article-review-repair',batchId,candidateId},reviewSystem,
-      `${buildReviewRepairPrompt({factBase,outline,article:human,review:JSON.stringify(reviewDecision)})}\n\n作者采用的研判拓展点：${JSON.stringify(brief.adoptedResearchPoints)}；作者明确不采用的方向：${JSON.stringify(brief.rejectedAngles)}。修订时保留并兑现采用点，不要重新引入舍弃方向。${reviewIssue?`\n上一次响应未通过审稿输出契约：${reviewIssue}。这次必须返回完整 Markdown 文章，不能返回审稿报告或结论摘要。`:''}`,Math.min(6500,providerConfig.maxOutputTokens));
+      `${buildReviewRepairPrompt({factBase,outline,article:human,review:JSON.stringify(reviewDecision)})}\n\n作者采用的研判拓展点：${JSON.stringify(brief.adoptedResearchPoints)}；作者明确不采用的方向：${JSON.stringify(brief.rejectedAngles)}。只修复门禁列出的具体问题，保留未涉及的句段、作者推断和观点语气。`,Math.min(6500,providerConfig.maxOutputTokens));
     reviewed=cleanMarkdown(repairResult.content);
-    finalReviewResult=repairResult;reviewLog+=`\n\n# 定向修订复审响应\n\n${reviewed}`;writeFile(reviewLogPath,reviewLog);reviewIssue=articleStageOutputIssue(reviewed,{requireArticle:true});
+    finalReviewResult=repairResult;
+    reviewIssue=articleStageOutputIssue(reviewed,{requireArticle:true});
+    reviewLog+=`\n\n# 定向修订响应\n\n${reviewed}`;
+    writeFile(reviewLogPath,reviewLog);
     if(!reviewIssue) {
       reviewDecision=await aiReviewGate({gateway,store,provider,batchId,candidateId,article:reviewed,factBase,outline,researchPoints:brief.adoptedResearchPoints,rejectedAngles:brief.rejectedAngles,publicationClaimRegister,publicationScan:scanPublicationRisk({article:reviewed,factBase}),...gateStance,systemPrompt:reviewSystem,maxOutputTokens:Math.min(3500,providerConfig.maxOutputTokens)});
     }
@@ -802,9 +784,9 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   const reviewBlockers=reviewIssue ? [{type:'output',message:reviewIssue}] : articleGateBlockingIssues(reviewDecision);
   if(reviewBlockers.length){
     const reason=reviewIssue
-      ? `审稿响应不符合输出契约：${reviewIssue}；原始响应已保存到 06-review-gate.md；返回摘要：${outputExcerpt(reviewed)}`
+      ? `审稿修订响应不符合输出契约：${reviewIssue}；原始响应已保存到 06-review-gate.md；返回摘要：${outputExcerpt(reviewed)}`
       : `审稿复审未返回可供编辑的文章：${issueList(reviewBlockers).join('；')||'模型判定需要返工'}；原始响应已保存到 06-review-gate.md；返回摘要：${outputExcerpt(reviewed)}`;
-    store.updateModelCall(finalReviewResult.callId,{status:'invalid_output',error:reason});
+    if(finalReviewResult?.callId)store.updateModelCall(finalReviewResult.callId,{status:'invalid_output',error:reason});
     throw new Error(reason);
   }
   const p06=path.join(workdir,'06-reviewed.md');writeFile(p06,reviewed);
@@ -815,8 +797,8 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   const reviewTitle=extractArticleTitle(reviewed)||finalSelectedTitle;
   const requiredHotspotAnchor=String(titleGen.hotspotAnchor||'').trim();
   let finalTitleGen=await generateTitlePlan({gateway,store,provider,batchId,candidateId,systemPrompt:titleLockSystem,purpose:'article-title-generation-final',fallbackTitle:reviewTitle,maxOutputTokens:Math.min(5000,providerConfig.maxOutputTokens),payload:{
-    topic:candidate.hotspot_title,content_role:plan.contentRole,packaging_mode:candidate.packaging_mode,distribution_lane:brief.distributionLane,reader_stake:brief.readerStake,
-    click_mechanism:plan.clickMechanism,opening_hook:plan.openingHook,retention_turns:plan.retentionTurns,ending_payoff:plan.endingPayoff,share_trigger:plan.shareTrigger,
+    topic:candidate.hotspot_title,content_role:contentRole,packaging_mode:candidate.packaging_mode,distribution_lane:brief.distributionLane,reader_stake:brief.readerStake,
+    click_mechanism:clickMechanism,opening_hook:openingHook,retention_turns:retentionTurns,ending_payoff:endingPayoff,share_trigger:shareTrigger,
     draft:reviewed,factBase,publicationClaimRegister,materialBrief:brief.materialBrief,forbiddenClaims:brief.forbiddenClaims,
     hotspotAnchor:requiredHotspotAnchor,hotspotAnchorRule:'必须沿用 hotspotAnchor，不可改成泛词或删掉。selectedTitle 必须原样包含该锚点（忽略大小写和标点）；若没有合适标题候选，显式保留锚点并标记待编辑确认。',
     current_title:reviewTitle,title_lock:true,publicationRiskRules:'标题必须兑现最终正文，不得把传闻、推断或绝对化判断写成事实。返回的 selectedTitle 将被确定性写回唯一 H1，后续 SEO、长度修复和门禁必须保留该标题。',
@@ -832,14 +814,14 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   const titleLockRisk=scanPublicationRisk({title:lockedTitle,article:reviewed,factBase});
   const titleLockPath=path.join(workdir,'03-title-lock.json');
   writeFile(titleLockPath,JSON.stringify({generatedAt:new Date().toISOString(),title:lockedTitle,previousTitle:reviewTitle,candidates:finalTitleGen.titleCandidates,coreKeywords:finalTitleGen.coreKeywords,hotspotAnchor:{anchor:lockedHotspotAnchor,preserved:lockedAnchorPreserved,status:finalTitleGen.hotspotAnchorStatus||'anchor_missing_or_unverified'},risk:titleLockRisk},null,2));
-  const lockedTitleMarkdown='# 标题候选\n\ndistribution_lane: '+brief.distributionLane+'\nreader_stake: '+(brief.readerStake||'待明确')+'\nhotspot_anchor: '+(lockedHotspotAnchor||'待编辑确认')+'\nhotspot_anchor_status: '+(lockedAnchorPreserved?'已保留':'待编辑确认')+'\nmaterial_title_promise: '+lockedTitle+'\ncore_keywords: '+(finalTitleGen.coreKeywords.length?finalTitleGen.coreKeywords:plan.coreKeywords).join('、')+'\n\n'+finalTitleGen.titleCandidates.map((x,i)=>`${i+1}. ${x.title} - ${x.reason}${x.score!=null?` (得分:${x.score}/12)`:''}`).join('\n')+'\n\nSELECTED_TITLE: '+lockedTitle+'; // 最终标题已锁定\nwriter_skill: '+chosenWriterSkill;
+  const lockedTitleMarkdown='# 标题候选\n\ndistribution_lane: '+brief.distributionLane+'\nreader_stake: '+(brief.readerStake||'待明确')+'\nhotspot_anchor: '+(lockedHotspotAnchor||'待编辑确认')+'\nhotspot_anchor_status: '+(lockedAnchorPreserved?'已保留':'待编辑确认')+'\nmaterial_title_promise: '+lockedTitle+'\ncore_keywords: '+finalTitleGen.coreKeywords.join('、')+'\n\n'+finalTitleGen.titleCandidates.map((x,i)=>`${i+1}. ${x.title} - ${x.reason}${x.score!=null?` (得分:${x.score}/12)`:''}`).join('\n')+'\n\nSELECTED_TITLE: '+lockedTitle+'; // 最终标题已锁定\nwriter_skill: '+chosenWriterSkill;
   writeFile(p03,lockedTitleMarkdown);
   recordStage('title-lock',stageSkills['title-generator'],['06-reviewed.md','02-fact-base.json'],['03-title-lock.json','03-titles.md'],titleLockRisk.titleBlockers.length||!lockedAnchorPreserved?'needs_review':'passed');
-  const lockedCoreKw=finalTitleGen.coreKeywords.length?finalTitleGen.coreKeywords:(plan.coreKeywords||[]);
+  const lockedCoreKw=finalTitleGen.coreKeywords;
   const coreKw=lockedCoreKw;
   const explicitSeo=candidate.seo_enabled === true || candidate.seo_enabled === 1;
   const explicitSeoOff=candidate.seo_enabled === false || candidate.seo_enabled === 0;
-  const seoEnabled=!explicitSeoOff && (explicitSeo || plan.contentRole==='搜索' || String(candidate.packaging_mode||'').trim()==='搜索型');
+  const seoEnabled=!explicitSeoOff && (explicitSeo || contentRole==='搜索' || String(candidate.packaging_mode||'').trim()==='搜索型');
   onProgress(seoEnabled ? 'Step 6.1 SEO 关键词评分（百度+360 搜索联想）' : 'Step 6.1 普通流量文跳过 SEO 改写，保留原审稿稿');
   let seoScores=[]; let keywordsMarkdown;
   if (seoEnabled && coreKw.length) {
@@ -876,7 +858,6 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   const finalGateSystem=stageSystem('final-quality-gate',writerSkillBundle,stageSkills['article-reviewer']);
   let finalPublicationScan=scanPublicationRisk({article:final,factBase});
   let finalQuality=await aiQualityGate({gateway,store,provider,batchId,candidateId,article:final,factBase,sourceText:brief.sourceText||'',researchPoints:brief.adoptedResearchPoints,rejectedAngles:brief.rejectedAngles,publicationClaimRegister,publicationScan:finalPublicationScan,...gateStance,systemPrompt:finalGateSystem,stage:'final',maxOutputTokens:Math.min(3500,providerConfig.maxOutputTokens)});
-  finalQuality=attachTrafficStructureGate(finalQuality, final);
   if(!finalQuality.pass){
     onProgress(`Step 6.3 AI 终稿门禁未通过，执行定向合规修订：${issueList(finalQuality.issues).join('；')}`);
     const finalRepair=await repairArticleForPublicationCompliance({ gateway, orchestratorSkill, reviewerSkill:stageSkills['article-reviewer'], provider, batchId, candidateId, article:final, factBase, publicationClaimRegister, publicationScan:finalPublicationScan, issues:finalQuality.issues || [], researchPoints:brief.adoptedResearchPoints, rejectedAngles:brief.rejectedAngles, writingStance, maxOutputTokens:Math.min(6500,providerConfig.maxOutputTokens) });
@@ -885,7 +866,6 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
     if(visibleChars(final)<articleLengthRange.min||visibleChars(final)>articleLengthRange.max)final=await fitArticleLength({gateway,provider,batchId,candidateId,article:final,factBase,systemPrompt:stageSystem('length-repair',writerSkillBundle),purpose:'article-final-repair-length',maxOutputTokens:Math.min(6500,providerConfig.maxOutputTokens),onProgress,maxAttempts:repairAttempts,range:articleLengthRange,lockedTitle});
     finalPublicationScan=scanPublicationRisk({article:final,factBase});
     finalQuality=await aiQualityGate({gateway,store,provider,batchId,candidateId,article:final,factBase,sourceText:brief.sourceText||'',researchPoints:brief.adoptedResearchPoints,rejectedAngles:brief.rejectedAngles,publicationClaimRegister,publicationScan:finalPublicationScan,...gateStance,systemPrompt:finalGateSystem,stage:'final-recheck',maxOutputTokens:Math.min(3500,providerConfig.maxOutputTokens)});
-    finalQuality=attachTrafficStructureGate(finalQuality, final);
   }
   if(visibleChars(final)<articleLengthRange.min||visibleChars(final)>articleLengthRange.max)onProgress(`字数警告：终稿有 ${visibleChars(final)} 个可见字符，不在 ${articleLengthRange.min}–${articleLengthRange.max} 字区间，可稍后在编辑器手动删减，流程继续`);
   const finalQualityBlockers=articleGateBlockingIssues(finalQuality);
@@ -922,7 +902,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
     gateway,store,provider,batchId,candidateId,markdown:final,factBase:JSON.stringify(factBase),
     workspaceRoot,maxOutputTokens:Math.min(8000,providerConfig.maxOutputTokens),
     visualPolicy:visualDecision.policy,
-    visualNeed:plan.visualNeed,
+    visualNeed:brief.materialBrief.visual_need||'auto',
     imageSkillPrompt:stageSystem('image-planning',stageSkills['article-image-placeholders']),
     onProgress,
   });
@@ -971,7 +951,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
       || researchCoverageNeedsRevision(researchCoverage)
   );
   store.saveDocument({batchId,candidateId,kind:'final',title:finalTitle,content:final,filePath:p09,status:needsEditorialReview?'needs_review':'finalized'});
-  for(const [kind,name,file] of [['技能清单','00-skill-manifest.json',skillManifestPath],['阶段执行清单','00-stage-executions.json',stageManifestPath],['锁定简报','00-article-brief.md',briefPath],['研判采用清单','editorial-research-selection.json',researchSelectionPath],['事实基座','02-fact-base.json',factBasePath],['发布主张登记','02-publication-claim-register.json',publicationClaimRegisterPath],['作者素材','01-personal-materials.md',p01],['文章大纲','02-outline.md',p02],['标题候选','03-titles.md',p03],['标题风险扫描','03-title-risk.json',selectedTitleRiskPath],['最终标题锁定','03-title-lock.json',titleLockPath],['文章初稿','04-draft.md',p04],['初稿AI门禁','04-quality-gate.json',draftGatePath],['去AI稿','05-humanized.md',p05],['风格门禁','05-voice-quality-gate.json',voiceGatePath],['审稿门禁原始响应','06-review-gate.md',reviewLogPath],['审稿质量门禁','06-review-quality-gate.json',reviewGatePath],['审稿稿','06-reviewed.md',p06],['SEO关键词','07-seo-keywords.md',p07],['SEO优化稿','08-seo-optimized.md',p08],['终稿AI门禁','08-quality-gate.json',finalGatePath],['研判贴合度检查','research-coverage-review.json',researchCoveragePath],['图表规划','09-visual-plan.json',visualPlanPath],['文章终稿','09-FINAL.md',p09],['发布合规门禁','10-publication-compliance.json',publicationCompliancePath]])artifact(store,batchId,kind,name,file,{candidateId,rootRunId,workflowRunId,stageId:'article-pipeline'});
+  for(const [kind,name,file] of [['技能清单','00-skill-manifest.json',skillManifestPath],['阶段执行清单','00-stage-executions.json',stageManifestPath],['锁定简报','00-article-brief.md',briefPath],['研判采用清单','editorial-research-selection.json',researchSelectionPath],['事实基座','02-fact-base.json',factBasePath],['发布主张登记','02-publication-claim-register.json',publicationClaimRegisterPath],['文章大纲','02-outline.md',p02],['标题候选','03-titles.md',p03],['标题风险扫描','03-title-risk.json',selectedTitleRiskPath],['最终标题锁定','03-title-lock.json',titleLockPath],['文章初稿','04-draft.md',p04],['初稿AI门禁','04-quality-gate.json',draftGatePath],['去AI稿','05-humanized.md',p05],['风格门禁','05-voice-quality-gate.json',voiceGatePath],['审稿门禁原始响应','06-review-gate.md',reviewLogPath],['审稿质量门禁','06-review-quality-gate.json',reviewGatePath],['审稿稿','06-reviewed.md',p06],['SEO关键词','07-seo-keywords.md',p07],['SEO优化稿','08-seo-optimized.md',p08],['终稿AI门禁','08-quality-gate.json',finalGatePath],['研判贴合度检查','research-coverage-review.json',researchCoveragePath],['图表规划','09-visual-plan.json',visualPlanPath],['文章终稿','09-FINAL.md',p09],['发布合规门禁','10-publication-compliance.json',publicationCompliancePath]])artifact(store,batchId,kind,name,file,{candidateId,rootRunId,workflowRunId,stageId:'article-pipeline'});
   store.updateBatch(batchId,{stage:'typeset',status:'review'}); onProgress(`成稿完成:${visibleChars(final)} 个可见字符`);
   return {workdir,finalPath:p09,visibleChars:visibleChars(final),writerSkill:chosenWriterSkill,skillHash:skillBundle.hash,skillFallback:skillBundle.fallback,title:finalTitle,needsEditorialReview,publicationReady:!needsEditorialReview};
 }

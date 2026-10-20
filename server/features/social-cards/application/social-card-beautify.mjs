@@ -16,7 +16,7 @@ import { resolveWorkspaceTheme } from '../../../platform/application/themes/user
 import { createSocialCardStoryboardThemeSnapshot, getSocialCardTemplateCapabilities } from '../rendering/social-card-template-resolver.mjs';
 import { createSocialCardAiVisualStageRecorder, writeSocialCardAiVisualSkillManifest } from './social-card-ai-visual-pipeline.mjs';
 import { AI_VISUAL_DOCUMENT_WRITE, runSocialCardAiVisualGenerationAgent } from './social-card-ai-visual-agent.mjs';
-import { generateSocialCardCopy, validateSocialCardCopy } from './social-card-copy.mjs';
+import { formatSocialCardCopyArtifact, generateSocialCardCopy, validateSocialCardCopy } from './social-card-copy.mjs';
 import { contentTypeForSocialRoute, socialStoryboardClassForMaterialType } from '../domain/social-routing.mjs';
 
 const execFileAsync = promisify(execFile);
@@ -794,15 +794,19 @@ export async function runSocialCardBeautify({ gateway, store, batchId, candidate
       cardPlan: editorialPages,
       disclosure: context.contentType === 'event' ? '据公开素材整理；未核实主张必须保留边界表达' : context.contentType === 'custom' ? '体验性表述来自作者确认；建议性内容未实测' : '基于项目文档整理，未实际运行',
     });
+    if (!copyResult.publishTitle) throw new Error('配套文案缺少公众号发布标题，请重新生成文案');
     const copyCheck = validateSocialCardCopy(copyResult.copy);
     if (!copyCheck.valid) throw new Error(`配套文案门禁未通过：${copyCheck.issues.join('；')}`);
-    writeFile(copyPath, copyResult.copy);
+    writeFile(copyPath, formatSocialCardCopyArtifact({ publishTitle:copyResult.publishTitle, copy:copyResult.copy, channelMode:context.channelMode }));
+    const publishTitlePath = path.join(workdir, 'publish-title.txt');
+    writeFile(publishTitlePath, copyResult.publishTitle);
     copyStage.finish({
       outputArtifact: 'copy.txt',
-      detail: `已生成配套发布文案（${copyCheck.tagCount} 个话题标签）`,
+      detail: `已生成公众号发布标题和配套文案（${copyCheck.tagCount} 个话题标签）`,
       metadata: { purpose: 'social-card-copy', tagCount: copyCheck.tagCount },
     });
     store.upsertArtifact?.({ batchId, candidateId, track: 'social_cards', kind: '图文配套文案', name: 'copy.txt', path: copyPath, size: fs.statSync(copyPath).size, modifiedAt: fs.statSync(copyPath).mtime.toISOString() });
+    store.upsertArtifact?.({ batchId, candidateId, track: 'social_cards', kind: '公众号发布标题', name: 'publish-title.txt', path: publishTitlePath, size: fs.statSync(publishTitlePath).size, modifiedAt: fs.statSync(publishTitlePath).mtime.toISOString() });
   } catch (error) {
     copyStage.fail(error);
     throw error;

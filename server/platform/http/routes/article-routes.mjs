@@ -48,7 +48,8 @@ export async function handleArticleRoutes(context) {
   if(writerSkillsMatch&&request.method==='GET'){
     const candidate=store.getCandidate(Number(writerSkillsMatch[1]));
     if(!candidate)return json(response,404,{error:'候选不存在'});
-    const recommendedSkillId=selectWriterSkill(candidate).skill;
+    const writerRecommendation=selectWriterSkill(candidate);
+    const recommendedSkillId=writerRecommendation.skill;
     return json(response,200,await listEntryWriterSkills({workspaceRoot:root,entryPoint:'hotspot-article',recommendedSkillId}));
   }
   const stageSkillsMatch=pathname.match(/^\/api\/candidates\/(\d+)\/stage-skills$/);
@@ -259,12 +260,20 @@ export async function handleArticleRoutes(context) {
     const explicitSkillId=String(input.skillId||'').trim();
     const requestedStages=input.stageSkills&&typeof input.stageSkills==='object'?input.stageSkills:{};
     const hasExplicitStages=Object.values(requestedStages).some((value)=>String(value||'').trim());
-    const previousSnapshot=(input.useLatestSkill===true||explicitSkillId||hasExplicitStages)?null:store.findLatestGenerationSnapshot({
+    const writerRecommendation=selectWriterSkill(candidate);
+    let previousSnapshot=(input.useLatestSkill===true||explicitSkillId||hasExplicitStages)?null:store.findLatestGenerationSnapshot({
       batchId:candidate.batch_id,candidateId:candidate.id,purposes:['article'],
     });
-    const recommendedSkillId=selectWriterSkill(candidate).skill;
+    const previousSelection=previousSnapshot?.snapshot?.selection||{};
+    if(writerRecommendation.source==='locked_article_type'
+      &&previousSelection.selectionSource!=='user'
+      &&previousSelection.selectedSkill!==writerRecommendation.skill){
+      previousSnapshot=null;
+    }
+    const recommendedSkillId=writerRecommendation.skill;
     const skillSelection=previousSnapshot?null:await resolveEntryWriterSkill({
       workspaceRoot:root,entryPoint:'hotspot-article',requestedSkillId:explicitSkillId,recommendedSkillId,
+      preferRecommended:writerRecommendation.source==='locked_article_type',
     });
     const stageSelections=previousSnapshot?null:await resolveArticleStageSkills({workspaceRoot:root,requested:requestedStages});
     return json(response, 202, aiJobs.start({ batchId: candidate.batch_id, candidateId: candidate.id,

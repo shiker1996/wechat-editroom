@@ -32,7 +32,7 @@ import { getSocialCardPlanRolloutProfile } from '../rendering/social-card-plan-r
 import { socialCardPageBudget, socialCardPageBudgetMessage } from '../rendering/social-card-page-budget.mjs';
 import { acceptSoftDensityOnlyLayoutReport, adaptiveContentPageIndexes, buildSocialCardPlannerFactScope, buildSocialCardPlannerPageScope, layoutAuditPageSummary, softDensityPageIndexes, templateAuditFailurePayload, validateSocialCardDelivery } from '../rendering/social-card-pipeline-contracts.mjs';
 import { contentTypeForSocialRoute, socialStoryboardClassForMaterialType, socialStoryboardSkillForMaterialType } from '../domain/social-routing.mjs';
-import { generateSocialCardCopy } from './social-card-copy.mjs';
+import { formatSocialCardCopyArtifact, generateSocialCardCopy } from './social-card-copy.mjs';
 // 交付门禁继续报告“配套文案话题标签不足”，实现已下沉到渲染契约模块。
 import { NEON_V1_CSS, renderNeonStoryboardSections } from '../rendering/templates/social/neon-v1.mjs';
 import { BRUTALIST_V1_CSS, renderBrutalistStoryboardSections } from '../rendering/templates/social/brutalist-v1.mjs';
@@ -477,6 +477,8 @@ export async function runSocialCardPipeline({ gateway, store, batchId, candidate
     editorial, cardPlan, disclosure: contentType==='event' ? '据公开素材整理；未核实主张必须保留边界表达' : contentType==='custom' ? '体验性表述来自作者确认；建议性内容未实测' : '基于项目文档整理，未实际运行',
   });
   const copy = copyResult.copy;
+  const publishTitle = copyResult.publishTitle;
+  if (!publishTitle) throw new Error('配套文案缺少公众号发布标题，请重新生成文案');
   const configuredGate=evaluateConfiguredGates(skillRuntime.config,{factBase:contentType==='event'?eventAnalysisRecord.analysis:facts?.data||{},output:copy});
   if(!configuredGate.pass)throw new Error(`图文配置门禁未通过：${configuredGate.issues.map((item)=>item.message).join('；')}`);
 
@@ -507,9 +509,12 @@ export async function runSocialCardPipeline({ gateway, store, batchId, candidate
   let html = renderCurrentStoryboard();
   if (!copy || !/<html\b/i.test(html) || !/class=["'][^"']*\bpage\b/i.test(html)) throw new Error('图文生成产物缺少文案、完整 HTML 或 .page');
   const copyPath = path.join(workdir, 'copy.txt');
+  const publishTitlePath = path.join(workdir, 'publish-title.txt');
   const htmlPath = path.join(workdir, 'my-design.html');
-  writeFile(copyPath, copy); writeFile(htmlPath, html);
-  record('generation', generator.skillName, [copyPath, htmlPath]);
+  writeFile(copyPath, formatSocialCardCopyArtifact({ publishTitle, copy, channelMode }));
+  writeFile(publishTitlePath, publishTitle);
+  writeFile(htmlPath, html);
+  record('generation', generator.skillName, [copyPath, publishTitlePath, htmlPath]);
 
   const auditScript = resolveSkillFile({ workspaceRoot, skillName: generator.skillName, relativePath: 'scripts/layout-audit.mjs' });
   const reportPath = path.join(workdir, 'layout-report.json');
@@ -1168,9 +1173,9 @@ export async function runSocialCardPipeline({ gateway, store, batchId, candidate
   if (!delivery.valid) throw new Error(`图文交付门禁未通过：${delivery.issues.join('；')}`);
   record('delivery-gate', 'fixed-program', deliveryPath);
 
-  for (const [kind, file] of [['图文事实清单',factPath],['图文事实候选索引',factIndexPath],['图文原始卡片规划',originalPlanPath],['图文卡片重排记录',reflowPath],['图文内容原子快照',contentAtomsPath],['图文内容计划调整记录',contentPlanAdjustmentsPath],['图文内容计划基线',planBaselinePath],['图文联合装箱审计',jointPackingAuditPath],['图文卡片规划',planPath],['图文配套文案',copyPath],['图文设计 HTML',htmlPath],['图文初始布局审计',initialReportPath],['图文布局审计',reportPath],['图文交付报告',deliveryPath],['图文主题快照',themeSnapshotPath],['图文模板指标',templateMetricsPath]]) addArtifact(store,batchId,candidateId,kind,file,{rootRunId,workflowRunId,stageId:'social-card-pipeline'});
+  for (const [kind, file] of [['图文事实清单',factPath],['图文事实候选索引',factIndexPath],['图文原始卡片规划',originalPlanPath],['图文卡片重排记录',reflowPath],['图文内容原子快照',contentAtomsPath],['图文内容计划调整记录',contentPlanAdjustmentsPath],['图文内容计划基线',planBaselinePath],['图文联合装箱审计',jointPackingAuditPath],['图文卡片规划',planPath],['公众号发布标题',publishTitlePath],['图文配套文案',copyPath],['图文设计 HTML',htmlPath],['图文初始布局审计',initialReportPath],['图文布局审计',reportPath],['图文交付报告',deliveryPath],['图文主题快照',themeSnapshotPath],['图文模板指标',templateMetricsPath]]) addArtifact(store,batchId,candidateId,kind,file,{rootRunId,workflowRunId,stageId:'social-card-pipeline'});
   for (const image of images) addArtifact(store,batchId,candidateId,'图文卡片 PNG',image,{rootRunId,workflowRunId,stageId:'social-card-pipeline'});
   store.updateCandidateTrack(candidateId, 'social_cards', { status:'completed' });
   onProgress(`图文 6/6：完成，共生成 ${images.length} 张卡片`);
-  return { workdir, copy:copyPath, html:htmlPath, layoutReport:reportPath, deliveryReport:deliveryPath, templateMetrics:templateMetricsPath, contentPlanAdjustments:contentPlanAdjustmentsPath, jointPackingAudit:jointPackingAuditPath, theme:{id:themeDefinition.id,version:themeDefinition.version,hash:themeDefinition.hash}, themeRouting, template:{pack:templateCompatibility.templatePack,source:templateCompatibility.source,fallback:templateCompatibility.fallback,warnings:templateCompatibility.warnings,capacityProfileVersion:templateCapabilities.capacityProfileVersion,capacityProfile:templateCapabilities.capacityProfile,rolloutProfile}, pageBudget, themeSnapshot:themeSnapshotPath, images, pageCount:images.length };
+  return { workdir, copy:copyPath, publishTitle:publishTitlePath, html:htmlPath, layoutReport:reportPath, deliveryReport:deliveryPath, templateMetrics:templateMetricsPath, contentPlanAdjustments:contentPlanAdjustmentsPath, jointPackingAudit:jointPackingAuditPath, theme:{id:themeDefinition.id,version:themeDefinition.version,hash:themeDefinition.hash}, themeRouting, template:{pack:templateCompatibility.templatePack,source:templateCompatibility.source,fallback:templateCompatibility.fallback,warnings:templateCompatibility.warnings,capacityProfileVersion:templateCapabilities.capacityProfileVersion,capacityProfile:templateCapabilities.capacityProfile,rolloutProfile}, pageBudget, themeSnapshot:themeSnapshotPath, images, pageCount:images.length };
 }

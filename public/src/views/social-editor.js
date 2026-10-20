@@ -297,6 +297,10 @@ async function loadDelivery(candidateId=selectedId){
   const planSummary=data.contentPlanAdjustments?.rounds?.length?` · 内容计划调整 ${data.contentPlanAdjustments.rounds.length} 轮`:'';
   const deliveryCount=data.images?.length?`${data.images.length} 张`:(data.beautifiedImages?.length?`AI 视觉版 ${data.beautifiedImages.length} 张`:'暂无可交付 PNG');
   document.getElementById('social-delivery-meta').textContent=`${deliveryCount} · 程序化布局审计${data.layout?.valid?'通过':'待确认'}${metricLabel}${metricSummary}${planSummary}`;
+  const titlePanel=document.getElementById('social-publish-title');
+  const titleLabel=document.getElementById('social-publish-title-label');
+  const titleValue=document.getElementById('social-publish-title-value');
+  if(titlePanel&&titleValue){titleValue.textContent=data.publishTitle||'';if(titleLabel)titleLabel.textContent=data.publishTitleLabel||'公众号发布标题';titlePanel.hidden=!data.publishTitle;}
   syncCurrentHtmlLink();
   const beautifyStatus=document.getElementById('social-beautify-status');
   const deliveryMeta=document.getElementById('social-delivery-meta');
@@ -705,6 +709,10 @@ if(!window.__socialDeliveryBound){
     if(image){deliveryIndex=Number(image.dataset.socialImage);renderDeliveryImage();}
     const tab=event.target.closest('[data-social-proof]');
     if(tab){proofTab=tab.dataset.socialProof;renderProof();}
+    if(event.target.closest('#copy-social-publish-title')){
+      const title=delivery?.publishTitle||'';
+      if(title)navigator.clipboard.writeText(title).then(()=>toast('公众号发布标题已复制')).catch(()=>toast('复制失败，请手动复制标题','error'));
+    }
     // 翻页按钮在视图加载前可能尚未渲染，顶层 ?. 绑定会变成死按钮，统一走 document 委托
     if(event.target.closest('#social-gallery-prev')){deliveryIndex-=1;renderDeliveryImage();}
     if(event.target.closest('#social-gallery-next')){deliveryIndex+=1;renderDeliveryImage();}

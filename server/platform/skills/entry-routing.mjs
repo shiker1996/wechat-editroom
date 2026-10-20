@@ -110,7 +110,7 @@ export async function listEntryWriterSkills({workspaceRoot,entryPoint,contentTyp
 }
 
 export async function resolveEntryWriterSkill({
-  workspaceRoot,entryPoint,contentType='',requestedSkillId='',recommendedSkillId,
+  workspaceRoot,entryPoint,contentType='',requestedSkillId='',recommendedSkillId,preferRecommended=false,
 }) {
   const result=await listEntryWriterSkills({workspaceRoot,entryPoint,contentType,recommendedSkillId});
   const byId=new Map(result.items.map((item)=>[item.id,item]));
@@ -120,6 +120,12 @@ export async function resolveEntryWriterSkill({
     if(!item)throw new Error('所选写作技能不兼容当前创作入口或文章类型');
     if(!item.available)throw new Error(`所选写作技能不可用：${item.unavailableReason}`);
     return {requestedSkill:requested,selectedSkill:item.id,selectionSource:'user',item};
+  }
+  if(preferRecommended){
+    const item=byId.get(String(recommendedSkillId||''));
+    if(!item)throw new Error('锁定文章类型对应的写作技能不兼容当前创作入口');
+    if(!item.available)throw new Error(`锁定文章类型对应的写作技能不可用：${item.unavailableReason}`);
+    return {requestedSkill:'',selectedSkill:item.id,selectionSource:'locked-article-type',item};
   }
   const candidates=[
     [result.defaultSkillId,'workspace-default'],

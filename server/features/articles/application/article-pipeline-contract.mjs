@@ -194,6 +194,15 @@ export function unverifiedFactBaseIssue(factBase) {
 export const ARTICLE_LENGTH_RANGE=Object.freeze({min:1300,max:2000});
 
 export function selectWriterSkill(candidate={}) {
+  const rawMaterialBrief=candidate.materialBrief||candidate.material_brief||candidate.editorial?.material_brief||candidate.editorial?.materialBrief;
+  let materialBrief=rawMaterialBrief;
+  if(typeof rawMaterialBrief==='string'){
+    try{materialBrief=JSON.parse(rawMaterialBrief);}catch{materialBrief={};}
+  }
+  const explicitType=String(candidate.article_type||candidate.articleType||materialBrief?.article_type||'').trim();
+  if(explicitType&&['wechat-mp-composite','wechat-mp-gossip-chill','wechat-mp-tech-deep','wechat-mp-tech-hotspot','wechat-mp-deep-dive'].includes(explicitType)){
+    return {skill:explicitType,reason:`锁定简报明确指定文章类型 ${explicitType}`,source:'locked_article_type'};
+  }
   if(candidate.composite)return {skill:'wechat-mp-composite',reason:'候选由多个热点组成，需要按共同机制或趋势组织'};
   const angleText=[candidate.angle,candidate.thesis,candidate.editorial?.research_basis,candidate.editorial?.confirmed_facts].filter(Boolean).join(' ');
   const allText=[candidate.hotspot_title,candidate.category,angleText].filter(Boolean).join(' ');
@@ -245,7 +254,7 @@ export function buildDraftUserPrompt(selectedTitle, brief, outline) {
     experience_required: brief?.experienceRequired ?? brief?.experience_required ?? false,
     confirmed_experiences: brief?.confirmedExperiences || brief?.confirmed_experiences || '',
   };
-  return `标题：${selectedTitle}\n\n文章任务（可写目标）：\n${JSON.stringify(articleTask)}\n\n事实与来源授权（只能从这里取事实）：\n${JSON.stringify(authority)}\n\n内部约束（只用于约束写作，不得逐字输出）：\n${JSON.stringify(internalConstraints)}\n\n当前写作立场只改变表达方式，不改变事实状态、来源边界、禁止主张或发布门禁。\n\n所有文章都以点击、前 200 字留存、完读和可转述判断为基线；必须把流量规划和读者收益落到正文，普通成稿安排 3–5 个 H2、至少两次中段推进，并控制外部案例和数据只为核心判断服务。不要把读者收益机械扩写成独立清单章节。\n\n写作时必须优先覆盖采用的研判拓展点，将其转化为事实解释、利益/成本分析、事件间关系或可验证的观点边界。只把事实基座中 status=verified 的主张写成确定事实；disputed、unverified 和 restricted_claims 必须按明确归因、限定或删除处理。不要把机器审计信息机械泄漏成逐句“据来源”。\n\n规划元信息隔离规则：下面的“文章结构视图”只描述章节和段落意图，不是正文素材。不要输出其中的“写作要求、禁写项、H2 编号、前置检查或内部术语”；也不要原样写出“本文不写”“只能当作提问的起点”“这不能当作行业统计”等规划式句子。需要保留证据边界时，改写成自然的来源限定和事实表述。\n\n文章结构视图（仅供执行，不得原样复述）：\n${buildDraftOutlineView(outline)}`;
+  return `当前标题：${selectedTitle}\n\n写作简报（确定文章要回答的问题、判断和读者影响）：\n${JSON.stringify(articleTask)}\n\n事实与来源授权（事实只能来自这里）：\n${JSON.stringify(authority)}\n\n必要边界（不得逐字写进正文）：\n${JSON.stringify(internalConstraints)}\n\n请按文章大纲的顺序和章节意图写成连贯的文章。简报确定文章写什么，事实基座限定哪些事实可以写，大纲确定文章如何展开。不要把大纲说明、机器审计字段或来源清单改写进正文。只把 fact_base 中 status=verified 的主张写成确定事实；disputed、unverified 和 restricted_claims 必须明确归因、限定或删除。采用的研判拓展点应自然进入论证；不要为了覆盖字段而增加无关章节。\n\n文章大纲（仅作为文章结构）：\n${buildDraftOutlineView(outline)}`;
 }
 
 export function buildResearchCoveragePrompt({ article = '', researchPoints = [], rejectedAngles = [] } = {}) {

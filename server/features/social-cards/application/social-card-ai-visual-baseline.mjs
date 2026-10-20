@@ -20,6 +20,7 @@ export const SOCIAL_CARD_AI_VISUAL_ARTIFACTS = Object.freeze([
   { name: 'ai-visual-card-plan.json', stage: 'inputs', required: false },
   { name: 'social-theme-snapshot.json', stage: 'inputs', required: true },
   { name: 'copy.txt', stage: 'copy', required: true },
+  { name: 'publish-title.txt', stage: 'copy', required: false },
   { name: 'social-theme-design-spec.md', stage: 'inputs', required: true },
   { name: 'my-design.html', stage: 'programmatic-render', required: false },
   { name: 'ai-beautified.html', stage: 'generation', required: false },
