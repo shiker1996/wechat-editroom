@@ -63,8 +63,10 @@ export async function convertPagesToImages(options = {}) {
     
     // 启动浏览器
     const executablePath = chromeExecutable();
+    const launchTimeout = Number.parseInt(process.env.PUPPETEER_LAUNCH_TIMEOUT_MS || '', 10) || 30000;
     browser = await puppeteer.launch({
       headless: true,
+      timeout: launchTimeout,
       ...(executablePath ? { executablePath } : {}),
       args: ['--no-sandbox', '--disable-setuid-sandbox']
     });

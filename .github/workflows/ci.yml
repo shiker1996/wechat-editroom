@@ -20,6 +20,7 @@ jobs:
     timeout-minutes: 45
     env:
       E2E_ARTIFACT_DIR: test-results/e2e
+      PUPPETEER_LAUNCH_TIMEOUT_MS: 60000
     steps:
       - uses: actions/checkout@v4
 
@@ -49,7 +50,7 @@ jobs:
         run: npm run build
 
       - name: 主链路 E2E 门禁
-        run: node --disable-warning=ExperimentalWarning --test --test-reporter=tap --test-reporter=junit --test-reporter-destination=stdout --test-reporter-destination=test-results/junit/e2e.xml test/e2e/**/*.test.mjs
+        run: node --disable-warning=ExperimentalWarning --test --test-concurrency=2 --test-reporter=tap --test-reporter=junit --test-reporter-destination=stdout --test-reporter-destination=test-results/junit/e2e.xml test/e2e/**/*.test.mjs
 
       - name: 单元与集成测试
         run: node --disable-warning=ExperimentalWarning --test --test-reporter=tap --test-reporter=junit --test-reporter-destination=stdout --test-reporter-destination=test-results/junit/unit.xml test/*.test.mjs
