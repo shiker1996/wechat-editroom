@@ -56,6 +56,10 @@
         "electron": "^44.8.0",
         "electron-builder": "^26.15.3"
     },
+    "overrides": {
+        "@electron/get": "5.1.0",
+        "katex": "0.18.2"
+    },
     "build": {
         "appId": "com.shiker.wechat-newsroom-workbench",
         "productName": "见字",
