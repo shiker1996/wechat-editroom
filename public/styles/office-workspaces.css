@@ -290,6 +290,53 @@
 #view-social-editor .social-beautify-status small { color: var(--blue); }
 #view-social-editor .social-delivery-status p,
 #view-social-editor .social-beautify-status span { color: var(--muted); }
+#view-social-editor .social-publish-title {
+  align-items: center;
+  gap: 24px;
+  padding: 18px 20px;
+  border: 1px solid var(--line-strong);
+  border-left: 4px solid var(--blue);
+  background: var(--surface);
+  color: var(--ink);
+}
+#view-social-editor .social-publish-title > div { min-width: 0; }
+#view-social-editor .social-publish-title .kicker {
+  display: block;
+  color: var(--blue);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .14em;
+}
+#view-social-editor .social-publish-title h4 {
+  margin: 5px 0 7px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+#view-social-editor .social-publish-title p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 750;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+#view-social-editor .social-publish-title .outline-button {
+  flex: 0 0 auto;
+  min-height: 40px;
+  border-color: var(--line-strong);
+  color: var(--ink);
+  background: var(--surface-subtle);
+  white-space: nowrap;
+}
+#view-social-editor .social-publish-title .outline-button:hover {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+}
+#view-social-editor .social-publish-title .outline-button:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
 #view-social-editor .social-gallery-stage {
   background: var(--editor-code-surface);
   border: 1px solid var(--line);
@@ -338,6 +385,15 @@
 #view-social-editor .social-theme-picker,
 #view-social-editor .storyboard-layout-control { color: var(--ink); background: var(--surface); border-color: var(--line); }
 #view-social-editor .social-theme-picker select { color: var(--ink); background: var(--surface-subtle); border-color: var(--line-strong); }
+
+@media (max-width: 640px) {
+  #view-social-editor .social-publish-title {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 14px;
+  }
+  #view-social-editor .social-publish-title .outline-button { align-self: flex-start; }
+}
 
 /* P2: topic-pool explanations are informative, not attention-grabbing warnings. */
 .candidate-selection-reason {
