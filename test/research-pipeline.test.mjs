@@ -328,7 +328,9 @@ test('缺少事件价值时不再把综合选题静默算成 0 分', () => {
 });
 
 test('纯项目不再被文章池的工具席位强行补入', () => {
-  const events=clusterItems([hotspot(1,'开源项目发布','主体|发布|开源项目')]);
+  const project=hotspot(1,'开源项目发布','主体|发布|开源项目','github');
+  project.url='https://github.com/example/project';
+  const events=clusterItems([project]);
   events[0].contentClass='github_project';
   const ranking=preselection(events,'2026-07-23');
   const pool=selectArticlePool(events,ranking,{coreLimit:1,blackLimit:0,backupLimit:0,accountContext:{contentPillars:[],scoring:{minimumToolCandidates:2}}});

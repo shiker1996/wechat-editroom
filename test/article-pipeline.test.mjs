@@ -56,12 +56,12 @@ test('审稿正文不再承载 result 标记，门禁结论通过独立 decision
   assert.deepEqual(calls[0].tools,[ARTICLE_REVIEW_GATE_TOOL]);
 });
 
-test('终稿统一字数门禁默认1300–2000个可见字符', () => {
-  assert.deepEqual(ARTICLE_LENGTH_RANGE,{min:1300,max:2000});
+test('终稿统一字数目标默认1600且可接受范围为1300–1800个可见字符', () => {
+  assert.deepEqual(ARTICLE_LENGTH_RANGE,{min:1300,max:1800,targetVisibleChars:1600});
   assert.deepEqual(articleLengthStatus(`# 标题\n\n${'字'.repeat(1166)}`),{count:1166,valid:false,shortfall:134,overflow:0});
   assert.deepEqual(articleLengthStatus(`# 标题\n\n${'字'.repeat(1450)}`),{count:1450,valid:true,shortfall:0,overflow:0});
-  assert.deepEqual(articleLengthStatus(`# 标题\n\n${'字'.repeat(1900)}`),{count:1900,valid:true,shortfall:0,overflow:0});
-  assert.deepEqual(articleLengthStatus(`# 标题\n\n${'字'.repeat(2100)}`),{count:2100,valid:false,shortfall:0,overflow:100});
+  assert.deepEqual(articleLengthStatus(`# 标题\n\n${'字'.repeat(1800)}`),{count:1800,valid:true,shortfall:0,overflow:0});
+  assert.deepEqual(articleLengthStatus(`# 标题\n\n${'字'.repeat(1900)}`),{count:1900,valid:false,shortfall:0,overflow:100});
 });
 
 test('成稿规划保留结构化数组并接纳单个风险对象', () => {
@@ -263,7 +263,7 @@ test('技能运行时加载完整写作技能并记录哈希', () => {
 test('直写流程使用单阶段提示词，兼容旧技能组合器', () => {
   assert.deepEqual(ARTICLE_STAGE_CONTRACT.map(({ id }) => id), ['brief', 'fact-base', 'drafting', 'review', 'length-adjustment', 'humanize', 'title-lock']);
   const manifest = articlePromptManifest('wechat-mp-tech-deep');
-  assert.equal(manifest.version, 'direct-brief-v2');
+  assert.equal(manifest.version, 'direct-brief-v3');
   assert.match(manifest.prompts.drafting.prompt, /技术深解需要解释机制/);
   assert.doesNotMatch(manifest.prompts.review.prompt, /## SKILL:|全流程|风格门禁/);
   assert.match(manifest.prompts.review.hash, /^[a-f0-9]{64}$/);

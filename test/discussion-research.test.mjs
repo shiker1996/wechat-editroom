@@ -41,6 +41,7 @@ test('阶段0按全局热度选 Top-K，并保留 T 不变策略', () => {
 
 test('阶段0的讨论研判Top-K排除纯项目，其他题材跨分类按全局热度排序', () => {
   const project = { ...event('P1', 1, { who: '作者A', object: '项目', actionType: '发布' }), classification: { contentClass: 'github_project' } };
+  project.articles = [{ ...project.articles[0], source: 'github', url: 'https://github.com/example/project' }];
   const news = event('E1', 2, { who: 'openai', object: '模型', actionType: '发布' });
   const technology = event('E2', 3, { who: 'google', object: '模型', actionType: '发布' });
   const items = [project, news, technology].map((item) => ({

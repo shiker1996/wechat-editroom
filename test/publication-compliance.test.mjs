@@ -51,10 +51,10 @@ test('发布合规提示要求单独检查标题和高影响主张', () => {
   assert.match(prompt, /publication_compliance/);
 });
 
-test('成稿流水线把事实登记传给标题、SEO和最终发布门禁', () => {
+test('成稿流水线保留事实登记与发布门禁，并从终稿生成标题', () => {
   const source = fs.readFileSync(new URL('../server/features/articles/application/article-pipeline.mjs', import.meta.url), 'utf8');
   assert.match(source, /publicationClaimRegister/);
-  assert.match(source, /purpose:'article-seo'/);
-  assert.match(source, /publication-safety-gate/);
+  assert.match(source, /purpose: 'article-title-generation-final'/);
+  assert.doesNotMatch(source, /article-seo/);
   assert.match(source, /10-publication-compliance\.json/);
 });

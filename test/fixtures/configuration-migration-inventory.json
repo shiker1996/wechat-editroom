@@ -102,6 +102,7 @@
     {"source":"config","path":"conversationAgent.timeoutMs","secret":false,"target":"system:conversation-agent.timeoutMs","consumer":{"file":"server/platform/agent/conversation-agent.mjs","token":"timeoutMs"}},
     {"source":"config","path":"articleLength.minVisibleChars","secret":false,"target":"system:content-length.minVisibleChars","consumer":{"file":"server/platform/core/config.mjs","token":"minVisibleChars"}},
     {"source":"config","path":"articleLength.maxVisibleChars","secret":false,"target":"system:content-length.maxVisibleChars","consumer":{"file":"server/platform/core/config.mjs","token":"maxVisibleChars"}},
+    {"source":"config","path":"articleLength.targetVisibleChars","secret":false,"target":"system:content-length.targetVisibleChars","consumer":{"file":"server/platform/core/config.mjs","token":"targetVisibleChars"}},
     {"source":"config","path":"articleLength.pipelines.*","secret":false,"target":"system:content-length.pipelines.*","consumer":{"file":"server/platform/core/config.mjs","token":"pipelines"}},
 
     {"source":"rsshub-env","path":"*","secret":true,"target":"collector:rsshub-collector.environment","consumer":{"file":"server/platform/integrations/runtime-settings.mjs","token":"publicRsshubFields"}}
