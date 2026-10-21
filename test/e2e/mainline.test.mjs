@@ -130,7 +130,7 @@ test('主链路 E2E：采集、文章与图文产物均可从真实 HTTP 服务�
     assert.ok(Number(fetchedSource.content_chars) > 800, '文章备料应来自 RSS 正文摘要而不是预置缓存');
 
     const browserFlowStartedAt = performance.now();
-    const browserFlow = await runBrowserMainlineFlow({ baseUrl: workbench.baseUrl, socialCandidateId: socialCandidate.id, factsText: '固定仓库分析 Fixture 工具', diagnosticsDir: path.join(root, 'diagnostics'), visualBaselinePath: path.join(projectRoot, 'test/e2e/fixtures/social-card-plan.sha256') });
+    const browserFlow = await runBrowserMainlineFlow({ baseUrl: workbench.baseUrl, socialCandidateId: socialCandidate.id, factsText: '固定仓库分析 Fixture 工具', diagnosticsDir: path.join(root, 'diagnostics'), visualBaselinePath: path.join(projectRoot, 'test/e2e/fixtures/social-card-plan.sha256'), waitForJob: (jobId, options) => waitForJob(workbench.api, jobId, options), readServerLogs: () => workbench.logs.join('') });
     timings.browserSocialFlowMs = Math.round(performance.now() - browserFlowStartedAt);
     assert.ok(timings.browserSocialFlowMs <= PERFORMANCE_THRESHOLDS.browserSocialFlowMs, `图文浏览器主链路超出性能阈值：${timings.browserSocialFlowMs}ms > ${PERFORMANCE_THRESHOLDS.browserSocialFlowMs}ms`);
     assert.deepEqual(browserFlow.actions, ['打开工具图文', '选择图文候选', '分析仓库', '生成故事板', '生成图文并等待交付']);

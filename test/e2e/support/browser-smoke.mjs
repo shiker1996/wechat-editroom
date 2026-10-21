@@ -94,7 +94,7 @@ export async function runBrowserSmoke({ baseUrl, routes, diagnosticsDir = null }
   }
 }
 
-export async function runBrowserMainlineFlow({ baseUrl, socialCandidateId, factsText = '固定仓库分析 Fixture 工具', diagnosticsDir = null, visualBaselinePath = null }) {
+export async function runBrowserMainlineFlow({ baseUrl, socialCandidateId, factsText = '固定仓库分析 Fixture 工具', diagnosticsDir = null, visualBaselinePath = null, waitForJob = null, readServerLogs = null }) {
   const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
   const page = await browser.newPage();
   await page.setViewport({ width: 1440, height: 1000, deviceScaleFactor: 1 });
@@ -103,6 +103,8 @@ export async function runBrowserMainlineFlow({ baseUrl, socialCandidateId, facts
   const failedRequests = [];
   const badResponses = [];
   let visualSnapshot = null;
+  let generationJob = null;
+  let generationJobResult = null;
   page.on('console', (message) => { if (message.type() === 'error' && !message.location()?.url?.endsWith('/favicon.ico')) consoleErrors.push(message.text()); });
   page.on('pageerror', (error) => pageErrors.push(error.message));
   page.on('requestfailed', (request) => { if (CORE_RESOURCE_TYPES.has(request.resourceType())) failedRequests.push(`${request.method()} ${request.url()} · ${request.failure()?.errorText || 'failed'}`); });
@@ -118,12 +120,28 @@ export async function runBrowserMainlineFlow({ baseUrl, socialCandidateId, facts
     await page.waitForFunction((expected) => document.querySelector('#repository-facts')?.innerText.includes(expected), { timeout: 30000 }, factsText);
     await page.click('#analyze-card-editorial');
     await page.waitForFunction(() => document.querySelectorAll('#card-plan-preview [data-card-page]').length >= 4 && document.querySelector('#generate-social-card')?.disabled === false, { timeout: 120000 });
+    const generationResponsePromise = page.waitForResponse((response) => {
+      const request = response.request();
+      const url = new URL(response.url());
+      return request.method() === 'POST' && url.pathname === `/api/candidates/${Number(socialCandidateId)}/ai/social-card`;
+    }, { timeout: 30000 });
     await page.click('#generate-social-card');
+    const generationResponse = await generationResponsePromise;
+    let generationPayload;
+    try { generationPayload = await generationResponse.json(); }
+    catch { throw new Error(`图文生成接口未返回有效 JSON：HTTP ${generationResponse.status()}`); }
+    assert.ok(generationResponse.ok(), `图文生成接口失败：HTTP ${generationResponse.status()} ${JSON.stringify(generationPayload)}`);
+    assert.ok(generationPayload?.id, `图文生成接口未返回任务 ID：${JSON.stringify(generationPayload)}`);
+    generationJob = { id: generationPayload.id, status: generationPayload.status || 'queued' };
+    if (waitForJob) generationJobResult = await waitForJob(generationJob.id, {
+      timeoutMs: 180000,
+      onPoll: (job) => { generationJob = { id: job.id || generationJob.id, status: job.status, progress: job.progress, error: job.error || null }; },
+    });
     await page.waitForFunction(() => {
       const panel = document.querySelector('#social-delivery');
       const meta = document.querySelector('#social-delivery-meta')?.textContent || '';
       return panel && !panel.hidden && /\d+ 张/.test(meta);
-    }, { timeout: 180000 });
+    }, { timeout: 15000 });
     await page.evaluate(async () => { if (document.fonts?.ready) await document.fonts.ready; });
     await delay(100);
     const preview = await page.$('#card-plan-preview');
@@ -172,13 +190,13 @@ export async function runBrowserMainlineFlow({ baseUrl, socialCandidateId, facts
     assert.deepEqual(pageErrors, [], `主链路浏览器操作出现页面异常：${pageErrors.join(' | ')}`);
     assert.deepEqual(failedRequests, [], `主链路浏览器操作关键资源加载失败：${failedRequests.join(' | ')}`);
     assert.deepEqual(badResponses, [], `主链路浏览器操作返回服务端错误：${badResponses.join(' | ')}`);
-    return { actions: ['打开工具图文', '选择图文候选', '分析仓库', '生成故事板', '生成图文并等待交付'], deliveryMeta: await page.$eval('#social-delivery-meta', (node) => node.textContent.trim()), visualSignature };
+    return { actions: ['打开工具图文', '选择图文候选', '分析仓库', '生成故事板', '生成图文并等待交付'], deliveryMeta: await page.$eval('#social-delivery-meta', (node) => node.textContent.trim()), generationJob, generationJobResult, visualSignature };
   } catch (error) {
     if (diagnosticsDir) {
       try {
         fs.mkdirSync(diagnosticsDir, { recursive: true });
         await page.screenshot({ path: path.join(diagnosticsDir, 'browser-mainline-failure.png'), fullPage: true });
-        fs.writeFileSync(path.join(diagnosticsDir, 'browser-mainline-failure.json'), JSON.stringify({ message: error.message, consoleErrors, pageErrors, failedRequests, badResponses, visualSnapshot }, null, 2));
+        fs.writeFileSync(path.join(diagnosticsDir, 'browser-mainline-failure.json'), JSON.stringify({ message: error.message, consoleErrors, pageErrors, failedRequests, badResponses, generationJob, generationJobResult, serverLogs: (await readServerLogs?.())?.slice(-20000) || null, visualSnapshot }, null, 2));
       } catch {}
     }
     throw error;
