@@ -212,11 +212,17 @@ export async function buildEditorialMessages(current,answer,events=[],retrieve=n
     const sources=[];
     for(const hotspot of event.hotspots||[]){
       const doc=hotspot.sourceDoc;
+      const readerReactions=hotspot.readerReactions?{
+        status:hotspot.readerReactions.status,
+        usage:'公开评论样本，只用于发现读者关注点、质疑和体验；不作为事实证据，也不代表整体受众。',
+        comments:(hotspot.readerReactions.comments||[]).slice(0,12).map((item)=>({text:item.text,url:item.url,author:item.author,createdAt:item.createdAt,likes:item.likes})),
+        error:hotspot.readerReactions.error||'',
+      }:null;
       sources.push(doc?{ status:doc.status, url:doc.final_url||doc.url||hotspot.url, title:doc.title||hotspot.title,
         description:doc.description, author:doc.author, publishedAt:doc.published_at,
         fetchedAt:doc.fetched_at, error:doc.error,
-        contentExcerpt:await sourceExcerpt(hotspot,retrieve,query)
-      }:{ status:'missing', error:'尚未抓取原文', url:hotspot.url, title:hotspot.title });
+        contentExcerpt:await sourceExcerpt(hotspot,retrieve,query), readerReactions
+      }:{ status:'missing', error:'尚未抓取原文', url:hotspot.url, title:hotspot.title, readerReactions });
     }
     eventInputs.push({
       eventId:event.event_id?String(event.event_id):undefined,

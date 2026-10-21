@@ -449,7 +449,13 @@ function renderEventCards(events) {
       const doc = h.sourceDoc;
       const status = doc ? doc.status : "missing";
       const label = status === "ok" ? `已抓取 ${doc.content_chars} 字` : status === "partial" ? `部分内容 ${doc.content_chars} 字` : doc ? `失败：${doc.error || "未知原因"}` : "未抓取";
-      return `<li class="event-source ${escapeHtml(status)}"><div class="event-source-row"><span>${escapeHtml(h.title || "来源")}</span><small>${escapeHtml(h.source || "")} · ${escapeHtml(label)}</small></div>${doc?.content ? `<details class="event-source-excerpt"><summary>查看摘录</summary><p>${escapeHtml(String(doc.content).slice(0, 800))}</p></details>` : ""}</li>`;
+      const reactions = h.readerReactions;
+      const reactionStatus = reactions?.status === "ok" ? `${reactions.comments?.length || 0} 条样本` : reactions?.status === "empty" ? "暂无公开评论" : reactions?.status === "failed" ? `获取失败：${reactions.error || "未知原因"}` : "尚未获取";
+      const reactionContent = reactions?.status === "ok" && reactions.comments?.length
+        ? `<ul>${reactions.comments.map((item) => `<li>${escapeHtml(item.text)}<small>${escapeHtml(item.author || "")}${item.likes != null ? ` · ${item.likes} 赞` : ""} · <a href="${escapeHtml(item.url || "#")}" target="_blank" rel="noreferrer">查看评论</a></small></li>`).join("")}</ul>`
+        : `<p class="muted">${escapeHtml(reactions?.error || "评论区观察仅供发现读者关注点和不同看法，不代表整体受众，也不作为事实依据。")}</p>`;
+      const reactionBlock = reactions ? `<details class="event-reader-reactions"><summary>评论区观察 · ${escapeHtml(reactionStatus)}</summary>${reactionContent}</details>` : "";
+      return `<li class="event-source ${escapeHtml(status)}"><div class="event-source-row"><span>${escapeHtml(h.title || "来源")}</span><small>${escapeHtml(h.source || "")} · ${escapeHtml(label)}</small></div>${doc?.content ? `<details class="event-source-excerpt"><summary>查看原文摘录</summary><p>${escapeHtml(String(doc.content).slice(0, 800))}</p></details>` : ""}${reactionBlock}</li>`;
     }).join("");
     return `<div class="event-card-item">
       <div class="event-card-item-head"><h4>${escapeHtml(event.title || "")}</h4></div>
@@ -552,14 +558,18 @@ function renderEditorialReadiness() {
 let editorialPrepareState = { candidateId: null, skipped: false };
 
 function editorialSourceGaps(candidate) {
-  let missing = 0, failed = 0;
+  let missing = 0, failed = 0, commentsMissing = 0, commentsFailed = 0;
   for (const event of candidate.events || []) {
     for (const h of event.hotspots || []) {
       if (!h.sourceDoc) missing += 1;
       else if (h.sourceDoc.status !== "ok" && h.sourceDoc.status !== "partial") failed += 1;
+      if (/https?:\/\/(?:www\.)?(?:x\.com|twitter\.com)\//i.test(String(h.url || ""))) {
+        if (h.readerReactions?.status === "failed") commentsFailed += 1;
+        else if (!['ok', 'empty'].includes(h.readerReactions?.status)) commentsMissing += 1;
+      }
     }
   }
-  return { missing, failed };
+  return { missing, failed, commentsMissing, commentsFailed };
 }
 
 function updateEditorialPrepareGate(candidate) {
@@ -569,11 +579,15 @@ function updateEditorialPrepareGate(candidate) {
   if (!gate || !candidate) return;
   const gaps = editorialSourceGaps(candidate);
   const blocked = gaps.missing > 0 && !editorialPrepareState.skipped;
-  gate.hidden = !blocked;
-  if (blocked) {
-    const text = document.getElementById("editorial-prepare-text");
-    if (text) text.textContent = `本选题还有 ${gaps.missing} 个来源未抓取原文${gaps.failed ? `（另有 ${gaps.failed} 个抓取失败，可在对话中补充链接）` : ""}。建议先备料，AI 编辑将基于完整原文提问。`;
-  }
+  const optionalComments = !blocked && (gaps.commentsMissing > 0 || gaps.commentsFailed > 0);
+  gate.hidden = !blocked && !optionalComments;
+  const text = document.getElementById("editorial-prepare-text");
+  if (text && blocked) text.textContent = `本选题还有 ${gaps.missing} 个来源未抓取原文${gaps.failed ? `（另有 ${gaps.failed} 个抓取失败，可在对话中补充链接）` : ""}。点击备料会抓取原文并尝试补充推文评论；评论获取失败不影响对话。`;
+  else if (text && optionalComments) text.textContent = `原文已备齐；还有 ${gaps.commentsMissing + gaps.commentsFailed} 条推文未获取评论区观察。可补抓少量公开评论，帮助发现读者关注点；评论不作为事实依据，也不影响开始对话。`;
+  const prepareButton = document.getElementById("run-editorial-prepare");
+  if (prepareButton) prepareButton.textContent = blocked ? "备料：抓取原文和评论" : "补抓评论区观察";
+  const skipButton = document.getElementById("skip-editorial-prepare");
+  if (skipButton) skipButton.hidden = !blocked;
   if (answer) {
     answer.disabled = blocked;
     answer.placeholder = blocked ? "备料完成后即可开始对话" : "回答当前问题；首次进入时可以留空，让 AI 先提问。可粘贴报道链接，系统将自动抓取纳入事实基座";
@@ -586,11 +600,13 @@ async function prepareEditorialSources() {
   if (!candidate) return;
   const button = document.getElementById("run-editorial-prepare");
   const text = document.getElementById("editorial-prepare-text");
-  if (text) text.textContent = "正在抓取来源原文，来源较多时需要几十秒…";
+  const gaps = editorialSourceGaps(candidate);
+  const refreshingCommentsOnly = gaps.missing === 0;
+  if (text) text.textContent = refreshingCommentsOnly ? "正在补抓评论区观察…" : "正在抓取来源原文并尝试补充评论区观察，来源较多时需要几十秒…";
   await withLoading(button, "正在抓取…", () =>
-    request(`/api/candidates/${candidate.id}/source`, { method: "POST", body: JSON.stringify({ force: false }) }));
+    request(`/api/candidates/${candidate.id}/source`, { method: "POST", body: JSON.stringify({ force: false, readerReactionsForce: refreshingCommentsOnly }) }));
   await openEditorial(candidate.id);
-  toast("备料完成，可以开始对话");
+  toast(refreshingCommentsOnly ? "评论区观察已更新，可以开始对话" : "原文备料完成，可以开始对话");
 }
 
 async function sendEditorialAnswer() {

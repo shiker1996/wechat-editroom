@@ -4,6 +4,7 @@ import { batchTopicsDir } from '../../../platform/core/workspace-paths.mjs';
 import { isFreshForBatch } from '../domain/hotspot-clustering.mjs';
 import { isResearchEligibleHotspot } from '../domain/hotspot-pipeline-scope.mjs';
 import { loadStableBatchEvents } from './stable-event-service.mjs';
+import { readReaderReactions, xPostId } from '../../articles/application/reader-reactions-cache.mjs';
 
 // 选题与事件为一对多：候选的关联热点分属哪些事件，哪些事件就是本选题的关联事件；
 // 原文绑定在事件下：每个事件携带其全部热点的原文抓取快照。contentLimit 控制快照正文截断。
@@ -34,9 +35,14 @@ export function eventGroupsForCandidate({ store, workspaceRoot, candidate, conte
         return docs.map((sourceDoc,index) => {
           const materialId=sourceDoc?.id||sourceDoc?.material_id;
           const sourceId=doc ? (article.hotspot_id ? `hotspot:${article.hotspot_id}` : '') : materialId ? `material:${materialId}` : article.hotspot_id ? `hotspot:${article.hotspot_id}` : '';
-          return { id: article.hotspot_id, source_id: sourceId, title: sourceDoc?.title || article.title, url: sourceDoc?.final_url || sourceDoc?.url || article.url, source: sourceDoc?.source || article.source, time: sourceDoc?.fetched_at || article.time,
+          const url = sourceDoc?.final_url || sourceDoc?.url || article.url;
+          const readerReactions = xPostId(url)
+            ? readReaderReactions(workspaceRoot, article.hotspot_id) || { status: 'not_fetched', comments: [] }
+            : null;
+          return { id: article.hotspot_id, source_id: sourceId, title: sourceDoc?.title || article.title, url, source: sourceDoc?.source || article.source, time: sourceDoc?.fetched_at || article.time,
             representative: wanted.has(article.hotspot_id)&&index===0,
-            sourceDoc: sourceDoc ? { ...sourceDoc, content: String(sourceDoc.content || sourceDoc.description || '').slice(0, contentLimit) } : null };
+            sourceDoc: sourceDoc ? { ...sourceDoc, content: String(sourceDoc.content || sourceDoc.description || '').slice(0, contentLimit) } : null,
+            readerReactions };
         });
       }),
     });

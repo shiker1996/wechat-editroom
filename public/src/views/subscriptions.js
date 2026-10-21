@@ -17,7 +17,7 @@ const FIELD_HELP = {
   dateAttribute: ["时间所在属性；time 元素通常使用 datetime", "datetime"], nextPageSelector: ["下一页按钮或链接，用于有限分页", "a.next"],
   identifier: ["公众号名称、ghid、wxid 或文章主页链接", "gh_xxxxx"], identifierType: ["公众号标识类型", "ghid"],
   query: ["固定搜索条件；查询词池模式下每行一个条件；趋势模式可不填", "from:OpenAI\nAI OR agent lang:zh"], searchType: ["X 搜索结果排序方式", "Latest"],
-  country: ["TwexAPI 趋势国家或地区 slug；例如 worldwide、united-states", "worldwide"], topic: ["TwexAPI 趋势话题筛选，可不填", "Technology"], content: ["TwexAPI 趋势内容标签筛选，可不填", "AI"],
+  woeid: ["TwitterAPI 趋势地区 WOEID；全球为 1", "1"],
   maxAgeHours: ["只保留最近多少小时内发布的内容", "72"],
   maxPages: ["单次最多翻页数，建议先用 1 测试", "1"], limit: ["单次最多保留的有效条目数", "30"],
   profileId: ["保存该网站登录状态的隔离浏览器身份", "example-news"], waitForSelector: ["等待这个元素出现后再采集", "main article"],

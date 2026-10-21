@@ -6,14 +6,14 @@
   "kind": "collector",
   "entry": "./adapter.mjs",
   "riskLevel": "network-read",
-  "credentialProfile": "x-twexapi",
+  "credentialProfile": "x-twitterapi",
   "configurationRenderer": "key-value-secret",
   "configuration": {
     "type": "object",
     "additionalProperties": false,
     "properties": {
-      "baseUrl": { "type": "string", "title": "TwexAPI Base URL", "format": "url", "default": "https://api.twexapi.io" },
-      "apiKey": { "type": "string", "title": "TwexAPI API Key", "secret": true, "format": "password" },
+      "baseUrl": { "type": "string", "title": "TwitterAPI Base URL", "format": "url", "default": "https://api.twitterapi.io" },
+      "apiKey": { "type": "string", "title": "TwitterAPI API Key", "secret": true, "format": "password" },
       "timeoutMs": { "type": "integer", "title": "请求超时（毫秒）", "minimum": 5000, "maximum": 120000, "default": 30000 }
     },
     "required": ["apiKey"]
@@ -22,14 +22,14 @@
   "inputSchema": {
     "type": "object", "additionalProperties": false,
     "properties": {
-      "mode": { "type": "string", "enum": ["fixed", "query-pool", "trending"], "enumNames": ["固定搜索", "查询词池增强", "TwexAPI 趋势"], "default": "fixed", "title": "采集模式" },
+      "mode": { "type": "string", "enum": ["fixed", "query-pool", "trending", "replies"], "enumNames": ["固定搜索", "查询词池增强", "TwitterAPI 趋势", "推文评论"], "default": "fixed", "title": "采集模式" },
       "query": { "type": "string", "maxLength": 2000, "title": "搜索条件（趋势模式可不填）", "format": "textarea" },
+      "tweetId": { "type": "string", "pattern": "^\\d{5,30}$", "title": "目标推文 ID（评论模式）" },
+      "sortBy": { "type": "string", "enum": ["Relevance", "Latest", "Likes"], "default": "Likes", "title": "评论排序" },
       "searchType": { "type": "string", "enum": ["Latest", "Top"], "default": "Latest", "title": "排序" },
       "limit": { "type": "integer", "minimum": 1, "maximum": 50, "default": 20, "title": "单次条数" },
       "maxAgeHours": { "type": "integer", "minimum": 1, "maximum": 8760, "default": 168, "title": "内容有效期（小时）" },
-      "country": { "type": "string", "maxLength": 80, "default": "worldwide", "title": "趋势国家/地区" },
-      "topic": { "type": "string", "maxLength": 120, "title": "趋势话题（可选）" },
-      "content": { "type": "string", "maxLength": 120, "title": "趋势内容标签（可选）" }
+      "woeid": { "type": "integer", "minimum": 1, "default": 1, "title": "趋势地区 WOEID（全球为 1）" }
     }
   },
   "outputSchema": { "type": "object", "required": ["items"], "properties": { "items": { "type": "array", "items": { "type": "object" } } } },
@@ -39,14 +39,12 @@
     "sourceConfigSchema": {
       "type": "object", "additionalProperties": false,
       "properties": {
-        "mode": { "type": "string", "enum": ["fixed", "query-pool", "trending"], "enumNames": ["固定搜索", "查询词池增强", "TwexAPI 趋势"], "default": "fixed" },
+        "mode": { "type": "string", "enum": ["fixed", "query-pool", "trending"], "enumNames": ["固定搜索", "查询词池增强", "TwitterAPI 趋势"], "default": "fixed" },
         "query": { "type": "string", "maxLength": 2000, "format": "textarea" },
         "searchType": { "type": "string", "enum": ["Latest", "Top"], "default": "Latest" },
         "limit": { "type": "integer", "minimum": 1, "maximum": 50, "default": 20 },
         "maxAgeHours": { "type": "integer", "minimum": 1, "maximum": 8760, "default": 168 },
-        "country": { "type": "string", "maxLength": 80, "default": "worldwide" },
-        "topic": { "type": "string", "maxLength": 120 },
-        "content": { "type": "string", "maxLength": 120 }
+        "woeid": { "type": "integer", "minimum": 1, "default": 1 }
       }
     }
   }

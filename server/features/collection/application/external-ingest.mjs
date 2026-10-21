@@ -39,7 +39,7 @@ function canonicalUrl(value) {
 /**
  * Normalize X/微信公众号 bridge payloads into the same hotspot item shape
  * used by the built-in collectors. The bridge is intentionally provider
- * neutral: TwexAPI、极致了/大佳拉或自有脚本都可以输出这套契约。
+ * neutral: TwitterAPI、极致了/大佳拉或自有脚本都可以输出这套契约。
  */
 export function normalizeExternalIngest(input = {}) {
   const channel = channelOf(input.channel);

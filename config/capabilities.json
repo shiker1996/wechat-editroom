@@ -19,7 +19,7 @@
     "cap_collect_rsshub": {"name":"RSSHub 路由采集","description":"通过配置的 RSSHub 路由采集内容。","category":"内容采集"},
     "cap_collect_twitter": {"name":"X 内容采集","description":"通过 RSSHub 等实现采集指定 X 账号内容。","category":"内容采集"},
     "cap_collect_wechat": {"name":"微信公众号账号采集","description":"通过已配置的第三方公众号数据接口采集指定账号的历史文章。","category":"内容采集"},
-    "cap_collect_x": {"name":"X 搜索 / 趋势采集","description":"通过已配置的 TwexAPI 接口按搜索条件或趋势筛选采集 X 动态。","category":"内容采集"},
+    "cap_collect_x": {"name":"X 搜索 / 趋势采集","description":"通过已配置的 TwitterAPI 接口按搜索条件或趋势话题采集 X 动态。","category":"内容采集"},
     "cap_collect_reddit": {"name":"Reddit 内容采集","description":"从配置的 Reddit 分区采集热门内容。","category":"内容采集"},
     "cap_collect_paper": {"name":"学术论文采集","description":"从 Hugging Face Daily Papers 和 arXiv 发现近期技术论文。","category":"内容采集"},
     "cap_collect_github": {"name":"GitHub 项目发现","description":"按时间、Star 和查询条件发现 GitHub 项目。","category":"内容采集"},

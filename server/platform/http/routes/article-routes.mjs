@@ -10,6 +10,7 @@ import { runWithThinkingSink } from '../../llm/gateway.mjs';
 import { readDiscussionResearchContext } from '../../../features/research/index.mjs';
 import { buildMaterialBrief } from '../../../shared/domain/material-brief.mjs';
 import { buildArticleReviewIssueReport, reviewArtifactFileNames } from '../../../features/articles/application/article-review-issues.mjs';
+import { readReaderReactions, writeReaderReactions, xPostId } from '../../../features/articles/application/reader-reactions-cache.mjs';
 
 // capability-call: cap_content_passage_retrieve
 
@@ -33,6 +34,49 @@ export async function handleArticleRoutes(context) {
         allowedCapabilities: policy.allowedCapabilities,
       },
     });
+  }
+  async function fetchReaderReactionsForCandidate(candidate, hotspots, { force = false } = {}) {
+    const targets = [...new Map((hotspots || []).filter((hotspot) => hotspot?.id && xPostId(hotspot.url))
+      .map((hotspot) => [Number(hotspot.id), hotspot])).values()].slice(0, 5);
+    const results = [];
+    const persist = (hotspotId, value) => {
+      try { writeReaderReactions(root, hotspotId, value); return true; }
+      catch { return false; }
+    };
+    for (const hotspot of targets) {
+      const postId = xPostId(hotspot.url);
+      const cached = readReaderReactions(root, hotspot.id);
+      if (!force && cached && cached.status !== 'not_fetched') {
+        results.push({ hotspotId: hotspot.id, status: cached.status, count: cached.comments?.length || 0, cached: true });
+        continue;
+      }
+      const fetchedAt = new Date().toISOString();
+      try {
+        const result = await executeCapabilityWithPreference(root, 'cap_collect_x', {
+          mode: 'replies', tweetId: postId, limit: 12, sortBy: 'Likes',
+        }, {
+          store, workspaceRoot: root, batchId: candidate.batch_id, candidateId: candidate.id,
+          consumerId: 'editorial-room-reader-reactions', reason: '抓取公开推文评论，作为编辑室读者反应素材',
+        });
+        if (result?.status !== 'ok') throw new Error(result?.error?.message || result?.message || '评论接口未返回成功结果');
+        const items = Array.isArray(result.items) ? result.items : Array.isArray(result.data?.items) ? result.data.items : [];
+        const comments = items.map((item) => ({
+          id: String(item.externalId || item.id || ''), text: String(item.summary || item.title || '').trim().slice(0, 1200),
+          url: String(item.url || ''), author: String(item.author || ''), createdAt: String(item.publishedAt || ''),
+          likes: Number.isFinite(Number(item.metrics?.likes)) ? Number(item.metrics.likes) : null,
+        })).filter((item) => item.text).slice(0, 12);
+        const saved = persist(hotspot.id, {
+          hotspotId: Number(hotspot.id), postId, sourceUrl: hotspot.url, status: comments.length ? 'ok' : 'empty',
+          fetchedAt, provider: result.provenance?.provider || result.provenance?.plugin || 'TwitterAPI', comments,
+        });
+        results.push({ hotspotId: hotspot.id, status: saved ? (comments.length ? 'ok' : 'empty') : 'failed', count: saved ? comments.length : 0, ...(!saved ? { error: '评论已抓取，但本地缓存写入失败' } : {}) });
+      } catch (error) {
+        const message = String(error?.message || error || '评论抓取失败').slice(0, 500);
+        persist(hotspot.id, { hotspotId: Number(hotspot.id), postId, sourceUrl: hotspot.url, status: 'failed', fetchedAt, error: message, comments: [] });
+        results.push({ hotspotId: hotspot.id, status: 'failed', error: message });
+      }
+    }
+    return results;
   }
   // 编辑会摘录检索：经能力槽位偏好调用 cap_content_passage_retrieve（read-only 纯本地计算），
   // 插件缺失或被禁用时返回 null，编辑室自动回退截断注入。
@@ -183,22 +227,28 @@ export async function handleArticleRoutes(context) {
     const candidate=store.getCandidate(candidateId);
     if(!candidate)return json(response,404,{error:'候选不存在'});
     const force=Boolean(input.force);
+    const forceReaderReactions=Boolean(input.readerReactionsForce || force);
+    const prepare = async (hotspots, sourceInput = {}) => {
+      const source = await fetchSourceForCandidate(candidate, { force, ...sourceInput });
+      const readerReactions = await fetchReaderReactionsForCandidate(candidate, hotspots, { force: forceReaderReactions });
+      return { ...source, readerReactions };
+    };
     // 支持按单个热点或单个事件抓取；默认抓取本选题全部关联事件下的热点原文
     if (input.hotspotId != null) {
       const hotspot=candidateEventGroups(candidate).flatMap((group)=>group.hotspots).find((h)=>h.id===Number(input.hotspotId));
       if(!hotspot)return json(response,404,{error:'该热点不属于本选题的关联事件'});
-      return json(response,200,await fetchSourceForCandidate(candidate,{force,hotspots:[hotspot]}));
+      return json(response,200,await prepare([hotspot],{hotspots:[hotspot]}));
     }
     if (input.eventId) {
       const group=candidateEventGroups(candidate).find((g)=>g.event_id===String(input.eventId));
       if(!group)return json(response,404,{error:'该事件不属于本选题'});
-      return json(response,200,await fetchSourceForCandidate(candidate,{force,hotspots:group.hotspots}));
+      return json(response,200,await prepare(group.hotspots,{hotspots:group.hotspots}));
     }
     const seen=new Set(); const all=[];
     for(const group of candidateEventGroups(candidate))for(const hotspot of group.hotspots) {
       if(!seen.has(hotspot.id)){seen.add(hotspot.id);all.push(hotspot);}
     }
-    if(all.length)return json(response,200,await fetchSourceForCandidate(candidate,{force,hotspots:all}));
+    if(all.length)return json(response,200,await prepare(all,{hotspots:all}));
     return json(response,200,await fetchSourceForCandidate(candidate,{force}));
   }
   if (editorialMatch && request.method === 'PUT') {
