@@ -5,6 +5,9 @@ const ISSUE_LABELS = {
   citation: '引用',
   fact: '事实',
   logic: '论证',
+  reasoning: '论证',
+  attribution: '来源归属',
+  brief: '简报落实',
   expression: '表达',
   style: '表达',
   publication_compliance: '发布合规',
@@ -98,8 +101,12 @@ export function buildArticleReviewIssueReport({ document = {}, artifacts = [], r
   const issues = [];
   const sourceArtifacts = [];
   const byName = new Map(artifacts.map((artifact) => [String(artifact.name || '').toLowerCase(), artifact]));
+  const manifest = readJsonArtifact(byName.get('00-stage-executions.json'), readFile);
+  const activeNames = manifest?.activeReviewArtifacts ?? manifest?.activeArtifacts;
+  const active = Array.isArray(activeNames) ? new Set(activeNames.map((name) => name.toLowerCase())) : null;
 
   for (const [fileName, meta] of JSON_ARTIFACTS) {
+    if (active && !active.has(fileName.toLowerCase())) continue;
     const artifact = byName.get(fileName.toLowerCase());
     if (!artifact) continue;
     const parsed = readJsonArtifact(artifact, readFile);
@@ -146,4 +153,4 @@ export function buildArticleReviewIssueReport({ document = {}, artifacts = [], r
   };
 }
 
-export function reviewArtifactFileNames() { return [...JSON_ARTIFACTS.keys()]; }
+export function reviewArtifactFileNames() { return ['00-stage-executions.json', ...JSON_ARTIFACTS.keys()]; }

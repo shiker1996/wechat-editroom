@@ -39,10 +39,8 @@ export function deriveWritingStance({ articleType = '', explicit = '', materialB
   };
 }
 
-export function citationPolicyForStance(stance, { sourceLevel = '', highImpact = false } = {}) {
-  if (highImpact || ['official', 'reliable_media', 'technical_primary'].includes(text(sourceLevel))) return 'each_claim';
-  if (normalizeWritingStance(stance) === 'report') return 'each_claim';
-  if (normalizeWritingStance(stance) === 'opinion') return 'cluster';
+export function citationPolicyForStance(_stance, { highImpact = false } = {}) {
+  if (highImpact) return 'each_claim';
   return 'cluster';
 }
 
@@ -65,7 +63,7 @@ export function visualPolicyForStance({ stance, articleType = '', factBase = nul
 export function stanceOverlay(stance) {
   const normalized = normalizeWritingStance(stance);
   const overlays = {
-    report: `## 写作立场 overlay：report\n- 先交代发生了什么，再交代影响。\n- 关键事实就近保留具体来源，不把来源观点改写成作者确定判断。\n- 不用长篇机制推演替代事实缺口；允许较高的来源可见密度。`,
+    report: `## 写作立场 overlay：report\n- 先交代发生了什么，再交代影响。\n- 关键事实必须能在内部主张登记中追溯；正文按来源簇自然归因，同一来源支撑的连续事实首次归因后不逐句重复。\n- 不把来源观点改写成作者确定判断；不把来源归因扩写成免责声明。`,
     analysis: `## 写作立场 overlay：analysis\n- 按“事实 → 机制 → 影响 → 边界”推进。\n- 同一来源簇在一个论证段落中集中归因，后续句子不重复堆叠来源提示。\n- 观点必须有事实和推理支撑；反事实、因果和动机使用克制语气。`,
     opinion: `## 写作立场 overlay：opinion\n- 开头一次性交代事实来源和文章观察角度。\n- 后文优先使用自然连接和作者推理，不重复“据该来源”。\n- 观点通过论证呈现，不强制使用“作者判断”“本文认为”等标签。\n- 对未核实、高影响或单方主张保留必要的自然限定；结尾回到判断和适用边界，不增加模板化免责声明。`,
   };

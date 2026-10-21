@@ -56,7 +56,7 @@ export async function runTutorialPipeline({gateway,store,batchId,candidateId,pro
     rootRunId:rootRunId||`batch:${batchId}`,workflowRunId:workflowRunId||`tutorial:${batchId}:${candidateId??'batch'}`,entryPoint:'tutorial-pipeline'});
   provider=runtime.provider;const providerConfig=runtime.providerConfig,maxTokens=Math.min(6500,providerConfig.maxOutputTokens);
   const configuredLength=runtime.config?.gates?.length;
-  // 技能覆盖层 > config.local.json articleLength（pipelines.tutorial 差异覆盖）> 默认 1300–2000
+  // 技能覆盖层 > config.local.json articleLength（pipelines.tutorial 差异覆盖）> 默认 1300–1800
   const resolvedLength=resolveArticleLength({articleLength},'tutorial');
   const minChars=Number(configuredLength?.minVisibleChars??resolvedLength.min),maxChars=Number(configuredLength?.maxVisibleChars??resolvedLength.max);
   const repairAttempts=configuredRepairAttempts(runtime.config,1);

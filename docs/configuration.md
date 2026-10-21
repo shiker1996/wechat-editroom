@@ -71,7 +71,7 @@
   - 模型提供商列表、默认模型、Base URL、协议、模型能力开关、吞吐参数和 API Key 均由配置中心管理：普通字段存入 `extension_settings`，默认模型存入 `system:llm-runtime`，API Key 存入隔离凭据 Profile。启动时会自动把旧 `config.local.json` 的 `llm.providers` / `llm.defaultProvider` 和 `.env` 中的模型密钥迁移，然后清理这些旧字段。
 - `aiJobs`：AI 后台任务并发。`maxConcurrent`（2）为全局并发上限，超过上限的任务进入 FIFO 队列等待；候选级任务（文章 / 图文 / 排版 / 自主写作）按候选并行，批次级任务（打标 / 研判 / 事件卡 / 自动流程 / 早报）同批次互斥。
 - `conversationAgent`：用户交互型 Agent 的回合预算，当前由编辑室、自主写作和自定义图文对话共享。默认 `maxModelSteps`（6）、`maxToolCalls`（10）、`maxParallelToolCalls`（3）、`maxToolResultChars`（12000）、`maxTotalToolResultChars`（64000）、`timeoutMs`（180000）；重复工具调用防护固定为 1 次，历史上下文默认 120000 字符。该配置只影响新建运行；运行启动时会把预算写入 generation snapshot，恢复或审计历史运行仍以快照为准。允许值仍受 Agent 契约中的硬上限约束。
-- `articleLength`：文章字数门禁（可见字符，统一五处判定：文章 / 早报 / 教程三条 pipeline 的长度返工区间、技能默认门禁、编辑器前端计数与 preflight 检查）。`minVisibleChars`（1300）/ `maxVisibleChars`（2000）为全局默认区间；`pipelines.article` / `pipelines.daily` / `pipelines.tutorial` 可按链路写同名字段做差异覆盖。生效优先级：技能覆盖层 `gates.length` > `articleLength.pipelines[链路]` > `articleLength` 全局 > 内置默认 1300–2000。编辑器前端经 `GET /api/system/settings` 读取全局区间，无需另配。字数门禁为**建议性**：pipeline 会先按区间尽力自动修复，修复后仍超限只记警告、任务照常完成；编辑器保存终稿不再拦截，仅 toast 提示，超限内容可在编辑器手动删减。
+- `articleLength`：文章字数目标与门禁（可见字符，统一文章 / 早报 / 教程三条 pipeline、技能默认门禁及编辑器前端计数与 preflight 检查）。`targetVisibleChars`（1600）是默认写作目标，`minVisibleChars`（1300）/ `maxVisibleChars`（1800）是默认可接受区间；`pipelines.article` / `pipelines.daily` / `pipelines.tutorial` 可按链路写同名字段做差异覆盖。生效优先级：技能覆盖层 `gates.length` > `articleLength.pipelines[链路]` > `articleLength` 全局 > 内置默认目标 1600、区间 1300–1800。编辑器前端经 `GET /api/system/settings` 读取全局目标与区间，无需另配。字数门禁为**建议性**：pipeline 会先按区间尽力自动修复，修复后仍超限只记警告、任务照常完成；编辑器保存终稿不再拦截，仅 toast 提示，超限内容可在编辑器手动删减。
 
 超时、重试、并发与 token 预算的安全默认值及适用范围见 [safety-defaults.md](./safety-defaults.md)。
 
@@ -102,7 +102,7 @@
 - `prompt`：覆盖层，追加在内置技能 prompt 之后（`CONFIGURED OVERLAY`），与不可变安全门禁冲突时以门禁为准。
 - `defaultModel`：该技能默认模型路由。
 - `allowedTools`：工具白名单（信息工具槽位能力 ID）。
-- `gates`：质量门禁——`length.minVisibleChars` / `maxVisibleChars`（默认跟随 `config.local.json` 的 `articleLength`，内置兜底 1300–2000；覆盖层配置后优先级最高；字数违规只记 warning，不阻断流程）、`facts`（未核验事实/缺来源/模型建议冒充体验，默认 error）、`voice`（第一人称与亲测声明策略）、`repair`（自动返工开关与上限，默认 1 轮）。
+- `gates`：质量门禁——`length.minVisibleChars` / `maxVisibleChars`（默认跟随 `config.local.json` 的 `articleLength`，内置兜底 1300–1800；覆盖层配置后优先级最高；字数违规只记 warning，不阻断流程）、`facts`（未核验事实/缺来源/模型建议冒充体验，默认 error）、`voice`（第一人称与亲测声明策略）、`repair`（自动返工开关与上限，默认 1 轮）。
 
 选题阶段 5 个技能（`hotspot-tagging`、`event-card-generator`、`hotspot-brainstorm`、`hotspot-synthesis`、`editorial-room-chat`）同样走覆盖层机制；它们在代码里留有内联 fallback，技能目录缺失时行为不变。
 

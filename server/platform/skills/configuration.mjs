@@ -9,7 +9,7 @@ export const SYSTEM_GATES = Object.freeze([
 ]);
 
 export const DEFAULT_GATES = Object.freeze({
-  length:{ minVisibleChars:1300, maxVisibleChars:2000 },
+  length:{ minVisibleChars:1300, maxVisibleChars:1800 },
   facts:{ unverifiedClaims:'error', missingAttribution:'error', modelSuggestionAsExperience:'error' },
   voice:{ firstPerson:'allow_with_author_source', personalTestClaim:'require_author_experience' },
   repair:{ enabled:true, maxAttempts:1 },

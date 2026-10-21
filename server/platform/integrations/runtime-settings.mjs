@@ -49,6 +49,7 @@ function publicRsshubFields(filePath) {
 }
 
 export function getRuntimeSettings(root, config) {
+  const articleLength=resolveArticleLength(config);
   return {
     app: [],
     rsshub: publicRsshubFields(path.join(config.rsshub.rootDir, '.env')),
@@ -59,7 +60,11 @@ export function getRuntimeSettings(root, config) {
       redditCdpUrl: config.reddit.cdpUrl,
     },
     // 成稿字数门禁（全局值；链路差异覆盖只影响对应 pipeline，编辑器按全局口径提示）
-    articleLength: { minVisibleChars: resolveArticleLength(config).min, maxVisibleChars: resolveArticleLength(config).max },
+    articleLength: {
+      minVisibleChars: articleLength.min,
+      maxVisibleChars: articleLength.max,
+      targetVisibleChars: articleLength.targetVisibleChars,
+    },
   };
 }
 

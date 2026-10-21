@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { ARTICLE_PROMPTS, articlePromptManifest, articleChangedPassages } from '../server/features/articles/application/article-prompts.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -69,15 +70,23 @@ test('成稿规划保留结构化数组并接纳单个风险对象', () => {
   assert.equal(plan.titleCandidates[0].title,'标题');
 });
 
-test('成稿提示词展开真实标题、简报和大纲', () => {
-  const prompt = buildDraftUserPrompt('真实标题', { thesis: '真实命题' }, '# 真实大纲');
-  assert.match(prompt, /标题：真实标题/);
-  assert.match(prompt, /\"thesis\":\"真实命题\"/);
-  assert.match(prompt, /文章大纲（仅作为文章结构）：\n# 真实大纲/);
-  assert.match(prompt, /简报确定文章写什么，事实基座限定哪些事实可以写，大纲确定文章如何展开/);
-  assert.match(prompt, /必要来源自然归因一次即可/);
-  assert.match(prompt, /不罗列其他证据缺项/);
-  assert.doesNotMatch(prompt, /\$\{(?:selectedTitle|outline|JSON\.stringify\(brief\))\}/);
+test('直写提示词保留简报和作者材料，忽略历史大纲', () => {
+  const prompt = buildDraftUserPrompt('真实标题', {
+    thesis: '真实命题', researchBasis: '已采用主线', authorOpinions: '作者判断',
+    confirmedExperiences: '确认的实践', experienceRequired: false, rejectedAngles: ['舍弃方向'],
+    factBase: { claims: [{ id: 'F1', claim: '吞吐提升', status: 'verified', evidence: '原始测量',
+      sourceUrl: 'https://example.com', boundary: '仅在指定硬件', publishedAt: '2026-10-21' }] },
+  }, '# 不应使用的历史大纲');
+  const input = JSON.parse(prompt);
+  assert.equal(input.working_title, '真实标题');
+  assert.equal(input.brief.thesis, '真实命题');
+  assert.equal(input.brief.research_basis, '已采用主线');
+  assert.equal(input.brief.author_opinions, '作者判断');
+  assert.equal(input.brief.confirmed_experiences, '确认的实践');
+  assert.deepEqual(input.brief.rejected_angles, ['舍弃方向']);
+  assert.equal(input.facts.claims[0].boundary, '仅在指定硬件');
+  assert.equal(input.facts.claims[0].evidence, '原始测量');
+  assert.doesNotMatch(prompt, /历史大纲|publicationRule/);
 });
 
 test('写作模型只接收结构大纲视图，不接收流量规划和剩余风险段', () => {
@@ -109,14 +118,16 @@ test('规划元话语泄漏检查拦截 S001 类型的内部说明，但不拦�
   assert.equal(inspectPlanningMetaLeakage('我会借助见字平台分析它能给读者带来什么收益（读者收益维度）。').pass, true);
 });
 
-test('审稿返工提示词直接携带事实基座、大纲、去AI稿和结构化审稿结果', () => {
-  const prompt = buildReviewRepairPrompt({ factBase: { claims: ['事实'] }, outline: '# 大纲', article: '# 去AI稿', review: '{"pass":false,"issues":[{"message":"缺少来源"}]}' });
-  assert.match(prompt, /事实基座：/);
-  assert.match(prompt, /文章大纲（对应 02-outline\.md）：[\s\S]*# 大纲/);
-  assert.match(prompt, /待修订文章（对应 05-humanized\.md）：[\s\S]*# 去AI稿/);
-  assert.match(prompt, /首次审稿门禁结果与修订要求：[\s\S]*缺少来源/);
-  assert.match(prompt, /未涉及的正文必须逐字保留/);
-  assert.match(prompt, /不要输出审阅过程、审稿报告、文件缺失说明或 REVIEW 注释/);
+test('必要修订只携带当前正文、问题和对应证据', () => {
+  const issues = [{ type: 'attribution', message: '来源归属错误', quote: '原句', basis: 'F1', repair: '修正归属', return_to: 'draft' }];
+  const prompt = buildReviewRepairPrompt({ factBase: { claims: [{ id: 'F1', claim: '事实', sourceTitle: '发布方' }] },
+    outline: '# 旧大纲', article: '# 当前稿', review: { pass: false, issues } });
+  const input = JSON.parse(prompt);
+  assert.equal(input.article, '# 当前稿');
+  assert.deepEqual(input.issues, issues);
+  assert.equal(input.evidence.claims[0].id, 'F1');
+  assert.doesNotMatch(prompt, /旧大纲|05-humanized|publicationRule/);
+  assert.match(ARTICLE_PROMPTS.repair, /只修改问题所在句段/);
 });
 
 test('合规修订提示词要求 AI 直接修订标题、归因和来源展示', () => {
@@ -152,15 +163,12 @@ test('综合候选汇总全部已抓取来源，写作简报移除来源原文',
   assert.deepEqual(safe.factBase,{claims:[]});
 });
 
-test('质量门禁只授权 verified 事实并区分观点与亲测', () => {
-  const source=fs.readFileSync(new URL('../server/features/articles/application/article-pipeline.mjs',import.meta.url),'utf8');
-  assert.match(source,/正文事实只能来自事实基座中的 verified 项/);
-  assert.match(source,/第一人称作者判断或阅读动作/);
-  assert.match(source,/作者判断或阅读动作（如“我看”“我读完后的判断”）不是亲测/);
-  assert.match(source,/大纲只按主线安排章节/);
-  assert.match(source,/SEO 只做关键词自然布局和搜索意图优化/);
-  assert.doesNotMatch(source,/特别检查证据限定是否叠加|SEO 不负责扩写证据边界/);
-  assert.doesNotMatch(source,/事实基座可能未穷尽其中数据/);
+test('审稿提示词检查证据和推理，允许明确的作者评价', () => {
+  assert.match(ARTICLE_PROMPTS.review, /缺失前提、因果跳跃/);
+  assert.match(ARTICLE_PROMPTS.review, /不因语气鲜明而要求弱化/);
+  assert.match(ARTICLE_PROMPTS.review, /不要求用免责声明代替修正/);
+  assert.match(ARTICLE_PROMPTS.drafting, /不虚构经历、引语、行为或结果/);
+  assert.match(ARTICLE_PROMPTS.humanize, /删除没有增加信息的重复判断/);
 });
 
 test('文章质量门禁开关开启时消费 decision tool，且仍保持内部结果契约', async () => {
@@ -206,24 +214,24 @@ test('仅修复规划元话语时要求保留标题、开头和结构', () => {
   assert.match(prompt, /只改对应句子/);
 });
 
-test('文章管线在审稿后增加最终标题锁定，并让后续阶段读取锁定标题', () => {
+test('发布标题在精修之后只生成一次', () => {
   const source = fs.readFileSync(new URL('../server/features/articles/application/article-pipeline.mjs', import.meta.url), 'utf8');
-  assert.match(source, /recordStage\('title-lock'/);
-  assert.match(source, /已锁定标题：\$\{lockedTitle\}/);
-  assert.match(source, /replaceArticleTitle\(illustration\.markdown,extractArticleTitle\(final\)\|\|lockedTitle\)/);
+  const runtime = source.slice(source.indexOf('export async function runArticlePipeline'), source.indexOf('function readJsonIfPresent'));
+  assert.equal([...runtime.matchAll(/await generateTitlePlan\(/g)].length, 1);
+  assert.ok(runtime.indexOf("purpose: 'article-humanize'") < runtime.indexOf('await generateTitlePlan'));
+  assert.match(runtime, /replaceArticleTitle\(final, titlePlan.selectedTitle\)/);
+  assert.doesNotMatch(runtime, /article-seo|article-planning|aiQualityGate\(|aiVoiceQualityGate\(/);
 });
 
-test('终稿与发布安全门禁失败后都会进入定向合规修订并复检', () => {
-  const source=fs.readFileSync(new URL('../server/features/articles/application/article-pipeline.mjs',import.meta.url),'utf8');
-  assert.match(source,/purpose: 'article-publication-compliance-repair'/);
-  assert.match(source,/Step 4\.2 AI 质量门禁未通过，执行定向事实与合规修订/);
-  assert.match(source,/stage:'final-recheck'/);
-  assert.match(source,/stage:'publication-safety-recheck'/);
-  assert.match(source,/preserveVisuals:true/);
-  assert.match(source,/JSON\.stringify\(\{generatedAt:new Date\(\)\.toISOString\(\),scan:publicationScan,gate:publicationQuality\}/);
-  assert.match(source,/Step 7\.3 发布合规门禁未通过，执行定向合规修订/);
-  assert.match(source,/decision\.research_coverage/);
-  assert.match(source,/RESEARCH_COVERAGE_TOOL/);
+test('审稿修订有次数上限，精修改动按差异复核', () => {
+  const source = fs.readFileSync(new URL('../server/features/articles/application/article-pipeline.mjs', import.meta.url), 'utf8');
+  const runtime = source.slice(source.indexOf('export async function runArticlePipeline'), source.indexOf('function readJsonIfPresent'));
+  assert.match(runtime, /attempt < repairAttempts/);
+  assert.match(runtime, /issue.return_to === 'materials'/);
+  assert.match(runtime, /original_issues: issues, changed_passages:/);
+  assert.match(runtime, /if \(current === previous\) break/);
+  assert.deepEqual(articleChangedPassages('# 标题\n\n原文', '# 标题\n\n**原文**'), { before: [], after: [] });
+  assert.deepEqual(articleChangedPassages('# 标题\n\n数字 1', '# 标题\n\n数字 2'), { before: ['数字 1'], after: ['数字 2'] });
 });
 
 test('爆款结构门禁要求钩子、3-5个章节和来源链接', () => {
@@ -252,15 +260,15 @@ test('技能运行时加载完整写作技能并记录哈希', () => {
   assert.ok(bundle.files.some((file) => /runtime-stage-contracts\.md$/.test(file)));
 });
 
-test('项目成稿总技能声明与执行器使用相同的阶段契约', () => {
-  const orchestrator = loadSkillBundle({ workspaceRoot:process.cwd(), skillName:'wechat-mp-topic-to-article' });
-  const writer = loadSkillBundle({ workspaceRoot:process.cwd(), skillName:'wechat-mp-tech-hotspot' });
-  assert.equal(orchestrator.fallback, false);
-  for (const { id } of ARTICLE_STAGE_CONTRACT) assert.match(orchestrator.prompt, new RegExp(`\\b${id}\\b`));
-  const system = buildArticleStageSystem(orchestrator, 'drafting', writer);
-  assert.match(system, /## SKILL: wechat-mp-topic-to-article/);
-  assert.match(system, /## SKILL: wechat-mp-tech-hotspot/);
-  assert.match(system, /只执行 `drafting` 阶段/);
+test('直写流程使用单阶段提示词，兼容旧技能组合器', () => {
+  assert.deepEqual(ARTICLE_STAGE_CONTRACT.map(({ id }) => id), ['brief', 'fact-base', 'drafting', 'review', 'length-adjustment', 'humanize', 'title-lock']);
+  const manifest = articlePromptManifest('wechat-mp-tech-deep');
+  assert.equal(manifest.version, 'direct-brief-v2');
+  assert.match(manifest.prompts.drafting.prompt, /技术深解需要解释机制/);
+  assert.doesNotMatch(manifest.prompts.review.prompt, /## SKILL:|全流程|风格门禁/);
+  assert.match(manifest.prompts.review.hash, /^[a-f0-9]{64}$/);
+  const system = buildArticleStageSystem({ prompt: '旧编排契约' }, 'drafting', { prompt: '旧子技能' });
+  assert.match(system, /旧编排契约/);
 });
 
 test('综合选题写作规则来自项目子技能而非执行器内置提示词', () => {
@@ -290,21 +298,14 @@ test('热点文章契约明确拒绝伪装教程、工具清单和纯快讯',()=
   assert.match(skill,/reader_stake/);
 });
 
-test('成稿执行器只把文章结构写入大纲，并在标题阶段读取分发与读者信息',()=>{
-  const pipeline=fs.readFileSync(new URL('../server/features/articles/application/article-pipeline.mjs',import.meta.url),'utf8');
-  const server=fs.readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
-  assert.match(pipeline,/只做文章结构设计：不生成作者素材、标题候选、分发信息、流量规划、读者收益说明、来源清单、风险清单/);
-  assert.match(pipeline,/大纲只按主线安排章节/);
-  assert.match(pipeline,/const p02=path\.join\(workdir,'02-outline\.md'\),p03=path\.join\(workdir,'03-titles\.md'\)/);
-  assert.match(pipeline,/distribution_lane:brief\.distributionLane,reader_stake:brief\.readerStake/);
-  assert.match(pipeline,/writeFile\(p03,updatedTitles\)/);
-  assert.match(pipeline,/writeFile\(p03,lockedTitleMarkdown\)/);
-  assert.match(server,/distribution_lane: \$\{candidate\.distribution_lane/);
-  assert.match(server,/reader_stake: \$\{candidate\.reader_stake/);
-  assert.match(pipeline,/researchBasis:editorial\.research_basis/);
-  assert.match(pipeline,/researchBasis:brief\.researchBasis/);
-  assert.match(pipeline,/## 采用的研判主线\\n\$\{brief\.researchBasis\}/);
-  assert.match(server,/采用的研判主线/);
+test('运行时删除大纲调用和读写依赖，保留研判输入和产物清单', () => {
+  const source = fs.readFileSync(new URL('../server/features/articles/application/article-pipeline.mjs', import.meta.url), 'utf8');
+  const runtime = source.slice(source.indexOf('export async function runArticlePipeline'));
+  assert.doesNotMatch(runtime, /02-outline\.md|article-planning|buildDraftOutlineView|buildArticlePlanningView/);
+  assert.match(runtime, /researchBasis:editorial.research_basis/);
+  assert.match(runtime, /packaging: \{ distributionLane: brief.distributionLane, readerStake: brief.readerStake \}/);
+  assert.match(runtime, /00-prompt-manifest.json/);
+  assert.match(runtime, /activeReviewArtifacts/);
 });
 
 test('阶段子技能从项目 skills 目录加载，覆盖层只替换正文', () => {

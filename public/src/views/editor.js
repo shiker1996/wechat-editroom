@@ -546,7 +546,7 @@ function currentWritingGoal() {
     const value=Number(localStorage.getItem(writingGoalKey()));
     if(value>=200&&value<=10000)return value;
   }catch{}
-  return selectedDocKind()==="final"?1600:1500;
+  return selectedDocKind()==="final"?articleLengthTarget:1500;
 }
 
 function renderWritingStats(markdown) {
@@ -1134,13 +1134,18 @@ function bindEditor() {
   });
 }
 
-// 终稿字数门禁：由服务端 /api/system/settings 统一下发（config.local.json articleLength），加载失败回退 1300–2000
-let articleLengthLimit = { min: 1300, max: 2000 };
+// 终稿字数目标与门禁：由服务端 /api/system/settings 统一下发，加载失败回退目标 1600、区间 1300–1800
+let articleLengthTarget = 1600;
+let articleLengthLimit = { min: 1300, max: 1800 };
 async function loadArticleLengthLimit() {
   try {
     const data = await request("/api/system/settings");
     const al = data?.articleLength;
-    if (al) articleLengthLimit = { min: Number(al.minVisibleChars) || 1300, max: Number(al.maxVisibleChars) || 2000 };
+    if (al) {
+      articleLengthLimit = { min: Number(al.minVisibleChars) || 1300, max: Number(al.maxVisibleChars) || 1800 };
+      const target = Number(al.targetVisibleChars);
+      if (Number.isFinite(target) && target > 0) articleLengthTarget = target;
+    }
   } catch {}
 }
 

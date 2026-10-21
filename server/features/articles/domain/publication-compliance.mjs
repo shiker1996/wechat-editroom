@@ -68,7 +68,7 @@ export function enrichFactBaseClaims(factBase = {}, { citationPolicy = 'cluster'
         source_level: sourceLevel,
         evidence_kind: evidenceKind,
         attribution_required: item?.attributionRequired ?? item?.attribution_required ?? Boolean(sourceUrl || sourceLevel === 'personal_social'),
-        visible_citation: text(item?.visibleCitation || item?.visible_citation) || citationPolicy,
+        visible_citation: citationPolicy,
       };
     }),
   };
@@ -157,12 +157,13 @@ export function scanPublicationRisk({ article = '', title = '', factBase = {} } 
 
 export function publicationCompliancePrompt({ factBase = {}, claimRegister = [], scan = {}, writingStance = 'analysis', citationPolicy = 'cluster' } = {}) {
   return `发布合规专项要求：
-- 当前写作立场为 ${writingStance}，来源展示策略为 ${citationPolicy}。立场只影响正文表达与来源露出密度，不改变事实门禁；观点文不因没有逐句“据来源”而自动失败，但每个关键事实仍必须能回指发布主张登记。
+- 当前写作立场为 ${writingStance}，内部引用策略为 ${citationPolicy}。每个关键事实都必须能回指主张登记；正文按来源簇自然归因，同一来源支撑的连续事实首次归因后不要求逐句重复。
 - 不能把传闻、匿名爆料、单方说法、模型推断或搜索摘要写成确定事实。
 - IPO、上市、估值、融资、破产、违法、诈骗、造假、压榨、性骚扰等高影响主张，必须检查直接证据、日期和归因；证据不足时必须删除、降格或停止发布。来源质量要区分硬阻塞和改进建议：已核验主张有可追溯 sourceUrl、文章明确归因时，聚合平台或二手媒体不是单独的失败理由；应要求正文说明“据某平台汇总”或其所引用的公告/财报，而不是要求模型自行补找原始链接。
 - 标题、摘要和前 200 字单独审核；正文中的限定语不能自动修复一个已经把传闻写成事实的标题。
 - 不能用“最后一次”“梦碎”“彻底失败”“必然”等绝对化或贬损化表达制造冲突，除非它是明确归因的原话且不会误导读者。
-- 争议内容应分别呈现各方说法，明确“谁说的”和“是否得到独立确认”；不要推断公司或个人动机。
+- 争议内容应分别呈现各方说法并清楚归因；只有“是否得到独立确认”会改变读者判断时，才说明核验状态。归因已经清楚时，不再追加“这是单方说法”“尚未独立确认”等同义提醒。不要推断公司或个人动机。
+- 限定只保留会改变读者判断的部分。来源或具体数据口径已经在事实句中交代后，不要再补“不能外推”“不是普遍结论”等重复句；作者推断的依据和推理链清楚时，不要求补“这是判断”“不代表官方立场”等元话语。
 
 程序风险扫描（只作为需要重点核查的信号，不是程序对文章的最终定性）：
 ${JSON.stringify(scan)}

@@ -85,7 +85,7 @@ export function selectDailyEvents(clusters, focuses = []) {
   }
   return [...events.values()];
 }
-export function normalizeDailyQuality(quality, visibleChars, maxVisibleChars=2000) {
+export function normalizeDailyQuality(quality, visibleChars, maxVisibleChars=1800) {
   const issues=(Array.isArray(quality?.issues)?quality.issues:[]).filter((item)=>{
     const message=String(item?.message||item||'');
     if(visibleChars<=maxVisibleChars&&/(?:可见字符|字数).{0,12}(?:可能|疑似|无法确认).{0,12}(?:超过|超出|上限)|(?:可能|无法确认).{0,12}(?:超过|超出).{0,12}(?:字符|字)/.test(message))return false;
@@ -140,7 +140,7 @@ export async function runDailyPipeline({ gateway, store, batchId, provider, work
     rootRunId:rootRunId||`batch:${batchId}`,workflowRunId:workflowRunId||`daily:${batchId}`,entryPoint:'daily-pipeline'});
   provider=runtime.provider;const providerConfig=runtime.providerConfig;
   const configuredLength=runtime.config?.gates?.length;
-  // 技能覆盖层 > config.local.json articleLength（pipelines.daily 差异覆盖）> 默认 1300–2000
+  // 技能覆盖层 > config.local.json articleLength（pipelines.daily 差异覆盖）> 默认 1300–1800
   const resolvedLength=resolveArticleLength({articleLength},'daily');
   const minChars=Number(configuredLength?.minVisibleChars??resolvedLength.min),maxChars=Number(configuredLength?.maxVisibleChars??resolvedLength.max);
   const repairAttempts=configuredRepairAttempts(runtime.config,1);

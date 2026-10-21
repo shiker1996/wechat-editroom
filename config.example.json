@@ -62,8 +62,9 @@
     "timeoutMs": 180000
   },
   "articleLength": {
+    "targetVisibleChars": 1600,
     "minVisibleChars": 1300,
-    "maxVisibleChars": 2000,
+    "maxVisibleChars": 1800,
     "pipelines": { "article": {}, "daily": {}, "tutorial": {} }
   }
 }

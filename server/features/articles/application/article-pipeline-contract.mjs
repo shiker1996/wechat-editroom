@@ -60,6 +60,51 @@ export function compositeSourceText(candidate,{maxChars=48000,perSourceChars=400
 
 export function authorizedWritingBrief(brief) { const safe={...brief};delete safe.sourceText;return safe; }
 
+function articleMaterialView(materialBrief = {}) {
+  const material = materialBrief && typeof materialBrief === 'object' ? materialBrief : {};
+  return Object.fromEntries(['action', 'affected_group', 'conflict', 'reader_consequence', 'reader_action']
+    .map((key) => [key, material[key]])
+    .filter(([, value]) => value != null && String(value).trim() !== ''));
+}
+
+export function articleFactAuthorityView(factBase = {}) {
+  // Daily/tutorial documents use their own evidence schemas during manual review.
+  if (!Array.isArray(factBase?.claims)) return { materials: factBase };
+  const claims = Array.isArray(factBase?.claims) ? factBase.claims : [];
+  return {
+    claims: claims.filter((claim) => claim && typeof claim === 'object').map((claim) => ({
+      id: claim.id,
+      claim: claim.claim,
+      subject: claim.subject || '',
+      status: claim.status,
+      sourceUrl: claim.sourceUrl || claim.source_url || '',
+      sourceTitle: claim.sourceTitle || claim.source_title || '',
+      sourceType: claim.sourceType || claim.source_type || '',
+      attribution: claim.attribution || '',
+      attributionRequired: claim.attributionRequired ?? claim.attribution_required ?? false,
+      evidence: claim.evidence || '',
+      publishedAt: claim.publishedAt || claim.published_at || '',
+      boundary: claim.boundary || '',
+      ...(claim.status === 'opinion' && claim.evidence ? { reasoningBasis: claim.evidence } : {}),
+    })),
+  };
+}
+
+/** Planning sees the article's argument and usable evidence, not duplicated editorial risk metadata. */
+export function buildArticlePlanningView(brief = {}) {
+  const materialBrief = brief?.materialBrief || brief?.material_brief || {};
+  return {
+    topic: brief?.topic,
+    angle: brief?.angle,
+    thesis: brief?.thesis,
+    audience: brief?.audience || brief?.targetAudience || brief?.target_audience,
+    article_type: brief?.articleType || brief?.article_type,
+    material_brief: articleMaterialView(materialBrief),
+    adopted_research_points: brief?.adoptedResearchPoints || brief?.adopted_research_points || [],
+    facts: articleFactAuthorityView(brief?.factBase || brief?.fact_base || {}),
+  };
+}
+
 const DRAFT_OUTLINE_SECTION_ENDINGS = new Set(['流量规划','读者收益','信息增量','实用增量','增长承接','来源','剩余风险','停止原因','写作立场','文章素材简报']);
 
 function outlineHeading(line) {
@@ -191,7 +236,7 @@ export function unverifiedFactBaseIssue(factBase) {
   return `事实基座中所有事实性主张均未核实${missing?`（待补：${missing}）`:''}，无法成稿；请抓取可核对的原文或回编辑室调整命题后再试`;
 }
 
-export const ARTICLE_LENGTH_RANGE=Object.freeze({min:1300,max:2000});
+export const ARTICLE_LENGTH_RANGE=Object.freeze({min:1300,max:1800,targetVisibleChars:1600});
 
 export function selectWriterSkill(candidate={}) {
   const rawMaterialBrief=candidate.materialBrief||candidate.material_brief||candidate.editorial?.material_brief||candidate.editorial?.materialBrief;
@@ -228,33 +273,37 @@ export function replaceArticleTitle(article, title) {
   return `# ${nextTitle}\n\n${source}`.trim();
 }
 
-export function buildDraftUserPrompt(selectedTitle, brief, outline) {
+export function buildArticleBriefView(brief = {}) {
   const materialBrief = brief?.materialBrief || brief?.material_brief || {};
-  const articleTask = {
+  return {
     topic: brief?.topic,
     angle: brief?.angle,
     thesis: brief?.thesis,
-    audience: brief?.audience || brief?.targetAudience,
+    audience: brief?.audience || brief?.targetAudience || brief?.target_audience,
     article_type: brief?.articleType || brief?.article_type,
-    distribution_lane: brief?.distributionLane || brief?.distribution_lane,
-    reader_stake: brief?.readerStake || brief?.reader_stake,
-    material_brief: materialBrief,
+    material_brief: articleMaterialView(materialBrief),
+    research_basis: brief?.researchBasis || brief?.research_basis || '',
+    writing_stance: brief?.writingStance || brief?.writing_stance || '',
+    reader_stake: brief?.readerStake || brief?.reader_stake || '',
+    baseline_change: brief?.baselineChange || brief?.baseline_change || materialBrief.baseline_change || '',
+    counter_evidence: brief?.counterEvidence || brief?.counter_evidence || materialBrief.counter_evidence || [],
     adopted_research_points: brief?.adoptedResearchPoints || brief?.adopted_research_points || [],
     rejected_angles: brief?.rejectedAngles || brief?.rejected_angles || [],
-  };
-  const authority = {
-    fact_base: brief?.factBase || brief?.fact_base || {},
-    publication_claim_register: brief?.publicationClaimRegister || brief?.publication_claim_register || [],
-  };
-  const internalConstraints = {
-    writing_stance: brief?.writingStance || brief?.writing_stance || 'analysis',
-    citation_policy: brief?.citationPolicy || brief?.citation_policy || 'cluster',
-    evidence_boundary: materialBrief?.evidence_boundary || brief?.evidenceBoundary || brief?.evidence_boundary || '',
-    forbidden_claims: brief?.forbiddenClaims || brief?.forbidden_claims || [],
-    experience_required: brief?.experienceRequired ?? brief?.experience_required ?? false,
+    forbidden_claims: brief?.forbiddenClaims || brief?.forbidden_claims || '',
+    author_opinions: brief?.authorOpinions || brief?.author_opinions || '',
     confirmed_experiences: brief?.confirmedExperiences || brief?.confirmed_experiences || '',
   };
-  return `当前标题：${selectedTitle}\n\n写作简报（确定文章要回答的问题、判断和读者影响）：\n${JSON.stringify(articleTask)}\n\n事实与来源授权（事实只能来自这里）：\n${JSON.stringify(authority)}\n\n必要边界（不得逐字写进正文）：\n${JSON.stringify(internalConstraints)}\n\n请按文章大纲的顺序和章节意图写成连贯的文章。简报确定文章写什么，事实基座限定哪些事实可以写，大纲确定文章如何展开。不要把大纲说明、机器审计字段或来源清单改写进正文。只把 fact_base 中 status=verified 的主张写成确定事实；其余事实性主张明确归因或删除。作者推断可以保留，但要让读者看出这是推断。必要来源自然归因一次即可；只在会改变核心判断时补一句最短限定，不罗列其他证据缺项。采用的研判拓展点应自然进入论证；不要为了覆盖字段而增加无关章节。\n\n文章大纲（仅作为文章结构）：\n${buildDraftOutlineView(outline)}`;
+}
+
+export function buildDraftUserPrompt(selectedTitle, brief, options = {}) {
+  const authority = articleFactAuthorityView(brief?.factBase || brief?.fact_base || {});
+  return JSON.stringify({
+    working_title: selectedTitle,
+    reader_context: options?.readerContext || {},
+    brief: buildArticleBriefView(brief),
+    facts: authority,
+    length: options?.length || ARTICLE_LENGTH_RANGE,
+  });
 }
 
 export function buildResearchCoveragePrompt({ article = '', researchPoints = [], rejectedAngles = [] } = {}) {

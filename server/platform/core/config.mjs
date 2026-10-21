@@ -116,23 +116,26 @@ const defaults = {
   },
   // 成稿字数门禁（可见字符，口径见 server/shared/domain/markdown-visible-chars.mjs）：
   // 成稿 / 早报 / 自主写作三条链路与编辑器终稿保存统一从这里读取；
-  // pipelines 下可按链路做差异覆盖（缺省回退全局 min/max）；
+  // pipelines 下可按链路做差异覆盖（缺省回退全局目标与 min/max）；
   // 单技能仍可在技能覆盖层 gates.length 做最终覆盖（优先级最高）。
   articleLength: {
+    targetVisibleChars: 1600,
     minVisibleChars: 1300,
-    maxVisibleChars: 2000,
+    maxVisibleChars: 1800,
     pipelines: { article: {}, daily: {}, tutorial: {} },
   },
 };
 
-// 解析某条链路的有效字数区间：pipelines[chain] 差异覆盖 → 全局 min/max。
+// 解析某条链路的有效字数目标和区间：pipelines[chain] 差异覆盖 → 全局配置 → 内置默认。
 export function resolveArticleLength(config, chain) {
   const base = config?.articleLength ?? {};
   const override = (chain && base.pipelines?.[chain]) ?? {};
   const min = Number(override.minVisibleChars ?? base.minVisibleChars ?? 1300);
-  const max = Number(override.maxVisibleChars ?? base.maxVisibleChars ?? 2000);
-  if(!Number.isFinite(min)||!Number.isFinite(max)||min<0||max<=0||min>max)throw new Error(`文章字数配置无效：minVisibleChars=${String(override.minVisibleChars??base.minVisibleChars)}, maxVisibleChars=${String(override.maxVisibleChars??base.maxVisibleChars)}`);
-  return { min, max };
+  const max = Number(override.maxVisibleChars ?? base.maxVisibleChars ?? 1800);
+  const requestedTarget = Number(override.targetVisibleChars ?? base.targetVisibleChars ?? 1600);
+  if(!Number.isFinite(min)||!Number.isFinite(max)||!Number.isFinite(requestedTarget)||min<0||max<=0||min>max)throw new Error(`文章字数配置无效：minVisibleChars=${String(override.minVisibleChars??base.minVisibleChars)}, maxVisibleChars=${String(override.maxVisibleChars??base.maxVisibleChars)}, targetVisibleChars=${String(override.targetVisibleChars??base.targetVisibleChars)}`);
+  const targetVisibleChars=Math.min(max,Math.max(min,requestedTarget));
+  return { min, max, targetVisibleChars };
 }
 
 function merge(base, override) {

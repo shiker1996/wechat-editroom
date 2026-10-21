@@ -16,7 +16,7 @@ function dice(left, right) {
   return (2 * overlap) / Math.max(1, a.size + b.size);
 }
 
-const VERSION_PRIORITY = { '文章终稿': 5, '早报终稿': 5, '排版 HTML': 4, '审阅稿': 3, '去 AI 稿': 2, '文章初稿': 1 };
+const VERSION_PRIORITY = { '文章终稿': 5, '早报终稿': 5, '排版 HTML': 4, '审阅稿': 3, '表达精修稿': 2, '去 AI 稿': 2, '文章初稿': 1 };
 const ARTICLE_FINAL_TYPES = new Set(['文章终稿', '早报终稿']);
 const SOCIAL_COPY_TYPE = '图文发布文案';
 
