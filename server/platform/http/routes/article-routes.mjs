@@ -11,6 +11,8 @@ import { readDiscussionResearchContext } from '../../../features/research/index.
 import { buildMaterialBrief } from '../../../shared/domain/material-brief.mjs';
 import { buildArticleReviewIssueReport, reviewArtifactFileNames } from '../../../features/articles/application/article-review-issues.mjs';
 import { readReaderReactions, writeReaderReactions, xPostId } from '../../../features/articles/application/reader-reactions-cache.mjs';
+import { ExtensionConfigurationService } from '../../extensions/configuration-service.mjs';
+import { createCollectorRuntime } from '../../collectors/runtime-registry.mjs';
 
 // capability-call: cap_content_passage_retrieve
 
@@ -38,6 +40,17 @@ export async function handleArticleRoutes(context) {
   async function fetchReaderReactionsForCandidate(candidate, hotspots, { force = false } = {}) {
     const targets = [...new Map((hotspots || []).filter((hotspot) => hotspot?.id && xPostId(hotspot.url))
       .map((hotspot) => [Number(hotspot.id), hotspot])).values()].slice(0, 5);
+    if (!targets.length) return [];
+    const extensionConfiguration = new ExtensionConfigurationService({ root, repository: store.repositories.extensionSettings });
+    const collectorRegistry = await createCollectorRuntime({
+      root,
+      config,
+      configurationResolver: (manifest) => extensionConfiguration.resolve({
+        extensionType: 'collector', extensionId: manifest.id, manifest,
+      }),
+    });
+    const xCollector = collectorRegistry.get('x-search-collector');
+    if (!xCollector) throw new Error('X 搜索 / TwitterAPI 采集器未启用');
     const results = [];
     const persist = (hotspotId, value) => {
       try { writeReaderReactions(root, hotspotId, value); return true; }
@@ -52,11 +65,8 @@ export async function handleArticleRoutes(context) {
       }
       const fetchedAt = new Date().toISOString();
       try {
-        const result = await executeCapabilityWithPreference(root, 'cap_collect_x', {
+        const result = await xCollector.adapter.collect({
           mode: 'replies', tweetId: postId, limit: 12, sortBy: 'Likes',
-        }, {
-          store, workspaceRoot: root, batchId: candidate.batch_id, candidateId: candidate.id,
-          consumerId: 'editorial-room-reader-reactions', reason: '抓取公开推文评论，作为编辑室读者反应素材',
         });
         if (result?.status !== 'ok') throw new Error(result?.error?.message || result?.message || '评论接口未返回成功结果');
         const items = Array.isArray(result.items) ? result.items : Array.isArray(result.data?.items) ? result.data.items : [];

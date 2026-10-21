@@ -603,10 +603,28 @@ async function prepareEditorialSources() {
   const gaps = editorialSourceGaps(candidate);
   const refreshingCommentsOnly = gaps.missing === 0;
   if (text) text.textContent = refreshingCommentsOnly ? "正在补抓评论区观察…" : "正在抓取来源原文并尝试补充评论区观察，来源较多时需要几十秒…";
-  await withLoading(button, "正在抓取…", () =>
+  const result = await withLoading(button, "正在抓取…", () =>
     request(`/api/candidates/${candidate.id}/source`, { method: "POST", body: JSON.stringify({ force: false, readerReactionsForce: refreshingCommentsOnly }) }));
   await openEditorial(candidate.id);
-  toast(refreshingCommentsOnly ? "评论区观察已更新，可以开始对话" : "原文备料完成，可以开始对话");
+  const reactions = Array.isArray(result?.readerReactions) ? result.readerReactions : [];
+  if (!reactions.length) {
+    toast(refreshingCommentsOnly
+      ? "没有识别到可抓取的 X / Twitter 推文链接，未发起评论抓取。"
+      : "原文备料完成；没有识别到可抓取的 X / Twitter 推文链接。", "info");
+    return;
+  }
+  const succeeded = reactions.filter((item) => item.status === "ok");
+  const empty = reactions.filter((item) => item.status === "empty");
+  const failed = reactions.filter((item) => item.status === "failed");
+  const commentCount = succeeded.reduce((total, item) => total + Number(item.count || 0), 0);
+  if (failed.length) {
+    const firstError = String(failed[0]?.error || "未知原因").slice(0, 100);
+    toast(`评论抓取完成：${succeeded.length} 条推文有评论（${commentCount} 条），${empty.length} 条无评论，${failed.length} 条失败。${firstError}`, "error");
+  } else if (!succeeded.length) {
+    toast(`已请求 ${reactions.length} 条推文，均未返回可用公开评论。`, "info");
+  } else {
+    toast(`评论抓取成功：${succeeded.length} 条推文共 ${commentCount} 条评论；${empty.length} 条无评论。`, "success");
+  }
 }
 
 async function sendEditorialAnswer() {
