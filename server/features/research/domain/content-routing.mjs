@@ -29,6 +29,9 @@ export function deriveClassificationFeatures(event = {}) {
 export function normalizeEventClassification(raw = {}, { event = {}, features = deriveClassificationFeatures(event) } = {}) {
   const requested = String(raw.content_class || raw.contentClass || '').trim();
   const hasGithubRepository = features.hasGithubRepository || isPureProjectEvent(event);
+  const singleRepositorySingleSource = hasGithubRepository
+    && ((Number(features.repositoryCount || 0) === 1 && Number(features.independentSourceCount || 0) <= 1)
+      || (Number(features.repositoryCount || 0) === 0 && Number(features.independentSourceCount || 0) === 0 && isPureProjectEvent(event)));
   const evidence = list(raw.evidence).map((item) => ({
     sourceId: String(item?.source_id || item?.sourceId || '').trim(),
     role: String(item?.role || '').trim(),
@@ -37,7 +40,12 @@ export function normalizeEventClassification(raw = {}, { event = {}, features = 
   const evidenceByRole = (role) => evidence.some((item) => item.role === role);
   const missingEvidence = [];
   let contentClass = CONTENT_CLASSES.has(requested) ? requested : 'news_event';
-  if (hasGithubRepository && features.repositoryCount <= 1 && features.independentSourceCount <= 1) contentClass = 'github_project';
+  if (singleRepositorySingleSource) contentClass = 'github_project';
+  else if (requested === 'github_project' && hasGithubRepository) {
+    contentClass = features.hasTechnicalDocs || features.hasPaper || features.hasBenchmark
+      ? 'open_source_technology'
+      : 'news_event';
+  }
   if (contentClass === 'open_source_technology' && !(features.hasTechnicalDocs || features.hasPaper || features.hasBenchmark || evidenceByRole('technical_mechanism'))) missingEvidence.push('技术机制、架构或性能证据');
   if (contentClass === 'open_source_trend' && !(Number(features.independentSourceCount || 0) >= 2 || Number(features.subjectCount || 0) >= 2 || features.hasTimeline) ) missingEvidence.push('多来源、多主体或生态变化证据');
   const status = contentClass === 'github_project' && hasGithubRepository
@@ -61,14 +69,16 @@ export function normalizeEventClassification(raw = {}, { event = {}, features = 
 
 /** Repository origin is provenance, not an editorial category. */
 export function isPureProjectEvent(event = {}) {
+  if (Array.isArray(event.articles) && event.articles.length) return isRepositoryEvent(event);
   return isRepositoryEvent(event)
-    || String(event.source_group || event.source_type || event.source || '').toLowerCase() === 'github'
-    || /^https:\/\/github\.com\//i.test(String(event.url || ''));
+    || String(event.source_group || event.source_type || event.source || '').toLowerCase().includes('github')
+    || /^https?:\/\/github\.com\//i.test(String(event.url || ''));
 }
 
 /** Choose a production route from source material and an explicit editorial decision. */
 export function classifyContentRoute(card = {}, { event = null, requestedRoute = '' } = {}) {
-  const project = isPureProjectEvent({ ...(event || {}), ...card, articles: card.articles || event?.articles || [] });
+  const articles = list(card.articles).length ? card.articles : list(event?.articles);
+  const project = isPureProjectEvent({ ...(event || {}), ...card, articles });
   const manuallyApproved = requestedRoute === 'article'
     || card.articleRouteApproved === true || card.article_route_approved === true;
   if (project && !manuallyApproved) {

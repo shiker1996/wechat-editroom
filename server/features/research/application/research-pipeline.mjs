@@ -563,11 +563,12 @@ export function scoreCards(cards, synthesis, scoring = resolveScoring()) {
 
 function editorialCategoryForCard(card = {}) {
   const source = card.source && typeof card.source === 'object' ? card.source : card;
+  const event = { ...source, articles: source.articles?.length ? source.articles : card.articles };
   const category = source.editorialCategory || source.editorial_category
     || card.editorialCategory || card.editorial_category
     || source.selectionCategory || card.selectionCategory
     || source.category || card.category;
-  return normalizeEditorialCategory(category, { repository: isRepositoryEvent(source) }) || '未归类';
+  return normalizeEditorialCategory(category, { repository: isRepositoryEvent(event), event }) || '未归类';
 }
 
 function markdownAgenda(scored) {

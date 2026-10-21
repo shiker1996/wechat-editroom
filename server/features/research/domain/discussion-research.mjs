@@ -19,6 +19,7 @@ const finite = (value, fallback = null) => Number.isFinite(Number(value)) ? Numb
 function categoryOf(event, heat) {
   return normalizeEditorialCategory(heat?.editorialCategory || event?.editorial_category || event?.topic_category || event?.category, {
     repository: isRepositoryEvent(event),
+    event,
   }) || EDITORIAL_CATEGORIES[0];
 }
 

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { isPureProjectEvent, readDiscussionResearchContext, scoreCards } from '../../../features/research/index.mjs';
+import { normalizeEditorialCategory } from '../../../features/research/domain/editorial-categories.mjs';
 import { resolveEditorialMode, routeBreakingAnalysis } from '../../../features/articles/index.mjs';
 import { buildMaterialBrief } from '../../../shared/domain/material-brief.mjs';
 import { buildCustomFactSheet, customFactMarkdown, customSourceUrl, socialRouteForContentType } from '../../../features/social-cards/index.mjs';
@@ -24,10 +25,24 @@ function readJsonFile(filePath) {
 }
 
 function articleRouteProjectHotspots(store, batchId, hotspots = []) {
+  const memberships = store.listEventHotspots?.({ batchId }) || [];
+  const batchHotspots = store.getBatch(batchId)?.hotspots || [];
+  const hotspotsById = new Map(batchHotspots.map((item) => [Number(item.id), item]));
   return hotspots.filter((hotspot) => {
-    const isProjectSource = isPureProjectEvent({ representative_title: hotspot.title, title: hotspot.title, articles: [hotspot], url: hotspot.url, source_group: hotspot.source_group });
+    const membership = memberships.find((item) => Number(item.hotspot_id) === Number(hotspot.id));
+    const eventArticles = membership?.event_id
+      ? memberships.filter((item) => String(item.event_id) === String(membership.event_id))
+        .map((item) => hotspotsById.get(Number(item.hotspot_id))).filter(Boolean)
+      : [hotspot];
+    const isProjectSource = isPureProjectEvent({ representative_title: hotspot.title, title: hotspot.title, articles: eventArticles, url: hotspot.url, source_group: hotspot.source_group });
     if (!isProjectSource) return false;
-    const membership = store.listEventHotspots?.({ batchId })?.find((item) => Number(item.hotspot_id) === Number(hotspot.id));
+    const eventEditorialCategories = new Set(eventArticles
+      .map((item) => normalizeEditorialCategory(item.category, { event: { articles: eventArticles } }))
+      .filter(Boolean));
+    // Event-level routing may lag behind the manually corrected editorial board.
+    // A multi-source event already classified as product/technology news must not
+    // be re-blocked as a singleton GitHub project because one linked hotspot is a repo.
+    if (eventEditorialCategories.has('产品与技术动态')) return false;
     const classification = membership?.event_id ? store.getEventRecord?.(membership.event_id) : null;
     const contentClass = String(classification?.content_class || '');
     return !(classification?.article_eligible && ['open_source_technology', 'open_source_trend', 'news_event'].includes(contentClass));
@@ -232,6 +247,12 @@ export async function handleCandidateRoutes({ request, response, pathname, searc
       return respond(json, response, 409, { error: '综合选题包含 GitHub 项目，不能直接进入文章路线；请先人工选题放行并通过事实门禁，或仅选择非项目事件', code: 'ARTICLE_ROUTE_REQUIRES_PROMOTION', hotspotIds: compositeProjects.map((item) => item.id) });
     }
     const composite = store.createCompositeCandidate(batchId, input.hotspotIds, input);
+    if (composite) {
+      const categories = [...new Set((compositeBatch?.hotspots || [])
+        .filter((hotspot) => input.hotspotIds.some((id) => Number(id) === Number(hotspot.id)))
+        .map((hotspot) => normalizeEditorialCategory(hotspot.category)).filter(Boolean))];
+      if (categories.length === 1) store.updateCandidate(composite.id, { editorial_category: categories[0] });
+    }
     if ((Array.isArray(input.tracks) ? input.tracks : []).includes('social_cards') && composite) {
       const materialType = candidateRepositoryUrl(composite) ? 'repository' : 'event';
       const route = socialRouteForContentType(materialType);

@@ -62,6 +62,7 @@ function reasonList({ state, newReportCount, sourceCount, repeatDays, currentCou
 function editorialCategoryOf(event = {}) {
   return normalizeEditorialCategory(event.editorial_category || event.editorialCategory || event.topic_category || event.category, {
     repository: isRepositoryEvent(event),
+    event,
   });
 }
 
@@ -207,11 +208,12 @@ export function scoreEditorialEvent({ event, currentMemberships = [], historical
   const currentHotspots = currentMemberships.map((membership) => hotspotsById.get(Number(membership.hotspot_id))).filter(Boolean);
   const platformImpact = platformImpactOf(currentHotspots, asOf);
   const scoreValue = platformImpact.available ? Number(clamp(base.heatScore * 0.9 + platformImpact.score, 0, 100).toFixed(1)) : base.heatScore;
-  const editorialCategory = editorialCategoryOf({ ...event, articles: event.articles || currentHotspots });
+  const articles = event.articles?.length ? event.articles : currentHotspots;
+  const editorialCategory = editorialCategoryOf({ ...event, articles });
   return {
     ...base,
     editorialCategory,
-    repositoryProject: isRepositoryEvent({ ...event, articles: event.articles || currentHotspots }),
+    repositoryProject: isRepositoryEvent({ ...event, articles }),
     scoreModel: 'T_account',
     scoreValue,
     platformImpact: platformImpact.score,

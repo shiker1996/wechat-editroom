@@ -154,6 +154,7 @@ function candidateFromEvents({ events, type, relation = null, ranking, scope, si
     const scopeItem = scope.get(id) || {};
     const editorialCategory = normalizeEditorialCategory(scopeItem.editorial_category || item.editorialCategory || item.category || event.topic_category, {
       repository: isRepositoryEvent(event),
+      event,
     });
     categoryCounts.set(editorialCategory, (categoryCounts.get(editorialCategory) || 0) + 1);
     const boardRank = finite(scopeItem.board_rank);
@@ -169,6 +170,7 @@ function candidateFromEvents({ events, type, relation = null, ranking, scope, si
     const scopeItem = scope.get(id) || {};
     const editorialCategory = normalizeEditorialCategory(scopeItem.editorial_category || item.editorialCategory || item.category || event.topic_category, {
       repository: isRepositoryEvent(event),
+      event,
     });
     return editorialCategory === selectionCategory;
   }).map((event) => {
