@@ -266,7 +266,7 @@ test('直写流程使用单阶段提示词，兼容旧技能组合器', () => {
   assert.equal(manifest.version, 'direct-brief-v3');
   assert.match(manifest.prompts.drafting.prompt, /技术深解需要解释机制/);
   assert.doesNotMatch(manifest.prompts.review.prompt, /## SKILL:|全流程|风格门禁/);
-  assert.match(manifest.prompts.review.hash, /^[a-f0-9]{64}$/);
+  assert.match(manifest.prompts.review.hash, /^sha256:[a-f0-9]{64}$/);
   const system = buildArticleStageSystem({ prompt: '旧编排契约' }, 'drafting', { prompt: '旧子技能' });
   assert.match(system, /旧编排契约/);
 });

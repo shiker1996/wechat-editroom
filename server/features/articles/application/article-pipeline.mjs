@@ -302,7 +302,7 @@ export async function aiReviewGate({gateway,store,provider,batchId,candidateId,a
     {role:'system',protected:true,content:systemPrompt},
     {role:'user',protected:true,content:JSON.stringify({brief:buildArticleBriefView({...brief,adoptedResearchPoints:brief.adoptedResearchPoints||brief.adopted_research_points||researchPoints,rejectedAngles:brief.rejectedAngles||brief.rejected_angles||rejectedAngles}),evidence:articleFactAuthorityView(factBase),article,...(scope?{recheck:scope}:{})})},
   ];
-  const fallback=async()=>parseJsonResult(await gateway.complete({provider,purpose,batchId,candidateId,jsonMode:true,maxOutputTokens,messages}),store);
+  const fallback=async()=>parseJsonResult(await gateway.complete({provider,purpose,batchId,candidateId,thinking:false,jsonMode:true,maxOutputTokens,messages}),store);
   const toolMessages=[
     {...messages[0],content:`${messages[0].content}\n\n如果当前调用提供了 decision.article_review_gate 工具，必须调用一次该工具；工具参数就是最终审稿门禁结果，不要输出文章正文或工具操作说明。`},
     messages[1],
@@ -425,7 +425,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
         : expected?.skill==='title-generator'?selectedStageIds.title
           : expected?.skill==='humanizer-zh'?selectedStageIds.humanizer:expected?.skill;
     if(!expected||expected.id!==stage||expectedSkill!==actualSkill)throw new Error(`成稿契约阶段不一致：期望 ${expected?.id||'结束'}/${expectedSkill||'-'}，实际 ${stage}/${actualSkill}`);
-    stageExecutions.push({stage,skill:actualSkill,skillHash:bundle.hash,skillFiles:bundle.files,inputArtifacts,outputArtifact,gate,fallback:bundle.fallback,promptVersion:ARTICLE_PROMPT_VERSION,promptSource: "article-prompts.mjs"});
+    stageExecutions.push({stage,skill:actualSkill,skillHash:bundle.hash,skillFiles:bundle.files,inputArtifacts,outputArtifact,gate,fallback:bundle.fallback,promptVersion:ARTICLE_PROMPT_VERSION,promptSource: "prompts/manifest.json"});
     activeArtifacts.push(...(Array.isArray(outputArtifact) ? outputArtifact : [outputArtifact]));
     flushStages();
   };

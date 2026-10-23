@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { resolvePrompt } from '../../../platform/llm/prompt-registry.mjs';
 import path from 'node:path';
 import { parseModelJson } from '../../../platform/llm/model-json.mjs';
 import crypto from 'node:crypto';
@@ -19,10 +20,7 @@ const SUPPLY_LIST_RE = /\n*<!--\s*IMAGE-SUPPLY-LIST[\s\S]*?-->\s*$/i;
 const PLAN_NONE_RE = /\n*<!--\s*IMAGE-PLAN:none\s*-->\s*$/i;
 const IMG_DATA_RE = /<!--\s*IMG-DATA:([^:\s]+:\d+)\s*(\{[\s\S]*?\})\s*-->/g;
 
-export const IMAGE_PLAN_SYSTEM = `你是文章配图编辑。只识别必须由作者或编辑提供、且确有阅读或证据价值的来源图、资料图和参考图；不要建议纯装饰图、氛围图，也不要为已有图片重复留位。
-返回严格 JSON：{"placements":[{"type":"来源|资料|参考","content":"需要提供的具体图片","afterExact":"原文中用于定位插入点的连续原句，20到80字，必须逐字存在","ratio":"16:9|4:3|1:1|自适应","suggestedSource":"待确认或明确建议来源","copyrightAction":"待确认或需要完成的授权动作"}]}。
-当配图需求是事件时间线、数据对比或统计汇总这类结构化信息图，且所需数据能完整取自文章正文（时间、事件、指标、数值）时，该项可附加 "generate":{"kind":"timeline|datacard","title":"图题","items":[{"label":"时间点或指标名","value":"事件或数值"}]}（items 2 到 8 条），表示由工作台确定性生成，无需作者供图；label 与 value 必须逐字来自正文，不得推算或编造。其余配图一律不加 generate，保持手动供图。
-最多4项；没有必要图片时返回空数组。不得改写文章，不得编造图片、URL、来源或授权状态，不要输出 JSON 之外的文字。`;
+export const IMAGE_PLAN_SYSTEM=resolvePrompt('articles.image-plan').text;
 
 function writeJson(filePath, value) {
   fs.mkdirSync(path.dirname(filePath), { recursive:true });

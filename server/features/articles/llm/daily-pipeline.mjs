@@ -10,6 +10,7 @@ import { markdownVisibleChars } from '../../../shared/domain/markdown-visible-ch
 import { resolveArticleStageSkills } from '../../../platform/skills/entry-routing.mjs';
 import { illustrateArticle } from '../application/article-illustration.mjs';
 import { parseModelJson } from '../../../platform/llm/model-json.mjs';
+import { resolvePrompt } from '../../../platform/llm/prompt-registry.mjs';
 import { callDecisionTool, DECISION_TITLE_PLAN_TOOL, decisionToolDefinition, normalizeDecisionTitlePlan } from '../../../platform/llm/decision-tools.mjs';
 
 function writeFile(filePath, content) {
@@ -157,7 +158,7 @@ export async function runDailyPipeline({ gateway, store, batchId, provider, work
   const titlePurpose='daily-title-generation';
   const fallbackTitle=draft.match(/^#\s+(.+)$/m)?.[1]||`${batch.batch_date} 大厂早报`;
   const titleMessages=[
-    {role:'system',protected:true,content:`${titleGenerator.prompt}\n\n根据完整早报生成标题，返回严格 JSON：{"selectedTitle":"最终标题","titleCandidates":[{"title":"候选1","reason":"理由"}],"coreKeywords":["关键词"]}。不得引入事件事实卡没有的事实、数字、人物或结论。`},
+    {role:'system',protected:true,content:`${titleGenerator.prompt}\n\n${resolvePrompt('articles.daily-title-output').text}`},
     {role:'user',protected:true,content:JSON.stringify({batchDate:batch.batch_date,focus:focusContext,draft})},
   ];
   const titleFallback=async()=>{try{return parseJson(await gateway.complete({provider,purpose:titlePurpose,batchId,jsonMode:true,maxOutputTokens:Math.min(3000,providerConfig.maxOutputTokens),messages:titleMessages}),store);}catch{return {};}};
@@ -179,18 +180,18 @@ export async function runDailyPipeline({ gateway, store, batchId, provider, work
   writeFile(humanPath,human);
 
   onProgress('早报 5/7 审阅修订并执行 SEO 优化');
-  const reviewResult=await textCall(gateway,{provider,purpose:'daily-review',batchId},`${reviewer.prompt}\n\n根据事件事实卡直接返回修订后的完整 Markdown，不要输出审阅报告、评分、result 标记或新增事实。保留来源链接与标题。`,
+  const reviewResult=await textCall(gateway,{provider,purpose:'daily-review',batchId},`${reviewer.prompt}\n\n${resolvePrompt('articles.daily-review-rewrite').text}`,
     `focus:${JSON.stringify(focusContext)}\nnews_items:${JSON.stringify(newsItems)}\n\n待审早报:\n${human}`,maxTokens);
   const reviewed=applyTitle(cleanMarkdown(reviewResult.content),selectedTitle),reviewedPath=path.join(workdir,'04-reviewed.md');
   writeFile(reviewedPath,reviewed);
-  const seoResult=await textCall(gateway,{provider,purpose:'daily-seo',batchId},`${seoOptimizer.prompt}\n\n直接返回优化后的完整 Markdown。不得改变事实、来源和关系判断；不得添加搜索量或效果承诺。`,
+  const seoResult=await textCall(gateway,{provider,purpose:'daily-seo',batchId},`${seoOptimizer.prompt}\n\n${resolvePrompt('articles.daily-seo-output').text}`,
     `核心关键词:${coreKeywords.join('、')}\n\n待优化早报:\n${reviewed}`,maxTokens);
   let final=applyTitle(cleanMarkdown(seoResult.content),selectedTitle),seoPath=path.join(workdir,'05-seo-optimized.md');
   writeFile(seoPath,final);
 
   const gate = async (article, stage) => {
     const purpose = `daily-quality-gate-${stage}`;
-    const system = `${reviewer.prompt}\n\n你只执行关系维度早报质量门禁，返回 JSON：{"pass":boolean,"issues":[{"message":"..."}]}。检查标题、导语和结构是否兑现全部 focus；是否概括重要事实并正确解释关系；是否有 2–6 个信息段落和可追溯来源链接；事实是否均由 news_items 支持；严肃事件语气是否中性。允许把多个事件合并归纳，不要求每个事件独立成段、独立引用、出现标题或暴露 event_id。不要判断字符数，字符上限由程序确定性检查。`;
+    const system = `${reviewer.prompt}\n\n${resolvePrompt('articles.daily-quality-gate').text}`;
     const messages = [
       { role: 'system', protected: true, content: system },
       { role: 'user', protected: true, content: `focus:${JSON.stringify(focusContext)}\nnews_items:${JSON.stringify(newsItems)}\n\n待检查早报：\n${article}` },

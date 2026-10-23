@@ -164,7 +164,7 @@ export function buildAiThemeMessages(request){
   const recipeSegment=catalog?`配方目录：${JSON.stringify(catalog)}。配方 ID 必须取 options.value。`:'';
   const differenceHint=isCover?'新候选应在配色、字阶或形状维度形成明确差异':'新候选应在配色、字阶、形状或至少两个组件配方维度形成明确差异';
   return [
-    {role:'system',protected:true,content:`你是受约束的主题设计生成器。只返回单个 JSON 对象，不要 Markdown、代码围栏或解释。\n输出顶层只能包含 label、description、tags、tokens、targetConfig、designSummary。不得输出 id、version、targets、status、source、basedOn、CSS、HTML、URL、字体文件或脚本。\n目标：${request.target}。${targetDirection}${coverTitleConstraint}\n这是必须逐键遵守的精确契约，不得发明 codeText、border、codeTheme、brightness、readingPriority 等字段：${JSON.stringify(exactContract)}。\n数值范围与步进：${JSON.stringify(ranges)}。${recipeSegment}${componentCatalog?`组件属性目录：${JSON.stringify(componentCatalog)}。组件属性必须逐字段使用 options.value，不得输出任意字体、颜色或尺寸。`:''}designSummary 为 1–6 条 {title,description}。颜色只使用六位 HEX，并保证正文、弱化文字、反白文字和代码区域可读。\n以下是内置主题的紧凑视觉签名，只用于避免直接复刻；${differenceHint}：${JSON.stringify(signatures)}`},
+    {role:'system',protected:true,content:resolvePrompt('themes.ai-generator', { target: request.target, targetDirection, coverTitleConstraint, exactContract, ranges, recipeSegment, componentCatalogInstructions: componentCatalog ? `组件属性目录：${JSON.stringify(componentCatalog)}。组件属性必须逐字段使用 options.value，不得输出任意字体、颜色或尺寸。` : '', differenceHint, signatures }).text},
     {role:'user',protected:true,content:`主题意图：${request.prompt}\n补充偏好：${JSON.stringify(request.preferences)}`},
   ];
 }
@@ -173,7 +173,7 @@ function parseJson(result){return parseModelJson(result,{label:'AI 主题候选'
 async function parseWithOneRepair(gateway,result,input){
   try{return {candidate:parseJson(result),formatRepaired:false,result};}
   catch(firstError){
-    const repairResult=await gateway.complete({provider:input.provider,purpose:'theme-create-format-repair',jsonMode:true,thinking:false,temperature:0,maxOutputTokens:5000,messages:[{role:'system',protected:true,content:'把输入修复为一个严格 JSON 对象。只修复 JSON 格式，不增加、删除或改写语义；不要代码围栏或解释。'},{role:'user',protected:true,content:String(result.content||'').slice(0,30000)}]});
+    const repairResult=await gateway.complete({provider:input.provider,purpose:'theme-create-format-repair',jsonMode:true,thinking:false,temperature:0,maxOutputTokens:5000,messages:[{role:'system',protected:true,content:resolvePrompt('themes.ai-theme-json-repair').text},{role:'user',protected:true,content:String(result.content||'').slice(0,30000)}]});
     try{return {candidate:parseJson(repairResult),formatRepaired:true,result:repairResult};}catch{throw new AiThemeContractError(AI_THEME_ERROR_CODES.MODEL_OUTPUT_INVALID,'模型未返回有效的主题 JSON',[{field:'candidate',code:'INVALID_JSON',message:firstError.message}]);}
   }
 }
@@ -196,3 +196,4 @@ export async function generateAiThemeCandidate({gateway,input,candidateStore=new
   const stored=candidateStore.put({target:request.target,definition:composed.definition,designSummary:composed.designSummary,repairs:[...(parsed.formatRepaired?[{field:'candidate',before:'invalid-json',after:'valid-json',reason:'执行一次模型格式修复'}]:[]),...normalized.repairs],audit,preview,comparison,model:{serviceId:parsed.result.provider||provider,model:parsed.result.model||providerConfig.model||'',callId:parsed.result.callId||null},promptVersion:AI_THEME_PROMPT_VERSION,request:{prompt:request.prompt,preferences:request.preferences}});
   return stored;
 }
+import { resolvePrompt } from '../../llm/prompt-registry.mjs';

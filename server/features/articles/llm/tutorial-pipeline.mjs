@@ -9,6 +9,7 @@ import { bindGenerationSnapshot, bindPipelineHarnessGateway, prepareSkillRun } f
 import { configuredRepairAttempts, evaluateConfiguredGates } from '../../../platform/skills/configuration.mjs';
 import { resolveArticleStageSkills } from '../../../platform/skills/entry-routing.mjs';
 import { parseModelJson } from '../../../platform/llm/model-json.mjs';
+import { resolvePrompt } from '../../../platform/llm/prompt-registry.mjs';
 import { callDecisionTool, DECISION_TITLE_PLAN_TOOL, decisionToolDefinition, normalizeDecisionTitlePlan } from '../../../platform/llm/decision-tools.mjs';
 
 function writeFile(filePath,content){fs.mkdirSync(path.dirname(filePath),{recursive:true});const temp=`${filePath}.tmp`;fs.writeFileSync(temp,`${String(content).trimEnd()}\n`,'utf8');fs.renameSync(temp,filePath);return fs.statSync(filePath);}
@@ -68,7 +69,7 @@ export async function runTutorialPipeline({gateway,store,batchId,candidateId,pro
   const titlePurpose='tutorial-title-generation';
   const fallbackTitle=draft.match(/^#\s+(.+)$/m)?.[1]||fact.topic;
   const titleMessages=[
-    {role:'system',content:`${titleGenerator.prompt}\n\n根据完整初稿生成标题，返回严格 JSON：{"selectedTitle":"最终标题","titleCandidates":[{"title":"候选1","reason":"理由"}],"coreKeywords":["关键词"]}。不得引入初稿没有的事实、数字、人物或结论。`,protected:true},
+    {role:'system',content:`${titleGenerator.prompt}\n\n${resolvePrompt('articles.tutorial-title-output').text}`,protected:true},
     {role:'user',content:JSON.stringify({topic:fact.topic,articleMode,draft}),protected:true},
   ];
   const titleFallback=async()=>{try{return parseJson(await gateway.complete({provider,purpose:titlePurpose,batchId,candidateId,jsonMode:true,maxOutputTokens:Math.min(3000,providerConfig.maxOutputTokens),messages:titleMessages}),store);}catch{return {};}};
@@ -89,19 +90,19 @@ export async function runTutorialPipeline({gateway,store,batchId,candidateId,pro
     `${articleMode==='experience'?'personal_writing_fact_base':'tutorial_fact_base'}:${JSON.stringify(fact)}\n\n待审文章:\n${human}`,maxTokens);
   const reviewed=applyTitle(clean(reviewResult.content),selectedTitle),reviewedPath=path.join(workdir,'06-reviewed.md');writeFile(reviewedPath,reviewed);
   onProgress(`${label} 5/7 执行 SEO 优化并保持事实与作者立场`);
-  const seoResult=await textCall(gateway,{provider,purpose:'tutorial-seo',batchId,candidateId},`${seoOptimizer.prompt}\n\n直接返回优化后的完整 Markdown。不得改变步骤、事实、来源、作者经历与观点；不得添加搜索量或效果承诺。`,
+  const seoResult=await textCall(gateway,{provider,purpose:'tutorial-seo',batchId,candidateId},`${seoOptimizer.prompt}\n\n${resolvePrompt('articles.tutorial-seo-output').text}`,
     `核心关键词:${coreKeywords.join('、')}\n\n待优化文章:\n${reviewed}`,maxTokens);
   let final=applyTitle(clean(seoResult.content),selectedTitle);
   const seoPath=path.join(workdir,'08-seo-optimized.md');writeFile(seoPath,final);
   const gate=async(stage)=>{
-    const system=`你是文章事实与真实性质量门禁。只评估，不修改、不续写、不复述文章。必须仅返回严格 JSON：{"pass":boolean,"issues":[{"message":"..."}]}。禁止返回 Markdown、标题、代码围栏或 JSON 之外的文字。${articleMode==='experience'?'检查第一人称经历只来自 author_experience，观点未超出作者输入，素材事实保留归属，model_suggestion 未伪装亲历或确定结论。':'检查步骤可复现、环境与前置条件明确、所有确定性步骤和结果由 author_experience 或 user_material 支持、model_suggestion 未伪装实测、来源链接可追溯。'}不要估算字符数，长度由程序检查。`;
+    const system=resolvePrompt(articleMode==='experience'?'articles.tutorial-quality-gate-experience':'articles.tutorial-quality-gate-guide').text;
     const user=`${articleMode==='experience'?'personal_writing_fact_base':'tutorial_fact_base'}:${JSON.stringify(fact)}\n\n${label}文章:\n${final}`;
     const purpose=`tutorial-quality-gate-${stage}`;
     const messages=[{role:'system',protected:true,content:system},{role:'user',protected:true,content:user}];
     const fallback=async()=>{
       for(let attempt=0;attempt<2;attempt+=1){
         const result=await gateway.complete({provider,purpose:`${purpose}${attempt?'-format-retry':''}`,batchId,candidateId,jsonMode:true,maxOutputTokens:Math.min(3000,providerConfig.maxOutputTokens),messages:[
-          {role:'system',protected:true,content:attempt?`${system}\n上一次返回了文章正文而不是 JSON。本次不得输出任何文章正文。`:system},
+          {role:'system',protected:true,content:attempt?`${system}\n${resolvePrompt('articles.json-retry-no-body').text}`:system},
           {role:'user',protected:true,content:user},
         ]});
         try{return parseJson(result,store);}catch(error){if(attempt===1)throw error;}

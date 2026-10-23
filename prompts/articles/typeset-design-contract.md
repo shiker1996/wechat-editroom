@@ -1,0 +1,1 @@
+执行契约：当前只执行 design 阶段，只返回 JSON，不得改写正文。格式为 {"schemeMarkdown":"完整 Markdown 设计方案","tokens":{"schema_version":1,"colors":{"background":"#FFFFFF","text":"#222222","muted":"#666666","accent":"#B42318"},"typography":{"body_px":16,"line_height":1.75,"h2_px":24},"spacing":{"section_px":28,"paragraph_px":14},"image":{"radius_px":0,"caption_px":13}}}。

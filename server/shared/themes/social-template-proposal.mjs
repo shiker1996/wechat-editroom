@@ -249,7 +249,7 @@ export function buildSocialTemplateProposalMessages(request,{basePack,baseTheme=
   const outputShape={label:'差异化模板名称',description:'说明适用的内容承载方式与阅读气质',visualDirection:['terminal','grid','mono'],baseTemplatePack:pack.id,roles:roleShape,surface:{density:'standard',decoration:'grid-line',headingTreatment:'accent-bar'}};
   const draftLine=request.draftMode==='html-css'?'可选输出 draft.html 与 draft.css；它们只用于隔离预览，必须设置在 draft 对象内，不得输出脚本、事件属性、外链资源或网络请求。':'不要输出 draft、HTML、CSS、脚本、URL 或任何网页代码。';
   return [
-    {role:'system',protected:true,content:`你是 Social 图文模板提案设计器。只返回一个严格 JSON 对象，不要 Markdown、代码围栏或解释。顶层只能包含 label、description、visualDirection、baseTemplatePack、roles、surface${request.draftMode==='html-css'?',draft':''}。不得输出 proposalId、status、source、provenance、id、version、targets 或主题 Token。目标固定为 Social 图文；模板提案描述的是可复用的页面角色版式，不是故事板内容，也不是固定卡片数量。\n基础模板包：${pack.id} v${pack.version}（${pack.label}）。请在其基础上形成差异化但可实现的版式建议。\n当前能力：\n${rolePrompt(pack)}\n${draftLine}\n输出结构示例（必须保留全部字段和全部十个角色，只替换示例值）：${JSON.stringify(outputShape)}\n硬性契约：visualDirection 必须是不重复的 1–12 项字符串数组，不能返回单个字符串；十个角色必须全部出现，roles 必须是且只能是这十个角色的对象：${SOCIAL_CARD_PAGE_ROLES.join('、')}，每个角色都必须包含 layout、maxBlocks、maxItems、supportedBlocks；supportedBlocks 只能使用：${SOCIAL_CARD_RENDERER_BLOCK_TYPES.join('、')}；layout 只能是安全 kebab-case ID；maxBlocks 1–6；maxItems 1–12；surface.density 只能是 compact、standard 或 airy，surface.decoration 和 surface.headingTreatment 也只能使用契约枚举。${themePrompt(baseTheme)}`},
+    {role:'system',protected:true,content:resolvePrompt('themes.social-template-proposal', { draftField: request.draftMode === 'html-css' ? ',draft' : '', packId: pack.id, packVersion: pack.version, packLabel: pack.label, rolePromptText: rolePrompt(pack), draftLine, outputShape, pageRoles: SOCIAL_CARD_PAGE_ROLES.join('、'), blockTypes: SOCIAL_CARD_RENDERER_BLOCK_TYPES.join('、'), themePromptText: themePrompt(baseTheme) }).text},
     {role:'user',protected:true,content:`模板提案意图：${request.prompt}\n基础模板包：${pack.id}\n${baseTheme?.label?`当前主题：${baseTheme.label}`:''}`},
   ];
 }
@@ -259,7 +259,7 @@ async function parseWithRepair(gateway,result,{provider,signal}){
   try{return {candidate:parseJson(result),formatRepaired:false,result};}
   catch(firstError){
     if(signal?.aborted)throw new SocialTemplateProposalError(SOCIAL_TEMPLATE_PROPOSAL_ERROR_CODES.GENERATION_CANCELLED,'Social 模板提案生成已取消');
-    const repaired=await gateway.complete({provider,purpose:'social-template-proposal-format-repair',jsonMode:true,thinking:false,temperature:0,maxOutputTokens:7000,signal,messages:[{role:'system',protected:true,content:'将输入修复为严格 JSON 对象，只修复 JSON 格式，不改变语义，不新增 HTML/CSS、脚本或解释。'},{role:'user',protected:true,content:String(result.content||'').slice(0,40000)}]});
+    const repaired=await gateway.complete({provider,purpose:'social-template-proposal-format-repair',jsonMode:true,thinking:false,temperature:0,maxOutputTokens:7000,signal,messages:[{role:'system',protected:true,content:resolvePrompt('themes.social-template-json-repair').text},{role:'user',protected:true,content:String(result.content||'').slice(0,40000)}]});
     try{return {candidate:parseJson(repaired),formatRepaired:true,result:repaired};}catch{throw new SocialTemplateProposalError(SOCIAL_TEMPLATE_PROPOSAL_ERROR_CODES.MODEL_OUTPUT_INVALID,'模型未返回有效的 Social 模板提案 JSON',[issue('proposal','INVALID_JSON',firstError.message)]);}
   }
 }
@@ -276,3 +276,4 @@ export async function generateSocialTemplateProposal({gateway,request,candidateS
   if(signal?.aborted)throw new SocialTemplateProposalError(SOCIAL_TEMPLATE_PROPOSAL_ERROR_CODES.GENERATION_CANCELLED,'Social 模板提案生成已取消');
   return candidateStore.put({proposal,repairs:[...(parsed.formatRepaired?[{field:'proposal',before:'invalid-json',after:'valid-json',reason:'执行一次模型格式修复'}]:[]),...sanitized.repairs],request:input,model:{serviceId:parsed.result.provider||provider,model:parsed.result.model||providerConfig.model||'',callId:parsed.result.callId||null},promptVersion:SOCIAL_TEMPLATE_PROPOSAL_PROMPT_VERSION});
 }
+import { resolvePrompt } from '../../platform/llm/prompt-registry.mjs';

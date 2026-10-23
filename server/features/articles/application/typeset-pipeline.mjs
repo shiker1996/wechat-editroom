@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { resolvePrompt } from '../../../platform/llm/prompt-registry.mjs';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -145,7 +146,7 @@ export async function runTypesetPipeline({ gateway, store, batchId, candidateId,
   onProgress('排版 2/6：按总契约执行 magazine-design-advisor');
   const designResult = await gateway.complete({ provider, purpose: 'magazine-design', batchId, candidateId, jsonMode: true,
     maxOutputTokens: Math.min(3200, providerConfig.maxOutputTokens), messages: [
-      { role: 'system', protected: true, content: `${skills['wechat-article-typeset'].prompt}\n\n## 当前阶段子技能\n${skills['magazine-design-advisor'].prompt}\n\n执行契约：当前只执行 design 阶段，只返回 JSON，不得改写正文。格式为 {"schemeMarkdown":"完整 Markdown 设计方案","tokens":{"schema_version":1,"colors":{"background":"#FFFFFF","text":"#222222","muted":"#666666","accent":"#B42318"},"typography":{"body_px":16,"line_height":1.75,"h2_px":24},"spacing":{"section_px":28,"paragraph_px":14},"image":{"radius_px":0,"caption_px":13}}}。` },
+      { role: 'system', protected: true, content: `${skills['wechat-article-typeset'].prompt}\n\n## 当前阶段子技能\n${skills['magazine-design-advisor'].prompt}\n\n${resolvePrompt('articles.typeset-design-contract').text}` },
       { role: 'user', protected: true, content: fs.readFileSync(renderedPath, 'utf8').slice(0, 16000) },
     ] });
   const design = parseJson(designResult, store);
@@ -257,7 +258,7 @@ export async function runTypesetPipeline({ gateway, store, batchId, candidateId,
   // 默认确定性渲染：HTML 拼装是机械工作，直接按 tokens 输出内联样式，
   // 不调用模型，也就不存在结构保真回退。draftMode 'llm' 保留旧路径用于实验对比。
   if (draftMode === 'llm') {
-    const htmlGenSystem = `${skills['wechat-article-typeset'].prompt}\n\n## 当前阶段子技能\n${skills['wechat-md-to-draft'].prompt}\n\n执行契约：当前只执行 draft 阶段，只输出 UTF-8 HTML，不附说明或 Markdown 围栏。严格保留正文、标题、数字、来源、链接、图片与章节顺序；样式只能来自给定 tokens。`;
+    const htmlGenSystem = `${skills['wechat-article-typeset'].prompt}\n\n## 当前阶段子技能\n${skills['wechat-md-to-draft'].prompt}\n\n${resolvePrompt('articles.typeset-html-contract').text}`;
     const { provider: providerConfig2 } = gateway.resolve(provider);
     const htmlGenResult = await gateway.complete({ provider, purpose: 'typeset-html', batchId, candidateId,
       maxOutputTokens: Math.min(8000, providerConfig2.maxOutputTokens), messages: [

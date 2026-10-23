@@ -1,0 +1,519 @@
+{
+  "schemaVersion": 1,
+  "prompts": [
+    {
+      "id": "articles.facts",
+      "version": 1,
+      "file": "articles/facts.md",
+      "purpose": "article-facts",
+      "variables": [],
+      "components": [],
+      "output": {
+        "format": "json"
+      }
+    },
+    {
+      "id": "articles.draft",
+      "version": 1,
+      "file": "articles/draft.md",
+      "purpose": "article-draft",
+      "variables": [],
+      "components": [
+        "articles.writer-tech-deep",
+        "articles.writer-deep-dive",
+        "articles.writer-gossip-chill",
+        "articles.writer-composite"
+      ],
+      "output": {
+        "format": "markdown"
+      }
+    },
+    {
+      "id": "articles.review",
+      "version": 1,
+      "file": "articles/review.md",
+      "purpose": "article-review",
+      "variables": [],
+      "components": [],
+      "output": {
+        "format": "json"
+      }
+    },
+    {
+      "id": "articles.repair",
+      "version": 1,
+      "file": "articles/repair.md",
+      "purpose": "article-repair",
+      "variables": [],
+      "components": [],
+      "output": {
+        "format": "markdown"
+      }
+    },
+    {
+      "id": "articles.length-adjust",
+      "version": 1,
+      "file": "articles/length-adjust.md",
+      "purpose": "article-length-adjust",
+      "variables": [],
+      "components": [],
+      "output": {
+        "format": "markdown"
+      }
+    },
+    {
+      "id": "articles.humanize",
+      "version": 1,
+      "file": "articles/humanize.md",
+      "purpose": "article-humanize",
+      "variables": [],
+      "components": [],
+      "output": {
+        "format": "markdown"
+      }
+    },
+    {
+      "id": "articles.title",
+      "version": 1,
+      "file": "articles/title.md",
+      "purpose": "article-title",
+      "variables": [],
+      "components": [],
+      "output": {
+        "format": "json"
+      }
+    },
+    {
+      "id": "articles.writer-tech-deep",
+      "version": 1,
+      "file": "articles/writer-tech-deep.md",
+      "purpose": "article-writer-route-hint",
+      "variables": [],
+      "components": [],
+      "output": {
+        "format": "text"
+      }
+    },
+    {
+      "id": "articles.writer-deep-dive",
+      "version": 1,
+      "file": "articles/writer-deep-dive.md",
+      "purpose": "article-writer-route-hint",
+      "variables": [],
+      "components": [],
+      "output": {
+        "format": "text"
+      }
+    },
+    {
+      "id": "articles.writer-gossip-chill",
+      "version": 1,
+      "file": "articles/writer-gossip-chill.md",
+      "purpose": "article-writer-route-hint",
+      "variables": [],
+      "components": [],
+      "output": {
+        "format": "text"
+      }
+    },
+    {
+      "id": "articles.writer-composite",
+      "version": 1,
+      "file": "articles/writer-composite.md",
+      "purpose": "article-writer-route-hint",
+      "variables": [],
+      "components": [],
+      "output": {
+        "format": "text"
+      }
+    },
+    {
+      "id": "collection.source-field-enricher",
+      "version": 1,
+      "file": "collection/source-field-enricher.md",
+      "purpose": "collection-source-field-enrichment",
+      "variables": [],
+      "components": [],
+      "output": {
+        "format": "json"
+      }
+    },
+    {
+      "id": "collection.source-candidate-ranker",
+      "version": 1,
+      "file": "collection/source-candidate-ranker.md",
+      "purpose": "collection-source-candidate-ranking",
+      "variables": [],
+      "components": [],
+      "output": {
+        "format": "json"
+      }
+    },
+    {
+      "id": "collection.repo-discovery-queries",
+      "version": 1,
+      "file": "collection/repo-discovery-queries.md",
+      "purpose": "collection-github-repo-discovery-query-planning",
+      "variables": [
+        "maxQueries"
+      ],
+      "components": [],
+      "output": {
+        "format": "json"
+      }
+    },
+    {
+      "id": "collection.repo-interest-filter",
+      "version": 1,
+      "file": "collection/repo-interest-filter.md",
+      "purpose": "collection-github-repo-interest-scoring",
+      "variables": [],
+      "components": [],
+      "output": {
+        "format": "json"
+      }
+    },
+    {
+      "id": "articles.daily-review-rewrite",
+      "version": 1,
+      "file": "articles/daily-review-rewrite.md",
+      "purpose": "daily-article-review-rewrite-instruction",
+      "variables": [],
+      "components": [],
+      "output": {
+        "format": "markdown"
+      }
+    },
+    {
+      "id": "articles.daily-quality-gate",
+      "version": 1,
+      "file": "articles/daily-quality-gate.md",
+      "purpose": "daily-article-quality-gate",
+      "variables": [],
+      "components": [],
+      "output": {
+        "format": "json"
+      }
+    },
+    {
+      "id": "articles.daily-seo-output",
+      "version": 1,
+      "file": "articles/daily-seo-output.md",
+      "purpose": "daily-article-seo-output-contract",
+      "variables": [],
+      "components": [],
+      "output": {
+        "format": "markdown"
+      }
+    },
+    {
+      "id": "articles.daily-title-output",
+      "version": 1,
+      "file": "articles/daily-title-output.md",
+      "purpose": "daily-article-title-output-contract",
+      "variables": [],
+      "components": [],
+      "output": {
+        "format": "json"
+      }
+    },
+    {
+      "id": "articles.tutorial-title-output",
+      "version": 1,
+      "file": "articles/tutorial-title-output.md",
+      "purpose": "tutorial-article-title-output-contract",
+      "variables": [],
+      "components": [],
+      "output": {
+        "format": "json"
+      }
+    },
+    {
+      "id": "articles.tutorial-quality-gate-experience",
+      "version": 1,
+      "file": "articles/tutorial-quality-gate-experience.md",
+      "purpose": "tutorial-experience-article-quality-gate",
+      "variables": [],
+      "components": [],
+      "output": {
+        "format": "json"
+      }
+    },
+    {
+      "id": "articles.tutorial-quality-gate-guide",
+      "version": 1,
+      "file": "articles/tutorial-quality-gate-guide.md",
+      "purpose": "tutorial-guide-quality-gate",
+      "variables": [],
+      "components": [],
+      "output": {
+        "format": "json"
+      }
+    },
+    {
+      "id": "articles.breaking-analysis",
+      "version": 1,
+      "file": "articles/breaking-analysis.md",
+      "purpose": "breaking-event-editorial-analysis",
+      "variables": [],
+      "components": [],
+      "output": {
+        "format": "json"
+      }
+    },
+    {
+      "id": "articles.visual-planner-fallback",
+      "version": 1,
+      "file": "articles/visual-planner-fallback.md",
+      "purpose": "article-visual-planning-fallback",
+      "variables": [],
+      "components": [],
+      "output": {
+        "format": "json"
+      }
+    },
+    {
+      "id": "social-cards.cover-title-wrap",
+      "version": 1,
+      "file": "social-cards/cover-title-wrap.md",
+      "purpose": "social-card-cover-title-line-breaking",
+      "variables": [],
+      "components": [],
+      "output": {
+        "format": "json"
+      }
+    },
+    {
+      "id": "social-cards.layout-repair",
+      "version": 1,
+      "file": "social-cards/layout-repair.md",
+      "purpose": "social-card-layout-copy-repair-suffix",
+      "variables": [],
+      "components": [],
+      "output": {
+        "format": "json"
+      }
+    },
+    {
+      "id": "themes.auto-router",
+      "version": 1,
+      "file": "themes/auto-theme-router.md",
+      "purpose": "visual-theme-routing",
+      "variables": [
+        "target",
+        "catalog"
+      ],
+      "components": [],
+      "output": {
+        "format": "json"
+      }
+    },
+    {
+      "id": "research.event-analysis-fallback",
+      "version": 1,
+      "file": "research/event-analysis-fallback.md",
+      "purpose": "event-analysis-skill-missing-fallback",
+      "variables": [],
+      "components": [],
+      "output": {
+        "format": "json"
+      }
+    },
+    {
+      "id": "themes.ai-theme-json-repair",
+      "version": 1,
+      "file": "themes/ai-theme-json-repair.md",
+      "purpose": "ai-theme-json-format-repair",
+      "variables": [],
+      "components": [],
+      "output": {
+        "format": "json"
+      }
+    },
+    {
+      "id": "themes.social-template-json-repair",
+      "version": 1,
+      "file": "themes/social-template-json-repair.md",
+      "purpose": "social-template-json-format-repair",
+      "variables": [],
+      "components": [],
+      "output": {
+        "format": "json"
+      }
+    },
+    {
+      "id": "feedback.social-patching",
+      "version": 1,
+      "file": "feedback/social-patching.md",
+      "purpose": "social-feedback-adjustment-patch",
+      "variables": [],
+      "components": [],
+      "output": {
+        "format": "json"
+      }
+    },
+    {
+      "id": "feedback.social-planning",
+      "version": 1,
+      "file": "feedback/social-planning.md",
+      "purpose": "social-feedback-adjustment-planning",
+      "variables": [
+        "targetIds",
+        "targetText"
+      ],
+      "components": [],
+      "output": {
+        "format": "json"
+      }
+    },
+    {
+      "id": "feedback.article-patching",
+      "version": 1,
+      "file": "feedback/article-patching.md",
+      "purpose": "article-feedback-adjustment-patch",
+      "variables": [
+        "titleSkillId"
+      ],
+      "components": [],
+      "output": {
+        "format": "json"
+      }
+    },
+    {
+      "id": "feedback.article-planning",
+      "version": 1,
+      "file": "feedback/article-planning.md",
+      "purpose": "article-feedback-adjustment-planning",
+      "variables": [
+        "titleSkillId"
+      ],
+      "components": [],
+      "output": {
+        "format": "json"
+      }
+    },
+    {
+      "id": "articles.image-plan",
+      "version": 1,
+      "file": "articles/image-plan.md",
+      "purpose": "article-image-placement-planning",
+      "variables": [],
+      "components": [],
+      "output": {
+        "format": "json"
+      }
+    },
+    {
+      "id": "articles.typeset-design-contract",
+      "version": 1,
+      "file": "articles/typeset-design-contract.md",
+      "purpose": "wechat-typeset-design-stage-contract",
+      "variables": [],
+      "components": [],
+      "output": {
+        "format": "json"
+      }
+    },
+    {
+      "id": "articles.typeset-html-contract",
+      "version": 1,
+      "file": "articles/typeset-html-contract.md",
+      "purpose": "wechat-typeset-html-draft-stage-contract",
+      "variables": [],
+      "components": [],
+      "output": {
+        "format": "html"
+      }
+    },
+    {
+      "id": "articles.visual-planner-mobile-retry",
+      "version": 1,
+      "file": "articles/visual-planner-mobile-retry.md",
+      "purpose": "article-visual-planning-mobile-retry-instruction",
+      "variables": [],
+      "components": [],
+      "output": {
+        "format": "json"
+      }
+    },
+    {
+      "id": "articles.tutorial-seo-output",
+      "version": 1,
+      "file": "articles/tutorial-seo-output.md",
+      "purpose": "tutorial-article-seo-output-contract",
+      "variables": [],
+      "components": [],
+      "output": { "format": "markdown" }
+    },
+    {
+      "id": "articles.json-retry-no-body",
+      "version": 1,
+      "file": "articles/json-retry-no-body.md",
+      "purpose": "article-json-retry-only-instruction",
+      "variables": [],
+      "components": [],
+      "output": { "format": "json" }
+    },
+    {
+      "id": "themes.ai-generator",
+      "version": 1,
+      "file": "themes/ai-generator.md",
+      "purpose": "ai-theme-generation",
+      "variables": [
+        "target",
+        "targetDirection",
+        "coverTitleConstraint",
+        "exactContract",
+        "ranges",
+        "recipeSegment",
+        "componentCatalogInstructions",
+        "differenceHint",
+        "signatures"
+      ],
+      "components": [],
+      "output": {
+        "format": "json"
+      }
+    },
+    {
+      "id": "themes.social-template-proposal",
+      "version": 1,
+      "file": "themes/social-template-proposal.md",
+      "purpose": "social-template-proposal-generation",
+      "variables": [
+        "draftField",
+        "packId",
+        "packVersion",
+        "packLabel",
+        "rolePromptText",
+        "draftLine",
+        "outputShape",
+        "pageRoles",
+        "blockTypes",
+        "themePromptText"
+      ],
+      "components": [],
+      "output": {
+        "format": "json"
+      }
+    },
+    {
+      "id": "social-cards.browser-audit-plan-adjustment",
+      "version": 1,
+      "file": "social-cards/browser-audit-plan-adjustment.md",
+      "purpose": "social-card-post-browser-audit-planning-stage",
+      "variables": [],
+      "components": [],
+      "output": { "format": "json" }
+    },
+    {
+      "id": "social-cards.browser-audit-plan-adjustment-user",
+      "version": 1,
+      "file": "social-cards/browser-audit-plan-adjustment-user.md",
+      "purpose": "social-card-post-browser-audit-user-task",
+      "variables": [],
+      "components": [],
+      "output": { "format": "json" }
+    }
+  ]
+}

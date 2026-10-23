@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { tutorialVisibleChars } from '../server/features/articles/llm/tutorial-pipeline.mjs';
+import { resolvePrompt } from '../server/platform/llm/prompt-registry.mjs';
 
 test('教程字数统计忽略标题和链接URL',()=>{
   assert.equal(tutorialVisibleChars('# 教程\n\n[文档](https://example.com)\n正文'),4);
@@ -38,7 +39,12 @@ test('自主写作管线按模式选择心得经验或教程技能',()=>{
 
 test('教程质量门禁使用独立 JSON 提示并在格式错误时重试',()=>{
   const source=fs.readFileSync(new URL('../server/features/articles/llm/tutorial-pipeline.mjs',import.meta.url),'utf8');
-  assert.match(source,/只评估，不修改、不续写、不复述文章/);
+  assert.match(source,/resolvePrompt\(articleMode==='experience'\?'articles\.tutorial-quality-gate-experience':'articles\.tutorial-quality-gate-guide'\)/);
+  for(const id of ['articles.tutorial-quality-gate-experience','articles.tutorial-quality-gate-guide']){
+    const prompt=resolvePrompt(id).text;
+    assert.match(prompt,/只评估，不修改、不续写、不复述文章/);
+    assert.match(prompt,/必须仅返回严格 JSON/);
+  }
   assert.match(source,/callDecisionTool/);
   assert.match(source,/decision\.tutorial_quality_gate/);
   assert.match(source,/\$\{purpose\}\$\{attempt\?'\-format-retry'/);

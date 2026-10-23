@@ -9,6 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseModelJson } from '../../../platform/llm/model-json.mjs';
+import { resolvePrompt } from '../../../platform/llm/prompt-registry.mjs';
 import { GITHUB_PROJECT_TYPES, GITHUB_SCENARIO_LANES } from '../../../shared/domain/github-repository.mjs';
 
 const QUERIES_FILE = 'repo-discovery-queries.json';
@@ -136,14 +137,7 @@ export async function planRepoDiscoveryQueries({ workspaceRoot, gateway, account
   const cached = loadCachedQueries(workspaceRoot, refreshDays);
   if (cached) return cached;
   if (!gateway) return { queries: builtInQueries(maxQueries), generatedAt: null, cached: false, fallback: true };
-  const system = `你是开源项目选题策划。根据调用方提供的账号上下文与读者画像，设计 GitHub Search 查询组，用于发现最近活跃、值得该账号继续加工的开源项目。
-要求：
-- 输出 3~${maxQueries} 组查询，覆盖账号内容支柱对应的具体读者场景；不要自行假定账号所属行业、读者职业或内容偏好；
-- 查询应优先描述可核验的使用场景和直接结果，避免只围绕热门名词扩展；
-- query 字段只写 GitHub Search 的关键词部分（可含 topic: 限定符），不要写 stars:/created:/fork: 等限定符，系统会统一追加；
-- 禁止单独使用宽泛词作为 query；每组必须说明账号核心读者使用后的直接结果；
-- minStars 按领域热度给 50~1000，小众方向放低、大众方向放高；
-- 返回严格 JSON：{"queries":[{"label":"方向名（10 字内）","lane":"场景组","query":"关键词","projectTypes":["tool|component|plugin-extension|skill-workflow|data-content|infrastructure|ai-utility|agent"],"directUseCase":"直接结果","searchMode":"new|active|evergreen","language":"可选，留空表示不限","createdWithinDays":30到90,"activityWindowDays":30到180,"minStars":数字}]}`;
+  const system = resolvePrompt('collection.repo-discovery-queries', { maxQueries }).text;
   const user = accountInterestText(accountContext);
   try {
     const result = await gateway.complete({
@@ -171,11 +165,7 @@ const INTEREST_CONCURRENCY = 4;
 export async function filterRepositoriesByInterest({ gateway, accountContext, repos, threshold = 6, provider = '', log = () => {}, chunkSize = INTEREST_CHUNK_SIZE, concurrency = INTEREST_CONCURRENCY }) {
   const list = (repos || []).filter((repo) => repo?.repository);
   if (!list.length || !gateway) return repos || [];
-  const system = `你是开源项目选题编辑。按"账号核心读者是否会想继续了解或使用该仓库"为每个仓库打 0~10 分，并给一句 20 字内的中文理由。
-评分必须以调用方提供的账号上下文为唯一账号相关依据：结合读者画像、内容支柱、分发策略和读者利益判断；不要自行假定固定行业或职业。
-评分锚点：9-10 分=与账号支柱高度匹配，并能给核心读者带来明确、可验证的结果；7-8 分=有清晰连接和输入输出，但价值或适用范围有限；5-6 分=存在弱连接、受众窄或同质严重；0-4 分=与账号定位基本无关。
-项目类型、技术栈或模型标签本身不加分；只有在账号上下文允许的情况下，具体场景和可验证结果才可提高分数。
-返回严格 JSON：{"results":[{"repository":"owner/name","score":数字,"reason":"理由"}]}，必须覆盖全部输入仓库。`;
+  const system = resolvePrompt('collection.repo-interest-filter').text;
   const batches = [];
   for (let index = 0; index < list.length; index += Math.max(1, chunkSize)) batches.push(list.slice(index, index + chunkSize));
   const scoreBatch = async (batch) => {
