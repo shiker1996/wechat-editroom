@@ -501,7 +501,6 @@ async function onReady() {
   const themeQuickPicker = document.getElementById("theme-quick-picker");
   const themeQuickPickerTrigger = document.getElementById("theme-quick-picker-trigger");
   const appearanceThemes = ["office", "harbor", "dark"];
-  const appearanceThemeLabels = { office: "雾灰蓝", harbor: "海盐薄荷", dark: "深夜墨蓝" };
   let savedAppearanceTheme = appearanceThemes.includes(document.documentElement.dataset.uiTheme) ? document.documentElement.dataset.uiTheme : "office";
   if (document.documentElement.dataset.uiThemePersisted !== "true") {
     try {
