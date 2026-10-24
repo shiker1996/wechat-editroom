@@ -23,7 +23,7 @@
 ## 系统主题配置位置
 
 - 配色值集中在 `public/styles/tokens-base.css`：文件开头的 `:root` 是「浅色」，`:root[data-ui-theme="harbor"]` 是「护眼」，`:root[data-ui-theme="dark"]` 是「暗色」。应在这里调整各主题的语义变量值。
-- 服务端从工作区根目录的 `appearance-theme.txt` 读取主题，并在返回 `public/index.html` 时注入，避免首屏闪回默认配色；`public/src/main.js` 通过 `/api/appearance-theme` 保存主题。桌面端和浏览器只要连接同一个工作台服务，就会读写同一份设置。旧 Electron `userData/appearance-theme.txt` 和浏览器 `localStorage` 只在首次无工作区设置时迁移。
+- 服务端从工作区 `data/appearance-theme.txt` 读取主题，并在返回 `public/index.html` 时注入，避免首屏闪回默认配色；`public/src/main.js` 通过 `/api/appearance-theme` 保存主题。桌面端和浏览器只要连接同一个工作台服务，就会读写同一份设置。旧工作区根目录、Electron `userData` 中的 `appearance-theme.txt` 和浏览器 `localStorage` 只在首次无 `data/` 设置时迁移。
 - `public/styles/tokens-base.css` 之后的组件样式引用这些变量。文章、图文和封面模板主题是另外一套模板配色，不要把它们与系统页面主题混在一起。
 - 快捷切换列表的主题小色块由同文件中的 `--ui-theme-preview-*-surface` 和 `--ui-theme-preview-*-accent` 组成，展示每套系统主题的底色与强调色。
 

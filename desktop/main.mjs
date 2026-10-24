@@ -18,7 +18,8 @@ let shuttingDown = false;
 let workspaceRootPath = null;
 let logDirectoryPath = null;
 const workspaceLocationFileName = 'workspace-location.txt';
-const legacyAppearanceThemeFileName = 'appearance-theme.txt';
+const appearanceThemeFileName = 'appearance-theme.txt';
+const appearanceThemes = new Set(['office', 'harbor', 'dark']);
 
 function ensureDirectory(directory) {
   fs.mkdirSync(directory, { recursive: true });
@@ -350,10 +351,22 @@ ipcMain.on('desktop-command-trace', (event, details = {}) => {
 async function boot() {
   const workspaceRoot = ensureDirectory(configuredWorkspaceRoot());
   workspaceRootPath = workspaceRoot;
-  const legacyAppearanceThemePath = path.join(app.getPath('userData'), legacyAppearanceThemeFileName);
-  const sharedAppearanceThemePath = path.join(workspaceRoot, legacyAppearanceThemeFileName);
-  if (!fs.existsSync(sharedAppearanceThemePath) && fs.existsSync(legacyAppearanceThemePath)) {
-    fs.copyFileSync(legacyAppearanceThemePath, sharedAppearanceThemePath);
+  const sharedAppearanceThemePath = path.join(workspaceRoot, 'data', appearanceThemeFileName);
+  const legacyThemePaths = [
+    path.join(workspaceRoot, appearanceThemeFileName),
+    path.join(app.getPath('userData'), appearanceThemeFileName),
+  ];
+  if (!fs.existsSync(sharedAppearanceThemePath)) {
+    const legacyThemePath = legacyThemePaths.find((candidate) => {
+      try { return appearanceThemes.has(fs.readFileSync(candidate, 'utf8').trim()); } catch { return false; }
+    });
+    if (legacyThemePath) {
+      ensureDirectory(path.dirname(sharedAppearanceThemePath));
+      fs.copyFileSync(legacyThemePath, sharedAppearanceThemePath);
+    }
+  }
+  if (fs.existsSync(sharedAppearanceThemePath)) {
+    for (const legacyThemePath of legacyThemePaths) fs.rmSync(legacyThemePath, { force: true });
   }
   seedWorkspaceResources(workspaceRoot);
   const logDirectory = ensureDirectory(path.join(workspaceRoot, 'logs'));

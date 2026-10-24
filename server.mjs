@@ -92,6 +92,17 @@ async function refreshProductionDemoSnapshot(sourcePath, snapshotPath) {
 }
 
 const dataRoot = runtimePaths.dataRoot;
+const appearanceThemeFileName = 'appearance-theme.txt';
+const appearanceThemes = new Set(['office', 'harbor', 'dark']);
+const appearanceThemePath = path.join(dataRoot, appearanceThemeFileName);
+const legacyAppearanceThemePath = path.join(root, appearanceThemeFileName);
+if (!fs.existsSync(appearanceThemePath) && fs.existsSync(legacyAppearanceThemePath)) {
+  const legacyTheme = fs.readFileSync(legacyAppearanceThemePath, 'utf8').trim();
+  if (appearanceThemes.has(legacyTheme)) {
+    fs.mkdirSync(dataRoot, { recursive: true });
+    fs.renameSync(legacyAppearanceThemePath, appearanceThemePath);
+  }
+}
 const productionSnapshotPath = path.join(dataRoot, 'demo-production.db');
 if (demoProduction) await refreshProductionDemoSnapshot(path.join(dataRoot, 'workbench.db'), productionSnapshotPath);
 const instanceLock=acquireInstanceLock(runtimePaths.workspaceRoot,{name:demoProduction?'demo-production':demo?'demo':'workbench'});
@@ -146,8 +157,6 @@ const aiJobs = new AiJobManager(store, models, config, {
 });
 const artifactRoots = [config.workspaceRoot, ...config.contentRoots];
 const publicRoot = path.join(runtimePaths.appRoot, 'public');
-const appearanceThemePath = path.join(root, 'appearance-theme.txt');
-const appearanceThemes = new Set(['office', 'harbor', 'dark']);
 function readAppearanceTheme() {
   try {
     const theme = fs.readFileSync(appearanceThemePath, 'utf8').trim();
