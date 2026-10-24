@@ -21,7 +21,6 @@ function processStartedAt(pid){
 function ownerProcessAlive(owner){
   const pid=Number(owner?.pid);
   if(!Number.isInteger(pid)||pid<=0)return false;
-  if(pid===process.pid)return true;
   if(!processAlive(pid))return false;
 
   const lockStartedAt=Date.parse(owner?.startedAt??'');
