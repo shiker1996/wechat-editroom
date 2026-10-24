@@ -49,6 +49,12 @@ jobs:
       - name: 构建校验
         run: npm run build
 
+      - name: 颜色硬编码与变量校验
+        run: npm run check:page-colors
+
+      - name: 颜色用途混用基线
+        run: npm run audit:color-roles -- --strict
+
       - name: 主链路 E2E 门禁
         run: node --disable-warning=ExperimentalWarning --test --test-concurrency=2 --test-reporter=tap --test-reporter=junit --test-reporter-destination=stdout --test-reporter-destination=test-results/junit/e2e.xml test/e2e/**/*.test.mjs
 

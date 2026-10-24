@@ -52,10 +52,13 @@ const entries = files.map((file) => {
 });
 
 const allowlist = fs.existsSync(allowlistPath) ? JSON.parse(fs.readFileSync(allowlistPath, 'utf8')) : {};
-const allowed = new Set((allowlist.allowed ?? []).map((item) => `${item.file}\t${item.property}\t${item.token}`));
+const allowed = new Map((allowlist.allowed ?? []).map((item) => [
+  `${item.file}\t${item.selector ?? ''}\t${item.property}\t${item.token}`,
+  Number.isInteger(item.maxOccurrences) ? item.maxOccurrences : Number.POSITIVE_INFINITY,
+]));
 const propertyCounts = new Map();
 const tokenUses = new Map();
-const findings = [];
+const rawFindings = [];
 const tokenFilter = process.argv.find((arg) => arg.startsWith('--token='))?.slice(8);
 const summaryOnly = process.argv.includes('--summary');
 
@@ -75,13 +78,22 @@ for (const entry of entries) {
         tokenUses.set(`${property}\t${token}`, (tokenUses.get(`${property}\t${token}`) ?? 0) + 1);
         const compatibleRoles = (role === 'focus' && ['border', 'shadow'].includes(expectedRole));
         if (role && role !== expectedRole && !compatibleRoles) {
-          const key = `${entry.relative}\t${property}\t${token}`;
-          if (!allowed.has(key)) findings.push({ type: 'cross-role-token', file: entry.relative, line: lineAt(entry.source, rule.index + rule[0].indexOf(body) + declaration.index), selector: rule[1].trim(), value, property, token, actualRole: role, expectedRole });
+          rawFindings.push({ type: 'cross-role-token', file: entry.relative, line: lineAt(entry.source, rule.index + rule[0].indexOf(body) + declaration.index), selector: rule[1].trim(), value, property, token, actualRole: role, expectedRole });
         }
       }
     }
   }
 }
+
+const observed = new Map();
+const findings = [];
+for (const item of rawFindings) {
+  const key = `${item.file}\t${item.selector}\t${item.property}\t${item.token}`;
+  const occurrence = (observed.get(key) ?? 0) + 1;
+  observed.set(key, occurrence);
+  if (occurrence > (allowed.get(key) ?? 0)) findings.push(item);
+}
+const baselineCount = rawFindings.length - findings.length;
 
 const grouped = new Map();
 for (const finding of findings) {
@@ -92,12 +104,12 @@ for (const finding of findings) {
 
 console.log(`颜色用途审计：${entries.length} 个源文件（${[...propertyCounts.values()].reduce((sum, count) => sum + count, 0)} 条颜色相关声明）`);
 console.log('审计属性：color/background/border/outline/shadow。font 是字体族、字号、字重与行高简写；文字颜色由 color 单独控制。');
-console.log(`发现 ${findings.length} 条跨用途引用。`);
+console.log(`发现 ${findings.length} 条超出基线的跨用途引用；现存基线覆盖 ${baselineCount} 条。`);
 console.log('未定义变量由 check:page-colors 校验；本脚本只报告颜色用途。');
 console.log('\n声明属性分布：');
 for (const [property, count] of [...propertyCounts].sort(([a], [b]) => a.localeCompare(b))) console.log(`  ${property}: ${count}`);
 console.log('\n按 token 汇总的可疑引用：');
-if (!grouped.size) console.log('  未发现跨用途或未定义 token 引用。');
+if (!grouped.size) console.log('  未发现超出基线的跨用途 token 引用。');
 for (const item of [...grouped.values()].filter((item) => !tokenFilter || item.token === tokenFilter).sort((a, b) => a.expectedRole.localeCompare(b.expectedRole) || a.token.localeCompare(b.token))) {
   console.log(`  ${item.expectedRole} <- ${item.token} (${item.actualRole}); ${item.occurrences.length} 处`);
   if (!summaryOnly) {

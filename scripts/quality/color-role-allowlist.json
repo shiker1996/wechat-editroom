@@ -1,3 +1,277 @@
 {
-  "allowed": []
+  "allowed": [
+    {
+      "file": "public/styles/chrome.css",
+      "selector": ".nav-icon",
+      "property": "border",
+      "token": "--chrome-nav-group-text-secondary",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/chrome.css",
+      "selector": ".theme-cycle-icon",
+      "property": "border",
+      "token": "--surface",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/chrome.css",
+      "selector": ".first-run-status i",
+      "property": "background",
+      "token": "--muted",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/editor-themes.css",
+      "selector": ".document-review-issue-panel.is-stale",
+      "property": "border-color",
+      "token": "--editor-preflight-status-count-markdown-toolbar-surface",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/editor-themes.css",
+      "selector": ".document-review-issue-panel.is-stale .document-review-issues-kicker,.document-review-issue-panel.is-stale .document-review-issues-state",
+      "property": "color",
+      "token": "--editor-preflight-status-count-markdown-toolbar-surface",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/editor-themes.css",
+      "selector": ".image-contact-sheet.drag-active",
+      "property": "box-shadow",
+      "token": "--editor-image-contact-sheet-drag-active-surface",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/editor-themes.css",
+      "selector": ".cal-plan .cal-content-type",
+      "property": "background",
+      "token": "--editor-cal-plan-border",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/editor-themes.css",
+      "selector": ".feedback-adjustment-status.stale",
+      "property": "border-color",
+      "token": "--muted",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/editor-themes.css",
+      "selector": ".adjustment-code-editor-label textarea:focus",
+      "property": "box-shadow",
+      "token": "--editor-material-flow-strip-surface",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/production.css",
+      "selector": ".source-row i, .legend i",
+      "property": "background",
+      "token": "--muted",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/production.css",
+      "selector": ".source-evidence",
+      "property": "border-left",
+      "token": "--muted",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/production.css",
+      "selector": ".production-step i",
+      "property": "border",
+      "token": "--muted",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/production.css",
+      "selector": ".extension-management-grid .runtime-commandbar .ghost-button:hover",
+      "property": "border-color",
+      "token": "--white",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/production.css",
+      "selector": ".health-idle",
+      "property": "box-shadow",
+      "token": "--production-health-dot-idle-surface",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/social-card.css",
+      "selector": ".storyboard-block-provenance",
+      "property": "color",
+      "token": "--social-storyboard-block-provenance-border",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/social-card.css",
+      "selector": ".social-delivery-head .outline-button",
+      "property": "color",
+      "token": "--social-social-delivery-head-outline-button-border",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/social-card.css",
+      "selector": ".social-gallery-tools .outline-button",
+      "property": "color",
+      "token": "--social-social-delivery-head-outline-button-border",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/social-card.css",
+      "selector": ".social-gallery-counter",
+      "property": "background",
+      "token": "--social-social-delivery-text",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/social-card.css",
+      "selector": ".social-gallery-film span",
+      "property": "background",
+      "token": "--social-social-gallery-counter-text",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/social-card.css",
+      "selector": ".theme-picker-trigger:after",
+      "property": "border-top",
+      "token": "--social-theme-picker-trigger-shadow",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/social-card.css",
+      "selector": ".theme-choice-sample",
+      "property": "border",
+      "token": "--card-ink",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/social-card.css",
+      "selector": ".theme-catalog-preview",
+      "property": "border",
+      "token": "--theme-preview-ink",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/social-card.css",
+      "selector": ".social-publish-title .outline-button",
+      "property": "color",
+      "token": "--social-social-delivery-head-outline-button-border",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/system-console.css",
+      "selector": ".theme-choice-sample .sample-rule",
+      "property": "background",
+      "token": "--card-ink",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/system-console.css",
+      "selector": ".theme-choice-sample .sample-inverse",
+      "property": "color",
+      "token": "--card-bg",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/system-console.css",
+      "selector": ".theme-choice-sample code",
+      "property": "border",
+      "token": "--card-ink",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/system-console.css",
+      "selector": ".source-empty::before",
+      "property": "color",
+      "token": "--line",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/system-console.css",
+      "selector": ".configuration-console-head p",
+      "property": "color",
+      "token": "--system-chat-immersive-toggle-hover-border",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/system-console.css",
+      "selector": ".maintenance-disclosure>summary b",
+      "property": "color",
+      "token": "--system-configuration-legend-secret-surface",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/system-console.css",
+      "selector": ".capability-consumer-list>span",
+      "property": "border-left",
+      "token": "--system-configuration-legend-configuration-resource-state-configuration-status-badge-surface",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/system-console.css",
+      "selector": ".capability-consumer-list>button.capability-consumer-chip",
+      "property": "border-left",
+      "token": "--system-configuration-legend-configuration-resource-state-configuration-status-badge-surface",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/system-console.css",
+      "selector": ".consumer-access-row.status-degraded .consumer-final",
+      "property": "color",
+      "token": "--system-is-consumer-skill-consumer-type-badge-surface",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/system-console.css",
+      "selector": ".storyboard-ai-restructure",
+      "property": "border-color",
+      "token": "--system-storyboard-ai-restructure-text",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/system-console.css",
+      "selector": ".storyboard-reflow-preview",
+      "property": "border-left",
+      "token": "--system-storyboard-ai-restructure-text",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/theme-picker.css",
+      "selector": ".theme-choice-sample",
+      "property": "border",
+      "token": "--card-ink",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/topics-accessibility.css",
+      "selector": ".log-entry",
+      "property": "border-left",
+      "token": "--muted",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/topics-accessibility.css",
+      "selector": ".run-trace-mark",
+      "property": "color",
+      "token": "--topics-run-trace-mark-border",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/topics-accessibility.css",
+      "selector": ".run-trace-resizer:focus-visible",
+      "property": "outline",
+      "token": "--topics-run-trace-mark-border",
+      "maxOccurrences": 1
+    },
+    {
+      "file": "public/styles/topics-accessibility.css",
+      "selector": ".run-trace-waterfall-row:focus-visible",
+      "property": "outline",
+      "token": "--topics-run-trace-mark-border",
+      "maxOccurrences": 1
+    }
+  ]
 }
