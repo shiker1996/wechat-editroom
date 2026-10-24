@@ -4,7 +4,7 @@
 
 「见字」是本地优先的 Windows 单用户工作台：Node.js 24 原生 HTTP（无 Web 框架）+ `node:sqlite`（无原生编译依赖）+ 浏览器端原生 ES Modules（`public/src/`，构建仅做打包）。只监听 `127.0.0.1:4317`。
 
-当前采用“业务能力垂直入口 + 平台基础设施”的垂直架构：`server/` 顶层严格收敛为 `features/`、`platform/`、`shared/` 三个目录。业务调用方从 `server/features/*` 进入，当前已建立 `research`、`social-cards`、`articles`、`collection`、`batches` 五个业务入口；研究、图文、文章主流水线与排版流水线已物理归入各自垂直的 `application/`。HTTP、LLM、持久化、任务、工具和外部集成统一位于 `server/platform/`；跨业务纯规则、Schema、渲染和主题位于 `server/shared/`。兼容导出只允许留在对应的 platform/shared 边界内，不再新增旧顶层目录。
+当前采用“业务能力垂直入口 + 平台基础设施”的垂直架构：`server/` 顶层严格收敛为 `features/`、`platform/`、`shared/` 三个目录。业务调用方从 `server/features/*` 进入，当前有 `research`、`social-cards`、`articles`、`collection`、`batches`、`content-planning`、`materials`、`content-feedback` 八个业务入口；研究、图文、文章、采集、素材和内容反馈的用例按领域归入各自 `application/`，领域规则归入 `domain/`。HTTP、LLM、持久化、任务、工具和外部集成统一位于 `server/platform/`；跨业务纯规则、Schema、渲染和主题位于 `server/shared/`。兼容导出只允许留在对应的 platform/shared 边界内，不再新增旧顶层目录。
 
 ## 总览图
 
@@ -12,11 +12,11 @@
 
 > 上图由 [LikeC4](https://likec4.dev/) 从 `likec4/model.c4` 实时生成，随架构变更同步更新。
 
-## 启动流程（server.mjs，约 960 行）
+## 启动流程（server.mjs，约 550 行）
 
 1. `loadEnv`（`server/platform/core/env.mjs`）→ `loadConfig`（`server/platform/core/config.mjs`，全部默认值内置，`config.local.json` 覆盖）。
 2. 组装单例：`Store`（`data/workbench.db`）、`JobManager`（采集任务）、`ModelGateway`、`AiJobManager`，构造函数传参，无 DI 框架。
-3. 路由注册是**顺序链式**：`/api/` 请求先依次经过 `server/platform/http/routes/` 的模型、主题、内容、系统、媒体、文章、社交卡、批次、候选创作和任务 handler（返回 falsy 则继续），最后由顶层入口决定 404。路由模块只负责 HTTP 适配，批次/候选/任务的业务编排通过显式上下文注入。
+3. 路由注册是**顺序链式**：`/api/` 请求先依次经过 `server/platform/http/routes/` 的 12 个路由模块（返回 falsy 则继续），最后由顶层入口决定 404。路由模块只负责 HTTP 适配，业务编排通过显式上下文调用 feature 或平台应用服务。
 4. 静态资源只服务 `public/`，路径越界检查 + `no-store`，无 SPA fallback。
 5. 引导时异步自启 RSSHub（失败只记日志不阻塞）；端口被占用时探测既有实例 `/api/overview`，已运行则提示退出。除 RSSHub 外无常驻守护，后台任务均为请求触发。
 
@@ -25,6 +25,9 @@
 | 模块 | 职责 |
 |---|---|
 | `model-routes.mjs` | 模型服务商列表、增删、连通性测试 |
+| `theme-routes.mjs` | 用户主题 CRUD、预览、自动匹配与发布门禁 |
+| `material-routes.mjs` | 素材捕获、查询、编辑、状态流转与就绪度评估 |
+| `content-feedback-routes.mjs` | 公众号导出、内容复盘、反馈上下文与建议 |
 | `content-routes.mjs` | 热点、文章、日历、日志、产物柜（含 reindex / preview） |
 | `system-routes.mjs` | 最大模块：设置、技能包与插件的安装 / 状态 / 回滚 / 删除、能力槽位、执行日志、RSSHub / Reddit 控制、订阅 CRUD、备份导出 / 校验 / 恢复 |
 | `media-routes.mjs` | 配图工作区、排版 `/ai/typeset`、文章封面（标准 / AI 视觉）、文档列表、可视化规划与决策 |
@@ -34,6 +37,8 @@
 | `candidate-routes.mjs` | 候选池、综合候选、突发素材、自定义图文、自主写作和候选轨道 |
 | `task-routes.mjs` | 打标、研究、自动化、事件卡、日报与任务查询 |
 | `route-helpers.mjs` | 路由响应、批次装饰、事件卡关联、事件事实和文件写入辅助 |
+
+路由目录另含 `system-restore-transactions.mjs`（恢复事务辅助）和 README；它们不计入 12 个 HTTP 路由模块。
 
 两个横切约定：
 
@@ -50,14 +55,15 @@
 
 ![持久化层与 Run Store](./diagrams/platformDetail.png)
 
-> 上图展示持久化层：SQLite、23 Repositories、4 QueryServices，以及 v43 新增的 Run / Step / Event / Checkpoint 存储。
+> 上图展示持久化层：SQLite、23 Repositories、4 QueryServices，以及 schema v46 的 Run / Step / Event / Checkpoint 存储。
 
 ### Store（server/platform/core/）
 
 - `store.mjs` 的 `Store` 类是兼容 facade：负责打开数据库、执行启动迁移、组装 Repository/Query Service/Application Service，并暴露旧公共 API；Store 本身不再直接执行 SQL。
+- 当前迁移 schema 版本为 v46；Run Store 保存 Agent Run、事件、步骤、checkpoint、恢复租约与工具幂等结果。
 - 迁移是**幂等的 `CREATE TABLE IF NOT EXISTS` + `PRAGMA table_info` 探测补列**（无 `user_version`），只增不破；跨版本验收见 `test/version-compat.test.mjs`。
 - 整库导入与 `foreign_key_check` 由 `DatabaseRestoreService` 承担，生成快照等领域数据由对应 Repository 存取。
-- 同目录：`config.mjs`（部署参数与内置默认值）、`env.mjs`、`workspace-paths.mjs`（`articles/`、`topics/`、`social-cards/` 等产物目录）。模型服务商运行配置由 `extension_settings` 统一持久化。
+- 同目录：`config.mjs`（部署参数与内置默认值）、`env.mjs`、`workspace-paths.mjs`（`articles/`、`topics/`、`social-cards/` 等产物目录）。模型服务商运行配置由 `extension_settings` 统一持久化；外观主题偏好保存在工作区 `data/appearance-theme.txt`，由浏览器和桌面端共用服务读取与写入。
 
 ### 核心实体关系（批次 / 热点 / 事件 / 选题）
 
@@ -81,6 +87,8 @@
 - `gateway.mjs`：OpenAI 兼容客户端，统一 `complete` / `streamComplete`。启动时从 `extension_settings` 恢复模型服务商注册表，模型配置含 baseUrl / model / 协议 / 能力开关 / 上下文窗口 / 输出上限 / webSearch 配置，默认模型单独保存在 `system:llm-runtime`，`resolve()` 校验启用状态与隔离凭据。降级：jsonMode 不支持自动去 `response_format` 重试；无原生 webSearch 且配置 Tavily 时注入搜索结果；`finishReason=length` 且 adaptive 时自动扩容重试一次。每次调用（含失败）写 `model_calls` 审计（含原始输出与推理文本，仅保留最近 2000 条，超出自动清理）。
 - `context-manager.mjs`：CJK 加权 token 估算与上下文预算；超预算时先 LLM 摘要老消息（不新增事实），仍超则丢弃最老非保护消息，不静默截断。
 - `output-budget.mjs`：按用途（typeset-html、editorial-room 等 16 组画像）定输出预算，截断时带重试提示词重试。
+- `prompt-registry.mjs`：统一解析项目级提示词资产；读取 `prompts/manifest.json` 和 Markdown，校验 ID、变量与组件引用，组合文本并返回版本、组件清单及源哈希。
+- `prompts/`：按业务域组织的版本化 Prompt 文件目录，与 `skills/` 中可配置的 Skill 定义分开管理。业务流程通过 `resolvePrompt(id, variables)` 取用；资产迁移进度见 [提示词资产管理方案](./design/prompt-asset-management.md)。
 
 ## 技能运行时（server/platform/skills/ + skills/）
 
@@ -132,7 +140,7 @@ Agent Harness 改造把运行时概念收敛为四种对象分工：**Skill**（
 - `gates.mjs`：输入 / 输出门禁执行，业务门禁经 `gateHandlers` 注入，门禁失败不写 completed。
 - 现有 `registry.mjs`、`entry-routing.mjs`、`pipeline-runtime.mjs`、`roles.mjs`、`package-manager.mjs` 继续承担技能合并、入口路由、工具白名单与包管理。
 
-持久化随运行内核升级为 v43 Run Store（`server/platform/persistence/agent-harness-schema.mjs`）：
+持久化中的 Run Store（当前数据库 schema v46，`server/platform/persistence/agent-harness-schema.mjs`）：
 
 - `agent_runs`（关联 `generation_snapshot_id`）、`agent_run_events`、`agent_steps`
 - `agent_checkpoints`（可恢复状态 + 阶段/预算计数）、`agent_resume_claims`（恢复租约）、`agent_tool_idempotency`（幂等工具结果）
@@ -202,11 +210,12 @@ Agent Harness 改造把运行时概念收敛为四种对象分工：**Skill**（
 
 | 目录 | 内容 |
 |---|---|
-| `server/features/` | 按业务能力组织的垂直入口与用例，目前包括研究、图文、文章、采集和批次 |
+| `server/features/` | 按业务能力组织的垂直入口与用例：研究、图文、文章、采集、批次、内容规划、素材和内容反馈 |
 | `server/platform/` | HTTP、配置、环境、Store、任务、LLM、工具、集成和插件运行时 |
 | `server/shared/domain/` | 跨业务复用的规则、事实模型与 Schema；保持纯业务依赖方向 |
 | `server/platform/http/routes/` | 已抽出的 HTTP 路由模块 |
 | `server/platform/llm/` | LLM 网关、JSON/安全/上下文等通用模型基础设施与少量兼容转发 |
+| `prompts/` | 由 `manifest.json` 登记、按业务域分类的版本化 Markdown Prompt 资产 |
 | `server/features/*/llm/` | 各业务垂直专用的模型任务、Prompt 编排和结构化输出适配 |
 | `server/platform/persistence/` | SQLite 连接、完整 Schema/兼容迁移、外键校验、按领域拆分的数据仓储与跨领域只读 Query Service；`Store` 作为兼容 facade 暴露旧 API |
 | `server/shared/rendering/` | 无文件系统和模型副作用的 Markdown/HTML、故事板和主题输出纯函数 |

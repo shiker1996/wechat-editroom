@@ -171,7 +171,7 @@ views {
   // ======================================================================
   view platformDetail of persistence {
     title "持久化层与 Run Store"
-    description "SQLite、23 Repositories、Query Services 与 v43 Run/Step/Checkpoint 存储"
+    description "SQLite、23 Repositories、4 个 Query Services 与 schema v46 Run/Step/Checkpoint 存储"
     include *
     include -> persistence
     include persistence -> sqlite

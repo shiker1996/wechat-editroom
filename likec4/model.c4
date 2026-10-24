@@ -35,9 +35,12 @@ model {
       #core
       description "装配 Store / ModelGateway / JobManager / Harness 单例，分发请求，静态资源"
     }
-    routes = container "routes/ (11 个路由模块)" {
+    routes = container "routes/ (12 个 HTTP 路由模块)" {
       #feature
-      description "模型/内容/系统/媒体/文章/社交卡/批次/候选/任务/运行 Trace"
+      description "模型/主题/素材/反馈/内容/系统/媒体/文章/社交卡/批次/候选/任务 HTTP 适配"
+      themeRoutes = component "theme-routes.mjs" { description "用户主题 CRUD、预览与发布门禁" }
+      materialRoutes = component "material-routes.mjs" { description "素材捕获、查询、编辑、状态和评估" }
+      feedbackRoutes = component "content-feedback-routes.mjs" { description "公众号与图文反馈上下文、复盘和修订" }
       taskRoutes = component "task-routes.mjs" { description "AI Job 状态、运行日志" }
       traceRoutes = component "system-routes.mjs" { description "含 /api/runs/:rootRunId Trace 聚合" }
     }
@@ -98,6 +101,7 @@ model {
     contextManager = component "context-manager.mjs" { description "CJK 加权 token 估算、上下文压缩" }
     stageRouting = component "stage-model-routing.mjs" { description "阶段模型路由与快照" }
     skillRuntime = component "skill-runtime.mjs" { description "技能 bundle 拼接 + 安全门禁段" }
+    promptRegistry = component "prompt-registry.mjs" { description "从 prompts/manifest.json 加载 Markdown 资产；校验变量与组件，解析版本和 SHA-256 哈希" }
   }
 
   // ============ Tools / Capabilities ============
@@ -115,8 +119,8 @@ model {
     description "SQLite 连接、迁移、按领域拆分的数据仓储与跨领域只读 Query Service"
     database = component "database.mjs" { description "SQLite 连接管理（WAL 模式）" }
     repos = component "23 Repositories" { description "每个领域实体一个 Repository" }
-    queries = component "4 QueryServices" { description "复杂读取模型" }
-    runStore = component "Run Store (v43)" {
+    queries = component "4 QueryServices" { description "Workbench / Batch / Candidate / Event Resolution 读取模型" }
+    runStore = component "Run Store (schema v46)" {
       #harness
       description "agent_runs / agent_run_events / agent_steps / agent_checkpoints / agent_resume_claims / agent_tool_idempotency"
     }
@@ -161,7 +165,33 @@ model {
     }
     contentPlanning = container "内容规划" {
       #feature
-      description "内容日历、微信审校、反馈闭环"
+      description "栏目、计划、素材简报与确定性规划建议"
+    }
+    materials = container "素材管理" {
+      #feature
+      description "材料捕获、检索、编辑、状态流转与就绪度评估"
+      service = component "Material Service" { description "用例编排，依赖 MaterialRepository" }
+      assessment = component "Material Assessment" { description "纯领域规则：评估材料质量与可用性" }
+    }
+    contentFeedback = container "内容反馈" {
+      #feature
+      description "公众号导出复盘、内容表现匹配、反馈修订与图文反馈"
+      insights = component "Feedback Domain" { description "导出解析、文章匹配、内容洞察与策略建议" }
+      services = component "Feedback Application Services" { description "数据关联、反馈上下文、技能修订与微信内容服务" }
+    }
+  }
+
+  // ============ Platform Application Services ============
+  platformApplications = system "平台应用服务" {
+    #core
+    description "跨 HTTP 与领域入口复用的用例编排，不承载模板纯函数"
+    userThemes = container "用户主题服务" {
+      #core
+      description "主题生成、自动匹配、预览、版本保存与发布门禁"
+    }
+    extensionConfiguration = container "扩展配置服务" {
+      #core
+      description "模型提供商、工具、采集器与技能的 schema 校验、profile 配置和数据库存储"
     }
   }
 
@@ -178,7 +208,15 @@ model {
   // ============ Storage ============
   sqlite = storage "SQLite 数据库" {
     #core
-    description "data/workbench.db (WAL)，Run/Step/Checkpoint/幂等存于 v43 schema"
+    description "data/workbench.db (WAL)，当前 schema v46；仓储与迁移由平台持久化层管理"
+  }
+  workspaceData = storage "工作区运行数据" {
+    #core
+    description "data/：SQLite、扩展配置、运行时清单与 appearance-theme.txt 等本地设置"
+  }
+  promptAssets = storage "版本化 Prompt 资产 (prompts/)" {
+    #core
+    description "Git 管理的 manifest.json 与按 articles / research / collection / themes / feedback 等领域拆分的 Markdown 提示词文件"
   }
 
   // ============ Plugin System ============
@@ -210,13 +248,23 @@ model {
   httpLayer.server -> httpLayer.routes "按 pathname 分发"
   httpLayer.routes -> features.articles.adapter "编辑会/成稿请求"
   httpLayer.routes -> features.batches "批次与流水线请求"
+  httpLayer.routes -> features.materials "素材业务 HTTP 适配"
+  httpLayer.routes -> features.contentFeedback "复盘与反馈 HTTP 适配"
+  httpLayer.routes -> platformApplications.userThemes "主题 API 适配"
+  httpLayer.routes -> platformApplications.extensionConfiguration "模型与扩展配置 API"
   httpLayer.routes -> persistence.runStore "Run Trace 聚合查询"
+  httpLayer.server -[data]-> workspaceData "主题偏好与工作区文件读写"
 
   // 特性层 → Harness（核心：薄 Adapter 调用统一入口）
   features.articles.adapter -[sync]-> harness.facade "runSkill(skillId, input)"
   features.socialCards -[sync]-> harness.facade "runSkill(stage/agent)"
   features.batches -[async]-> harness.facade "阶段技能运行"
   features.articles.adapter -[sync]-> skills.resolver "解析技能定义"
+  features.materials.service -> features.materials.assessment "材料就绪度评估"
+  features.materials.service -[data]-> persistence.repos "素材 Repository"
+  features.contentFeedback.services -> features.contentFeedback.insights "反馈上下文与业务洞察"
+  features.contentFeedback -[data]-> persistence.repos "读取内容与规划指标"
+  features.contentPlanning -> features.materials "按规划建议组织素材"
 
   // Harness 内部
   harness.facade -> harness.engine "agent-skill → runConversationAgent"
@@ -246,12 +294,20 @@ model {
   // LLM
   llm.gateway -> llm.contextManager "压缩上下文"
   llm.gateway -> llm.stageRouting "阶段模型解析"
+  llm.promptRegistry -> promptAssets "读取 manifest 与 Markdown 文件"
+  llm.promptRegistry -> llm.gateway "交付解析后的 Prompt 文本"
+  features -> llm.promptRegistry "resolvePrompt(id, variables)"
+  shared.themes -> llm.promptRegistry "读取主题与模板 Prompt"
   llm.gateway -[async]-> llmProvider "API 调用" { technology "HTTPS/OpenAI" }
   llm.skillRuntime -> skills.registry "读取训练技能 bundle"
 
   // 持久化 & 存储
   features.collection -[sync]-> persistence.repos "读写采集数据"
   features.research -[data]-> persistence.queries "复杂分析查询"
+  features.contentPlanning -[data]-> persistence.repos "栏目、计划与简报快照"
+  platformApplications.userThemes -[data]-> persistence.repos "ThemeRepository / 版本元数据"
+  platformApplications.userThemes -> shared.themes "复用主题值对象与编译器"
+  platformApplications.extensionConfiguration -[data]-> persistence.repos "ExtensionSettingRepository"
   persistence.database -[data]-> sqlite "读/写" { technology "SQLite (WAL)" }
   persistence.runStore -[data]-> persistence.database "Run 相关表存取"
 
