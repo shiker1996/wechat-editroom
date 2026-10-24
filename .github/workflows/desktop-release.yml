@@ -36,6 +36,14 @@ jobs:
           configurationJson: |
             {
               "template": "#{{CHANGELOG}}",
+              "pr_template": "- #{{TITLE}} ([#{{NUMBER}}](#{{URL}}))",
+              "transformers": [
+                {
+                  "pattern": "^(\\s*-\\s*)(?:build|chore|ci|docs|feat|fix|perf|refactor|revert|test|style)(?:\\([^)]*\\))?:\\s*",
+                  "target": "$1",
+                  "flags": "i"
+                }
+              ],
               "categories": [
                 { "title": "## ✨ Features", "labels": ["enhancement"] },
                 { "title": "## 🐛 Bug fixes", "labels": ["bug"] },

@@ -16,8 +16,14 @@
    ```
 
    产物在 `dist/`：`<name>-<version>.zip`（`git archive HEAD` 生成）与 `SHA256SUMS.txt`。脚本会先精确清空项目根目录下的旧 `dist/` 内容，拒绝工作区与 HEAD 版本号不一致，并为本次目录中的全部发布物生成 SHA-256；工作区有其他未提交改动时仍会明确警告，因为归档只包含 HEAD。
-7. 在 GitHub 创建 Release：选择刚推送的 tag，把 zip 与 `SHA256SUMS.txt` 作为附件上传，正文粘贴 CHANGELOG 对应段落。
+7. tag 推送后，GitHub Actions 会自动构建 Windows 安装包并创建 GitHub Release；等待工作流完成后，把 zip 与 `SHA256SUMS.txt` 上传到同一个 Release。正文由 Actions 根据本次 tag 范围内已合并的 PR 自动生成，不要用 CHANGELOG 段落覆盖。
 8. 用户侧校验下载完整性：`certutil -hashfile <zip> SHA256`（Windows）或 `shasum -a 256 <zip>`，与 `SHA256SUMS.txt` 比对。
+
+## Release 正文规范
+
+- Release 正文按 PR 标签分组：`enhancement` → Features、`bug` → Bug fixes、`documentation` → Documentation、`dependencies` → Dependencies、`github_actions` → CI and maintenance；未匹配这些标签的 PR 放在 Other changes。
+- PR 条目使用 PR 标题和 PR 编号链接。标题以 Conventional Commit 前缀（如 `feat:`、`fix:`、`chore(deps):`）开头时，生成正文会移除该前缀；请保持标题简洁、能独立说明用户可见的改动。
+- 合并 PR 时由维护者添加最合适的分类标签。`CHANGELOG.md` 仍是版本历史的人工维护来源；自动生成的 GitHub Release 正文由 PR 标签和标题生成，两者用途不同。
 
 ## 升级
 
