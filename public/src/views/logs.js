@@ -937,6 +937,9 @@ function startTraceAutoRefresh(id) {
 async function openRunTrace(rootRunId) {
   const id = String(rootRunId || "").trim();
   if (!id) return;
+  // Skills and system pages can open this dialog without initializing the logs view.
+  // Bind the dialog close and trace controls before showing it from those entry points.
+  bindLogs();
   tracePoller?.cancel();
   tracePoller = null;
   activeTraceId = id;

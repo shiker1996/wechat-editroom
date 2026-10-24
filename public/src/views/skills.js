@@ -1,6 +1,6 @@
 import { request } from "../core/http.js";
 import { escapeHtml, toast, confirmAction, debounce } from "../core/ui.js";
-import { openRunTrace } from "./logs.js?v=20260906-run-input6";
+import { openRunTrace } from "./logs.js?v=20261024-run-trace-dialog-fix-1";
 
 let bound = false;
 let skillRegistryData = null;
