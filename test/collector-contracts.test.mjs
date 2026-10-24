@@ -127,6 +127,6 @@ test('采集源页面保留旧入口并接入 Reddit、动态表单和统一 API
   const html=fs.readFileSync(path.resolve('public/index.html'),'utf8');const view=fs.readFileSync(path.resolve('public/src/views/subscriptions.js'),'utf8');const css=readStyles();const officeCss=fs.readFileSync(path.resolve('public/styles/office-workspaces.css'),'utf8');
   assert.match(html,/option value="reddit"/);assert.match(html,/id="source-plugin-fields"/);assert.match(html,/id="source-status-filter"/);
   assert.match(officeCss,/#view-system \.source-plugin-fields,[\s\S]*?color: var\(--ink\);[\s\S]*?background: var\(--surface-subtle\);/);
-  assert.match(css,/\.source-compose \.source-plugin-fields input[^}]*color:var\(--ink\);[^}]*background:var\(--white\)/);
+  assert.match(css,/\.source-compose \.source-plugin-fields input[^}]*color:var\(--ink\);[^}]*background:var\(--surface\)/);
   assert.match(view,/\/api\/collection-sources/);assert.match(view,/sourceConfigSchema/);assert.match(view,/\/api\/subscriptions/);
 });

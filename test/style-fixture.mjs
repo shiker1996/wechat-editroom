@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const CSS_SOURCES = [
   "tokens-base.css",
+  "chrome.css",
   "social-card.css",
   "production.css",
   "theme-picker.css",

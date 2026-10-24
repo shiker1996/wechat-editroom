@@ -4,6 +4,8 @@
 
 - `GET /api/security/session`：建立当前进程内的本地会话并返回随机 CSRF token。
 - `POST /api/security/confirmation`：在 CSRF 校验通过后签发 60 秒、一次性、绑定操作类型的敏感操作确认 token。
+- `GET /api/appearance-theme`：读取当前工作区持久化的外观主题标识，返回 `{ "theme": "office|harbor|dark", "persisted": true|false }`；未设置或值无效时回退到 `office`。
+- `PUT /api/appearance-theme`：持久化外观主题标识，请求正文为 `{ "theme": "office|harbor|dark" }`，成功返回 `{ "theme", "persisted": true }`，无效主题返回 `400 APPEARANCE_THEME_INVALID`。
 - `POST /api/ingest/items`：外部采集入口。请求头使用 `Authorization: Bearer <token>`；token 从 `collection.ingestToken` 或环境变量 `WORKBENCH_INGEST_TOKEN` 配置。JSON 正文为 `{ "batchId", "channel": "x|wechat", "sourceId", "sourceName?", "items": [{ "title", "url?", "summary?", "author?", "publishedAt?", "externalId?", "raw?" }] }`，`items` 每次 1–50 条，重复 URL/标题会在本批次内去重。成功返回 `202`，包含 `accepted`、`duplicates`、`batchId`、`channel`、`sourceKey`、`sourceName` 和 `sourceRunId`；无效 token 返回 `401`，未配置 token 返回 `503`，批次或条目无效返回 `400`。
 - `GET /api/system/log-governance`：读取模型调用和工具审计的留存配置。
 - `PUT /api/system/log-governance`：保存留存配置；可附带 `cleanup:true` 立即清理过期记录并将其压缩归档到 `data/audit-archive/`（需管理员确认）。字段为 `modelCallsLimit`、`modelCallsDays`、`toolExecutionsDays`、`archiveEnabled`。
