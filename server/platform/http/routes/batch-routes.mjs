@@ -11,6 +11,28 @@ import { selectBatchSourceGroups } from '../../../features/collection/applicatio
 import { inspectRsshubEnvironment } from '../../integrations/rsshub-installer.mjs';
 import { respond, boundedLimit } from '../route-helpers.mjs';
 
+function compactEventHeatItem(item) {
+  const childFields = ['eventId', 'title', 'editorialCategory', 'rank', 'scoreValue', 'reportCount', 'hotspotIds'];
+  const fields = ['eventId', 'title', 'editorialCategory', 'topic_category', 'rank', 'rankDelta', 'state', 'marketScopes', 'reason',
+    'platformImpactByPlatform', 'platformImpactAvailable', 'platformImpact', 'displayKind', 'reportCount', 'scoreValue', 'heatScore',
+    'sourceCount', 'repositoryProject', 'materialType', 'contentClass', 'keywords', 'hotspotIds'];
+  const compact = Object.fromEntries(fields.filter((key) => item?.[key] !== undefined).map((key) => [key, item[key]]));
+  if (Array.isArray(item?.childItems)) {
+    compact.childItems = item.childItems.map((child) => Object.fromEntries(childFields
+      .filter((key) => child?.[key] !== undefined).map((key) => [key, child[key]])));
+  }
+  return compact;
+}
+
+function cacheJson(file, value) {
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const tempFile = `${file}.${process.pid}.${Date.now()}.tmp`;
+    fs.writeFileSync(tempFile, JSON.stringify(value), 'utf8');
+    fs.renameSync(tempFile, file);
+  } catch { /* Cache writes are optional; callers can still return the computed response. */ }
+}
+
 export async function handleBatchRoutes({ request, response, pathname, searchParams, root, store, jobs, body, json,
   batchWorkdir, decorateBatch, batchMaxAgeHours, config, buildStatus = buildBatchPipelineStatus }) {
   if (request.method === 'GET' && pathname === '/api/batches') return respond(json, response, 200, store.listBatches(boundedLimit(searchParams,60,500)));
@@ -171,29 +193,31 @@ export async function handleBatchRoutes({ request, response, pathname, searchPar
     if (!ranking || !Array.isArray(ranking.items) || ranking.titleVersion !== 2 || ranking.scoringVersion !== EVENT_HEAT_RANKING_VERSION) {
       const rankingHotspots = batch.hotspots.filter(isResearchEligibleHotspot).filter((item) => isFreshForBatch(item, batch.batch_date, batchMaxAgeHours(batch)));
       ranking = buildEventHeatRanking({ store, batch, events: loadStableBatchEvents({ workspaceRoot: root, batch, hotspots: rankingHotspots }), previousItems: loadPreviousEventHeatItems({ store, workspaceRoot: root, batch }) });
+      cacheJson(file, ranking);
     }
     return respond(json, response, 200, ranking);
   }
   if (overviewMatch && request.method === 'GET') {
-    const batchId = decodeURIComponent(overviewMatch[1]); const batch = store.getBatch(batchId);
+    const batchId = decodeURIComponent(overviewMatch[1]); const batch = store.getAtlasBatch?.(batchId) || store.getBatch(batchId);
     if (!batch) return respond(json, response, 404, { error: '批次不存在' });
     const eligible = batch.hotspots.filter(isResearchEligibleHotspot).filter((item) => isFreshForBatch(item, batch.batch_date, batchMaxAgeHours(batch)));
     const taggedCount = eligible.filter((item) => { try { const tags = JSON.parse(item.raw_json).aiTags; return Boolean(tags?.eventKey && tags?.relevanceReason && tags?.preScores); } catch { return false; } }).length;
+    const heatFile = path.join(batchWorkdir(batch), 'sources', 'event-heat-ranking.json');
     let eventHeatRanking = null;
     try {
-      const heatFile = path.join(batchWorkdir(batch), 'sources', 'event-heat-ranking.json');
       eventHeatRanking = fs.existsSync(heatFile) ? JSON.parse(fs.readFileSync(heatFile, 'utf8')) : null;
     } catch { eventHeatRanking = null; }
     if (!eventHeatRanking || !Array.isArray(eventHeatRanking.items) || eventHeatRanking.titleVersion !== 2 || eventHeatRanking.scoringVersion !== EVENT_HEAT_RANKING_VERSION) {
       eventHeatRanking = buildEventHeatRanking({ store, batch, events: loadStableBatchEvents({ workspaceRoot: root, batch, hotspots: eligible }), previousItems: loadPreviousEventHeatItems({ store, workspaceRoot: root, batch }) });
+      cacheJson(heatFile, eventHeatRanking);
     }
-    const memberships = store.listEventHotspots?.({ batchId, limit: 100000 }) || [];
+    const memberships = store.listEventHotspots?.({ batchId, limit: Math.max(1, batch.hotspots.length) }) || [];
     const membershipsByEvent = new Map();
     for (const membership of memberships) {
       if (!membershipsByEvent.has(membership.event_id)) membershipsByEvent.set(membership.event_id, []);
       membershipsByEvent.get(membership.event_id).push(membership);
     }
-    const recordsById = new Map((store.listEventRecords?.({ limit: 100000 }) || []).map((record) => [record.id, record]));
+    const recordsById = new Map((store.listEventRecords?.({ eventIds: [...membershipsByEvent.keys()], limit: Math.max(1, membershipsByEvent.size) }) || []).map((record) => [record.id, record]));
     const rawStableEvents = [...membershipsByEvent.entries()].map(([eventId, eventMemberships]) => {
       const record = recordsById.get(eventId) || {};
       return { event_id: eventId, title: record.title || '', normalized: record.normalized || {}, hotspot_ids: eventMemberships.map((item) => Number(item.hotspot_id)),
@@ -233,14 +257,20 @@ export async function handleBatchRoutes({ request, response, pathname, searchPar
         if (heat) event.event_heat = { rank: heat.rank, heatScore: heat.heatScore, state: heat.state, rankDelta: heat.rankDelta };
       }
     }
-    atlas.eventHotlist = (eventHeatRanking.items || []).map((item) => ({ ...item, editorial_category: item.editorialCategory || '' }));
+    atlas.eventHotlist = (eventHeatRanking.items || []).map((item) => ({
+      eventId: item.eventId,
+      title: item.title,
+      hotspotIds: item.hotspotIds,
+      repositoryProject: item.repositoryProject,
+      materialType: item.materialType,
+      contentClass: item.contentClass,
+    }));
     atlas.eventHeatRankings = Object.fromEntries(Object.entries(eventHeatRanking.categoryRankings || {}).map(([category, board]) => [category, {
-      ...board,
-      items: displayItemsForTopicGroups(board.items || [], eventHeatRanking.topicGroups || []).map((item) => ({
-        ...item,
-        editorial_category: item.editorialCategory || '',
-        childItems: (item.childItems || []).map((child) => ({ ...child, editorial_category: child.editorialCategory || '' })),
-      })),
+      editorialCategory: board.editorialCategory,
+      scoreModel: board.scoreModel,
+      scoreComparable: board.scoreComparable,
+      totalEvents: board.totalEvents,
+      items: displayItemsForTopicGroups(board.items || [], eventHeatRanking.topicGroups || []).map(compactEventHeatItem),
     }]));
     atlas.eventHotlistGeneratedAt = eventHeatRanking.generatedAt || null;
     try {
@@ -257,6 +287,16 @@ export async function handleBatchRoutes({ request, response, pathname, searchPar
         for (const node of atlas.graph?.nodes || []) if (node.type === 'event') { const card = cardMap.get(String(node.id).replace(/^event:/, '')); if (card?.conclusion) node.summary = card.conclusion; }
       }
     } catch { /* event cards are optional */ }
+    atlas.events = (atlas.events || []).map((event) => ({
+      ...event,
+      articles: (event.articles || []).map((article) => ({
+        title: article.title,
+        source: article.source,
+        channel: article.channel,
+        url: article.url,
+        time: article.time,
+      })),
+    }));
     return respond(json, response, 200, atlas);
   }
   return false;

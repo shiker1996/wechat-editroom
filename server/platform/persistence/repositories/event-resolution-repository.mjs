@@ -97,14 +97,39 @@ export class EventResolutionRepository {
     return withEventRecord(row);
   }
 
-  list({ status = null, limit = 200 } = {}) {
+  list({ status = null, limit = 200, eventIds = null } = {}) {
+    if (Array.isArray(eventIds)) {
+      const ids = [...new Set(eventIds.map(String).filter(Boolean))];
+      if (!ids.length) return [];
+      const rows = [];
+      for (let offset = 0; offset < ids.length && rows.length < limit; offset += 900) {
+        const chunk = ids.slice(offset, offset + 900);
+        const statusClause = status ? ' AND status=?' : '';
+        rows.push(...this.db.prepare(`SELECT * FROM event_records WHERE id IN (${chunk.map(() => '?').join(',')})${statusClause}`).all(...chunk, ...(status ? [status] : [])));
+      }
+      return rows.slice(0, limit).map(withEventRecord);
+    }
     const rows = status
       ? this.db.prepare('SELECT * FROM event_records WHERE status=? ORDER BY COALESCE(last_update_at,last_seen_at) DESC LIMIT ?').all(status, limit)
       : this.db.prepare('SELECT * FROM event_records ORDER BY COALESCE(last_update_at,last_seen_at) DESC LIMIT ?').all(limit);
     return rows.map(withEventRecord);
   }
 
-  listHotspots({ eventId = null, batchId = null, limit = 100000 } = {}) {
+  listHotspots({ eventId = null, eventIds = null, batchId = null, limit = 100000 } = {}) {
+    if (Array.isArray(eventIds)) {
+      const ids = [...new Set(eventIds.map(String).filter(Boolean))];
+      if (!ids.length) return [];
+      const rows = [];
+      for (let offset = 0; offset < ids.length && rows.length < limit; offset += 900) {
+        const chunk = ids.slice(offset, offset + 900);
+        const where = [`event_id IN (${chunk.map(() => '?').join(',')})`]; const values = [...chunk];
+        if (eventId) { where.push('event_id=?'); values.push(eventId); }
+        if (batchId) { where.push('batch_id=?'); values.push(batchId); }
+        values.push(limit - rows.length);
+        rows.push(...this.db.prepare(`SELECT eh.*, b.batch_date FROM event_hotspots eh LEFT JOIN batches b ON b.id=eh.batch_id WHERE ${where.join(' AND ')} ORDER BY eh.created_at DESC LIMIT ?`).all(...values));
+      }
+      return rows.slice(0, limit);
+    }
     const where = []; const values = [];
     if (eventId) { where.push('event_id=?'); values.push(eventId); }
     if (batchId) { where.push('batch_id=?'); values.push(batchId); }

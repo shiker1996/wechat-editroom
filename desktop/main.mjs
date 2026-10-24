@@ -18,6 +18,7 @@ let shuttingDown = false;
 let workspaceRootPath = null;
 let logDirectoryPath = null;
 const workspaceLocationFileName = 'workspace-location.txt';
+const legacyAppearanceThemeFileName = 'appearance-theme.txt';
 
 function ensureDirectory(directory) {
   fs.mkdirSync(directory, { recursive: true });
@@ -349,6 +350,11 @@ ipcMain.on('desktop-command-trace', (event, details = {}) => {
 async function boot() {
   const workspaceRoot = ensureDirectory(configuredWorkspaceRoot());
   workspaceRootPath = workspaceRoot;
+  const legacyAppearanceThemePath = path.join(app.getPath('userData'), legacyAppearanceThemeFileName);
+  const sharedAppearanceThemePath = path.join(workspaceRoot, legacyAppearanceThemeFileName);
+  if (!fs.existsSync(sharedAppearanceThemePath) && fs.existsSync(legacyAppearanceThemePath)) {
+    fs.copyFileSync(legacyAppearanceThemePath, sharedAppearanceThemePath);
+  }
   seedWorkspaceResources(workspaceRoot);
   const logDirectory = ensureDirectory(path.join(workspaceRoot, 'logs'));
   logDirectoryPath = logDirectory;

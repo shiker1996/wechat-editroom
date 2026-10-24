@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="color-scheme" content="light">
+  <meta name="color-scheme" content="light dark">
   <title>见字 · 公众号编辑工作台</title>
-          <link rel="stylesheet" data-base-style="common" href="/assets/styles/common.css?v=20261005-theme-picker-surface-1">
+          <link rel="stylesheet" data-base-style="common" href="/assets/styles/common.css?v=20261024-theme-picker-swatch-27">
 </head>
 <body>
   <a class="skip-link" href="#main-content">跳到主内容</a>
@@ -92,10 +92,19 @@
         <time id="clock"></time>
         <div id="first-run-progress" class="first-run-progress" hidden></div>
         <button class="primary-button" id="new-batch-button" data-icon="＋">新建今日批次</button>
+        <details class="theme-quick-picker" id="theme-quick-picker">
+          <summary id="theme-quick-picker-trigger" aria-label="选择工作台配色" title="选择工作台配色"><span class="theme-cycle-icon" aria-hidden="true"></span></summary>
+          <div class="theme-quick-menu" role="group" aria-label="工作台配色">
+            <button type="button" data-theme-choice="office"><span class="theme-option-swatch office" aria-hidden="true"></span><span>雾灰蓝</span><i aria-hidden="true">✓</i></button>
+            <button type="button" data-theme-choice="harbor"><span class="theme-option-swatch harbor" aria-hidden="true"></span><span>海盐薄荷</span><i aria-hidden="true">✓</i></button>
+            <button type="button" data-theme-choice="dark"><span class="theme-option-swatch dark" aria-hidden="true"></span><span>深夜墨蓝</span><i aria-hidden="true">✓</i></button>
+          </div>
+        </details>
         <details class="topbar-more">
           <summary aria-label="更多操作">⋯</summary>
           <div class="topbar-menu">
             <button class="ghost-button desktop-shortcuts-button" id="desktop-shortcuts-button" data-icon="⌨" type="button" title="查看快捷键（Ctrl+/）">快捷键</button>
+            <label class="appearance-theme-control" for="appearance-theme">工作台配色<select id="appearance-theme" aria-label="工作台配色"><option value="office">雾灰蓝</option><option value="harbor">海盐薄荷</option><option value="dark">深夜墨蓝</option></select></label>
             <button class="ghost-button" id="quick-material-button">＋ 快速记素材</button>
             <button class="ghost-button" id="new-breaking-button" data-icon="⚡">突发热点</button>
           </div>
@@ -1306,6 +1315,6 @@
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
   <script src="/vendor/markdown-it.min.js"></script>
-  <script type="module" src="/src/main.js?v=20260910-review-highlights-7"></script>
+  <script type="module" src="/src/main.js?v=20261024-theme-persistence-27"></script>
 </body>
 </html>

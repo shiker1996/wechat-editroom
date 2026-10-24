@@ -341,7 +341,11 @@ export function buildEventHeatRanking({ store, batch, previousItems = [], events
   if (!store || !batch) return { schemaVersion: 2, titleVersion: 2, scoringVersion: EVENT_HEAT_RANKING_VERSION, generatedAt: new Date(asOf).toISOString(), batchId: batch?.id || null, topicGroups: [], items: [] };
   const currentMemberships = store.listEventHotspots?.({ batchId: batch.id, limit: 100000 }) || [];
   if (!currentMemberships.length) return { schemaVersion: 2, titleVersion: 2, scoringVersion: EVENT_HEAT_RANKING_VERSION, generatedAt: new Date(asOf).toISOString(), batchId: batch.id, topicGroups: [], items: [] };
-  const historicalMemberships = store.listEventHotspots?.({ limit: 100000 }) || currentMemberships;
+  const relevantEventIds = [...new Set([
+    ...currentMemberships.map((membership) => String(membership.event_id || '')).filter(Boolean),
+    ...[...(events || [])].map((event) => String(event?.event_id || event?.id || '')).filter(Boolean),
+  ])];
+  const historicalMemberships = store.listEventHotspots?.({ eventIds: relevantEventIds, limit: 100000 }) || currentMemberships;
   const hotspotsById = new Map((batch.hotspots || []).map((hotspot) => [Number(hotspot.id), hotspot]));
   const eventInputGroups = new Map();
   for (const event of events || []) {
@@ -390,7 +394,7 @@ export function buildEventHeatRanking({ store, batch, previousItems = [], events
     if (!historyByEvent.has(eventId)) historyByEvent.set(eventId, []);
     historyByEvent.get(eventId).push(membership);
   }
-  const records = new Map((store.listEventRecords?.({ limit: 100000 }) || []).map((event) => [event.id, event]));
+  const records = new Map((store.listEventRecords?.({ eventIds: relevantEventIds, limit: 100000 }) || []).map((event) => [event.id, event]));
   const eventInputs = new Map((events || []).map((event) => [event.event_id || event.id, event]));
   for (const [eventId, event] of mergedEventInputs) eventInputs.set(eventId, event);
   const previous = new Map((previousItems || []).map((item) => [item.eventId, item]));

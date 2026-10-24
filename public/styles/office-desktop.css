@@ -6,10 +6,6 @@
  */
 :root {
   --surface: var(--white);
-  --surface-subtle: #f8f9fa;
-  --surface-hover: #f3f7fb;
-  --overlay: rgba(32, 38, 45, .24);
-  --shadow-popover: 0 12px 28px rgba(32, 38, 45, .14), 0 2px 6px rgba(32, 38, 45, .08);
 }
 
 html, body { background: var(--paper); }
@@ -22,7 +18,7 @@ html, body { background: var(--paper); }
 .nav-group .nav-item.active { background: var(--chrome-selection-strong); }
 .nav-group .nav-item.active::before { background: var(--blue); }
 .nav-item:hover, .nav-item.active { transform: none; }
-.nav-utility:hover, .nav-utility.active { border-color: var(--chrome-focus); background: var(--chrome-selection); }
+.nav-utility:hover, .nav-utility.active { border-color: var(--chrome-nav-utility-nav-utility-active-hover-border); background: var(--chrome-nav-utility-nav-utility-active-hover-surface); }
 .nav-utility.active::before { background: var(--blue); }
 
 .shell { background: var(--paper); }
@@ -66,9 +62,9 @@ html, body { background: var(--paper); }
   transform: none;
 }
 .primary-button { background: var(--blue); color: var(--white); }
-.primary-button:hover { background: var(--blue-dark); box-shadow: none; transform: none; }
-.ink-button { background: var(--ink-strong); }
-.ink-button:hover { background: var(--ink-hover); }
+.primary-button:hover { background: var(--primary-hover-bg); color: var(--white); box-shadow: none; transform: none; }
+.ink-button { background: var(--chrome-rail); }
+.ink-button:hover { background: var(--surface-hover); color: var(--ink); }
 .ghost-button, .chrome-toggle, .topbar-more > summary { border-color: var(--line); background: var(--surface); }
 .ghost-button:hover { border-color: var(--blue-border-strong); background: var(--blue-soft); }
 .outline-button { border-color: var(--line-strong); background: var(--surface); }
@@ -206,7 +202,8 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
   color: var(--ink);
   border-color: var(--line);
 }
-.source-compose { background: var(--surface-subtle); box-shadow: none; }
+.source-compose { color: var(--ink); background: var(--surface-subtle); box-shadow: none; }
+.source-compose .kicker { color: var(--blue); }
 .source-compose::after { display: none; }
 .source-compose input, .source-compose select { color: var(--ink); background: var(--surface); border-color: var(--line-strong); }
 .source-compose .outline-button { color: var(--ink); border-color: var(--line-strong); background: var(--surface); }

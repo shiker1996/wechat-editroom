@@ -1,0 +1,62 @@
+# UI 主题颜色用途审计
+
+## 审计范围
+
+- `npm run check:page-colors` 扫描页面源代码中的硬编码颜色、未定义颜色变量和旧式调色板变量。
+- `npm run audit:color-roles` 对 CSS 的文字色、背景、边框、焦点轮廓和阴影变量做用途交叉检查。
+- `font` 是字体族、字号、字重和行高的简写，不承载文字颜色；文字颜色由 `color` 控制。
+- 源文件按 59 个 CSS、JS、HTML 文件扫描；忽略构建生成的 CSS。
+
+## 当前统一约定
+
+| 用途 | CSS 属性 | 优先变量 |
+| --- | --- | --- |
+| 正文/标题文字 | `color` | `--ink`、`--muted`、`--white`、状态色文字变量 |
+| 页面、卡片、控件表面 | `background` | `--paper`、`--surface`、`--surface-subtle`、`--surface-hover` |
+| 分隔线/网格缝隙 | `border` 或背景分隔 | `--line`、`--line-strong`、`--surface-separator` |
+| 控件边缘/结构边缘 | `border*` | `--surface-control-border`、`--surface-edge-strong` |
+| 焦点和交互强调 | `outline` / 状态边框 | `--focus`、`--focus-ring` |
+| 投影 | `box-shadow` | `--shadow-*` 或组件专用 `*-shadow` |
+
+主题相关组件需要在主题根节点覆写语义变量；组件 CSS 不应依赖某主题的原始颜色数值，也不应拿文字颜色变量兼任表面或边框。
+
+## 系统主题配置位置
+
+- 配色值集中在 `public/styles/tokens-base.css`：文件开头的 `:root` 是默认浅色「雾灰蓝」，`:root[data-ui-theme="harbor"]` 是另一套浅色实验配色，`:root[data-ui-theme="dark"]` 是「深夜墨蓝」。应在这里调整各主题的语义变量值。
+- `public/index.html` 在首屏绘制前读取已保存的主题，避免闪一下默认配色；`public/src/main.js` 初始化主题选择器并保存用户选择。桌面端服务每次启动可能使用不同端口，所以主题偏好保存在 Electron `userData/appearance-theme.txt`，通过 `desktop/main.mjs` 和 `desktop/preload.cjs` 读写；浏览器运行时继续使用 `localStorage`。
+- `public/styles/tokens-base.css` 之后的组件样式引用这些变量。文章、图文和封面模板主题是另外一套模板配色，不要把它们与系统页面主题混在一起。
+- 快捷切换列表的主题小色块由同文件中的 `--ui-theme-preview-*-surface` 和 `--ui-theme-preview-*-accent` 组成，展示每套系统主题的底色与强调色。
+
+## 本轮修正
+
+- 将控件 hover、active、普通边框里误用的 `--ink` 改为 `--focus` 或 `--surface-control-border`；将作为阴影色的 `--ink` 改为 `--surface-edge-strong`。深色主题里的 `--ink` 是浅色文字，直接拿来画边框会让边框变浅。
+- 新增 `--surface-separator: var(--line)`，把网格/列表间隙中作为背景使用的 `--line` 调用改成用途明确的表面分隔变量。它仍随各主题的 `--line` 值变化。
+- 把表单控件背景上的 `--ink-inverse` 改成 `--surface`，并把深色底上的选中态前景 `--paper` 改成 `--ink-inverse`；避免暗色模式出现浅灰表单和近似背景色的暗文字。写作进度条、权限卡片渐变的白色端点也改为跟随主题的 `--surface`。
+- 确认并修正按钮悬浮色：原 `--ink-hover` 在深色主题下是近白色，却被用作深色按钮背景；现改为按主题提供的 `--ink-button-hover-surface`。首次设置的来源说明卡片原将半透明白色文字 token 当背景；现改用 `--surface-subtle`。主题建议按钮也改为主题反色表面及其配套文字色。输入焦点光晕和按钮投影改用焦点/阴影变量。
+- 颜色用途检查器按变量名末尾的语义角色分类，避免把 `*-focus-brief-surface` 误判为焦点色；数值进度变量不作为颜色 token 检查。
+
+## 剩余待审引用
+
+检查器仍报告一些跨用途变量引用。结果是静态提示，不等同于确认缺陷：主题预览色、品牌/状态强调色以及同一强调色用于描边和文字，往往是有意的；只有变量承担的角色会在不同主题下改变明暗关系时，才应调整组件或拆分变量。当前发现逐项定位在脚本输出中，重点类别为：
+
+- 主题缩略图使用动态前景色绘制边缘/示意线：属于预览画板绘制，不跟随系统页面颜色。
+- 状态/来源标记以同一状态色绘制小边框、文字和色条：颜色本身是状态强调色，布局用途不同但视觉含义相同。
+- 运行动画/焦点 halo 将强调色绘制成 `box-shadow` 或 outline：属于焦点表现；检查器已允许 focus 色用于 outline/halo。
+- 社交交付、图文预览使用各自的内容调色板：这是图文内容的独立主题色，不应被系统暗色主题覆盖。
+- 被修正的主题敏感问题包括反色文字误作输入背景、近白悬浮色误作暗色按钮背景、半透明白文字色误作卡片背景、白色渐变端点、以及边框/线色误作阴影。
+
+检查命令：
+
+```sh
+npm run audit:color-roles
+npm run audit:color-roles -- --token=--ink
+npm run check:page-colors
+```
+
+优先处理名称后缀与实际职责相反的变量，例如以 `-text` 结尾却用于背景，或 `-border` 用作文字色；对于主题预览、运行时注入的色值和状态点，应明确记录允许原因，避免为了让扫描器归零而改变视觉含义。
+
+## 检查结果（2026-10-24）
+
+- 颜色合规扫描：59 个页面源文件，未发现未登记硬编码颜色、未定义颜色变量、数值编码调色板变量、旧式浅色表面变量或将前景色用作背景的调用。
+- 生产构建成功：472 个生产模块，主题包校验通过。
+- 用途扫描的剩余提示需要结合选择器判断；后续新增配色应先改语义变量值，而不是逐个覆盖组件规则。

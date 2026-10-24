@@ -146,6 +146,16 @@ const aiJobs = new AiJobManager(store, models, config, {
 });
 const artifactRoots = [config.workspaceRoot, ...config.contentRoots];
 const publicRoot = path.join(runtimePaths.appRoot, 'public');
+const appearanceThemePath = path.join(root, 'appearance-theme.txt');
+const appearanceThemes = new Set(['office', 'harbor', 'dark']);
+function readAppearanceTheme() {
+  try {
+    const theme = fs.readFileSync(appearanceThemePath, 'utf8').trim();
+    return appearanceThemes.has(theme) ? { theme, persisted: true } : { theme: 'office', persisted: false };
+  } catch {
+    return { theme: 'office', persisted: false };
+  }
+}
 const execFileAsync = promisify(execFile);
 const localSecurity = createLocalSecurity();
 const CONTENT_SECURITY_POLICY = "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; frame-src 'self'";
@@ -180,6 +190,15 @@ function serveStatic(request, response, url) {
   const relativeToPublic = path.relative(publicRoot, filePath);
   if (relativeToPublic.startsWith('..') || path.isAbsolute(relativeToPublic) || !fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) return false;
   const type = mime[path.extname(filePath)] ?? 'application/octet-stream';
+  if ((pathname === '/' || pathname === '/index.html') && request.method !== 'HEAD') {
+    const { theme, persisted } = readAppearanceTheme();
+    let html = fs.readFileSync(filePath, 'utf8');
+    html = html.replace('<html lang="zh-CN">', `<html lang="zh-CN" data-ui-theme="${theme}" data-ui-theme-persisted="${persisted}">`);
+    const headers = { 'content-type': type, 'cache-control': 'no-cache' };
+    response.writeHead(200, headers);
+    response.end(html);
+    return true;
+  }
   const versioned = searchParams.has('v');
   // 生产环境的带版本资源可以长期缓存；本地开发默认不缓存，避免漏改
   // query 版本号时浏览器继续使用旧 JS/CSS，导致测试结果与工作区不一致。
@@ -406,6 +425,16 @@ async function api(request, response, url) {
   const { pathname, searchParams } = url;
   if (request.method === 'GET' && pathname === '/api/security/session') {
     return json(response, 200, { csrfToken: localSecurity.csrfToken });
+  }
+  if (request.method === 'GET' && pathname === '/api/appearance-theme') {
+    return json(response, 200, readAppearanceTheme());
+  }
+  if (request.method === 'PUT' && pathname === '/api/appearance-theme') {
+    const input = await body(request);
+    if (!appearanceThemes.has(input.theme)) return json(response, 400, { code: 'APPEARANCE_THEME_INVALID', error: '主题配色无效' });
+    fs.mkdirSync(path.dirname(appearanceThemePath), { recursive: true });
+    fs.writeFileSync(appearanceThemePath, input.theme, 'utf8');
+    return json(response, 200, { theme: input.theme, persisted: true });
   }
   if (request.method === 'POST' && pathname === '/api/security/confirmation') {
     const input = await body(request);

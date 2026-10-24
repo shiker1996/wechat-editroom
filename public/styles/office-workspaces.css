@@ -1,5 +1,25 @@
 /* Phase 3: page-level office workspaces. Loaded after route bundles. */
 
+/* Native controls must follow the active workspace palette, including dialogs. */
+:root select,
+:root select option {
+  background-color: var(--surface);
+  color: var(--ink);
+}
+:root input[type="checkbox"],
+:root input[type="radio"] {
+  accent-color: var(--blue);
+}
+:root select:focus-visible,
+:root input[type="checkbox"]:focus-visible,
+:root input[type="radio"]:focus-visible {
+  outline-color: var(--focus);
+}
+:root select option:checked {
+  background-color: var(--blue-soft);
+  color: var(--ink);
+}
+
 /* Shared page framing */
 .view > .section-intro { margin-bottom: 18px; }
 .view > .section-intro p { max-width: 720px; line-height: 1.65; }
@@ -163,7 +183,7 @@
 #view-system .configuration-console-head p { color: var(--muted); }
 #view-system .configuration-console-head .kicker { color: var(--muted); }
 #view-system .configuration-readiness { border-color: var(--line); }
-#view-system .runtime-path-strip { background: var(--line); }
+#view-system .runtime-path-strip { background: var(--surface-separator); }
 #view-system .runtime-path-strip > span { background: var(--surface-subtle); }
 #view-system .config-panel-heading { border-bottom-color: var(--line); }
 #view-system .extension-settings-layout { border-color: var(--line); }
@@ -415,7 +435,7 @@
 }
 #view-editorial .candidate-sidebar::-webkit-scrollbar { display: none; }
 #view-editorial .candidate-tab-arrow {
-  background: var(--ink);
+  background: var(--surface-inverse);
   color: var(--white);
   border-color: var(--line);
 }
@@ -520,6 +540,27 @@
 #view-system .configuration-resource-mark { background: var(--blue); }
 #view-system .configuration-form-actions button,
 #view-system .runtime-save-row button { box-shadow: none; }
+
+/* Keep helper text readable when system guidance sits on the light office surface. */
+#view-system .source-plugin-fields .web-collector-guidance { color: var(--ink); background: var(--success-soft); }
+#view-system .source-plugin-fields .web-collector-guidance b { color: var(--success-strong); }
+#view-system .source-plugin-fields .web-collector-guidance span,
+#view-system .source-plugin-fields .web-auto-guidance p,
+#view-system .source-plugin-fields .web-auto-technical-note p,
+#view-system .source-plugin-fields .web-auto-technical-note summary { color: var(--muted); }
+#view-system .source-plugin-fields label,
+#view-system .source-plugin-fields .source-advanced-fields summary { color: var(--ink); }
+#view-system .source-plugin-fields label small,
+#view-system .source-plugin-fields .source-advanced-fields summary small { color: var(--muted); }
+#view-system .source-plugin-fields .source-field-group-title { color: var(--blue); }
+#view-system .source-plugin-fields .source-advanced-fields { border-color: var(--line); }
+#view-system .source-plugin-fields .source-advanced-fields[open] summary { color: var(--blue-dark); }
+#view-system .source-compose .source-form-step { color: var(--ink); }
+#view-system .source-assist-result article p,
+#view-system .source-assist-result article ol,
+#view-system .source-assist-result > header small { color: var(--muted); }
+#view-system .source-assist-result article code { color: var(--success-strong); }
+#view-system .source-assist-result article em { color: var(--warning); }
 
 @media (max-width: 760px) {
   #view-skills .capability-studio-hero { padding: 22px 20px; }

@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 
 const PATTERNS = [
-  [/sk-[A-Za-z0-9_-]{20,}/g, 'OpenAI 风格 API Key'],
+  [/(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{20,}/g, 'OpenAI 风格 API Key'],
   [/ghp_[A-Za-z0-9]{30,}/g, 'GitHub Personal Access Token'],
   [/github_pat_[A-Za-z0-9_]{22,}/g, 'GitHub Fine-grained Token'],
   [/AIza[0-9A-Za-z_-]{35}/g, 'Google API Key'],

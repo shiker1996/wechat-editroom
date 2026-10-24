@@ -42,6 +42,14 @@ export class BatchQueryService {
     return batch;
   }
 
+  // Atlas needs hotspot inputs, but not the full batch drawer payload or per-hotspot materials.
+  getAtlasBatch(id) {
+    const batch = this.db.prepare('SELECT id,batch_date,batch_type,max_age_hours,created_at FROM batches WHERE id=?').get(id);
+    if (!batch) return null;
+    batch.hotspots = this.db.prepare('SELECT * FROM hotspots WHERE batch_id=?').all(id);
+    return batch;
+  }
+
   getOverview(batchId) {
     const items = this.db.prepare('SELECT * FROM hotspots WHERE batch_id=?').all(batchId).sort(newestFirst);
     const channels = new Map();

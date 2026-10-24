@@ -24,6 +24,8 @@
         "build:styles": "node scripts/build/build-styles.mjs",
         "check:legacy-config-guidance": "node scripts/quality/check-legacy-configuration-guidance.mjs",
         "check:harness-boundaries": "node scripts/quality/check-harness-boundaries.mjs",
+        "check:page-colors": "node scripts/quality/check-page-colors.mjs",
+        "audit:color-roles": "node scripts/quality/audit-color-role-usage.mjs",
         "architecture:report": "node scripts/quality/report-feature-boundaries.mjs",
         "postinstall": "node scripts/runtime/install-skill-deps.mjs",
         "build:watch": "node --watch scripts/build/build.mjs",

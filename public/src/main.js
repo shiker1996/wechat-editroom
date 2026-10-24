@@ -15,7 +15,7 @@ const viewModules = {
   hotspots: "./views/hotspots.js", artifacts: "./views/artifacts.js",
   system: "./views/system.js", account: "./views/account.js", skills: "./views/skills.js", sources: "./views/subscriptions.js",
   themes: "./views/theme-manager.js",
-  logs: "./views/logs.js?v=20260908-run-trace-status1",
+  logs: "./views/logs.js?v=20261024-run-trace-dialog-fix-1",
   calendar: "./views/calendar.js",
   "material-inbox": "./views/material-inbox.js", "wechat-review-prep": "./views/wechat-review-prep.js", "wechat-review": "./views/wechat-review.js", "content-feedback": "./views/content-feedback.js",
 };
@@ -23,7 +23,7 @@ const viewModules = {
 // 三个导航入口共用同一视图 DOM：工具图文 / 自定义图文 / 事件图文都落在 #view-social-editor
 const viewSectionAliases = { "social-custom": "view-social-editor", "social-event": "view-social-editor" };
 
-const styleVersion = "20261021-event-reader-reactions-1";
+const styleVersion = "20261024-dark-theme-contrast-fix-24";
 const styleModules = {
   social: "/assets/styles/social.css",
   topics: "/assets/styles/topics.css",
@@ -55,8 +55,8 @@ const viewStyles = {
   themes: ["social", "editor", "system"],
   hotspots: ["topics"],
   logs: ["topics"],
-  system: ["system"],
-  skills: ["system"],
+  system: ["system", "topics"],
+  skills: ["system", "topics"],
   sources: ["system"],
 };
 const loadedStyles = new Map();
@@ -497,6 +497,51 @@ async function pollJobNotifications() {
 }
 
 async function onReady() {
+  const appearanceTheme = document.getElementById("appearance-theme");
+  const themeQuickPicker = document.getElementById("theme-quick-picker");
+  const themeQuickPickerTrigger = document.getElementById("theme-quick-picker-trigger");
+  const appearanceThemes = ["office", "harbor", "dark"];
+  const appearanceThemeLabels = { office: "雾灰蓝", harbor: "海盐薄荷", dark: "深夜墨蓝" };
+  let savedAppearanceTheme = appearanceThemes.includes(document.documentElement.dataset.uiTheme) ? document.documentElement.dataset.uiTheme : "office";
+  if (document.documentElement.dataset.uiThemePersisted !== "true") {
+    try {
+      const legacyTheme = localStorage.getItem("write-assistant.ui-theme");
+      if (appearanceThemes.includes(legacyTheme)) savedAppearanceTheme = legacyTheme;
+    } catch { /* 浏览器隐私设置可能禁用 localStorage */ }
+  }
+  const setAppearanceTheme = (theme, { persist = true } = {}) => {
+    const nextTheme = appearanceThemes.includes(theme) ? theme : "office";
+    document.documentElement.dataset.uiTheme = nextTheme;
+    if (appearanceTheme) appearanceTheme.value = nextTheme;
+    themeQuickPicker?.querySelectorAll("[data-theme-choice]").forEach((option) => {
+      option.setAttribute("aria-pressed", String(option.dataset.themeChoice === nextTheme));
+    });
+    if (persist) {
+      void request("/api/appearance-theme", { method: "PUT", body: JSON.stringify({ theme: nextTheme }) }).catch((error) => {
+        toast(`主题已切换，但保存失败：${error.message}`, "error");
+      });
+    }
+  };
+  // 兼容旧版浏览器 localStorage：仅在服务端主题文件尚不存在时迁移一次。
+  const migrateLegacyTheme = document.documentElement.dataset.uiThemePersisted !== "true";
+  setAppearanceTheme(savedAppearanceTheme, { persist: migrateLegacyTheme });
+  appearanceTheme?.addEventListener("change", () => setAppearanceTheme(appearanceTheme.value));
+  themeQuickPicker?.querySelectorAll("[data-theme-choice]").forEach((option) => {
+    option.addEventListener("click", () => {
+      setAppearanceTheme(option.dataset.themeChoice);
+      themeQuickPicker.open = false;
+      themeQuickPickerTrigger?.focus();
+    });
+  });
+  document.addEventListener("click", (event) => {
+    if (themeQuickPicker?.open && !themeQuickPicker.contains(event.target)) themeQuickPicker.open = false;
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && themeQuickPicker?.open) {
+      themeQuickPicker.open = false;
+      themeQuickPickerTrigger?.focus();
+    }
+  });
   // 原生菜单和全局按钮必须先于任何网络/模型初始化完成绑定。
   // 否则初始化接口较慢或失败时，菜单点击会在渲染器尚未注册监听器的
   // 窗口期丢失，表现为 Electron 原生菜单完全没有反应。

@@ -320,6 +320,10 @@ export class Store {
     return this.queries.batches.getOverview(batchId);
   }
 
+  getAtlasBatch(batchId) {
+    return this.queries.batches.getAtlasBatch(batchId);
+  }
+
   addCandidates(batchId, hotspotIds, { tracks = ['article'], editorialMode = 'manual' } = {}) {
     this.repositories.candidates.addFromHotspots(batchId, hotspotIds, { tracks, editorialMode });
     return this.listCandidates(batchId);

@@ -1,0 +1,9 @@
+{
+  "allowedLiteralCount": 16,
+  "literalColors": {
+    "public/src/core/theme-catalog.js": ["#F1E8D6", "#FFFDF7", "#192824", "#C53A2E"],
+    "public/src/views/atlas.js": ["#355f55", "#7a5c2e", "#6b4a7d", "#9a4e42", "#000", "#e44b3f", "#8fa9bd"],
+    "public/src/views/theme-manager.js": ["#fffdf7", "#192824"]
+  },
+  "dynamicThemeVariables": ["--p-*", "--wash", "--text"]
+}
