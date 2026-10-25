@@ -1,22 +1,27 @@
+<p align="center">
+  <img src="./docs/readme-banner.svg" alt="见字编辑工作台：从信息采集、编辑判断到文章交付" width="100%">
+</p>
+
 # 见字 · 公众号编辑工作台
 
 [中文](./README.md) · [English](./README.en.md)
 
-> **从热点到成稿，把公众号内容生产变成一张可以回头检查的工作台。**
+<p align="center"><strong>从热点到成稿，把公众号内容生产变成一张可以回头检查的工作台。</strong></p>
 
 见字不是一个“输入主题、等待生成”的聊天框，而是一套面向真实内容生产的本地 AI 编辑工作台：
 
-**找热点 → 研判事实 → 做编辑决策 → 写稿 → 审稿 → 排版 → 交付文章、封面与图文。**
+<p align="center">找热点 <strong>→</strong> 研判事实 <strong>→</strong> 做编辑决策 <strong>→</strong> 写稿 <strong>→</strong> 审稿 <strong>→</strong> 排版 <strong>→</strong> 交付文章、封面与图文</p>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![Platform: Windows](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6?logo=windows&logoColor=white)](./docs/user-guide.md#1-安装与启动)
-[![Latest Release](https://img.shields.io/github/v/release/shiker1996/wechat-newsroom-workbench?label=latest%20release)](https://github.com/shiker1996/wechat-newsroom-workbench/releases/latest)
-
-<p align="center"><a href="https://www.bilibili.com/video/BV1KjYj6GEJU" target="_blank" rel="noreferrer">点击打开 B 站教程视频 ↗</a></p>
+<p align="center">
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="MIT License"></a>
+  <a href="./docs/user-guide.md#1-安装与启动"><img src="https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6?logo=windows&amp;logoColor=white" alt="Platform: Windows 10/11"></a>
+  <a href="https://github.com/shiker1996/wechat-newsroom-workbench/releases/latest"><img src="https://img.shields.io/github/v/release/shiker1996/wechat-newsroom-workbench?label=latest%20release" alt="Latest release"></a>
+</p>
 
 <p align="center">
   <a href="https://github.com/shiker1996/wechat-newsroom-workbench/releases/latest">下载 Windows 桌面版</a> ·
   <a href="https://wechat-newsroom-guide.vercel.app/">查看真实界面</a> ·
+  <a href="https://www.bilibili.com/video/BV1KjYj6GEJU">观看 B 站教程 ↗</a> ·
   <a href="https://github.com/shiker1996/wechat-newsroom-workbench/issues">反馈问题</a>
 </p>
 

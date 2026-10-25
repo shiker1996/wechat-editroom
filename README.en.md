@@ -1,16 +1,22 @@
+<p align="center">
+  <img src="./docs/readme-banner.svg" alt="见字 editorial workbench: from signals and editorial judgment to publishable work" width="100%">
+</p>
+
 # 见字 · WeChat Editorial Workbench
 
 [中文](./README.md) · [English](./README.en.md)
 
-> **A local-first editorial workbench that takes a WeChat story from signal to publishable output.**
+<p align="center"><strong>A local-first editorial workbench that takes a WeChat story from signal to publishable output.</strong></p>
 
 见字 is not another “type a topic and wait for an article” chat box. It is a focused workflow for real content production:
 
-**Discover → investigate → decide → write → review → format → deliver.**
+<p align="center">Discover <strong>→</strong> investigate <strong>→</strong> decide <strong>→</strong> write <strong>→</strong> review <strong>→</strong> format <strong>→</strong> deliver</p>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![Platform: Windows](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6?logo=windows&logoColor=white)](./docs/user-guide.md#1-安装与启动)
-[![Latest Release](https://img.shields.io/github/v/release/shiker1996/wechat-newsroom-workbench?label=latest%20release)](https://github.com/shiker1996/wechat-newsroom-workbench/releases/latest)
+<p align="center">
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="MIT License"></a>
+  <a href="./docs/user-guide.md#1-安装与启动"><img src="https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6?logo=windows&amp;logoColor=white" alt="Platform: Windows 10/11"></a>
+  <a href="https://github.com/shiker1996/wechat-newsroom-workbench/releases/latest"><img src="https://img.shields.io/github/v/release/shiker1996/wechat-newsroom-workbench?label=latest%20release" alt="Latest release"></a>
+</p>
 
 <p align="center">
   <img src="docs/screenshots/ui-demo.gif" alt="见字 workbench: from signals to topics, articles, and deliverables" width="760">
