@@ -83,6 +83,7 @@ export function buildSocialCardCopySystemPrompt(skillPrompt, { channelMode = 'we
 - 先确定读者最可能搜索的具体主体词、工具/产品名或主题词，以及其搜索意图；标题应与卡片内容和事实基座一致。
 - 将最有辨识度的具体关键词自然放在标题前半句，再说明读者要解决的问题、了解的变化或获得的内容。优先采用具体问题或任务表达，避免“值得收藏”“终于来了”等无法检索的空泛钩子。
 - 关键词必须有输入依据；不得编造搜索热度、排名、体验、效果、数字或结论，不堆砌近义词，不做标题党。
+`;
 }
 
 export function parseSocialCardCopyOutput(value = '', { channelMode = 'wechat' } = {}) {

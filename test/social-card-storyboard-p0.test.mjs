@@ -173,8 +173,8 @@ test('迁移后的故事板提示词保持六种入口和渠道组合的语义�
     custom:'custom-card-storyboard',
   };
   const snapshots={
-    'repository/wechat':'0855352b5ff2496d28617722257ecaded3723f59ae13067e622345323619d68d',
-    'repository/xiaohongshu':'e46f63467e746ba0b59d74f01a5dc8cf10d14d0f4013317af93c779dc97e619c',
+    'repository/wechat':'7a3946eb1aa477fb703911b321537f525ba105cc27b46d35909eb4c0401f391b',
+    'repository/xiaohongshu':'a674b37c530c46f5a5aa9865e9ce906a531f7ae05cbd726cc969a86e202fa7a0',
     'event/wechat':'ce6c31e920fb73892d646df2a643330336a4ef13389731d0bd7fb6fdb28694ff',
     'event/xiaohongshu':'51c4ff0576c64225ffc13137ca9eb846f221cb8921e2056537a981f0be4ccede',
     'custom/wechat':'becae18bd7506d49f5c51594491aea48a124cdbd4edf22a9290852fc1cbccf43',
