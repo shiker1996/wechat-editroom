@@ -5,6 +5,7 @@ const TEXT_FIELDS = [
   'action', 'affected_group', 'reader_consequence', 'conflict', 'baseline_change', 'thesis',
   'evidence_boundary', 'title_promise', 'reader_action', 'article_type', 'writing_stance', 'material_readiness',
   'click_mechanism', 'opening_hook', 'reader_value_type', 'reader_value_placement', 'ending_payoff', 'share_trigger',
+  'freshness_basis',
 ];
 
 function text(value) { return String(value ?? '').trim(); }
@@ -76,6 +77,7 @@ export function buildMaterialBrief({ candidate = {}, editorial = {}, researchCon
     conflict,
     baseline_change: firstText(stored.baseline_change, material.baseline_change, material.change, material.before_after),
     thesis: firstText(stored.thesis, candidate.thesis, topicCandidate.thesis),
+    freshness_basis: firstText(stored.freshness_basis, topicCandidate.freshness_basis),
     counter_evidence: stored.counter_evidence.length ? stored.counter_evidence : list(editorial.rejected_angles),
     evidence_boundary: firstText(stored.evidence_boundary, researchContext?.evidence_boundary?.note),
     article_type: firstText(stored.article_type, derivedArticleType),

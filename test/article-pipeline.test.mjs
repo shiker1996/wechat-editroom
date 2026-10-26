@@ -263,7 +263,7 @@ test('技能运行时加载完整写作技能并记录哈希', () => {
 test('直写流程使用单阶段提示词，兼容旧技能组合器', () => {
   assert.deepEqual(ARTICLE_STAGE_CONTRACT.map(({ id }) => id), ['brief', 'fact-base', 'drafting', 'review', 'length-adjustment', 'humanize', 'title-lock']);
   const manifest = articlePromptManifest('wechat-mp-tech-deep');
-  assert.equal(manifest.version, 'direct-brief-v3');
+  assert.equal(manifest.version, 'direct-brief-v5');
   assert.match(manifest.prompts.drafting.prompt, /技术深解需要解释机制/);
   assert.doesNotMatch(manifest.prompts.review.prompt, /## SKILL:|全流程|风格门禁/);
   assert.match(manifest.prompts.review.hash, /^sha256:[a-f0-9]{64}$/);

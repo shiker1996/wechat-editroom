@@ -1,10 +1,11 @@
 import { dimensionPartsOf } from './hotspot-dimensions.mjs';
 import { EDITORIAL_CATEGORIES, isRepositoryEvent, normalizeEditorialCategory } from './editorial-categories.mjs';
 
-export const DISCUSSION_RESEARCH_SCHEMA_VERSION = 6;
+export const DISCUSSION_RESEARCH_SCHEMA_VERSION = 8;
 // 讨论研判按全局事件热度排序；类别只保留为选题标签，不参与范围配额。
 export const DISCUSSION_RESEARCH_TOP_K_OPTIONS = Object.freeze([5, 8, 10, 15]);
 export const DISCUSSION_RESEARCH_TOP_K = 15;
+export const DISCUSSION_RESEARCH_READER_RECALL_LIMIT = 5;
 export const DISCUSSION_RESEARCH_CATEGORIES = EDITORIAL_CATEGORIES;
 
 export function resolveDiscussionResearchTopK(value) {
@@ -328,7 +329,9 @@ function trendRelations(selected) {
   });
 }
 
-export function buildDiscussionResearch({ events = [], eventHeatRanking = {}, topK = DISCUSSION_RESEARCH_TOP_K, batchId = '', generatedAt = new Date().toISOString() } = {}) {
+export function buildDiscussionResearch({ events = [], eventHeatRanking = {}, topK = DISCUSSION_RESEARCH_TOP_K,
+  readerScreening = [], readerRecallLimit = DISCUSSION_RESEARCH_READER_RECALL_LIMIT,
+  readerScreeningStatus = 'not_run', freshnessWindowHours = 168, batchId = '', generatedAt = new Date().toISOString() } = {}) {
   const heatByEvent = new Map(list(eventHeatRanking.items).map((item) => [String(item.eventId || item.event_id), item]));
   const boardHeatByEvent = new Map();
   for (const editorialCategory of DISCUSSION_RESEARCH_CATEGORIES) {
@@ -359,12 +362,54 @@ export function buildDiscussionResearch({ events = [], eventHeatRanking = {}, to
     || finite(a.heat?.globalRank ?? a.heat?.rank, 999999) - finite(b.heat?.globalRank ?? b.heat?.rank, 999999)
     || idOf(a.event).localeCompare(idOf(b.event)));
   const topKLimit = Math.max(0, Number(topK) || DISCUSSION_RESEARCH_TOP_K);
-  const selected = heatEligible.slice(0, topKLimit);
-  const scope = selected.map(({ event, heat, editorialCategory }, index) => eventScope(
+  const heatSelected = heatEligible.slice(0, topKLimit).map((entry) => ({ ...entry, inclusionType: 'global_heat' }));
+  const heatSelectedIds = new Set(heatSelected.map(({ event }) => idOf(event)));
+  const screeningByEvent = new Map(list(readerScreening).map((item) => [String(item?.event_id || ''), item]));
+  const readerRecall = heatEligible.filter(({ event }) => !heatSelectedIds.has(idOf(event)))
+    .map((entry) => ({ ...entry, readerScreen: screeningByEvent.get(idOf(entry.event)) }))
+    .filter(({ readerScreen }) => readerScreen?.eligible === true
+      && finite(readerScreen.daily_work_fit, 0) >= 4
+      && finite(readerScreen.reader_impact, 0) >= 4
+      && finite(readerScreen.specificity, 0) >= 3
+      && text(readerScreen.work_scenario, 180)
+      && text(readerScreen.reader_effect, 180)
+      && text(readerScreen.evidence_basis, 180))
+    .map((entry) => ({ ...entry, recallScore: Number((
+      finite(entry.readerScreen.daily_work_fit, 0) * 0.25
+      + finite(entry.readerScreen.reader_impact, 0) * 0.30
+      + finite(entry.readerScreen.specificity, 0) * 0.25
+      + finite(entry.readerScreen.conflict_signal, 0) * 0.20
+    ).toFixed(2)) }))
+    .sort((a, b) => b.recallScore - a.recallScore
+      || globalHeat(b) - globalHeat(a)
+      || idOf(a.event).localeCompare(idOf(b.event)))
+    .slice(0, Math.max(0, Number(readerRecallLimit) || 0))
+    .map((entry) => ({ ...entry, inclusionType: 'reader_impact_recall' }));
+  const selected = [...heatSelected, ...readerRecall];
+  const scope = selected.map(({ event, heat, editorialCategory, inclusionType, readerScreen, recallScore }, index) => eventScope(
     event, heat, finite(heat?.globalRank ?? heat?.rank, index + 1), index + 1,
     finite(heat?.boardRank ?? heat?.board_rank), editorialCategory,
-    `按全局热度排序第 ${index + 1} 名纳入研判范围`,
+    inclusionType === 'global_heat'
+      ? `按全局热度排序第 ${index + 1} 名纳入研判范围`
+      : `全量读者影响初筛补入；综合分 ${recallScore}/5；工作场景：${text(readerScreen?.work_scenario, 120)}；读者影响：${text(readerScreen?.reader_effect, 120)}`,
   ));
+  scope.forEach((item, index) => {
+    item.selection_type = selected[index]?.inclusionType || 'global_heat';
+    if (selected[index]?.readerScreen) {
+      item.reader_impact_screen = {
+        daily_work_fit: selected[index].readerScreen.daily_work_fit,
+        reader_impact: selected[index].readerScreen.reader_impact,
+        specificity: selected[index].readerScreen.specificity,
+        conflict_signal: selected[index].readerScreen.conflict_signal,
+        recall_score: selected[index].recallScore,
+        target_reader: selected[index].readerScreen.target_reader,
+        work_scenario: selected[index].readerScreen.work_scenario,
+        reader_effect: selected[index].readerScreen.reader_effect,
+        tension_basis: selected[index].readerScreen.tension_basis,
+        evidence_basis: selected[index].readerScreen.evidence_basis,
+      };
+    }
+  });
   // 阶段 0 只负责冻结研判范围。不要在这里根据关键词、维度或时间
   // 直接生成反常、利益冲突、发散方向或事件关系；这些都由阶段 1 的
   // 单事件模型联网交互完成。
@@ -375,7 +420,11 @@ export function buildDiscussionResearch({ events = [], eventHeatRanking = {}, to
     mode: 'phase0_scope',
     policy: {
       top_k: topKLimit,
-      selection_policy: 'global_heat_rank',
+      selection_policy: 'global_heat_top_k_plus_reader_impact_recall',
+      reader_recall_limit: Math.max(0, Number(readerRecallLimit) || 0),
+      reader_recall_selected: readerRecall.length,
+      freshness_window_hours: Math.max(1, Number(freshnessWindowHours) || 168),
+      reader_screening_status: readerScreeningStatus,
       included_categories: [...DISCUSSION_RESEARCH_CATEGORIES],
       excluded_reasons: {
         account_irrelevant: 'audience score is 0',
@@ -390,6 +439,8 @@ export function buildDiscussionResearch({ events = [], eventHeatRanking = {}, to
       eligible_count: heatEligible.length,
       excluded_count: excluded.length,
       selected_count: selected.length,
+      heat_selected_count: heatSelected.length,
+      reader_recall_selected_count: readerRecall.length,
       excluded_account_irrelevant_count: excluded.filter((item) => item.accountAudience === 0).length,
       excluded_repository_project_count: excluded.filter((item) => item.repository).length,
       excluded_unmapped_category_count: excluded.filter((item) => !isBoardCategory(item.editorialCategory)).length,
@@ -415,6 +466,7 @@ export function discussionResearchMarkdown(report) {
     '# 高热事件讨论研判报告',
     '',
     `模式：${report?.mode || 'phase0_observation'}；范围：按全局热度选取 ${report?.policy?.top_k || DISCUSSION_RESEARCH_TOP_K} 个事件，题材类别仅作标签；GitHub 项目素材不自动进入文章研判；本次纳入 ${scope.length} 个事件。`,
+    `模式：${report?.mode || 'phase0_observation'}；范围：全局热度 Top-${report?.policy?.top_k || DISCUSSION_RESEARCH_TOP_K} 加全量读者影响初筛补入 ${report?.scope?.reader_recall_selected_count || 0} 个（上限 ${report?.policy?.reader_recall_limit ?? DISCUSSION_RESEARCH_READER_RECALL_LIMIT}）；GitHub 项目素材不自动进入文章研判；本次纳入 ${scope.length} 个事件。`,
     '',
     report?.research_source === 'model'
       ? '本报告由模型按事件逐个联网研判并直接返回 Markdown；程序只负责范围裁剪、调用审计、来源整理、结构索引和去重，研判价值 J 在候选评分阶段计算。'
@@ -422,9 +474,10 @@ export function discussionResearchMarkdown(report) {
         ? '阶段 0 只按全局热度冻结研判范围和来源指针；尚未进行事件内或事件间语义研判，页面不会在此阶段展示程序猜出的关系。'
         : '本报告只整理已有事件卡、事件维度和时间关系，不改变 T、F、候选池，也不把观察信号直接当作选题命题。',
     '',
-    '## Top-K 研判范围',
+    '## 深研范围',
     '',
     ...scope.map((item) => `- #${item.selection_rank ?? item.rank} · ${item.editorial_category || '未分类'}榜第 ${item.board_rank ?? '—'} 名 · T ${item.t ?? '—'} · ${item.title}（${item.event_id}）`),
+    ...scope.map((item) => `- #${item.selection_rank ?? item.rank} · ${item.selection_type === 'reader_impact_recall' ? '读者影响补入' : (item.editorial_category || '未分类') + '榜第 ' + (item.board_rank ?? '—') + ' 名'} · T ${item.t ?? '—'} · ${item.title}（${item.event_id}）${item.selection_type === 'reader_impact_recall' ? '；' + item.included_reason : ''}`),
     '',
     '## 事件内研判',
     '',

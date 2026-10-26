@@ -356,6 +356,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
     articleType,writingStance,stanceSource:stanceDecision.source,citationPolicy,visualPolicy:visualDecision.policy,
     action:materialBrief.action,affectedGroup:materialBrief.affected_group,readerConsequence:materialBrief.reader_consequence,
     conflict:materialBrief.conflict,baselineChange:materialBrief.baseline_change,counterEvidence:materialBrief.counter_evidence,
+    freshnessBasis:materialBrief.freshness_basis,
     evidenceBoundary:materialBrief.evidence_boundary,readerAction:materialBrief.reader_action,materialReadiness:materialBrief.material_readiness};
   // 原文用于准备事实记录，正文写作只消费可追溯的记录。
   if (sourceInput.issue) throw Object.assign(new Error(sourceInput.issue), { fatalSourceCache: true });

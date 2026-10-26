@@ -22,6 +22,7 @@ import {
 } from '../server/features/research/index.mjs';
 
 function event(id, rank, title = `事件 ${id}`) {
+  const triggerDate = new Date().toISOString().slice(0, 10);
   return {
     event_id: id,
     representative_title: title,
@@ -34,9 +35,9 @@ function event(id, rank, title = `事件 ${id}`) {
     articles: [{ hotspot_id: rank, title: `来源报道 ${id}`, source: '测试源', summary: `来源摘要 ${id}`, content: `来源正文 ${id}` }],
     card: {
       conclusion: `事件卡结论 ${id}`,
-      confirmed_facts: [`已确认事实 ${id}`],
+      confirmed_facts: [`${triggerDate} 已确认事实 ${id}`],
       unverified: [`待核实信息 ${id}`],
-      timeline: [{ time: '08-10', fact: `时间事实 ${id}` }],
+      timeline: [{ time: triggerDate, fact: `时间事实 ${id}` }],
     },
   };
 }
@@ -69,6 +70,8 @@ test('模型研判输出被转换为事件内信号、事件间关系和候选�
       candidate_title: '同一产品从发布到回应，谁承担了调整成本？', event_ids: ['E1', 'E2'], relation_ids: ['MR-001'],
       topic_type: 'event_comparison', core_question: '发布和回应之间发生了什么变化？', angle: '从承诺变化与成本承担者切入',
       thesis_seed: '动作变化比发布本身更能说明各方利益如何重新分配。', source_ids: ['hotspot:1', 'hotspot:2'], confidence: 'high',
+      timeliness_status: 'current', freshness_date: new Date().toISOString().slice(0, 10), freshness_basis: '事件卡记录近期触发事实', freshness_source_ids: ['hotspot:1'],
+      answerability_status: 'answerable', answerability_basis: '事件卡与来源可回答责任和成本如何变化',
     }],
   }, { events, baseReport: base });
 
@@ -90,6 +93,22 @@ test('模型研判输出被转换为事件内信号、事件间关系和候选�
   assert.equal(candidates.length, 1);
   assert.equal(candidates[0].title, '同一产品从发布到回应，谁承担了调整成本？');
   assert.equal(candidates[0].analysis_source, 'model');
+});
+
+test('近期网页发布时间不能单独充当事件触发日期', () => {
+  const staleEvent = event('E1', 1);
+  staleEvent.card = { confirmed_facts: ['历史事件背景'], timeline: [] };
+  staleEvent.articles = [{ hotspot_id: 1, title: '旧事件近期报道', source: '测试源', time: new Date().toISOString(), summary: '报道未说明近期有新动作' }];
+  const base = baseReport([staleEvent]);
+  const report = normalizeDiscussionResearchModel({
+    items: [], relations: [],
+    topic_candidates: [{
+      candidate_title: '近期报道的旧事件', event_ids: ['E1'], core_question: '旧事件是否影响读者？', angle: '从旧事件切入', thesis_seed: '需要重新理解旧事件',
+      timeliness_status: 'current', freshness_date: new Date().toISOString().slice(0, 10), freshness_basis: '近期有报道', freshness_source_ids: ['hotspot:1'],
+      answerability_status: 'answerable', answerability_basis: '报道提及该事件',
+    }],
+  }, { events: [staleEvent], baseReport: base });
+  assert.equal(report.topic_candidates.length, 0);
 });
 
 test('程序门禁拒绝没有具体差异或未知证据的对比关系', () => {
@@ -395,6 +414,8 @@ test('阶段3不要求关系型选题配额，关系来源仅在模型提供素�
       return { content: JSON.stringify({ topic_candidates: [{
         candidate_title: '事件内候选', event_ids: ['E1'], material_ids: [], relation_ids: [], internal_signal_refs: [],
         topic_type: 'model_discussion', core_question: '问题', angle: '角度', thesis_seed: '命题', source_ids: ['hotspot:1'],
+        timeliness_status: 'current', freshness_date: new Date().toISOString().slice(0, 10), freshness_basis: '近期事实变化', freshness_source_ids: ['hotspot:1'],
+        answerability_status: 'answerable', answerability_basis: '输入事实可直接回答问题',
       }] }) };
     },
   };
@@ -429,6 +450,8 @@ test('阶段3记录聚合候选与未覆盖事件，不强行生成低质量选�
       topic_candidates: [{
         candidate_title: '两个事件合并后的讨论命题', event_ids: ['E1', 'E2'],
         core_question: '两个事件为什么应放在一起讨论？', angle: '从共同变化切入', thesis_seed: '共同变化比单点新闻更值得讨论',
+        timeliness_status: 'current', freshness_date: new Date().toISOString().slice(0, 10), freshness_basis: '事件卡记录近期触发事实', freshness_source_ids: ['hotspot:1'],
+        answerability_status: 'answerable', answerability_basis: '两件事实可比较并回答问题',
       }],
       event_coverage: [
         { event_id: 'E1', status: 'covered', candidate_indexes: [1], reason: '' },
@@ -458,6 +481,8 @@ test('阶段3兼容研判报告来源别名，并从关系素材继承来源与�
       material_ids: ['RM-inter_event-MR-001'], evidence_source_ids: ['S1'],
       topic_type: 'event_comparison', core_question: '两个事件为何采取不同策略？',
       angle: '比较双方的动作与代价', thesis_seed: '同一压力下不同策略会产生不同代价',
+      timeliness_status: 'current', freshness_date: new Date().toISOString().slice(0, 10), freshness_basis: '事件卡记录近期触发事实', freshness_source_ids: ['S1'],
+      answerability_status: 'answerable', answerability_basis: '关系材料支持比较动作与代价',
     }] }) }),
   };
   const result = await generateDiscussionResearchTopics({
@@ -486,6 +511,8 @@ test('阶段3接受 B 阶段模型联网返回的引用来源', async () => {
       material_ids: ['RM-internal_anomaly-E1:anomaly:1'],
       topic_type: 'internal_anomaly', core_question: '这个落差是否成立？', angle: '从基线与实际结果的差异切入',
       thesis_seed: '只有把事件放回基线中比较，反常才有解释力。', source_ids: [nativeSourceId],
+      timeliness_status: 'current', freshness_date: new Date().toISOString().slice(0, 10), freshness_basis: '事件卡记录近期触发事实', freshness_source_ids: [nativeSourceId],
+      answerability_status: 'answerable', answerability_basis: '研判引用与事实卡可核对落差',
     }] }) }),
   };
   const result = await generateDiscussionResearchTopics({

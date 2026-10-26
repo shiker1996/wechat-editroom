@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "hotspot-brainstorm",
   "name": "热点探索脑暴",
-  "version": "1.3.0",
+  "version": "1.5.0",
   "kind": "stage",
   "entryPoints": [],
   "contentTypes": [],

@@ -1,5 +1,7 @@
 # 提示词资产管理方案
 
+> 本文中的版本号和阶段描述是历史盘点；当前文章提示词版本与执行阶段分别以 `server/features/articles/application/article-prompts.mjs` 和 `skills/wechat-mp-topic-to-article/references/runtime-stage-contracts.md` 为准。
+
 日期：2026-10-22  
 状态：方案已开始实施；文章主链和其他模块分批迁移中
 

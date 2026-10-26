@@ -39,6 +39,29 @@ test('阶段0按全局热度选 Top-K，并保留 T 不变策略', () => {
   assert.equal(report.topic_candidates.length, 0);
 });
 
+test('全量读者影响初筛可把贴近日常工作且有具体后果的事件补入热度 Top-K', () => {
+  const events = [
+    event('E1', 1, { who: 'A', object: '产品', actionType: '发布' }),
+    event('E2', 2, { who: 'B', object: '产品', actionType: '回应' }),
+    event('E3', 3, { who: 'C', object: '工作流', actionType: '调整' }),
+  ];
+  const report = buildDiscussionResearch({
+    events,
+    topK: 2,
+    readerRecallLimit: 1,
+    readerScreeningStatus: 'completed',
+    readerScreening: [{
+      event_id: 'E3', eligible: true, daily_work_fit: 5, reader_impact: 5, specificity: 4, conflict_signal: 3,
+      target_reader: '开发者', work_scenario: '团队部署流程调整', reader_effect: '增加上线前的核验成本', evidence_basis: '事件卡记录部署流程变化',
+    }],
+    eventHeatRanking: { items: events.map((item) => ({ eventId: item.event_id, rank: item.eventHeatRank, t: item.t, eventValue: item.t, state: 'new_event' })) },
+  });
+  assert.deepEqual(report.scope.items.map((item) => item.event_id), ['E1', 'E2', 'E3']);
+  assert.equal(report.scope.items[2].selection_type, 'reader_impact_recall');
+  assert.equal(report.scope.items[2].reader_impact_screen.work_scenario, '团队部署流程调整');
+  assert.equal(report.policy.reader_screening_status, 'completed');
+});
+
 test('阶段0的讨论研判Top-K排除纯项目，其他题材跨分类按全局热度排序', () => {
   const project = { ...event('P1', 1, { who: '作者A', object: '项目', actionType: '发布' }), classification: { contentClass: 'github_project' } };
   project.articles = [{ ...project.articles[0], source: 'github', url: 'https://github.com/example/project' }];

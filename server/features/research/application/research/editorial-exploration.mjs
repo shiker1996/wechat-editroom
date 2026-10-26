@@ -156,12 +156,16 @@ export async function brainstorm(gateway, store, selected, account, batchId, pro
       topic_type: text(candidate.topic_type || candidate.topic_candidate?.topic_type, 60),
       angle: text(candidate.angle, 260),
       thesis: text(candidate.thesis, 260),
+      freshness_basis: text(candidate.topic_candidate?.freshness_basis, 400),
+      freshness_source_ids: list(candidate.topic_candidate?.freshness_source_ids).map((value) => text(value, 120)).filter(Boolean),
+      answerability_status: text(candidate.topic_candidate?.answerability_status, 40),
+      answerability_basis: text(candidate.topic_candidate?.answerability_basis, 400),
       riskLevel: text(candidate.riskLevel, 40),
       research_basis: candidate.research_basis || researchBasisForCandidate(candidate),
     }));
     const result = await gateway.complete({ provider, purpose: 'hotspot-brainstorm-explore', batchId, jsonMode: true,
        messages: [{ role: 'system', content: brainstormSystem, protected: true },
-        { role: 'user', content: `${retry ? '【极简重试】每个字符串不超过40个汉字，严格闭合JSON。\n' : ''}【账号与作者资产】\n${compactAccount.map((x) => `${x.label}:\n${x.content}`).join('\n\n')}\n\n【脑暴输入规则】\n只允许基于每条候选中的 research_basis 生成角度、命题和包装。research_basis 为空，或其中没有任何研判报告/研判素材时，不得把事件卡摘要自行改造成选题；应返回 NO_ANGLE，并说明缺少研判依据。候选本身未回填 material_ids、internal_signal_refs 或 relation_ids，不等于没有研判依据；只要 research_basis 中存在对应报告或素材即可继续脑暴。候选标题只是研判阶段的临时种子，不是新的事实来源。\n\n【候选】\n${JSON.stringify(promptCandidates)}`, protected: true }],
+        { role: 'user', content: `${retry ? '【极简重试】每个字符串不超过40个汉字，严格闭合JSON。\n' : ''}【账号与作者资产】\n${compactAccount.map((x) => `${x.label}:\n${x.content}`).join('\n\n')}\n\n【脑暴输入规则】\n只允许基于每条候选中的 research_basis 生成角度、命题和包装。research_basis 为空，或其中没有任何研判报告/研判素材时，不得把事件卡摘要自行改造成选题；应返回 NO_ANGLE，并说明缺少研判依据。候选本身未回填 material_ids、internal_signal_refs 或 relation_ids，不等于没有研判依据；只要 research_basis 中存在对应报告或素材即可继续脑暴。候选标题只是研判阶段的临时种子，不是新的事实来源。必须沿用输入的近期触发事实和对应来源，把核心问题收窄为现有证据能回答的具体问题；不得在脑暴中把旧事件包装为新热点，也不得退回没有对象、条件和可验证结论的宽泛议论。输入判定与研判材料互相矛盾、或具体问题无法由材料回答时，返回 NO_ANGLE，说明缺少的近期事实或回答依据。\n\n【候选】\n${JSON.stringify(promptCandidates)}`, protected: true }],
       maxOutputTokens: Math.min(6500, providerConfig.maxOutputTokens) });
     let parsed;
     try { parsed = parseModelJson(result, store); }

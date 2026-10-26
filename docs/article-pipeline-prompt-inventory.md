@@ -1,8 +1,8 @@
 # 公众号成稿链路提示词清单
 
-> 历史基线：本清单记录 2026-10-21 调整前的链路。运行时现已切换到 [direct-brief-v2](design/article-pipeline-optimized-prompts.md)，下文旧阶段与组合方式保留用于对照。
+> 历史基线：本清单记录 2026-10-21 调整前的大纲链路与后续历史提示词。运行时已切换到 direct-brief 直写链，当前唯一阶段契约见 [运行阶段契约](../skills/wechat-mp-topic-to-article/references/runtime-stage-contracts.md)；提示词版本见 `server/features/articles/application/article-prompts.mjs`。下文旧阶段与组合方式仅保留用于审计，不是当前执行说明。
 
-> 用途：审计“简报与事实 → 大纲 → 初稿 → 审稿与终稿”的实际模型提示词组成。
+> 用途：审计历史“简报与事实 → 大纲 → 初稿 → 审稿与终稿”的模型提示词组成；不得据此恢复或调用旧大纲阶段。
 > 范围：基于当前工作区运行时代码和 `2026-10-21-b08f8d5682-s002` 产物的技能清单整理。此文档是只读说明，不改变任何技能或运行时提示词。
 
 ## 1. 先看提示词是怎么拼出来的

@@ -11,7 +11,6 @@ articles/<topic-slug>/
   00-article-brief.md
   01-personal-materials.md
   02-fact-base.json
-  02-outline.md
   03-titles.md
   04-draft.md
   04-quality-gate.json
@@ -45,6 +44,7 @@ articles/<topic-slug>/
 - `reader_job`
 - `distribution_lane: 推荐池|通知池|实验池`
 - `reader_stake`
+- `freshness_basis`：近期触发事件/变化、发生或更新时间、对应来源，以及它此刻影响目标读者的原因
 - `confirmed_public_facts`
 - `confirmed_author_opinions`
 - `confirmed_experiences`
@@ -54,6 +54,8 @@ articles/<topic-slug>/
 - `remaining_gaps`
 
 `experience_required: true` 时 `confirmed_experiences` 不得为空，并须记录材料或证据来源。`remaining_gaps` 中只要仍有会影响核心命题成立的项目，就不得标为 `LOCKED`。
+
+`freshness_basis` 应说明近期触发事件/变化、时间和来源，以及它此刻影响目标读者的原因。用户明确要求写常青解释稿时，可将其标为常青稿并说明原因。
 
 ### `editorial-research-selection.json`
 
@@ -83,22 +85,7 @@ articles/<topic-slug>/
 
 保留用户原话时使用引用块；推断内容不得放进引用块。
 
-### 02-outline.md
-
-- `## 核心判断`
-- `## 目标读者`
-- `## 内容角色`
-- `## 分发池与读者利益`
-- `## 事实基座`
-- `## 结构大纲`
-- `## 流量规划`
-- `## 信息增量`
-- `## 读者收益`
-- `## 增长承接`
-
-`## 流量规划` 可记录 `reader_emotion`、`click_mechanism`、`opening_hook`、`retention_turns`、`ending_payoff` 和 `share_trigger`。只要 `readerStake` 明确，`reader_emotion` 必填，描述读者可能的起始感受、具体处境触发点和期望的阅读后变化；它是写作规划，不是关于读者群体的事实主张。仅在没有具体受影响读者或读者后果时可省略。写作与审稿须把这一情绪路径落实为具体处境、选择或代价，不要求强烈语气或固定章节数。章节数、推进节奏和案例数量按材料决定，不设固定 H2 数或推进次数。`## 读者收益` 记录 `reader_value_type` 与 `reader_value_placement`；`standalone_h2` 不是默认值。
-
-事实基座每条记录：`id`、`claim`、`status`、`source_title`、`source_url`、`published_at`、`checked_at`。无 URL 的来源不能标为 `verified`，用户提供的内部材料除外；内部材料须标记为用户提供。
+成稿流程不创建 `02-outline.md`。锁定简报负责提供核心问题、角度、读者任务和边界；写作阶段根据这些要素与事实基座自行组织结构，不需要额外的大纲产物。用户主动提供的大纲可作为额外上下文，但不是成稿前置条件。
 
 ### 02-fact-base.json
 

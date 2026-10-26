@@ -13,12 +13,16 @@ export const G_SOCIAL_THRESHOLDS = Object.freeze({ candidate: 55, auto: 70 });
 export const G_SOCIAL_MATERIAL_CAPS = Object.freeze({ repository: 6 });
 export const G_SOCIAL_CLASS_CAPS = Object.freeze({ github_project: 6, repository: 6 });
 
-const DEMONSTRABLE_PATTERN = /工具|教程|学习资源|框架|跨平台|开发者|开发|临时邮箱|隐私|窗口管理器|代码审查|架构图|音频处理|文件传输|监控|skill|workflow|framework|library|plugin|server|cli|agent/i;
+const DEMONSTRABLE_PATTERN = /转换|转成|生成|复刻|预览|检索|搜索|可视化|导入|导出|同步|备份|部署|调试|测试|审查|自动化|一条命令|输入.{0,12}输出|pdf.{0,20}markdown|screenshot.{0,30}(?:website|web page)|(?:convert|generate|clone|preview|search|visuali[sz]e|import|export|sync|backup|deploy|debug|test|review|automate)/i;
 const TREND_SIGNAL_PATTERN = /采用|迁移|生态|竞争|标准|政策|规范|趋势|增长|发布|合作|集成|adoption|migration|ecosystem|standard|policy|trend/i;
 
 function clamp(value, min = 0, max = 100) {
   const number = Number(value);
   return Math.max(min, Math.min(max, Number.isFinite(number) ? number : 0));
+}
+
+function hasFiniteValue(value) {
+  return value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
 }
 
 function round(value) { return Number(clamp(value).toFixed(1)); }
@@ -58,13 +62,22 @@ function materialTypeOf(item) {
 function repositorySignals(item, text) {
   const repository = item?.repositoryMeta || {};
   const topics = Array.isArray(repository.topics) ? repository.topics : [];
-  const demonstrable = DEMONSTRABLE_PATTERN.test(text);
+  const hasReaderValue = hasFiniteValue(repository.projectReaderValue);
+  const outcomeClarity = clamp(Number(repository.outcomeClarity || 0) * 10);
+  const evidenceQuality = clamp(Number(repository.evidenceQuality || 0) * 10);
+  const quickStart = clamp(Number(repository.quickStart || 0) * 10);
+  const demonstrable = hasReaderValue ? outcomeClarity >= 40 : DEMONSTRABLE_PATTERN.test(text);
   const hasDescription = Boolean(String(repository.description || '').trim());
   const hasSource = Boolean(articlesOf(item)[0]?.url || item.sourceUrl);
+  const metadataSupport = clamp(30 + (hasDescription ? 22 : 0) + (topics.length ? 10 : 0) + (hasSource ? 16 : 0) + (Number(repository.stars) > 0 ? 10 : 0));
   return {
-    factSupport: clamp(30 + (hasDescription ? 22 : 0) + (topics.length ? 10 : 0) + (hasSource ? 16 : 0) + (Number(repository.stars) > 0 ? 10 : 0)),
-    visualPotential: clamp(28 + (demonstrable ? 32 : 0) + Math.min(20, topics.length * 4) + (repository.language ? 8 : 0)),
-    productionReadiness: clamp(25 + (hasDescription ? 20 : 0) + (repository.language ? 10 : 0) + (topics.length ? 10 : 0) + (repository.createdAt ? 10 : 0) + (Number(repository.stars) > 0 ? 10 : 0) + (hasSource ? 10 : 0)),
+    factSupport: hasReaderValue ? clamp(metadataSupport * 0.4 + evidenceQuality * 0.6) : metadataSupport,
+    visualPotential: hasReaderValue
+      ? clamp(15 + outcomeClarity * 0.7 + (demonstrable ? 15 : 0))
+      : clamp(28 + (demonstrable ? 32 : 0) + Math.min(20, topics.length * 4) + (repository.language ? 8 : 0)),
+    productionReadiness: hasReaderValue
+      ? clamp(15 + quickStart * 0.7 + evidenceQuality * 0.15 + (repository.language ? 5 : 0) + (hasSource ? 5 : 0))
+      : clamp(25 + (hasDescription ? 20 : 0) + (repository.language ? 10 : 0) + (topics.length ? 10 : 0) + (repository.createdAt ? 10 : 0) + (Number(repository.stars) > 0 ? 10 : 0) + (hasSource ? 10 : 0)),
   };
 }
 
@@ -83,7 +96,8 @@ function commonSignals(item, text, sourceCount, articleCount) {
   const china = clamp(Number(item?.chinaRelevance || item?.china_relevance_score || 0) / 12 * 60);
   const audience = clamp(Number(item?.preScores?.audience || 0) / 20 * 40);
   const baselineReaderValue = clamp(china + audience);
-  const projectReaderValue = Number(item?.repositoryMeta?.projectReaderValue);
+  const projectReaderValue = hasFiniteValue(item?.repositoryMeta?.projectReaderValue)
+    ? Number(item.repositoryMeta.projectReaderValue) : Number.NaN;
   const projectFeedbackAdjustment = Number(item?.repositoryMeta?.projectFeedbackAdjustment);
   const feedbackAdjustment = Number.isFinite(projectFeedbackAdjustment) ? clamp(projectFeedbackAdjustment, -8, 8) : 0;
   const readerValue = Number.isFinite(projectReaderValue)
@@ -104,8 +118,18 @@ function qualificationFor(item, materialType, signals) {
     const repository = item?.repositoryMeta || {};
     const text = textOf([item?.title, item?.chinaRelevanceReason, repository.description, repository.language, repository.topics,
       repository.projectType, repository.scenarioIds, repository.directUseCase, repository.discoveryChannels]);
-    if (!DEMONSTRABLE_PATTERN.test(text)) return { status: 'type_gate_blocked', reason: '项目缺少可演示的工具或使用场景证据', candidateEligible: false, autoEligible: false };
-    if (Number.isFinite(Number(repository.projectReaderValue)) && Number(repository.projectReaderValue) < 60) {
+    const hasReaderValue = hasFiniteValue(repository.projectReaderValue);
+    const directUseCase = String(repository.directUseCase || '').trim();
+    const outcomeClarity = Number(repository.outcomeClarity);
+    const evidenceQuality = Number(repository.evidenceQuality);
+    if (hasReaderValue && (!directUseCase || !Number.isFinite(outcomeClarity) || outcomeClarity < 4)) {
+      return { status: 'outcome_gate_blocked', reason: '项目没有说明读者任务和可见结果', candidateEligible: false, autoEligible: false };
+    }
+    if (!hasReaderValue && !DEMONSTRABLE_PATTERN.test(text)) return { status: 'type_gate_blocked', reason: '项目缺少具体任务或结果的可演示证据', candidateEligible: false, autoEligible: false };
+    if (hasReaderValue && Number.isFinite(evidenceQuality) && evidenceQuality < 3) {
+      return { status: 'evidence_gate_blocked', reason: '项目缺少支持贴图介绍的 README、示例或来源证据', candidateEligible: false, autoEligible: false };
+    }
+    if (hasFiniteValue(repository.projectReaderValue) && Number(repository.projectReaderValue) < 60) {
       return { status: 'reader_value_blocked', reason: `项目读者价值 ${Number(repository.projectReaderValue).toFixed(1)}，低于候选线 60`, candidateEligible: false, autoEligible: false };
     }
   }
@@ -167,7 +191,7 @@ export function scoreSocialCandidate(item) {
     repository?.discoveryChannels?.includes('search') ? '近期增长发现' : null,
     repository?.discoveryChannels?.includes('mentioned') ? '热点提及' : null,
     Number(repository?.stars) >= 1000 ? `${repository.stars} Stars` : null,
-    Number.isFinite(Number(repository?.projectReaderValue)) ? `读者价值 ${Number(repository.projectReaderValue).toFixed(1)}` : null,
+    hasFiniteValue(repository?.projectReaderValue) ? `读者价值 ${Number(repository.projectReaderValue).toFixed(1)}` : null,
     common.projectFeedbackAdjustment ? `反馈调整 ${common.projectFeedbackAdjustment > 0 ? '+' : ''}${common.projectFeedbackAdjustment}` : null,
     demonstrable ? '可演示工具' : null,
   ].filter(Boolean);

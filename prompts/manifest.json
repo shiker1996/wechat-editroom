@@ -14,7 +14,7 @@
     },
     {
       "id": "articles.draft",
-      "version": 1,
+      "version": 2,
       "file": "articles/draft.md",
       "purpose": "article-draft",
       "variables": [],
@@ -30,7 +30,7 @@
     },
     {
       "id": "articles.review",
-      "version": 1,
+      "version": 2,
       "file": "articles/review.md",
       "purpose": "article-review",
       "variables": [],
@@ -151,7 +151,7 @@
     },
     {
       "id": "collection.repo-discovery-queries",
-      "version": 1,
+      "version": 2,
       "file": "collection/repo-discovery-queries.md",
       "purpose": "collection-github-repo-discovery-query-planning",
       "variables": [
@@ -164,7 +164,7 @@
     },
     {
       "id": "collection.repo-interest-filter",
-      "version": 1,
+      "version": 3,
       "file": "collection/repo-interest-filter.md",
       "purpose": "collection-github-repo-interest-scoring",
       "variables": [],
