@@ -83,7 +83,7 @@ export function buildSocialCardCopySystemPrompt(skillPrompt, { channelMode = 'we
 - 先确定读者最可能搜索的具体主体词、工具/产品名或主题词，以及其搜索意图；标题应与卡片内容和事实基座一致。
 - 将最有辨识度的具体关键词自然放在标题前半句，再说明读者要解决的问题、了解的变化或获得的内容。优先采用具体问题或任务表达，避免“值得收藏”“终于来了”等无法检索的空泛钩子。
 - 关键词必须有输入依据；不得编造搜索热度、排名、体验、效果、数字或结论，不堆砌近义词，不做标题党。
-`;
+${repositoryTitleRules}${channelMode === 'xiaohongshu' ? '小红书渠道：文案口语化、段落短，适度使用 emoji，末尾带 6–8 个话题标签，标签不得含夸大功效词。' : '公众号渠道：文案信息密度优先、结构清晰，末尾带 6–8 个准确话题标签，标签须与内容严格相关。'}${contentType === 'event' ? ' 未核实主张必须注明说话者和“尚未获独立证实”等边界；不得把技术能力、趋势判断或争议定性为超出证据的结论。' : ''}${contentType === 'custom' ? ' 体验性表述只能来自 source_level=author_experience 的要点；user_material 必须保留来源归属；model_suggestion 只能写成建议或参考，禁止写成亲测、效果或收益。' : ''}`;
 }
 
 export function parseSocialCardCopyOutput(value = '', { channelMode = 'wechat' } = {}) {

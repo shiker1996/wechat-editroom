@@ -13,7 +13,7 @@ export const G_SOCIAL_THRESHOLDS = Object.freeze({ candidate: 55, auto: 70 });
 export const G_SOCIAL_MATERIAL_CAPS = Object.freeze({ repository: 6 });
 export const G_SOCIAL_CLASS_CAPS = Object.freeze({ github_project: 6, repository: 6 });
 
-const DEMONSTRABLE_PATTERN = /转换|转成|生成|复刻|预览|检索|搜索|可视化|导入|导出|同步|备份|部署|调试|测试|审查|自动化|一条命令|输入.{0,12}输出|pdf.{0,20}markdown|screenshot.{0,30}(?:website|web page)|(?:convert|generate|clone|preview|search|visuali[sz]e|import|export|sync|backup|deploy|debug|test|review|automate)/i;
+const DEMONSTRABLE_PATTERN = /转换|转成|生成|复刻|预览|检索|搜索|可视化|导入|导出|同步|备份|部署|调试|测试|审查|自动化|接入.{0,16}(?:工作流|项目|系统)|一条命令|输入.{0,12}输出|pdf.{0,20}markdown|screenshot.{0,30}(?:website|web page)|(?:convert|generate|clone|preview|search|visuali[sz]e|import|export|sync|backup|deploy|debug|test|review|automate)/i;
 const TREND_SIGNAL_PATTERN = /采用|迁移|生态|竞争|标准|政策|规范|趋势|增长|发布|合作|集成|adoption|migration|ecosystem|standard|policy|trend/i;
 
 function clamp(value, min = 0, max = 100) {
@@ -122,15 +122,17 @@ function qualificationFor(item, materialType, signals) {
     const directUseCase = String(repository.directUseCase || '').trim();
     const outcomeClarity = Number(repository.outcomeClarity);
     const evidenceQuality = Number(repository.evidenceQuality);
+    if (hasReaderValue && Number(repository.projectReaderValue) < 60) {
+      return { status: 'reader_value_blocked', reason: `项目读者价值 ${Number(repository.projectReaderValue).toFixed(1)}，低于候选线 60`, candidateEligible: false, autoEligible: false };
+    }
     if (hasReaderValue && (!directUseCase || !Number.isFinite(outcomeClarity) || outcomeClarity < 4)) {
       return { status: 'outcome_gate_blocked', reason: '项目没有说明读者任务和可见结果', candidateEligible: false, autoEligible: false };
     }
-    if (!hasReaderValue && !DEMONSTRABLE_PATTERN.test(text)) return { status: 'type_gate_blocked', reason: '项目缺少具体任务或结果的可演示证据', candidateEligible: false, autoEligible: false };
+    if (!hasReaderValue && !DEMONSTRABLE_PATTERN.test(text) && signals.gSocial >= G_SOCIAL_THRESHOLDS.candidate) {
+      return { status: 'type_gate_blocked', reason: '项目缺少具体任务或结果的可演示证据', candidateEligible: false, autoEligible: false };
+    }
     if (hasReaderValue && Number.isFinite(evidenceQuality) && evidenceQuality < 3) {
       return { status: 'evidence_gate_blocked', reason: '项目缺少支持贴图介绍的 README、示例或来源证据', candidateEligible: false, autoEligible: false };
-    }
-    if (hasFiniteValue(repository.projectReaderValue) && Number(repository.projectReaderValue) < 60) {
-      return { status: 'reader_value_blocked', reason: `项目读者价值 ${Number(repository.projectReaderValue).toFixed(1)}，低于候选线 60`, candidateEligible: false, autoEligible: false };
     }
   }
   const contentClass = String(item?.contentClass || item?.content_class || '');

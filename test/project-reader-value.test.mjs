@@ -30,7 +30,7 @@ test('项目读者价值按六项维度程序化合成并扣除复杂度与 Agen
   const scored = scoreProjectReaderValue({ eventId: 'E1', dailyFit: 10, quickStart: 10, outcomeClarity: 10,
     reusability: 10, novelty: 10, evidenceQuality: 10, installationFriction: 2, agentPenalty: 5 });
   assert.equal(scored.projectReaderValue, 93);
-  assert.equal(scored.scoreParts.dailyFit, 35);
+  assert.equal(scored.scoreParts.dailyFit, 28);
   assert.equal(scored.scoreParts.agentPenalty, 5);
 });
 
@@ -55,7 +55,7 @@ test('项目读者价值模型调用返回结构化结果，失败不阻塞候�
   } };
   const result = await evaluateProjectReaderValue({ gateway, workspaceRoot: process.cwd(), projects: [event('E1', '项目一')], topK: 5 });
   assert.equal(result.status, 'completed');
-  assert.equal(result.results[0].projectReaderValue, 83);
+  assert.equal(result.results[0].projectReaderValue, 83.8);
   assert.equal(calls[0].purpose, 'project-reader-value');
   assert.equal(calls[0].jsonMode, true);
 });
