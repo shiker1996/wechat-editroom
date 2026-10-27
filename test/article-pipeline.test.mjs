@@ -44,12 +44,12 @@ test('审稿正文不再承载 result 标记，门禁结论通过独立 decision
     config:{defaultProvider:'mock',providers:{mock:{supportsNativeTools:true}}},
     async complete(input){
       calls.push(input);
-      return {callId:43,toolCalls:[{id:'call-review',name:'decision.article_review_gate',input:{pass:true,issues:[]},providerExecuted:false}]};
+      return {callId:43,toolCalls:[{id:'call-review',name:'decision.article_review_gate',input:{pass:true,issues:[],evidence_checks:[]},providerExecuted:false}]};
     },
   };
   const store={repositories:{extensionSettings:{get(){return {value:{decisionToolsEnabled:true}};}}}};
   const result=await aiReviewGate({gateway,store,provider:'mock',batchId:'b1',candidateId:'c1',article:'# 标题\n\n正文',factBase:{claims:[]},systemPrompt:'审稿门禁'});
-  assert.deepEqual(result,{pass:true,issues:[]});
+  assert.deepEqual(result,{pass:true,issues:[],evidence_checks:[]});
   assert.equal(calls.length,1);
   assert.deepEqual(calls[0].toolChoice,{type:'function',name:'decision.article_review_gate'});
   assert.equal(calls[0].jsonMode,false);
@@ -144,7 +144,8 @@ test('合规修订提示词要求 AI 直接修订标题、归因和来源展示'
   assert.match(prompt, /明确归因/);
   assert.match(prompt, /具体来源/);
   assert.match(prompt, /只输出修订后的完整 Markdown 文章/);
-  assert.match(prompt, /不得新增事实、数字、日期/);
+  assert.match(prompt, /不能按模型记忆补造事实、引语、来源或链接/);
+  assert.match(prompt, /搜索工具实际返回且能直接支撑主张/);
 });
 
 test('综合候选汇总全部已抓取来源，写作简报移除来源原文', () => {
@@ -177,13 +178,13 @@ test('文章质量门禁开关开启时消费 decision tool，且仍保持内部
     config: { defaultProvider: 'mock', providers: { mock: { supportsNativeTools: true } } },
     async complete(input) {
       calls.push(input);
-      return { callId: 42, toolCalls: [{ id: 'call-gate', name: 'decision.article_quality_gate', input: { pass: true, issues: [] }, providerExecuted: false }] };
+      return { callId: 42, toolCalls: [{ id: 'call-gate', name: 'decision.article_quality_gate', input: { pass: true, issues: [], evidence_checks: [] }, providerExecuted: false }] };
     },
   };
   const store = { repositories: { extensionSettings: { get() { return { value: { decisionToolsEnabled: true } }; } } } };
   const result = await aiQualityGate({ gateway, store, provider: 'mock', purpose: 'unused', batchId: 'b1', candidateId: 'c1',
     article: '# 标题\n\n正文', factBase: { claims: [] }, systemPrompt: '质量门禁', stage: 'draft' });
-  assert.deepEqual(result, { pass: true, issues: [] });
+  assert.deepEqual(result, { pass: true, issues: [], evidence_checks: [] });
   assert.equal(calls.length, 1);
   assert.deepEqual(calls[0].toolChoice, { type: 'function', name: 'decision.article_quality_gate' });
   assert.equal(calls[0].jsonMode, false);
@@ -194,7 +195,7 @@ test('文章质量门禁在模型判定通过后仍拦截规划元话语泄漏',
   const gateway = {
     config: { defaultProvider: 'mock', providers: { mock: { supportsNativeTools: true } } },
     async complete() {
-      return { callId: 42, toolCalls: [{ id: 'call-gate', name: 'decision.article_quality_gate', input: { pass: true, issues: [] }, providerExecuted: false }] };
+      return { callId: 42, toolCalls: [{ id: 'call-gate', name: 'decision.article_quality_gate', input: { pass: true, issues: [], evidence_checks: [] }, providerExecuted: false }] };
     },
   };
   const store = { repositories: { extensionSettings: { get() { return { value: { decisionToolsEnabled: true } }; } } } };
@@ -263,7 +264,7 @@ test('技能运行时加载完整写作技能并记录哈希', () => {
 test('直写流程使用单阶段提示词，兼容旧技能组合器', () => {
   assert.deepEqual(ARTICLE_STAGE_CONTRACT.map(({ id }) => id), ['brief', 'fact-base', 'drafting', 'review', 'length-adjustment', 'humanize', 'title-lock']);
   const manifest = articlePromptManifest('wechat-mp-tech-deep');
-  assert.equal(manifest.version, 'direct-brief-v5');
+  assert.equal(manifest.version, 'direct-brief-v6');
   assert.match(manifest.prompts.drafting.prompt, /技术深解需要解释机制/);
   assert.doesNotMatch(manifest.prompts.review.prompt, /## SKILL:|全流程|风格门禁/);
   assert.match(manifest.prompts.review.hash, /^sha256:[a-f0-9]{64}$/);
