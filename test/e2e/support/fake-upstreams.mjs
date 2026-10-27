@@ -143,7 +143,13 @@ function synthesisJson(payload) {
 
 function jsonForRequest(payload) {
   const text = JSON.stringify(payload.messages || []);
-  if (/请审核文章中的事实与论证/.test(text)) return { pass: true, issues: [] };
+  if (/为这篇公众号文章生成\s*5 个发布标题|生成 5 个发布标题|唯一推荐标题/.test(text)) return {
+    selectedTitle: 'E2E 文章采集样本：固定事实如何进入最终内容',
+    titleCandidates: [{ title: 'E2E 文章采集样本：固定事实如何进入最终内容', reason: '固定主链路标题夹具' }],
+    hotspotAnchor: 'E2E 文章采集样本',
+    coreKeywords: [],
+  };
+  if (/请审核文章中的事实与论证/.test(text)) return { pass: true, issues: [], evidence_checks: [] };
   if (/请判断这篇文章是否存在明显、影响阅读体验的模板化\/AI 腔/.test(text)) return { pass: true, issues: [] };
   if (/文章简报和事实基座整理成一份文章大纲/.test(text)) return { outlineMarkdown: '## 背景\n\n## 验证步骤\n\n## 完成标准' };
   if (/hotspot-tagging|语义打标|preScores|eventParts/i.test(text)) return hotspotTaggingJson(payload);
@@ -166,7 +172,7 @@ function jsonForRequest(payload) {
   if (/image-plan|配图|图片规划/i.test(text)) return { placements: [] };
   if (/hotspotAnchorRule|title_lock|SELECTED_TITLE|生成 5 个发布标题/.test(text)) return {
     selectedTitle: 'E2E 文章采集样本：固定事实如何进入最终内容',
-    titleCandidates: ['E2E 文章采集样本：固定事实如何进入最终内容'],
+    titleCandidates: [{ title: 'E2E 文章采集样本：固定事实如何进入最终内容', reason: '固定主链路标题夹具' }],
     hotspotAnchor: 'E2E 文章采集样本',
     coreKeywords: [],
   };
@@ -189,7 +195,7 @@ function jsonForRequest(payload) {
 
 function toolResponse(toolName, payload = {}) {
   const requestText = JSON.stringify(payload.messages || []);
-  if (/title_plan|hotspotAnchorRule|title_lock|SELECTED_TITLE/i.test(`${toolName} ${requestText}`)) return { selectedTitle: 'E2E 文章采集样本：固定事实如何进入最终内容', titleCandidates: ['E2E 文章采集样本：固定事实如何进入最终内容'], hotspotAnchor: 'E2E 文章采集样本', coreKeywords: [] };
+  if (/title_plan|hotspotAnchorRule|title_lock|SELECTED_TITLE/i.test(`${toolName} ${requestText}`)) return { selectedTitle: 'E2E 文章采集样本：固定事实如何进入最终内容', titleCandidates: [{ title: 'E2E 文章采集样本：固定事实如何进入最终内容', reason: '固定主链路标题夹具' }], hotspotAnchor: 'E2E 文章采集样本', coreKeywords: [] };
   if (/research_coverage/i.test(toolName)) {
     const pointId = JSON.stringify(payload.messages || []).match(/"point_id"\s*:\s*"([^"]+)"/)?.[1] || 'e2e-research-1';
     return { status: 'pass', summary: '固定文章完整回应已采用的研判点。', items: [{ point_id: pointId, status: 'full', coverage: '文章说明采集结果如何进入最终产物。', explanation: '正文覆盖了固定夹具检查的完整链路。', article_excerpt: '检查任务状态和最终文件。' }], omitted_points: [], contradicted_points: [], rejected_point_leakage: [], repair_suggestions: [] };
@@ -202,6 +208,7 @@ function replayIdForRequest(payload) {
   const tools = Array.isArray(payload.tools) ? payload.tools : [];
   const toolName = tools[0]?.function?.name || '';
   if (toolName) return `tool:${toolName}`;
+  if (/为这篇公众号文章生成\s*5 个发布标题|生成 5 个发布标题|唯一推荐标题/.test(text)) return 'article-title-plan';
   if (/请审核文章中的事实与论证/.test(text)) return 'article-review';
   if (/请判断这篇文章是否存在明显、影响阅读体验的模板化\/AI 腔/.test(text)) return 'article-voice-quality-gate';
   if (/hotspot-tagging|语义打标|preScores|eventParts/i.test(text)) return 'hotspot-tagging';
