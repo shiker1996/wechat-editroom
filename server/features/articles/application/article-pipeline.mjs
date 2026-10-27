@@ -26,7 +26,7 @@ import {
 import {
   ARTICLE_LENGTH_RANGE, articleLengthStatus, articleStageOutputIssue, authorizedWritingBrief,
   buildDraftUserPrompt, buildDraftOutlineView, buildArticlePlanningView, replaceArticleTitle, compositeSourceText, normalizePlanningResult, selectWriterSkill,
-  readArticleSourceInput, sourceCacheIssue, unverifiedFactBaseIssue, buildResearchCoveragePrompt,
+  readArticleSourceInput, sourceCacheIssue, buildResearchCoveragePrompt,
 } from './article-pipeline-contract.mjs';
 export {
   ARTICLE_LENGTH_RANGE, articleLengthStatus, articleStageOutputIssue, authorizedWritingBrief,
@@ -68,7 +68,7 @@ async function generateTitlePlan({ gateway, store, provider, batchId, candidateI
     { role: 'user', content: JSON.stringify(payload), protected: true },
   ];
   const fallback = async () => {
-    return parseJsonResult(await gateway.complete({ provider, purpose, batchId, candidateId, jsonMode: true, maxOutputTokens, messages }), store);
+    return parseJsonResult(await gateway.complete({ provider, purpose, batchId, candidateId, jsonMode: true, webSearch: true, maxOutputTokens, messages }), store);
   };
   const decision = await callDecisionTool({
     gateway,
@@ -79,6 +79,7 @@ async function generateTitlePlan({ gateway, store, provider, batchId, candidateI
     candidateId,
     definition: DECISION_TITLE_PLAN_TOOL,
     schema: DECISION_TITLE_PLAN_TOOL.function.parameters,
+    webSearch: true,
     messages: [
       { ...messages[0], content: `${messages[0].content}\n\n如果当前调用提供了 decision.title_plan 工具，必须调用一次该工具；工具参数就是标题规划结果，不要输出解释文字。` },
       messages[1],
@@ -157,14 +158,14 @@ export function buildPublicationComplianceRepairPrompt({ factBase = {}, claimReg
     : '';
   return `你是公众号文章的合规修订编辑。请直接修订文章，不要输出审阅报告、修订说明、工具操作过程或 JSON。
 
-修订目标：只解决门禁明确指出的发布风险，保留作者已经确认的事实、观点、角度、命题和研判拓展点。只能使用事实基座中已有的信息，不得新增事实、数字、日期、人物行为、来源、引语或作者经历。输出完整文章时，未被问题涉及的句段必须原样保留。
+修订目标：只解决门禁明确指出的发布风险，保留作者已经确认的观点、角度、命题和研判拓展点。事实基座是已有证据线索，不是唯一事实来源；可依据当前联网搜索结果补充事实或来源，但只能使用搜索工具实际返回且能直接支撑主张的材料，不能按模型记忆补造事实、引语、来源或链接。修订后的新事实须由后续审稿复核并记入联网事实核验记录。输出完整文章时，未被问题涉及的句段必须原样保留。
 
 必须执行的修订规则：
 - 只在门禁明确指出标题问题时修改标题。标题中的事实主张按事实证据核验；标题中的作者判断按观点表达处理。不得仅因标题有判断、数字或修辞，就默认改成中性标题。
 - 先区分可核验事实、来源说法、作者推断和价值判断。可核验事实缺少支持时，修正对应事实；来源说法要准确归因；有事实依据且推理链可理解的作者推断和价值判断可以保留，不要求统一添加“笔者认为”“从……看”“这可能意味着”等标记。
 - 只有当作者推断被写成了可核验的客观事实，且门禁指出具体句子时，才在该句作最小修改；不要把限定扩展到邻近观点或全篇。
 - 争议、负面和动机事实主张要准确归因；不得把作者解读写成公司已经承认的事实。作者对动机的推断可作为推断保留，但不得伪装成当事方已确认事实。
-- 事实中的数字、折价率、营收、分红和时间信息，必须就近使用事实基座登记的具体来源。保留数字时，在对应句末使用登记中的具体来源标题和 URL，例如“（来源：[登记中的来源标题](登记中的 sourceUrl)）”；不得只写“据媒体”“据市场观察”或其他无法追溯的笼统来源。登记中没有 sourceUrl 的数字或高影响事实必须删除、改成不含数字的概括，不能自行补 URL、来源名称或外部事实。
+- 事实中的数字、折价率、营收、分红和时间信息，必须就近使用事实基座或本次联网搜索实际返回的具体来源。新增来源只可使用搜索工具返回并核对过的 URL；数字和高影响事实找不到直接支持时，删除、降格或准确归因，不能自行补 URL、来源名称或外部事实。
 - 严格遵守作者明确不采用的方向和禁写边界，不得为了增强冲突补写退市、挤压投入、价格高估/低估、管理层动机或未披露时间表等结论。
 - 保留并兑现作者采用的研判拓展点，但不得把研判假设改写成已核验事实。
 ${preserveVisuals ? '- 保留现有全部 Markdown 图片、图片占位 HTML 注释、Mermaid/ECharts 产物和相关链接，只修改必要的文字与标题，不得删除或重排这些视觉产物。' : ''}
@@ -207,10 +208,10 @@ async function textCall(gateway,input,system,user,maxOutputTokens=5000) {
 
 export const ARTICLE_QUALITY_GATE_TOOL = decisionToolDefinition({
   name: 'decision.article_quality_gate',
-  description: '返回文章质量门禁结果，只包含是否通过以及需要修复的问题。',
+  description: '返回文章质量门禁结果、需要修复的问题以及搜索核验记录。',
   parameters: {
     type: 'object',
-    required: ['pass', 'issues'],
+    required: ['pass', 'issues', 'evidence_checks'],
     properties: {
       pass: { type: 'boolean' },
       issues: {
@@ -226,16 +227,35 @@ export const ARTICLE_QUALITY_GATE_TOOL = decisionToolDefinition({
           },
         },
       },
+      evidence_checks: {
+        type: 'array',
+        items: {
+          type: 'object', required: ['claim', 'status', 'sources'],
+          properties: {
+            claim: { type: 'string', minLength: 1, maxLength: 500 },
+            status: { type: 'string', enum: ['verified', 'disputed', 'unverified'] },
+            evidence: { type: 'string', maxLength: 1200 },
+            jurisdiction: { type: 'string', maxLength: 120 },
+            period: { type: 'string', maxLength: 120 },
+            denominator: { type: 'string', maxLength: 240 },
+            keyNumber: { type: 'boolean' },
+            sources: { type: 'array', items: { type: 'object', properties: {
+              url: { type: 'string', maxLength: 2000 }, title: { type: 'string', maxLength: 300 },
+              level: { type: 'string', maxLength: 60 }, sourceGroupId: { type: 'string', maxLength: 120 },
+            } } },
+          },
+        },
+      },
     },
   },
 });
 
 export const ARTICLE_REVIEW_GATE_TOOL = decisionToolDefinition({
   name: 'decision.article_review_gate',
-  description: '返回文章审稿门禁结果，只包含是否通过以及需要修复的问题。',
+  description: '返回文章审稿门禁结果、需要修复的问题以及联网搜索核验的证据记录。',
   parameters: {
     type: 'object',
-    required: ['pass', 'issues'],
+    required: ['pass', 'issues', 'evidence_checks'],
     properties: {
       pass: { type: 'boolean' },
       issues: {
@@ -251,6 +271,28 @@ export const ARTICLE_REVIEW_GATE_TOOL = decisionToolDefinition({
             quote: { type: 'string', maxLength: 1000 },
             basis: { type: 'string', maxLength: 1000 },
             return_to: { type: 'string', enum: ['materials', 'draft'] },
+          },
+        },
+      },
+      evidence_checks: {
+        type: 'array',
+        items: {
+          type: 'object',
+          required: ['claim', 'status', 'sources'],
+          properties: {
+            claim: { type: 'string', minLength: 1, maxLength: 500 },
+            status: { type: 'string', enum: ['verified', 'disputed', 'unverified'] },
+            evidence: { type: 'string', maxLength: 1200 },
+            jurisdiction: { type: 'string', maxLength: 120 },
+            period: { type: 'string', maxLength: 120 },
+            denominator: { type: 'string', maxLength: 240 },
+            keyNumber: { type: 'boolean' },
+            sources: { type: 'array', items: { type: 'object', properties: {
+              url: { type: 'string', maxLength: 2000 },
+              title: { type: 'string', maxLength: 300 },
+              level: { type: 'string', maxLength: 60 },
+              sourceGroupId: { type: 'string', maxLength: 120 },
+            } } },
           },
         },
       },
@@ -274,11 +316,11 @@ export async function aiQualityGate({gateway,store,provider,batchId,candidateId,
   const purpose=`article-quality-gate-${stage}`;
   const messages=[
     {role:'system',protected:true,content:systemPrompt},
-    {role:'user',protected:true,content:`作者采用的研判拓展点：${JSON.stringify(researchPoints)}\n\n作者明确不采用的方向：${JSON.stringify(rejectedAngles)}\n\n判定口径：正文事实只能来自下面唯一的发布主张登记；未核实事实不得写成确定结论。第一人称作者判断或阅读动作（如“我看”“我读完后的判断”）不是亲测；只有声称本人测试、部署、使用并得到结果，且没有已确认实践证据时，才按未经核实的亲测处理。保留有事实依据、推理链清楚的作者判断，不要求用“这是判断”“不代表官方说法”自我标注。\n\n${publicationCompliancePrompt({factBase,claimRegister:publicationClaimRegister,scan:publicationScan,writingStance,citationPolicy})}\n\n待检查文章：\n${article}`},
+    {role:'user',protected:true,content:`作者采用的研判拓展点：${JSON.stringify(researchPoints)}\n\n作者明确不采用的方向：${JSON.stringify(rejectedAngles)}\n\n判定口径：事实基座和主张登记是已有材料而非唯一来源。主动联网核验标题与关键主张，允许以搜索结果中可追溯、直接支撑的新来源补充事实；将核验结果及来源链接写进 evidence_checks 或具体 issue。未确认事实不得写成确定结论。第一人称作者判断或阅读动作（如“我看”“我读完后的判断”）不是亲测；只有声称本人测试、部署、使用并得到结果，且没有已确认实践证据时，才按未经核实的亲测处理。保留有事实依据、推理链清楚的作者判断，不要求用“这是判断”“不代表官方说法”自我标注。\n\n${publicationCompliancePrompt({factBase,claimRegister:publicationClaimRegister,scan:publicationScan,writingStance,citationPolicy})}\n\n待检查文章：\n${article}`},
   ];
-  const fallback=async()=>parseJsonResult(await gateway.complete({provider,purpose,batchId,candidateId,jsonMode:true,maxOutputTokens,messages}),store);
+  const fallback=async()=>parseJsonResult(await gateway.complete({provider,purpose,batchId,candidateId,jsonMode:true,webSearch:true,maxOutputTokens,messages}),store);
   const toolMessages=[
-    { ...messages[0], content:`${messages[0].content}\n\n如果当前调用提供了 decision.article_quality_gate 工具，必须调用一次该工具；工具参数就是最终门禁结果，不要输出文章正文或工具操作说明。` },
+    { ...messages[0], content:`${messages[0].content}\n\n必须主动使用联网搜索核验关键主张；搜索不可用或找不到直接依据时，在 evidence_checks 中记录 unverified。若提供 decision.article_quality_gate 工具，必须调用一次并返回 pass、issues、evidence_checks。` },
     messages[1],
   ];
   const decision=await callDecisionTool({
@@ -290,6 +332,7 @@ export async function aiQualityGate({gateway,store,provider,batchId,candidateId,
     candidateId,
     definition:ARTICLE_QUALITY_GATE_TOOL,
     schema:ARTICLE_QUALITY_GATE_SCHEMA,
+    webSearch:true,
     messages:toolMessages,
     fallback,
   });
@@ -302,19 +345,40 @@ export async function aiReviewGate({gateway,store,provider,batchId,candidateId,a
     {role:'system',protected:true,content:systemPrompt},
     {role:'user',protected:true,content:JSON.stringify({brief:buildArticleBriefView({...brief,adoptedResearchPoints:brief.adoptedResearchPoints||brief.adopted_research_points||researchPoints,rejectedAngles:brief.rejectedAngles||brief.rejected_angles||rejectedAngles}),evidence:articleFactAuthorityView(factBase),article,...(scope?{recheck:scope}:{})})},
   ];
-  const fallback=async()=>parseJsonResult(await gateway.complete({provider,purpose,batchId,candidateId,thinking:false,jsonMode:true,maxOutputTokens,messages}),store);
+  const fallback=async()=>parseJsonResult(await gateway.complete({provider,purpose,batchId,candidateId,thinking:false,jsonMode:true,webSearch:true,maxOutputTokens,messages}),store);
   const toolMessages=[
-    {...messages[0],content:`${messages[0].content}\n\n如果当前调用提供了 decision.article_review_gate 工具，必须调用一次该工具；工具参数就是最终审稿门禁结果，不要输出文章正文或工具操作说明。`},
+    {...messages[0],content:`${messages[0].content}\n\n必须主动使用联网搜索核验影响标题、核心判断和读者行动的事实。若搜索不可用或未找到直接来源，在 evidence_checks 中如实记录 unverified 与原因；不得按模型记忆补造来源。必须调用 decision.article_review_gate 一次，写入 pass、issues 和 evidence_checks；每个 evidence_check 的 sources 只能使用本次搜索实际返回的 URL。`},
     messages[1],
   ];
   const decision=await callDecisionTool({
     gateway,provider,repository:store?.repositories?.extensionSettings,purpose,batchId,candidateId,
     definition:ARTICLE_REVIEW_GATE_TOOL,schema:ARTICLE_REVIEW_GATE_TOOL.function.parameters,
+    webSearch:true,
     messages:toolMessages,fallback,
   });
   if (typeof decision.value?.pass !== 'boolean' || !Array.isArray(decision.value?.issues)) throw new Error('审稿阶段未返回有效的 pass/issues 结果');
   if (decision.value.pass === false && !decision.value.issues.length) throw new Error('审稿未通过，但没有定位具体问题');
-  return appendPlanningMetaLeakage(decision.value, article);
+  if (Array.isArray(decision.value.evidence_checks)) return appendPlanningMetaLeakage(decision.value, article);
+  // Older/fallback model responses may return a valid review without the optional audit payload.
+  // Preserve the review, carry forward the initial evidence ledger, and hold publication later
+  // instead of aborting the whole article pipeline at Step 3.
+  const evidenceChecks = (Array.isArray(factBase?.claims) ? factBase.claims : [])
+    .filter((claim) => claim && claim.status !== 'opinion')
+    .map((claim) => ({
+      claim: String(claim.claim || claim.text || '').trim(),
+      status: ['verified', 'disputed', 'unverified'].includes(claim.status) ? claim.status : 'unverified',
+      evidence: String(claim.evidence || '审稿模型未返回联网核验记录；此项沿用初始事实台账状态，尚不能视为本轮搜索确认。'),
+      jurisdiction: String(claim.jurisdiction || ''), period: String(claim.period || ''),
+      denominator: String(claim.denominator || ''), keyNumber: Boolean(claim.keyNumber),
+      sources: Array.isArray(claim.sources) ? claim.sources : (claim.sourceUrl ? [{
+        url: claim.sourceUrl, title: claim.sourceTitle || '', level: claim.sourceLevel || claim.sourceType || 'unknown',
+        sourceGroupId: claim.sourceGroupId || claim.source_group_id || '',
+      }] : []),
+      auditSource: 'initial_fact_base_fallback',
+    }))
+    .filter((claim) => claim.claim);
+  return appendPlanningMetaLeakage({ ...decision.value, evidence_checks: evidenceChecks,
+    evidence_checks_status: 'model_omitted' }, article);
 }
 
 export async function runArticlePipeline({gateway,store,batchId,candidateId,provider,workspaceRoot,snapshotId=null,skillSelection=null,stageSelections=null,articleLength=null,rootRunId=null,workflowRunId=null,onProgress=()=>{}}) {
@@ -464,18 +528,16 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   const publicationClaimRegisterPath=path.join(workdir,'02-publication-claim-register.json');
   const factPublicationIssues=publicationFactBaseIssues(factBase);
   writeFile(factBasePath,JSON.stringify(factBase,null,2));
-  writeFile(publicationClaimRegisterPath,JSON.stringify({generatedAt:new Date().toISOString(),claims:publicationClaimRegister},null,2));
-  recordStage('fact-base',orchestratorSkill,['00-article-brief.md','source-cache'],['02-fact-base.json','02-publication-claim-register.json'],factPublicationIssues.length?'failed':'passed');
-  if(factPublicationIssues.length)throw new Error(`事实基座发布合规门禁未通过：${factPublicationIssues.join('；')}`);
-  const factIssue=unverifiedFactBaseIssue(factBase);
-  if(factIssue)throw new Error(factIssue);
-  const factGate = evaluateArticleFactEligibility({ classification, factBase });
+  writeFile(publicationClaimRegisterPath,JSON.stringify({generatedAt:new Date().toISOString(),preflightDiagnostics:factPublicationIssues,claims:publicationClaimRegister},null,2));
+  recordStage('fact-base',orchestratorSkill,['00-article-brief.md','source-cache'],['02-fact-base.json','02-publication-claim-register.json'],'passed');
+  // Fact-base records existing material and known gaps. Search-enabled drafting/review performs the active verification.
+  const factGate = evaluateArticleFactEligibility({ classification });
   writeFile(path.join(workdir,'02-fact-gate.json'), JSON.stringify(factGate, null, 2));
   if (!factGate.eligible) throw new Error(`文章事实门禁未通过：${factGate.reason}`);
   const readerContext = articleReaderContext(getAccountContext({ workspaceRoot }));
   const promptManifestPath = path.join(workdir, '00-prompt-manifest.json');
   writeFile(promptManifestPath, JSON.stringify(articlePromptManifest(chosenWriterSkill), null, 2));
-  const paths = Object.fromEntries(['04-draft.md', '06-reviewed.md', '06-review-quality-gate.json', '07-length-adjusted.md',
+  const paths = Object.fromEntries(['04-draft.md', '06-reviewed.md', '06-review-quality-gate.json', '02-search-fact-checks.json', '07-length-adjusted.md',
     '07-length-adjustment.json', '05-humanized.md',
     '03-titles.md', '03-title-lock.json', '03-title-risk.json', '08-quality-gate.json', '10-publication-compliance.json', '09-FINAL.md']
     .map((name) => [name, path.join(workdir, name)]));
@@ -488,10 +550,26 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
     return article;
   };
   const reviewHistory = [];
+  let searchAugmentedFactBase = factBase;
+  const mergeSearchEvidence = (base, checks = []) => {
+    const claims = new Map((Array.isArray(base?.claims) ? base.claims : []).map((claim, index) => [
+      String(claim?.claim || '').toLowerCase().replace(/\s+/g, ''), claim,
+    ]));
+    for (const check of checks) {
+      const claimText = String(check?.claim || '').trim();
+      const key = claimText.toLowerCase().replace(/\s+/g, '');
+      if (!key) continue;
+      claims.set(key, { ...check, id: `search-${claims.size + 1}`, claim: claimText,
+        sourceUrl: check.sources?.[0]?.url || '', sourceType: check.sources?.[0]?.level || 'search_result' });
+    }
+    return { ...(base || {}), claims: [...claims.values()] };
+  };
   const reviewArticle = async (article, scope = null) => {
-    const decision = await aiReviewGate({ gateway, store, ...modelInput, article, factBase, brief: writingBrief,
+    const decision = await aiReviewGate({ gateway, store, ...modelInput, article, factBase: searchAugmentedFactBase, brief: writingBrief,
       scope, maxOutputTokens: Math.min(3500, providerConfig.maxOutputTokens || 3500) });
     reviewHistory.push({ scope: scope || 'full', decision });
+    searchAugmentedFactBase = mergeSearchEvidence(searchAugmentedFactBase,
+      (decision.evidence_checks || []).filter((claim) => claim.auditSource !== 'initial_fact_base_fallback'));
     writeFile(paths['06-review-quality-gate.json'], JSON.stringify({ ...decision, history: reviewHistory }, null, 2));
     return decision;
   };
@@ -505,7 +583,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
       const issues = decision.issues || [];
       onProgress('按审稿定位修订问题句段');
       const offBrief = issues.some((issue) => issue.type === 'brief');
-      current = requireArticle(await textCall(gateway, { ...modelInput, purpose: offBrief ? 'article-drafting-pipeline' : 'article-review-repair' },
+      current = requireArticle(await textCall(gateway, { ...modelInput, webSearch: true, purpose: offBrief ? 'article-drafting-pipeline' : 'article-review-repair' },
         offBrief ? draftSystemPrompt(chosenWriterSkill) : ARTICLE_PROMPTS.repair,
         offBrief
           ? JSON.stringify({ task: JSON.parse(buildDraftUserPrompt(brief.topic, writingBrief, { readerContext, length: articleLengthRange })), previous_article: current, issues })
@@ -533,8 +611,8 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
     };
   };
 
-  onProgress('Step 2 简报与事实材料直接生成初稿');
-  const draft = requireArticle(await textCall(gateway, { ...modelInput, purpose: 'article-drafting-pipeline' },
+  onProgress('Step 2 基于简报成稿并联网核验关键事实');
+  const draft = requireArticle(await textCall(gateway, { ...modelInput, webSearch: true, purpose: 'article-drafting-pipeline' },
     draftSystemPrompt(chosenWriterSkill), buildDraftUserPrompt(brief.topic, writingBrief, { readerContext, length: articleLengthRange }), maxTextTokens));
   writeFile(paths['04-draft.md'], draft);
   recordStage('drafting', writerSkillBundle, ['00-article-brief.md', '02-fact-base.json'], '04-draft.md');
@@ -640,6 +718,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   const titlePlan = await generateTitlePlan({ gateway, store, ...modelInput, systemPrompt: ARTICLE_PROMPTS.title,
     purpose: 'article-title-generation-final', fallbackTitle: extractArticleTitle(final) || brief.topic,
     payload: { topic: brief.topic, reader_context: readerContext, article: final,
+      facts: articleFactAuthorityView(factBase),
       packaging: { distributionLane: brief.distributionLane, readerStake: brief.readerStake },
       keywords: parseMaterialBrief(editorial.material_brief).core_keywords || [], title_length: stageSkills['title-generator'].config?.gates?.length || null } });
   final = replaceArticleTitle(final, titlePlan.selectedTitle);
@@ -665,15 +744,36 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
     writeFile(visualPlanPath, JSON.stringify(illustrated.visualPlan, null, 2));
   }
 
-  const publicationScan = scanPublicationRisk({ article: final, factBase });
+  onProgress('发布前联网复核最终标题与关键事实');
+  const finalAudit = await reviewAndRepair(final);
+  final = finalAudit.article;
+  reviewDecision = finalAudit.decision;
+  writeFile(paths['06-review-quality-gate.json'], JSON.stringify({ ...reviewDecision, history: reviewHistory }, null, 2));
+  const evidenceByClaim = new Map();
+  for (const item of reviewHistory) for (const check of Array.isArray(item.decision?.evidence_checks) ? item.decision.evidence_checks : []) {
+    if (check.auditSource === 'initial_fact_base_fallback') continue;
+    const key = String(check.claim || '').toLowerCase().replace(/\s+/g, '');
+    if (key) evidenceByClaim.set(key, check);
+  }
+  const searchedEvidence = [...evidenceByClaim.values()];
+  writeFile(paths['02-search-fact-checks.json'], JSON.stringify({ generatedAt: new Date().toISOString(),
+    auditStatus: reviewDecision.evidence_checks_status === 'model_omitted' ? 'missing_from_final_review' : 'returned', checks: searchedEvidence }, null, 2));
+  const searchClaims = searchedEvidence.map((item, index) => ({
+    id: `S${index + 1}`, claim: item.claim, status: item.status, evidence: item.evidence,
+    sources: item.sources, jurisdiction: item.jurisdiction, period: item.period,
+    denominator: item.denominator, keyNumber: Boolean(item.keyNumber),
+  }));
+  const publicationEvidence = mergeSearchEvidence(searchAugmentedFactBase, searchClaims);
+  const publicationScan = scanPublicationRisk({ article: final, factBase: publicationEvidence });
   writeFile(paths['03-title-risk.json'], JSON.stringify(publicationScan, null, 2));
   const length = articleLengthStatus(final, articleLengthRange);
-  const configured = evaluateConfiguredGates(writerSkillBundle.config, { factBase, output: final, visibleChars: length.count });
+  const configured = evaluateConfiguredGates(writerSkillBundle.config, { factBase: publicationEvidence, output: final, visibleChars: length.count });
   const localIssues = [
     ...(articleStageOutputIssue(final, { requireArticle: true }) ? [{ type: 'output', message: articleStageOutputIssue(final, { requireArticle: true }) }] : []),
     ...(!length.valid ? [{ type: 'length', message: `正文可见字数 ${length.count} 超出配置范围 ${articleLengthRange.min}–${articleLengthRange.max}` }] : []),
     ...configured.issues,
     ...publicationScan.titleBlockers.map((message) => ({ type: 'title', message })),
+    ...(reviewDecision.evidence_checks_status === 'model_omitted' ? [{ type: 'publication_compliance', message: '最终联网审稿未返回 evidence_checks；已保留文章和审稿意见，但联网核验记录缺失，需人工复核后发布。' }] : []),
   ];
   const delivery = { pass: !localIssues.length, issues: localIssues, length, warnings: configured.warnings, mode: 'deterministic' };
   writeFile(paths['08-quality-gate.json'], JSON.stringify(delivery, null, 2));
@@ -702,6 +802,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
       '04-draft.md': '文章初稿', '06-reviewed.md': '审稿稿', '07-length-adjusted.md': '字数调整稿',
       '07-length-adjustment.json': '字数调整记录', '05-humanized.md': '表达精修稿',
       '06-review-quality-gate.json': '事实与逻辑审稿', '03-titles.md': '标题候选',
+      '02-search-fact-checks.json': '联网事实核验记录',
       '03-title-lock.json': '最终标题锁定', '03-title-risk.json': '标题检查',
       '08-quality-gate.json': '交付检查', '10-publication-compliance.json': '发布检查', '09-FINAL.md': '文章终稿',
     })[name], name, file]),
@@ -751,14 +852,22 @@ export async function runArticleReview({ gateway, store, batchId, candidateId = 
   onProgress('审核当前文稿的事实、推理及核心命题');
   const reviewDecision = await aiReviewGate({ gateway, store, provider: runtime.provider, batchId, candidateId, article,
     factBase, brief, maxOutputTokens: Math.min(3500, runtime.providerConfig?.maxOutputTokens || 3500) });
-  const publicationScan = scanPublicationRisk({ article, factBase });
+  const allEvidenceChecks = Array.isArray(reviewDecision.evidence_checks) ? reviewDecision.evidence_checks : [];
+  const searchEvidence = allEvidenceChecks.filter((check) => check.auditSource !== 'initial_fact_base_fallback');
+  const searchFactBase = { ...factBase, claims: [...(Array.isArray(factBase.claims) ? factBase.claims : []), ...searchEvidence] };
+  const publicationScan = scanPublicationRisk({ article, factBase: searchFactBase });
   const localIssues = publicationScan.titleBlockers.map((message) => ({ type: 'title', message }));
+  if (reviewDecision.evidence_checks_status === 'model_omitted') localIssues.push({ type: 'publication_compliance', message: '联网审稿未返回 evidence_checks；需人工复核联网事实依据后发布。' });
   const outputIssue = articleStageOutputIssue(article, { requireArticle: true });
   if (outputIssue) localIssues.push({ type: 'output', message: outputIssue });
-  if (!Object.keys(factBase).length || (Array.isArray(factBase.claims) && !factBase.claims.length)) localIssues.push({ type: 'fact', message: '缺少可追溯的事实记录，请补齐材料后重新审核', return_to: 'materials' });
   const needsReview = articleGateNeedsEditorialReview(reviewDecision) || localIssues.length > 0;
+  const evidencePath = path.join(workdir, '02-search-fact-checks.json');
+  writeFile(evidencePath, JSON.stringify({ generatedAt: new Date().toISOString(),
+    auditStatus: reviewDecision.evidence_checks_status === 'model_omitted' ? 'missing_from_review' : 'returned',
+    initialLedgerFallback: allEvidenceChecks.filter((check) => check.auditSource === 'initial_fact_base_fallback'), checks: searchEvidence }, null, 2));
   const reports = [
     ['事实与逻辑审稿', '06-review-quality-gate.json', { ...reviewDecision, reviewMode: 'manual-rerun' }],
+    ['联网事实核验记录', '02-search-fact-checks.json', JSON.parse(fs.readFileSync(evidencePath, 'utf8'))],
     ['标题检查', '03-title-risk.json', publicationScan],
     ['交付检查', '08-quality-gate.json', { pass: !localIssues.length, issues: localIssues, mode: 'deterministic' }],
     ['发布检查', '10-publication-compliance.json', { scan: publicationScan, gate: { pass: !needsReview, issues: [...(reviewDecision.issues || []), ...localIssues] }, reviewMode: 'manual-rerun' }],

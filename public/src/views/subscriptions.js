@@ -38,7 +38,7 @@ function unifiedItems() {
     return {
     id: item.id, kind: item.source_type, value: unifiedValue(item), label: item.label,
     enabled: Boolean(item.enabled), managed: item.origin === "managed", pluginId: item.plugin_id,
-    unified: true, pluginAvailable: plugin?.available !== false, pluginNeedsConfiguration: plugin?.executionStatus === "needs_configuration", health: item.health || (item.last_test_status ? { status: item.last_test_status, error: item.last_test_error } : null),
+    config: item.config || {}, unified: true, pluginAvailable: plugin?.available !== false, pluginNeedsConfiguration: plugin?.executionStatus === "needs_configuration", health: item.health || (item.last_test_status ? { status: item.last_test_status, error: item.last_test_error } : null),
   };});
 }
 function allItems() {
@@ -151,7 +151,8 @@ function renderSubscriptions() {
     const status = itemStatus(item), hc = status === "success" ? "ok" : status === "failed" ? "bad" : "idle";
     const healthText = item.pluginAvailable === false ? item.pluginNeedsConfiguration ? "请先在系统配置中完成该采集器设置" : "插件不可用 · 来源配置已保留" : status === "disabled" ? "已暂停" : status === "success" ? `最近成功 · ${item.health?.item_count || 0} 条` : status === "failed" ? `最近失败 · ${item.health?.error || "未返回详情"}` : "尚无采集记录";
     const identity = item.unified ? `data-source-id="${item.id}"` : `data-kind="${escapeHtml(item.kind)}" data-value="${escapeHtml(item.value)}"`;
-    return `<article class="subscription-row health-${hc} ${item.enabled ? "" : "disabled"}" style="--row:${index}"><span class="subscription-kind ${escapeHtml(item.kind)}">${escapeHtml(LABELS[item.kind] || item.kind)}</span><div class="subscription-identity"><b>${escapeHtml(item.label)}</b><code>${escapeHtml(item.value)}</code><small>${escapeHtml(pluginById(item.pluginId)?.name || (item.unified ? item.pluginId : "内置兼容来源"))}</small><small class="source-health ${hc}">${escapeHtml(healthText)}</small></div>${item.managed ? '<span class="story-meta">系统采集入口</span>' : `<label class="source-switch"><input type="checkbox" data-source-toggle ${identity} ${item.enabled ? "checked" : ""}><i></i><span>${item.enabled ? "启用" : "暂停"}</span></label>`}<div class="subscription-actions">${item.managed ? '<span class="story-meta">随系统任务执行</span>' : `<button class="text-button" data-source-test ${identity}>测试</button><button class="source-remove" data-source-remove ${identity} aria-label="删除订阅源：${escapeHtml(item.label)}">×</button>`}</div></article>`;
+    const wechatSettings = item.unified && item.kind === "wechat" ? `<details class="source-config-editor"><summary>编辑采集配置</summary><form data-source-config-form data-source-id="${item.id}"><label>回溯窗口（小时）<input name="maxAgeHours" type="number" min="1" max="8760" required value="${Number(item.config?.maxAgeHours) || 168}"></label><small>只采集最近指定小时内发布的文章。缩短窗口可减少每天重复入库。</small><button type="submit" class="text-button">保存配置</button></form></details>` : "";
+    return `<article class="subscription-row health-${hc} ${item.enabled ? "" : "disabled"}" style="--row:${index}"><span class="subscription-kind ${escapeHtml(item.kind)}">${escapeHtml(LABELS[item.kind] || item.kind)}</span><div class="subscription-identity"><b>${escapeHtml(item.label)}</b><code>${escapeHtml(item.value)}</code><small>${escapeHtml(pluginById(item.pluginId)?.name || (item.unified ? item.pluginId : "内置兼容来源"))}</small><small class="source-health ${hc}">${escapeHtml(healthText)}</small>${wechatSettings}</div>${item.managed ? '<span class="story-meta">系统采集入口</span>' : `<label class="source-switch"><input type="checkbox" data-source-toggle ${identity} ${item.enabled ? "checked" : ""}><i></i><span>${item.enabled ? "启用" : "暂停"}</span></label>`}<div class="subscription-actions">${item.managed ? '<span class="story-meta">随系统任务执行</span>' : `<button class="text-button" data-source-test ${identity}>测试</button><button class="source-remove" data-source-remove ${identity} aria-label="删除订阅源：${escapeHtml(item.label)}">×</button>`}</div></article>`;
   }).join("") : `<div class="empty-state source-empty"><b>${all.length ? "没有匹配的订阅源" : "还没有订阅源"}</b><span>${all.length ? "换个关键词，或清除当前筛选条件。" : "从左侧选择一种来源并完成首次添加。"}</span>${filtered ? '<button type="button" class="text-button" data-clear-source-filters>清除筛选</button>' : ""}</div>`;
 }
 async function loadSubscriptions() {
@@ -187,6 +188,17 @@ async function toggleSource(input) {
   try { if (input.dataset.sourceId) await request(`/api/collection-sources/${input.dataset.sourceId}`, { method: "PATCH", body: JSON.stringify({ enabled: input.checked }) }); else await request("/api/subscriptions", { method: "PATCH", body: JSON.stringify({ kind: input.dataset.kind, value: input.dataset.value, enabled: input.checked }) }); await reloadSources(); }
   finally { input.disabled = false; }
 }
+async function updateSourceConfig(form) {
+  const input = form.elements.namedItem("maxAgeHours"), button = form.querySelector('button[type="submit"]');
+  if (!input || !form.dataset.sourceId) return;
+  const maxAgeHours = Number(input.value);
+  if (!Number.isInteger(maxAgeHours) || maxAgeHours < 1 || maxAgeHours > 8760) throw new Error("回溯窗口需为 1–8760 小时");
+  button.disabled = true;
+  try {
+    await request(`/api/collection-sources/${form.dataset.sourceId}`, { method: "PATCH", body: JSON.stringify({ config: { maxAgeHours } }) });
+    await reloadSources(); toast("采集配置已保存");
+  } finally { button.disabled = false; }
+}
 async function removeSource(button) {
   if (!await confirmAction("确定删除这个采集源吗？", { confirmText: "删除" })) return;
   if (button.dataset.sourceId) await request(`/api/collection-sources/${button.dataset.sourceId}`, { method: "DELETE" }); else await request("/api/subscriptions", { method: "DELETE", body: JSON.stringify({ kind: button.dataset.kind, value: button.dataset.value }) });
@@ -210,6 +222,11 @@ function bindSubscriptions() {
     const apply = event.target.closest("[data-apply-source-candidate]"); if (apply) { const output = $("#source-assist-result"); applyCandidate(output?._candidates?.[Number(apply.dataset.applySourceCandidate)]?.config, output?._targetPluginId); }
     const test = event.target.closest("[data-source-test]"); if (test) testSource(test.dataset.sourceId ? {} : { kind: test.dataset.kind, value: test.dataset.value }, test, test.dataset.sourceId || null).then(reloadSources).catch(() => {});
     const remove = event.target.closest("[data-source-remove]"); if (remove) removeSource(remove).catch((error) => toast(error.message, "error"));
+  });
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("#view-sources [data-source-config-form]");
+    if (!form) return;
+    event.preventDefault(); updateSourceConfig(form).catch((error) => toast(error.message, "error"));
   });
 }
 

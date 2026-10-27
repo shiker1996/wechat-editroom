@@ -106,6 +106,8 @@ collection-job-manager
 
 改造重点是把具体读者任务、预期输出、演示证据和上手限制前移到查询与项目核验，不把 GitHub 贴图并入文章榜，也不把文章模式用在故事板上。
 
+GitHub 贴图的发布标题和配套文案需要落实同一任务—结果主线：标题先写读者要完成的任务/场景，再写可见结果，项目名主要承担识别作用；配文只展开一个主场景，保留 1–2 个关键亮点、必要的运行前提和一个清晰获取入口。避免把 README 的多场景、功能清单、兼容项、版本/许可、完整命令全部压进配文；不实测时明确标作文档整理。运行时规则登记在 `prompts/manifest.json`，正文存放于 `prompts/social-cards/copy*.md`，技能指南同步约束格式与信息取舍。默认以 180–320 个中文字符作为配文聚焦目标（不计标题、URL、标签），必要的运行条件与事实边界可以使文案稍长。
+
 ## 4. 切口识别的职责与时点
 
 切口不是程序通过公司名、题材词或标题模式做的正则分类。它是 AI 基于研判证据提出并比较的编辑假设；程序负责 schema、来源和资格门禁；编辑负责锁定。
@@ -283,6 +285,7 @@ collection-job-manager
 | 角度展开与最终名额 | 通过资格与研判依据门禁的文章候选进入 editorial exploration；核心/黑马/候补名额在角度展开和 F 评分后确定 | `topic-preselection-ranking.json`、`topics-ranked.md` |
 | GitHub 贴图 | 查询、读者价值研判、项目筛选、故事板和配套文案沿用独立项目链；强调读者任务、可见结果、演示证据、上手成本与限制 | `repo-discovery-queries.md`、`repo-interest-filter.md`、`project-reader-value.json`、`repository-card-storyboard` |
 | 文章成稿 | 成稿采用 `brief → fact-base → drafting → review → length-adjustment → humanize → title-lock`；不生成/等待文章大纲，标题在精修后锁定 | `ARTICLE_STAGE_CONTRACT`、`runtime-stage-contracts.md`、文章各阶段产物 |
+| 证据与发布门禁 | 事实基座仅作为已有材料台账；成稿、审稿和标题锁定使用联网搜索核验/补充关键主张，审稿按主张输出来源、摘录和核验状态并保存为 `evidence_checks`；同源转载归为一个来源簇；关键数字记录统计口径；劳动权益/福利资格结论核对具体辖区法律或官方原始材料；最终标题扫描读取审稿搜索证据，不将初始事实基座视为唯一证据 | `02-fact-base.json`、`02-publication-claim-register.json`、`02-search-fact-checks.json`、`03-title-risk.json`、`10-publication-compliance.json` |
 
 已完成运行时与技能/架构说明的同步。尚未完成的交付是固定历史高峰/普通样本的端到端离线回放；因此当前可确认的是流程门禁和数据传递已落地，不能据此声称已经通过历史样本验证或能够复刻历史阅读量。发布后反馈仍属后续工作。
 

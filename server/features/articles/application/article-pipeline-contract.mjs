@@ -62,7 +62,7 @@ export function authorizedWritingBrief(brief) { const safe={...brief};delete saf
 
 function articleMaterialView(materialBrief = {}) {
   const material = materialBrief && typeof materialBrief === 'object' ? materialBrief : {};
-  return Object.fromEntries(['action', 'affected_group', 'conflict', 'reader_consequence', 'reader_action']
+  return Object.fromEntries(['action', 'affected_group', 'conflict', 'reader_consequence', 'reader_action', 'evidence_boundary']
     .map((key) => [key, material[key]])
     .filter(([, value]) => value != null && String(value).trim() !== ''));
 }

@@ -14,7 +14,7 @@
     },
     {
       "id": "articles.draft",
-      "version": 2,
+      "version": 3,
       "file": "articles/draft.md",
       "purpose": "article-draft",
       "variables": [],
@@ -30,7 +30,7 @@
     },
     {
       "id": "articles.review",
-      "version": 2,
+      "version": 3,
       "file": "articles/review.md",
       "purpose": "article-review",
       "variables": [],
@@ -74,7 +74,7 @@
     },
     {
       "id": "articles.title",
-      "version": 1,
+      "version": 2,
       "file": "articles/title.md",
       "purpose": "article-title",
       "variables": [],
@@ -96,7 +96,7 @@
     },
     {
       "id": "articles.writer-deep-dive",
-      "version": 1,
+      "version": 2,
       "file": "articles/writer-deep-dive.md",
       "purpose": "article-writer-route-hint",
       "variables": [],
@@ -271,6 +271,66 @@
       "output": {
         "format": "json"
       }
+    },
+    {
+      "id": "social-cards.copy",
+      "version": 1,
+      "file": "social-cards/copy.md",
+      "purpose": "social-card-publish-copy",
+      "variables": ["titleLabel"],
+      "components": [
+        "social-cards.copy-channel-xiaohongshu",
+        "social-cards.copy-channel-wechat",
+        "social-cards.copy-content-repository",
+        "social-cards.copy-content-event",
+        "social-cards.copy-content-custom"
+      ],
+      "output": { "format": "text" }
+    },
+    {
+      "id": "social-cards.copy-channel-xiaohongshu",
+      "version": 1,
+      "file": "social-cards/copy-channel-xiaohongshu.md",
+      "purpose": "social-card-publish-channel-rules",
+      "variables": ["titleLabel"],
+      "components": [],
+      "output": { "format": "text" }
+    },
+    {
+      "id": "social-cards.copy-channel-wechat",
+      "version": 1,
+      "file": "social-cards/copy-channel-wechat.md",
+      "purpose": "social-card-publish-channel-rules",
+      "variables": ["titleLabel"],
+      "components": [],
+      "output": { "format": "text" }
+    },
+    {
+      "id": "social-cards.copy-content-repository",
+      "version": 1,
+      "file": "social-cards/copy-content-repository.md",
+      "purpose": "social-card-publish-content-rules",
+      "variables": ["titleLabel"],
+      "components": [],
+      "output": { "format": "text" }
+    },
+    {
+      "id": "social-cards.copy-content-event",
+      "version": 1,
+      "file": "social-cards/copy-content-event.md",
+      "purpose": "social-card-publish-content-rules",
+      "variables": ["titleLabel"],
+      "components": [],
+      "output": { "format": "text" }
+    },
+    {
+      "id": "social-cards.copy-content-custom",
+      "version": 1,
+      "file": "social-cards/copy-content-custom.md",
+      "purpose": "social-card-publish-content-rules",
+      "variables": ["titleLabel"],
+      "components": [],
+      "output": { "format": "text" }
     },
     {
       "id": "social-cards.cover-title-wrap",

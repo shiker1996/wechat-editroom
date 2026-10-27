@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "xiaohongshu-article-generator",
   "name": "图文生成与交付",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "kind": "stage",
   "entryPoints": [
     "social-tool",
