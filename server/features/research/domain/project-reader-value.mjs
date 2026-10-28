@@ -1,12 +1,12 @@
 export const PROJECT_READER_VALUE_TOP_K_OPTIONS = Object.freeze([5, 8, 10]);
 export const PROJECT_READER_VALUE_TOP_K = 8;
 export const PROJECT_READER_VALUE_WEIGHTS = Object.freeze({
-  dailyFit: 35,
-  quickStart: 25,
-  outcomeClarity: 15,
+  dailyFit: 28,
+  quickStart: 22,
+  outcomeClarity: 25,
   reusability: 10,
-  novelty: 10,
-  evidenceQuality: 5,
+  novelty: 5,
+  evidenceQuality: 10,
 });
 
 const list = (value) => Array.isArray(value) ? value : [];
@@ -32,6 +32,11 @@ export function projectReaderValueInput(event, heat = {}) {
     projectType: text(repository.projectType, 40),
     scenarioIds: list(repository.scenarioIds).map((value) => text(value, 40)).slice(0, 6),
     directUseCase: text(repository.directUseCase, 180),
+    discoveryHypotheses: list(repository.discoveryContexts).slice(0, 6).map((context) => ({
+      label: text(context?.label, 60),
+      query: text(context?.query, 160),
+      directUseCase: text(context?.directUseCase, 180),
+    })),
     repository: {
       name: text(repository.repository, 120),
       description: text(repository.description, 500),
@@ -72,12 +77,12 @@ export function scoreProjectReaderValue(result = {}) {
     ...result,
     projectReaderValue: Number(score.toFixed(1)),
     scoreParts: {
-      dailyFit: Number((clamp(result.dailyFit, 0, 10) * 3.5).toFixed(1)),
-      quickStart: Number((clamp(result.quickStart, 0, 10) * 2.5).toFixed(1)),
-      outcomeClarity: Number((clamp(result.outcomeClarity, 0, 10) * 1.5).toFixed(1)),
+      dailyFit: Number((clamp(result.dailyFit, 0, 10) * 2.8).toFixed(1)),
+      quickStart: Number((clamp(result.quickStart, 0, 10) * 2.2).toFixed(1)),
+      outcomeClarity: Number((clamp(result.outcomeClarity, 0, 10) * 2.5).toFixed(1)),
       reusability: Number(clamp(result.reusability, 0, 10).toFixed(1)),
-      novelty: Number(clamp(result.novelty, 0, 10).toFixed(1)),
-      evidenceQuality: Number((clamp(result.evidenceQuality, 0, 10) * 0.5).toFixed(1)),
+      novelty: Number((clamp(result.novelty, 0, 10) * 0.5).toFixed(1)),
+      evidenceQuality: Number(clamp(result.evidenceQuality, 0, 10).toFixed(1)),
       installationFriction: Number(clamp(result.installationFriction, 0, 10).toFixed(1)),
       agentPenalty: Number(clamp(result.agentPenalty, 0, 25).toFixed(1)),
     },

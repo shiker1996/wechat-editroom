@@ -182,9 +182,9 @@ Agent Harness 改造把运行时概念收敛为四种对象分工：**Skill**（
        → 编辑会（editorial-room，对话式沉淀结构化决策，WRITE_NOW 门禁；
           回答中粘贴的链接自动抓取落 candidate_sources，逐条结果写入对话）
        → 成稿（article-pipeline，ARTICLE_STAGE_CONTRACT 固定阶段：
-          brief → fact-base → planning → drafting($writer) → 质量门禁
-          → title → humanize → review → seo 评分 / 优化 → 终审门禁；
-          每阶段产物落候选工作目录，门禁不过自动返工一次）
+          brief → fact-base → drafting($writer) → review → length-adjustment
+          → humanize → title-lock；初稿直接依据锁定简报与事实基座写作，不生成独立大纲；
+          每阶段产物落候选工作目录，具体返修按阶段契约执行；SEO 不属于自动成稿链）
        → 排版（typeset-pipeline：rendered → design → images → draft → normalized → gate；
           确定性 markdownToHtml + 主题 tokens，只输出内联样式，含 CDN 上传开关）
        → 封面图（cover-image-generator：界面默认 AI 视觉模式，由单 Agent 生成 HTML/CSS 后截图；

@@ -1,6 +1,6 @@
 # 公众号成稿：直接依据简报写作的提示词清单
 
-日期：2026-10-21。版本：direct-brief-v2，取消独立大纲阶段。状态：已接入热点文章成稿运行时，尚未进行真实模型重跑对比。
+日期：2026-10-21。本文保存 direct-brief-v2 的提示词设计基线。运行时代码已迭代至 `direct-brief-v5`；当前阶段顺序与输入输出以 [成稿运行阶段契约](../../skills/wechat-mp-topic-to-article/references/runtime-stage-contracts.md) 为准，本文不作为当前阶段顺序的权威定义。
 
 依据：[现状提示词清单](../article-pipeline-prompt-inventory.md)与[账号配置](../../account-context.json)。本版替代此前包含大纲生成和独立发布前核对的提案。
 

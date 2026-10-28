@@ -1,4 +1,5 @@
 import { selectSkillPromptReferences } from '../../../platform/llm/skill-runtime.mjs';
+import { resolvePrompt } from '../../../platform/llm/prompt-registry.mjs';
 
 function copyReferences(contentType) {
   const primary = contentType === 'event'
@@ -11,7 +12,7 @@ function copyReferences(contentType) {
 
 export function buildSocialCardCopySkillPrompt(skillPrompt, { contentType } = {}) {
   return selectSkillPromptReferences(skillPrompt, {
-    include: ['COPY_GUIDE.md', ...copyReferences(contentType)],
+    include: [...(contentType === 'repository' ? ['COPY_GUIDE.md'] : []), ...copyReferences(contentType)],
   });
 }
 
@@ -41,6 +42,9 @@ export function buildSocialCardCopyInput({
     custom_content_type: contentType === 'custom' ? factData?.content_type : undefined,
     source_url: contentType === 'event' ? sourceUrls : contentType === 'custom' ? sourceUrls : sourceUrl,
     repository_facts: contentType === 'repository' ? factData : undefined,
+    acquisition: contentType === 'repository' ? {
+      repository_url: String(factData?.sourceUrl || sourceUrl || '').trim(),
+    } : undefined,
     event_analysis: contentType === 'event' ? (eventAnalysis || factData) : undefined,
     custom_facts: contentType === 'custom' ? factData : undefined,
     editorial_decisions: editorial,
@@ -51,17 +55,16 @@ export function buildSocialCardCopyInput({
 
 export function buildSocialCardCopySystemPrompt(skillPrompt, { channelMode = 'wechat', contentType = 'event', storyboardClass } = {}) {
   const titleLabel = channelMode === 'xiaohongshu' ? '小红书笔记标题' : '公众号发布标题';
-  return `${buildSocialCardCopySkillPrompt(skillPrompt, { contentType, storyboardClass })}
-
-## 当前运行阶段
-生成一个明确的发布标题和可直接发布的配套文案。第一行必须严格写成“${titleLabel}：<标题>”，空一行后输出文案正文；标题不要在正文重复。输出纯文本，不要 JSON、Markdown 围栏、页码或布局指令；严格遵守事实与禁用表达。
-
-### ${titleLabel}规则
-- 只生成一个推荐标题，直接供作者复制发布；不要给候选列表。
-- 先确定读者最可能搜索的具体主体词、工具/产品名或主题词，以及其搜索意图；标题应与卡片内容和事实基座一致。
-- 将最有辨识度的具体关键词自然放在标题前半句，再说明读者要解决的问题、了解的变化或获得的内容。优先采用具体问题或任务表达，避免“值得收藏”“终于来了”等无法检索的空泛钩子。
-- 关键词必须有输入依据；不得编造搜索热度、排名、体验、效果、数字或结论，不堆砌近义词，不做标题党。
-${channelMode === 'xiaohongshu' ? '小红书渠道：文案口语化、段落短，适度使用 emoji，末尾带 6–8 个话题标签，标签不得含夸大功效词。' : '公众号渠道：文案信息密度优先、结构清晰，末尾带 6–8 个准确话题标签，标签须与内容严格相关。'}${contentType === 'event' ? ' 未核实主张必须注明说话者和“尚未获独立证实”等边界；不得把技术能力、趋势判断或争议定性为超出证据的结论。' : ''}${contentType === 'custom' ? ' 体验性表述只能来自 source_level=author_experience 的要点；user_material 必须保留来源归属；model_suggestion 只能写成建议或参考，禁止写成亲测、效果或收益。' : ''}`;
+  const channelComponent = channelMode === 'xiaohongshu'
+    ? 'social-cards.copy-channel-xiaohongshu'
+    : 'social-cards.copy-channel-wechat';
+  const contentComponent = contentType === 'repository'
+    ? 'social-cards.copy-content-repository'
+    : contentType === 'custom' ? 'social-cards.copy-content-custom' : 'social-cards.copy-content-event';
+  const runtimePrompt = resolvePrompt('social-cards.copy', { titleLabel }, {
+    components: [channelComponent, contentComponent],
+  }).text;
+  return `${buildSocialCardCopySkillPrompt(skillPrompt, { contentType, storyboardClass })}\n\n${runtimePrompt}`;
 }
 
 export function parseSocialCardCopyOutput(value = '', { channelMode = 'wechat' } = {}) {
@@ -89,6 +92,22 @@ export function validateSocialCardCopy(copy = '') {
   const copyTagCount = (value.match(/#[^#\s]{1,30}/g) || []).length;
   if (value && copyTagCount < 3) issues.push(`配套文案话题标签不足（检测到 ${copyTagCount} 个，末尾应有 6–8 个）`);
   return { valid: issues.length === 0, issues, tagCount: copyTagCount };
+}
+
+function ensureRepositoryAcquisitionAddress(copy, acquisition = {}) {
+  const value = String(copy || '').trim();
+  const repositoryUrl = String(acquisition.repository_url || '').trim();
+  if (!repositoryUrl) return value;
+  const lines = value.split(/\r?\n/);
+  const cleanedLines = lines.filter((line) => {
+    const hasUrl = /https?:\/\//i.test(line);
+    return !(hasUrl && (/下载入口|GitHub Releases|github\.com\/[^\s]+\/releases/i.test(line)));
+  });
+  const cleaned = cleanedLines.join('\n').trim();
+  const hasRepositoryAddress = cleaned.split(/\r?\n/).some((line) =>
+    /(获取地址|项目主页)/i.test(line) && line.includes(repositoryUrl));
+  if (hasRepositoryAddress) return cleaned;
+  return `${cleaned}${cleaned ? '\n\n' : ''}项目主页：${repositoryUrl}`;
 }
 
 export async function generateSocialCardCopy({
@@ -122,6 +141,9 @@ export async function generateSocialCardCopy({
       { role: 'user', protected: true, content: JSON.stringify(input) },
     ],
   });
-  const { publishTitle, copy } = parseSocialCardCopyOutput(result?.content || '', { channelMode });
-  return { publishTitle, copy, result, input };
+  const parsed = parseSocialCardCopyOutput(result?.content || '', { channelMode });
+  const copy = contentType === 'repository'
+    ? ensureRepositoryAcquisitionAddress(parsed.copy, input.acquisition)
+    : parsed.copy;
+  return { publishTitle: parsed.publishTitle, copy, result, input };
 }

@@ -62,7 +62,7 @@ export function authorizedWritingBrief(brief) { const safe={...brief};delete saf
 
 function articleMaterialView(materialBrief = {}) {
   const material = materialBrief && typeof materialBrief === 'object' ? materialBrief : {};
-  return Object.fromEntries(['action', 'affected_group', 'conflict', 'reader_consequence', 'reader_action']
+  return Object.fromEntries(['action', 'affected_group', 'conflict', 'reader_consequence', 'reader_action', 'evidence_boundary']
     .map((key) => [key, material[key]])
     .filter(([, value]) => value != null && String(value).trim() !== ''));
 }
@@ -99,6 +99,7 @@ export function buildArticlePlanningView(brief = {}) {
     thesis: brief?.thesis,
     audience: brief?.audience || brief?.targetAudience || brief?.target_audience,
     article_type: brief?.articleType || brief?.article_type,
+    freshness_basis: brief?.freshnessBasis || brief?.freshness_basis || materialBrief.freshness_basis || '',
     material_brief: articleMaterialView(materialBrief),
     adopted_research_points: brief?.adoptedResearchPoints || brief?.adopted_research_points || [],
     facts: articleFactAuthorityView(brief?.factBase || brief?.fact_base || {}),
@@ -285,6 +286,7 @@ export function buildArticleBriefView(brief = {}) {
     research_basis: brief?.researchBasis || brief?.research_basis || '',
     writing_stance: brief?.writingStance || brief?.writing_stance || '',
     reader_stake: brief?.readerStake || brief?.reader_stake || '',
+    freshness_basis: brief?.freshnessBasis || brief?.freshness_basis || materialBrief.freshness_basis || '',
     baseline_change: brief?.baselineChange || brief?.baseline_change || materialBrief.baseline_change || '',
     counter_evidence: brief?.counterEvidence || brief?.counter_evidence || materialBrief.counter_evidence || [],
     adopted_research_points: brief?.adoptedResearchPoints || brief?.adopted_research_points || [],

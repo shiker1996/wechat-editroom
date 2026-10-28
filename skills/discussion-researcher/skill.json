@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "discussion-researcher",
   "name": "讨论研判编辑",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "kind": "stage",
   "entryPoints": [],
   "contentTypes": [],

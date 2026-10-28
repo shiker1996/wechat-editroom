@@ -1,5 +1,7 @@
 # 项目内硬编码提示词清单
 
+> 历史快照：本文的版本号和阶段描述已过期。当前文章提示词版本以 `server/features/articles/application/article-prompts.mjs` 为准；当前成稿阶段顺序以 `skills/wechat-mp-topic-to-article/references/runtime-stage-contracts.md` 为准。
+
 盘点日期：2026-10-22  
 范围：运行时代码中直接写入源码、传给模型的 system/user 指令、JSON 格式修复指令，以及在技能文本前后追加的阶段契约。技能目录中的 Markdown 正文不抄录到本清单；仅记录代码如何调用或包裹这些技能。普通错误提示、UI 文案和仅用于模型参数的配置不算提示词。
 

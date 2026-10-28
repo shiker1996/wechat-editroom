@@ -1,109 +1,41 @@
 # 成稿运行阶段契约
 
-执行器在每次模型调用时加载总技能、全部 references 和当前阶段子技能，并明确当前阶段 ID。阶段顺序固定为：
+此文件与 article-pipeline.mjs 中的 ARTICLE_STAGE_CONTRACT 同步。自动成稿链只有以下七个记录阶段；不生成独立文章大纲，不设独立规划、初稿质量门禁、标题候选前置阶段或 voice-quality-gate 阶段。
 
-```text
-brief → fact-base → planning → drafting → draft-quality-gate → title-generation → humanize → voice-quality-gate → review → title-lock → seo-keyword-scoring → seo-optimization → final-quality-gate → research-coverage → visual-planning → image-planning → publication-safety-gate
-```
+~~~text
+brief → fact-base → drafting → review → length-adjustment → humanize → title-lock
+~~~
 
-## `brief`
+选题时效、近期触发事实和问题可回答性必须已由选题漏斗确认。成稿链沿用锁定简报，不重做选题资格判断。
 
-校验并保存锁定简报。该阶段不调用模型。简报、编辑决策、事实与作者观点是全部下游阶段的唯一授权来源。
+## brief
 
-## `fact-base`
+读取并保存锁定简报，作为唯一选题和作者立场约束。该阶段不生成文章大纲，也不改变命题、角度或读者关系。
 
-只根据锁定事实、作者观点和来源正文建立事实基座，不使用模型常识补齐日期、数字、人物行为、任职经历、合同细节、引语或来源。对 IPO、上市、估值、融资、违法、造假、压榨、骚扰、事故伤亡和其他公司/个人负面主张记录证据等级、来源归因、日期和使用边界。只返回严格 JSON：
+## fact-base
 
-```json
-{"claims":[{"id":"claim-1","claim":"待使用主张","status":"verified|disputed|unverified|opinion","evidence":"来源直接证据或作者观点说明","sourceUrl":"直接来源 URL","sourceTitle":"来源标题","sourceType":"official|reliable_media|user_material|anonymous|other","publishedAt":"来源日期","attribution":"主张由谁提出","boundary":"正文使用边界"}],"missingEvidence":["缺失证据"],"forbiddenClaims":["禁止写入的主张"]}
-```
+只根据锁定事实、作者观点和来源正文建立事实基座，不使用模型常识补齐日期、数字、人物行为、任职经历、合同细节、引语或来源。输出 02-fact-base.json 与 02-publication-claim-register.json。verified 只表示来源直接支持该主张；高影响主张没有可靠证据时应收窄、删除或停止。
 
-没有直接证据的外部事实标为 `unverified`。
+## drafting
 
-事实基座完成后，执行器会生成 `02-publication-claim-register.json`。`verified` 只表示来源直接支持该主张，不表示标题可以脱离归因使用；高影响主张没有可靠证据时只能降格、删除或停止。
+同时使用总契约与选定写作子技能。写作输入是锁定简报和事实基座；流程不生成、传递或等待 02-outline.md。根据简报锁定的核心问题、事实关系和读者任务自行安排开头、章节和结尾。只使用 verified 事实；disputed 准确呈现分歧，opinion 明确属于作者判断，unverified 不写成确定事实。严格沿用漏斗确认的近期触发事实、日期、来源和具体问题，不重新判定时效资格，也不扩成宽泛趋势。冲突、反常或争议必须有事实支持，不强造对立。输出完整 Markdown，第一行是唯一 H1。
 
-## `planning`
+## review
 
-根据锁定简报和事实基座建立作者素材、流量规划、大纲与第一轮标题方向。综合选题明确多个热点之间的关联逻辑；普通选题围绕单一主线。只返回严格 JSON：
+同时使用总契约、写作技能和 article-reviewer 检查事实支持、事实与判断边界、推理、标题承诺、读者影响是否兑现、结构是否服务主线及发布风险。初次审稿输入为初稿；返修按问题定位处理，最多自动修订两轮。门禁通过时原样保存审稿稿；问题未解决时保留问题并标记待编辑。审稿不重新做时效筛选，只确认稿件是否忠实于锁定简报。
 
-```json
-{"distributionLane":"推荐池|通知池|实验池","readerStake":"对读者工作、收入、岗位、效率、成本或选择的具体影响","contentRole":"拉新|沉淀|搜索","expectedAction":[],"readerValueType":"understanding|judgment|perspective|impact|action|checklist","readerValuePlacement":"woven|standalone_h2|ending|none","readerEmotion":"由具体读者利益触发的可能感受、具体触发处境，以及读完后希望转成的感受；readerStake 明确时必填，不得为缺少亲历而返回 null","clickMechanism":"真实点击理由或 null","openingHook":"适合本文的开头入口或 null","retentionTurns":[],"endingPayoff":"自然收束方式或 null","shareTrigger":null,"visualNeed":"auto|off|manual","practicalIncrement":"可选的具体实用增量","materialsMarkdown":"作者素材补充","outlineMarkdown":"依材料组织的结构大纲","titleCandidates":[{"title":"标题","reason":"理由"}],"selectedTitle":"阶段选中标题","coreKeywords":["核心词"],"remainingRisks":["剩余风险"]}
-```
+## length-adjustment
 
-`distributionLane` 与 `readerStake` 继承锁定简报，不得擅自换池；缺失时才根据账号上下文提出建议。只要 `readerStake` 明确，`readerEmotion` 必须给出从读者利害推导的克制情绪路径；它规划的是可能的感受，不是声称读者实际都如此，也不要求强烈情绪或作者亲历。仅当没有具体受影响读者、没有可说明的读者后果时才可为 `null`。点击理由、开头入口、推进点、结尾回收和分享理由是规划参考，不是每篇文章都必须出现的清单。按材料与论证决定章节数、案例数量和节奏；不得为了满足固定小标题数、推进频率、主案例或互动指标而补写空段。`outlineMarkdown` 记录核心判断、目标读者、证据与风险边界，以及确有依据的信息/实用增量。
+仅当正文超出当前字数范围时运行。按目标和范围压缩重复内容或补足已有事实支持的解释；保留标题、关键事实、来源、作者立场和风险边界。调整后重新检查字数与受影响事实，不生成新事实。
 
-## `drafting`
+## humanize
 
-同时使用总契约与选定写作子技能。只使用 `verified` 事实；`disputed` 呈现分歧，`opinion` 明确为作者判断，`unverified` 不进入正文。前 200 字尽早进入具体议题；信息与判断随论证自然推进，不设最低推进次数。只要上游 `readerStake` 明确，正文就要让读者看见至少一个具体处境、选择或代价，并把它推进到新的判断或掌控感；可用条件句或明确标记的假设场景，不得虚构亲历、对话或把假设写成真实事件。不得用情绪词替代事实。来源按事实簇归因：同一来源支撑的连续事实在首次出现时清楚归因并尽量链接原文，后续不重复加来源标签；只有切换来源、归属可能混淆或涉及争议/高影响主张时再补归因。禁止“来源：同上”和逐句来源标签。未核实状态、单方说法和未知机制只保留对读者判断必要的一句限定，不把内部证据边界扩写成免责声明段落。输出完整 Markdown，第一行是唯一 H1，不附说明。
+基于审稿稿精修表达，去除重复和机械表达。不得改动事实、来源归因、作者判断、证据边界或文章主线。精修若改变事实或推理含义，必须把受影响段落交回审稿检查。
 
-规划阶段的大纲、流量规划、证据边界和禁写项属于内部元信息。写作模型只能把结构意图转化为正文，不得原样输出“本文不写”“只能当作提问的起点”、H2 编号、写作要求或其他编辑口吻；必要的证据边界须改写成自然来源限定，且只说一次，不重复解释“来源说了什么、还没核实什么、没有说明什么”。大纲是建议而非逐项验收清单，章节数、推进节奏、案例与结尾按实际材料决定。
+## title-lock
 
-## `draft-quality-gate` / `final-quality-gate`
+表达精修后使用 title-generator。依据锁定简报、事实基座、发布主张登记和精修稿生成候选并锁定唯一发布标题。程序将标题写入精修稿唯一 H1，并生成 03-titles.md 与 03-title-lock.json。标题承诺必须由正文兑现；锁题后不得因普通润色修改标题。
 
-同时使用总契约、写作技能和 `article-reviewer`，执行语义门禁，不用问号、固定词或单一引用格式作机械判断。检查标题兑现、开头、单一主线、章节是否服务论证、事实与观点边界、来源覆盖、信息增量、自然表达和发布合规。若 `readerStake` 明确，但文章只有抽象概念、成本数字或作者结论，读者看不出具体选择和代价，应指出情绪没有进入正文并要求定向修复；不得要求感叹词、虚构案例或固定情绪强度。不得因章节数量或固定推进频率判失败。只返回严格 JSON：
+## 自动链之后的可选操作
 
-```json
-{"pass":true,"issues":[{"type":"fact|structure|opening|citation|voice|title","message":"具体问题","repair":"具体修复要求"}],"strengths":["有效优点"],"citationCoverage":100,"summary":"一句总评"}
-```
-
-只有实质影响发布的问题才判定失败，不因个人风格偏好失败。标题、摘要、封面文案和前 200 字单独审核；高影响事实没有可靠证据、争议没有明确归因、或标题有未核实数字/动作/负面指控时必须失败。返工严格按 issues 修复，保留已核验事实、来源、作者立场与风险边界，不新增事实。
-
-第一人称作者判断或阅读动作（如“我看”“我读完后的判断”）不等于第一人称亲测。只有正文声称作者本人测试、部署或使用产品并得到具体结果，且输入中没有已确认实践证据时，才作为未经核实的亲测拦截。
-
-## `title-generation`
-
-同时使用总契约与 `title-generator`，根据已经完成的初稿、事实基座和发布主张登记重新生成标题。准确兑现正文，不夸大，默认不超过 28 个汉字。IPO、上市、估值、融资和公司/个人负面指控必须有对应已核验事实或明确可靠来源归因；只返回严格 JSON：
-
-```json
-{"distributionLane":"推荐池|通知池|实验池","readerStake":"具体读者利益","titleCandidates":[{"title":"标题","reason":"理由","score":0}],"selectedTitle":"最终标题","coreKeywords":["核心词"]}
-```
-
-`score` 使用 0–12。
-
-## `humanize`
-
-同时使用总契约与 `humanizer-zh`。本阶段只修改明确可定位的 AI 套话、重复表达和机械连接；未涉及的句段逐字保留，不删段、合并、重排、改写结尾或重新组织论证。保留事实、数字、引语、来源、标题承诺、作者推理链、判断力度、修辞和风险边界。不得把作者推断改成客观事实，也不得给观点句统一添加免责声明；不虚构亲历、人物细节或作者观点。只输出完整 Markdown，不附评分或修改总结。
-
-## `voice-quality-gate`
-
-在人类审稿前独立检查自然化稿。只报告具体、可在原文定位且明显损害阅读真实感的问题，例如重复论点、机械对称结构、空泛口号/比喻、没有信息增量的过场、每节重复同一模板、硬加互动句。不得依赖 AI 检测器，不因单个词、修辞偏好、缺少第一人称或正常论证结构判失败，也不得仅因某个判断缺少逐句引文而要求删改观点。每个问题须附原文短引文和局部修法；无实质问题时通过。未通过时最多局部修复一次并复检；仍不通过则保存 `05-humanized.md` 与 `05-voice-quality-gate.json`，标记待审。
-
-## `review`
-
-同时使用总契约与 `article-reviewer`。先由审稿门禁检查事实、归因、推理和发布风险；门禁通过时原样进入 `06-reviewed.md`，不再调用全文改写。门禁未通过时，按结构化问题对对应句段做一次局部修订，再复审。事实、来源说法、作者推断和价值判断分别处理：事实按事实基座核验，来源说法准确归因；有事实依据且推理链可理解的作者推断和价值判断可以保留，不要求统一添加“笔者认为”“可能”等限定。只输出完整 Markdown；未涉及的内容逐字保留。审稿通过与否由编排器单独调用 `decision.article_review_gate` 工具判断，不在文章正文中嵌入 REVIEW 注释；仍有 blocker 或 major 时标记待审。
-
-## `title-lock`
-
-审稿完成后再次使用总契约与 `title-generator`，只根据最终审稿正文、事实基座、发布主张登记和流量简报确定最终发布标题。该阶段不是重新生成正文：必须把 `selectedTitle` 确定性写回文章唯一 H1，并将标题承诺同步到 `material_brief.title_promise`、`03-titles.md` 和 `03-title-lock.json`。后续 SEO、长度修复、视觉处理和普通质量门禁不得改写已锁定标题；只有发布合规门禁发现标题本身存在事实或风险问题时，才允许定向覆盖并重新复检。只返回严格 JSON：
-
-```json
-{"distributionLane":"推荐池|通知池|实验池","readerStake":"具体读者利益","titleCandidates":[{"title":"标题","reason":"理由","score":0}],"selectedTitle":"锁定标题","coreKeywords":["核心词"]}
-```
-
-## `seo-keyword-scoring`
-
-仅在搜索型或明确要求 SEO 时使用 `seo-keyword-scoring` 的确定性评分能力。普通流量文记录跳过原因，不因缺少 SEO 报告阻断成稿。启用时输出核心词、相对搜索信号、相关词、可用来源数和数据局限；评分不是微信搜索量。
-
-## `seo-optimization`
-
-仅在 SEO 已启用时使用总契约与 `seo-content-optimizer`。不改变事实、引语、作者立场、读者收益、来源或已通过审稿的转化段，不新增高影响主张、财经数字、负面指控或绝对化判断；不得损害标题张力、前 200 字或完读节奏。移除 REVIEW 注释，只输出完整 Markdown。SEO 后还要通过发布合规专项门禁；未启用时将 `06-reviewed.md` 安全透传为后续版本。
-
-## `length-repair`
-
-正文低于 `min_visible_chars` 时，只依据事实基座补充必要解释、因果链、反方边界和读者可执行信息；正文超过 `max_visible_chars` 时，只删除重复背景、次要案例和同义结论。两种情况都必须保留标题、关键事实、来源、作者立场、风险边界和实用增量，禁止新增未经核验的事实。只输出完整 Markdown。
-
-## `research-coverage`
-
-使用 `article-reviewer` 对最终 SEO 版本进行语义贴合度检查，只检查作者在编辑室明确采用的研判拓展点。输出 `research-coverage-review.json`，逐条标记 `full`、`partial`、`omitted` 或 `contradicted`；核心采用点没有被文章解释和展开时返回 `needs_revision`，不得用事件摘要或关键词命中代替覆盖。
-
-## `visual-planning`
-
-同时使用总契约与 `article-visual-planner`。只针对确有理解增量的位置规划 Mermaid/ECharts 图表，数字必须逐项来自事实基座；图表围栏在 `image-planning` 之前插入正文，规划结果写入 `09-visual-plan.json`。
-
-## `image-planning`
-
-同时使用总契约与 `article-image-placeholders`。只为必须由编辑提供的来源图、资料图或参考图插入结构化注释；不为纯装饰图强加占位。输出 `09-FINAL.md`，不得进入排版。
-
-## `publication-safety-gate`
-
-在图表规划和配图占位完成后，对实际 `09-FINAL.md` 执行最后一次发布合规检查。模型结合事实基座、发布主张登记和程序风险扫描，逐项检查标题、摘要、封面文案、前 200 字、正文高影响主张、来源归因、名誉、隐私、财经误导和版权风险。只返回与质量门禁相同结构的 JSON；任何无法核验的核心高影响主张、标题中的未核实数字/动作或明显名誉风险都必须 `pass:false`。该门禁失败时不得进入排版。
+视觉规划只在锁定简报明确需要且文章存在理解增量时运行。发布合规扫描在交付前执行；发现问题时定向修复并复审。当前自动 article-pipeline 不执行 SEO 改写，SEO 技能只能作为单独授权的后续操作，且不得重开选题或添加未经核验主张。

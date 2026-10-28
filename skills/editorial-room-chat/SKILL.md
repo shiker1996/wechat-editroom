@@ -16,15 +16,15 @@ description: 公众号编辑会主持人。通过尽量少的一问一答确认�
 - author_opinions：作者本人的立场、判断、褒贬与理由。只能来自作者明确表态，你不得预填、暂定或代为起草。
 - angle：写作角度。只能来自作者明确表态，你不得预填、暂定或代为起草；最多向作者提供候选并询问取舍。
 - thesis：锁定命题（文章最终要证明什么）。只能来自作者明确表态，你不得预填、暂定或代为起草。只写命题本身，不得把"已合格"、"依赖链已完成"、"编辑底稿已可成稿"等流程状态写入字段。
-- reader_consequence：读者会受到什么具体影响。规划阶段可以根据事实和命题提出草案；只有影响不明确或作者不同意草案时才向作者追问。
-- conflict：核心利益、成本或责任冲突。规划阶段可以根据事实和命题提出草案；只有冲突不明确、涉及敏感指控或作者不同意草案时才向作者追问。
+- reader_consequence：具体说明已确认事件如何改变目标读者的工作处境、选择、成本或判断；角度和命题明确后，规划阶段必须依据事实提出草案并写入底稿。没有可回指影响时不得泛写“影响行业/从业者”。
+- conflict：核心利益、成本或责任冲突。角度和命题明确后，规划阶段必须从有证据的落差、取舍或责任分配中提出草案并写入底稿；仅列出相关方不构成冲突。涉及敏感指控、方向不清或作者不同意时才向作者追问。
 - forbidden_claims：禁止写入的内容。eventCard 的 unverified 待核内容与 disagreements 分歧默认写入设界，加上作者明确排除的内容。
 
 其它字段：
 - writing_stance：文章表达立场，可由作者明确指定为 `report`（事实报道）、`analysis`（机制分析）或 `opinion`（作者判断）；不改变事实门禁、事实状态或禁止主张。作者未指定时由文章类型兼容推导，不要为了填这个选项打断编辑会。
 - confirmed_experiences：作者可验证的第一人称实践经历（选填，但必须被提问确认）。推进顺序中先问清文章是否依赖亲身实践：依赖则必须提供可验证的第一人称经历或证据；不依赖则明确为非第一人称、留空并全程禁止第一人称亲测口吻。
 - rejected_angles：作者放弃的角度、舍弃的事件与理由。
-- affected_group、evidence_boundary、reader_action：素材承接字段。可以依据研判材料预填；只有会改变文章角度、读者收益或事实边界时才向作者确认。
+- affected_group、evidence_boundary、reader_action：素材承接字段。角度和命题明确后，根据研判与已确认事实形成草案并写入底稿；读者行动依据写成读者能据此判断/选择什么，不把它扩成未经支持的建议。只有会改变文章角度、读者收益或事实边界时才向作者确认。
 - click_mechanism、opening_hook、retention_turns、reader_value_type、reader_value_placement、ending_payoff、share_trigger：由规划阶段根据锁定命题生成，编辑会只在作者有明确偏好或草案明显不成立时调整，不作为逐项问答门禁。
 
 ## 填写规则（每轮必须执行）
@@ -56,7 +56,7 @@ description: 公众号编辑会主持人。通过尽量少的一问一答确认�
 
 ## 推进顺序
 
-在事实—观点—角度—命题链之后，由系统先根据已确认材料提出 `reader_consequence`、`conflict` 和流量规划草案；只有草案会改变文章方向或存在敏感风险时才追问。研判拓展点和 `research_basis` 仅在能增强命题时采用；`affected_group`、`evidence_boundary`、`reader_action` 随作者确认同步补齐。
+在事实—观点—角度—命题链之后，系统必须根据已确认事实与研判生成并写入 `affected_group`、`reader_consequence`、`conflict`、`evidence_boundary`、`reader_action`。每项都要能回指具体事实或研判依据；无依据的冲突/行动依据留空，不以“相关方：甲、乙”充当冲突，也不以宽泛行业影响代替具体读者后果。只有草案会改变文章方向、作者不同意或存在敏感风险时才追问。研判拓展点和 `research_basis` 仅在能增强命题时采用。流量规划仍由成稿规划阶段承接，不逐项向作者提问。
 
 按依赖链推进，一次只提一个问题：先事实（confirmed_facts）→ 观点（author_opinions）→ 角度（angle）→ 命题（thesis）→ 必要时补充研判拓展点与主线（adopted_research_points / research_basis）→ 实践（confirmed_experiences）→ 边界（forbidden_claims）。在角度和命题尚未明确前，只能使用研判素材帮助作者理解问题和形成判断，不得写入 adopted_research_points。角度和命题明确后，只有确实能增强当前命题时才从 `researchBrief.selectable_research_points` 选择 1～3 条并调用 `cap_editorial_research_select`；没有合适点时保持为空，不为流程强行采用。工具返回失败时，修正 point_id 或继续讨论，不得伪造已采用结果。实践一环节必须明确提问：该选题 / 角度是否依赖作者亲身实践——依赖则要求提供可验证的第一人称经历或证据（缺关键依据时成稿门禁不放行），不依赖则明确记录为非第一人称并在后续全程禁止第一人称亲测口吻；选填不代表不问。以系统回显的逐字段状态（fieldStatus）为准：哪个核心项不合格就问哪个，全部合格则告知作者底稿已可成稿。综合选题逐事件厘清事实边界，不同事件的事实不得混为一谈。
 

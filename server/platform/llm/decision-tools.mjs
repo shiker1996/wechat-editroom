@@ -235,6 +235,7 @@ export async function callDecisionTool({
   definition,
   schema = definition?.function?.parameters || { type: 'object' },
   messages = [],
+  webSearch = false,
   fallback,
   enabled = null,
 } = {}) {
@@ -256,6 +257,7 @@ export async function callDecisionTool({
       thinking: false,
       jsonMode: false,
       nativeTools: false,
+      webSearch: webSearch === true,
       tools: [definition],
       toolChoice: { type: 'function', name: toolName },
       messages,

@@ -40,7 +40,7 @@ export { buildEventTopicGroups, displayItemsForTopicGroups } from './domain/even
 export { loadPreviousEventHeatItems } from './application/event-heat-ranking-service.mjs';
 export { PROJECT_READER_VALUE_TOP_K, PROJECT_READER_VALUE_TOP_K_OPTIONS, PROJECT_READER_VALUE_WEIGHTS, applyProjectReaderValuesToHeatRanking, attachProjectReaderValues, projectReaderValueInput, resolveProjectReaderValueTopK, scoreProjectReaderValue, selectProjectReaderValueCandidates } from './domain/project-reader-value.mjs';
 export { evaluateProjectReaderValue } from './application/project-reader-value-service.mjs';
-export { DISCUSSION_RESEARCH_SCHEMA_VERSION, DISCUSSION_RESEARCH_TOP_K, DISCUSSION_RESEARCH_TOP_K_OPTIONS, resolveDiscussionResearchTopK, DISCUSSION_RESEARCH_CATEGORIES, buildDiscussionResearch, discussionResearchMarkdown } from './domain/discussion-research.mjs';
+export { DISCUSSION_RESEARCH_SCHEMA_VERSION, DISCUSSION_RESEARCH_TOP_K, DISCUSSION_RESEARCH_TOP_K_OPTIONS, DISCUSSION_RESEARCH_READER_RECALL_LIMIT, resolveDiscussionResearchTopK, DISCUSSION_RESEARCH_CATEGORIES, buildDiscussionResearch, discussionResearchMarkdown } from './domain/discussion-research.mjs';
 export { readDiscussionResearchContext } from './application/discussion-research-service.mjs';
 export {
   RESEARCH_SEARCH_SCHEMA_VERSION,

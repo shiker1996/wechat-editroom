@@ -690,9 +690,11 @@ test('布局审计拦截文字与实际背景不可区分的封面标题',async(
 
 test('copy stage requires topic tags on both channels and delivery validation flags missing tags', () => {
   const source = fs.readFileSync(path.join(process.cwd(), 'server/features/social-cards/application/social-card-copy.mjs'), 'utf8');
-  assert.ok(source.includes('末尾带 6–8 个话题标签'), 'xiaohongshu channel should require tags');
-  assert.ok(source.includes('末尾带 6–8 个准确话题标签'), 'wechat channel should require tags');
-  assert.ok(!source.includes('不使用话题标签'), 'wechat channel must not forbid tags');
+  const xiaohongshuPrompt = fs.readFileSync(path.join(process.cwd(), 'prompts/social-cards/copy-channel-xiaohongshu.md'), 'utf8');
+  const wechatPrompt = fs.readFileSync(path.join(process.cwd(), 'prompts/social-cards/copy-channel-wechat.md'), 'utf8');
+  assert.match(xiaohongshuPrompt, /正文末尾附 6–8 个.*话题标签/, 'xiaohongshu channel should require tags');
+  assert.match(wechatPrompt, /正文末尾附 6–8 个.*话题标签/, 'wechat channel should require tags');
+  assert.doesNotMatch(wechatPrompt, /不使用话题标签/, 'wechat channel must not forbid tags');
   assert.ok(source.includes('配套文案话题标签不足'), 'delivery validation should flag missing tags');
 });
 

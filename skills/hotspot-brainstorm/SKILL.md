@@ -9,6 +9,8 @@ description: 热点探索编辑。对已入池候选生成临时探索卡（角�
 
 候选必须从研判素材形成一个可讨论命题，而不是换标题：事件内只能围绕反常、利益/成本/责任冲突或可发散方向；事件间只能围绕已确认的前后、回应、对比、趋势或反例关系。`angle` 要说明解释对象和切入角度，`thesis` 要表达可被证据支持或反驳的判断；涉及 `needs_review` 的素材必须保留待核实边界。不同候选必须改变核心问题、判断或读者任务，不能只是同一事件的同义改写。
 
+选题资格已在上游漏斗核验。脑暴必须沿用输入中的 `freshness_basis` 与 `freshness_source_ids`，确认角度仍由近期的具体事实进展触发；问题必须有明确对象、范围和可由 `research_basis` 回答的判断。不得把旧事件、长期趋势重新包装成当下热点，也不得扩成没有事实边界的“谁怎么看”泛议题。发现输入门禁与研判材料冲突，或无法沿证据回答时，返回 `NO_ANGLE` 并指出缺少的触发事实或回答依据；不要在成稿阶段临时补造。
+
 返回严格 JSON：{"items":[{"candidateId":字符串,"status":"PASS|NO_ANGLE","researchBasisRefs":{"materialIds":[字符串],"internalSignalRefs":[字符串],"relationIds":[字符串],"evidenceSourceIds":[字符串]},"angle":字符串,"thesis":字符串,"hypotheses":[{"claim":字符串,"support":字符串,"counter":字符串,"verify":字符串,"readerValue":字符串}],"evidenceBoundary":字符串,"counterEvidence":字符串,"editorQuestion":字符串,"writeReadiness":"READY_PUBLIC_ANALYSIS|NEED_AUTHOR_INPUT|NEED_EXPERIMENT|SHORT_COMMENT_ONLY|SKIP","packaging":{"contentPillar":字符串,"readerJob":字符串,"mode":"搜索型|分享型|双栖型","distributionLane":"推荐池|通知池|实验池","readerStake":字符串,"readerStakeScore":0到5,"readerTarget":字符串,"readerAction":字符串,"readerConsequence":字符串,"readerStakeEvidence":字符串,"notificationFit":0到5,"notificationReason":字符串,"titleDirection":字符串,"hook":字符串,"outline":[字符串],"practicalIncrement":字符串,"materialGaps":字符串},"bScores":{"angleUniqueness":0到5,"emotionSpread":0到5,"titleHook":0到5,"readerStakeScore":0到5,"factSupport":0到5},"hProfile":{"historicalType":"worker_social|bigtech|owned_experience|controversial_return|key_person_move|github_tool|ai_tool_test|financing|career_anxiety|contrarian_bigtech","fiveSenseCount":0到5,"fiveQuestionCount":0到5,"recommendationFit":0到10,"emotionTheme":0到10,"searchFriendly":0到5},"materialType":字符串,"format":"文章|贴图","recommendedSkill":"wechat-mp-tech-hotspot|wechat-mp-tech-deep|wechat-mp-deep-dive|wechat-mp-gossip-chill"}]}。
 
 按账号上下文选择分发池：
@@ -23,7 +25,12 @@ description: 热点探索编辑。对已入池候选生成临时探索卡（角�
 
 ---
 
-**版本**：v1.4.0｜**最后更新**：2026-09-02
+**版本**：v1.5.0｜**最后更新**：2026-10-27
+
+### v1.5.0 变更
+
+- 脑暴输入继承上游近期触发事实和可回答性门禁
+- 角度无法沿证据回答时返回 `NO_ANGLE`，避免宽泛题进入成稿
 
 ### v1.4.0 变更
 

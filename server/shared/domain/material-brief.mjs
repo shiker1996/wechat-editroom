@@ -5,6 +5,7 @@ const TEXT_FIELDS = [
   'action', 'affected_group', 'reader_consequence', 'conflict', 'baseline_change', 'thesis',
   'evidence_boundary', 'title_promise', 'reader_action', 'article_type', 'writing_stance', 'material_readiness',
   'click_mechanism', 'opening_hook', 'reader_value_type', 'reader_value_placement', 'ending_payoff', 'share_trigger',
+  'freshness_basis',
 ];
 
 function text(value) { return String(value ?? '').trim(); }
@@ -43,20 +44,28 @@ export function deriveMaterialReadiness({ researchContext = null, materialBrief 
 }
 
 export function buildMaterialBrief({ candidate = {}, editorial = {}, researchContext = null, events = [] } = {}) {
-  const stored = normalizeMaterialBrief(editorial.material_brief || editorial.materialBrief || editorial.material_brief_json);
+  const storedValue = parseMaterialBrief(editorial.material_brief || editorial.materialBrief || editorial.material_brief_json);
+  const editorialFields = Object.fromEntries(TEXT_FIELDS
+    .filter((key) => Object.prototype.hasOwnProperty.call(editorial, key))
+    .map((key) => [key, editorial[key]]));
+  const stored = normalizeMaterialBrief({ ...storedValue, ...editorialFields });
   const materials = Array.isArray(researchContext?.verified_research_materials) ? researchContext.verified_research_materials : [];
   const material = materials[0] || {};
   const topicCandidate = researchContext?.topic_candidate || {};
   const eventIds = list(candidate.event_ids || events.map((event) => event.event_id || event.eventId));
   const researchMaterialIds = materials.map((item) => text(item.material_id || item.id || item.research_material_id)).filter(Boolean);
-  const parties = Array.isArray(material.parties) ? material.parties.map((item) => text(item)).filter(Boolean) : [];
-  const readerConsequence = firstText(stored.reader_consequence, material.reader_impact, material.impact, material.reader_consequence);
+  const readerConsequence = firstText(
+    stored.reader_consequence,
+    material.reader_impact,
+    material.impact,
+    material.reader_consequence,
+    candidate.reader_consequence,
+  );
   const conflict = firstText(
     stored.conflict,
     material.difference_or_conflict,
     material.difference,
     material.gap,
-    parties.length ? `相关方：${parties.join('、')}` : '',
   );
   const textForRoute = [candidate.category, candidate.angle, candidate.thesis].map(text).join(' ');
   const derivedArticleType = /趣闻|离谱|八卦|段子|奇葩|荒诞|整活|吐槽/.test(textForRoute)
@@ -71,11 +80,13 @@ export function buildMaterialBrief({ candidate = {}, editorial = {}, researchCon
     event_ids: eventIds,
     research_material_ids: researchMaterialIds,
     action: firstText(stored.action, material.action, material.observed, material.event_change, topicCandidate.core_question),
-    affected_group: firstText(stored.affected_group, material.affected_group, material.audience, candidate.reader_stake),
+    affected_group: firstText(stored.affected_group, material.affected_group, material.audience, topicCandidate.target_reader, candidate.reader_stake),
     reader_consequence: readerConsequence,
     conflict,
     baseline_change: firstText(stored.baseline_change, material.baseline_change, material.change, material.before_after),
     thesis: firstText(stored.thesis, candidate.thesis, topicCandidate.thesis),
+    freshness_basis: firstText(stored.freshness_basis, topicCandidate.freshness_basis),
+    reader_action: firstText(stored.reader_action, topicCandidate.reader_payoff),
     counter_evidence: stored.counter_evidence.length ? stored.counter_evidence : list(editorial.rejected_angles),
     evidence_boundary: firstText(stored.evidence_boundary, researchContext?.evidence_boundary?.note),
     article_type: firstText(stored.article_type, derivedArticleType),

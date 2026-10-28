@@ -13,19 +13,19 @@ import { resolvePrompt } from '../../../platform/llm/prompt-registry.mjs';
 import { GITHUB_PROJECT_TYPES, GITHUB_SCENARIO_LANES } from '../../../shared/domain/github-repository.mjs';
 
 const QUERIES_FILE = 'repo-discovery-queries.json';
-const QUERY_SCHEMA_VERSION = 2;
+const QUERY_SCHEMA_VERSION = 3;
 const BROAD_QUERY_TERMS = new Set(['ai', 'agent', 'agents', 'llm', 'prompt', 'framework', 'cli', 'rust', 'kubernetes']);
 const AI_LANES = new Set(['ai-utility', 'agent']);
 
 export const BUILTIN_REPO_DISCOVERY_QUERIES = Object.freeze([
-  { label: '开发者工具', lane: 'developer-productivity', query: 'topic:developer-tools', projectTypes: ['tool', 'component'], directUseCase: '改善日常开发、调试或代码协作效率', createdWithinDays: 30, activityWindowDays: 30, minStars: 100 },
-  { label: '文件处理工具', lane: 'file-content', query: 'pdf markdown converter', projectTypes: ['tool', 'data-content'], directUseCase: '处理 PDF、Markdown 或其他日常文件内容', createdWithinDays: 90, activityWindowDays: 30, minStars: 50 },
-  { label: '终端远程开发', lane: 'terminal-remote', query: 'terminal remote development', projectTypes: ['tool', 'infrastructure'], directUseCase: '改善终端、SSH 或远程开发体验', createdWithinDays: 90, activityWindowDays: 30, minStars: 50 },
-  { label: '浏览器自动化', lane: 'browser-automation', query: 'browser automation testing', projectTypes: ['tool', 'plugin-extension'], directUseCase: '自动化浏览器操作、网页测试或扩展能力', createdWithinDays: 90, activityWindowDays: 30, minStars: 50 },
-  { label: '数据库与同步', lane: 'data-observability', query: 'database backup sync', projectTypes: ['data-content', 'infrastructure'], directUseCase: '处理数据库、备份、同步或可观测性问题', createdWithinDays: 90, activityWindowDays: 30, minStars: 50 },
-  { label: '可复用组件', lane: 'reusable-components', query: 'library sdk plugin component', projectTypes: ['component', 'plugin-extension'], directUseCase: '把能力作为库、SDK、插件或组件复用', createdWithinDays: 90, activityWindowDays: 30, minStars: 50 },
-  { label: '工作流自动化', lane: 'skills-workflows', query: 'workflow automation integration', projectTypes: ['skill-workflow', 'tool'], directUseCase: '把重复工作接入自动化工作流', createdWithinDays: 90, activityWindowDays: 30, minStars: 50 },
-  { label: '实用型 AI 工具', lane: 'ai-utility', query: 'AI PDF code review browser automation', projectTypes: ['ai-utility', 'tool'], directUseCase: '用 AI 直接完成可验证的文件、代码或浏览器任务', createdWithinDays: 60, activityWindowDays: 30, minStars: 100 },
+  { label: '网页结果工具', lane: 'browser-automation', query: 'website recreate screenshot preview', projectTypes: ['tool', 'component'], directUseCase: '从网页或界面参考得到可运行、可预览的页面结果', createdWithinDays: 90, activityWindowDays: 30, minStars: 50 },
+  { label: '文档格式转换', lane: 'file-content', query: 'pdf to markdown converter', projectTypes: ['tool', 'data-content'], directUseCase: '把 PDF 等文档转成可搜索、可继续处理的文本', createdWithinDays: 90, activityWindowDays: 30, minStars: 50 },
+  { label: '开发者资源', lane: 'developer-productivity', query: 'awesome free developer tools APIs', projectTypes: ['data-content', 'tool'], directUseCase: '按用途找到可直接使用的开发服务或资源，并说明适用限制', createdWithinDays: 90, activityWindowDays: 30, minStars: 50 },
+  { label: 'MCP 工作流', lane: 'skills-workflows', query: 'MCP server developer workflow integration', projectTypes: ['skill-workflow', 'tool'], directUseCase: '把具体开发任务接入现有编辑器、终端或自动化流程', createdWithinDays: 90, activityWindowDays: 30, minStars: 50 },
+  { label: '知识整理检索', lane: 'file-content', query: 'knowledge graph search local notes', projectTypes: ['tool', 'data-content'], directUseCase: '把代码或资料整理成可检索、可浏览的知识结构', createdWithinDays: 90, activityWindowDays: 30, minStars: 50 },
+  { label: '终端调试工具', lane: 'terminal-remote', query: 'terminal remote development debugging', projectTypes: ['tool', 'infrastructure'], directUseCase: '在终端或远程环境中完成调试、管理或协作任务', createdWithinDays: 90, activityWindowDays: 30, minStars: 50 },
+  { label: '浏览器自动化', lane: 'browser-automation', query: 'browser automation testing screenshot', projectTypes: ['tool', 'plugin-extension'], directUseCase: '自动执行网页操作或测试并得到可核验结果', createdWithinDays: 90, activityWindowDays: 30, minStars: 50 },
+  { label: '实用型 AI 工具', lane: 'ai-utility', query: 'AI document conversion code review browser automation', projectTypes: ['ai-utility', 'tool'], directUseCase: '用 AI 完成具体文件、代码或浏览器任务，并展示输出', createdWithinDays: 60, activityWindowDays: 30, minStars: 100 },
 ]);
 
 function parseJsonLoose(result, label) {
