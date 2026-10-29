@@ -94,22 +94,6 @@ export function validateSocialCardCopy(copy = '') {
   return { valid: issues.length === 0, issues, tagCount: copyTagCount };
 }
 
-function ensureRepositoryAcquisitionAddress(copy, acquisition = {}) {
-  const value = String(copy || '').trim();
-  const repositoryUrl = String(acquisition.repository_url || '').trim();
-  if (!repositoryUrl) return value;
-  const lines = value.split(/\r?\n/);
-  const cleanedLines = lines.filter((line) => {
-    const hasUrl = /https?:\/\//i.test(line);
-    return !(hasUrl && (/下载入口|GitHub Releases|github\.com\/[^\s]+\/releases/i.test(line)));
-  });
-  const cleaned = cleanedLines.join('\n').trim();
-  const hasRepositoryAddress = cleaned.split(/\r?\n/).some((line) =>
-    /(获取地址|项目主页)/i.test(line) && line.includes(repositoryUrl));
-  if (hasRepositoryAddress) return cleaned;
-  return `${cleaned}${cleaned ? '\n\n' : ''}项目主页：${repositoryUrl}`;
-}
-
 export async function generateSocialCardCopy({
   gateway,
   provider,
@@ -142,8 +126,5 @@ export async function generateSocialCardCopy({
     ],
   });
   const parsed = parseSocialCardCopyOutput(result?.content || '', { channelMode });
-  const copy = contentType === 'repository'
-    ? ensureRepositoryAcquisitionAddress(parsed.copy, input.acquisition)
-    : parsed.copy;
-  return { publishTitle: parsed.publishTitle, copy, result, input };
+  return { publishTitle: parsed.publishTitle, copy: parsed.copy, result, input };
 }
