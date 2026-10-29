@@ -132,6 +132,7 @@ export const ARTICLE_STAGE_CONTRACT = Object.freeze([
   { id: 'drafting', skill: '$writer' },
   { id: 'review', skill: 'article-reviewer' },
   { id: 'length-adjustment', skill: '$writer' },
+  { id: 'full-edit', skill: 'humanizer-zh' },
   { id: 'humanize', skill: 'humanizer-zh' },
   { id: 'title-lock', skill: 'title-generator' },
 ]);
@@ -538,7 +539,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   const promptManifestPath = path.join(workdir, '00-prompt-manifest.json');
   writeFile(promptManifestPath, JSON.stringify(articlePromptManifest(chosenWriterSkill), null, 2));
   const paths = Object.fromEntries(['04-draft.md', '06-reviewed.md', '06-review-quality-gate.json', '02-search-fact-checks.json', '07-length-adjusted.md',
-    '07-length-adjustment.json', '05-humanized.md',
+    '07-length-adjustment.json', '05-full-edited.md', '05-humanized.md',
     '03-titles.md', '03-title-lock.json', '03-title-risk.json', '08-quality-gate.json', '10-publication-compliance.json', '09-FINAL.md']
     .map((name) => [name, path.join(workdir, name)]));
   const modelInput = { provider, batchId, candidateId };
@@ -695,26 +696,48 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   }, null, 2));
   recordStage('length-adjustment', writerSkillBundle, ['06-reviewed.md'], ['07-length-adjusted.md', '07-length-adjustment.json'], lengthStageStatus);
 
-  onProgress('Step 5 表达精修');
-  const polished = requireArticle(await textCall(gateway, { ...modelInput, purpose: 'article-humanize' },
-    ARTICLE_PROMPTS.humanize, JSON.stringify({ reader_context: readerContext, article: final }), maxTextTokens));
-  const changed = articleChangedPassages(final, polished);
-  final = polished;
-  if (changed.before.length || changed.after.length) {
-    // The polish stage does not repair factual or logical issues. It only checks whether its own edits changed meaning.
-    onProgress('核对精修改动涉及的事实与推理');
-    const polishDecision = await reviewArticle(polished, {
-      changed_passages: changed,
-      instruction: '仅检查表达精修引入的改动及受影响的论证；未改正文作为上下文。只报告精修改动新增或加重的问题。',
+  onProgress('Step 5 全篇编辑');
+  const fullEdited = requireArticle(await textCall(gateway, { ...modelInput, purpose: 'article-humanize' },
+    ARTICLE_PROMPTS.fullEdit, JSON.stringify({
+      reader_context: readerContext,
+      locked_brief: writingBrief,
+      verified_facts: articleFactAuthorityView(searchAugmentedFactBase),
+      review_evidence: reviewDecision.evidence_checks || [],
+      article: final,
+    }), maxTextTokens));
+  const fullEditChanges = articleChangedPassages(final, fullEdited);
+  final = fullEdited;
+  if (fullEditChanges.before.length || fullEditChanges.after.length) {
+    onProgress('核对全篇编辑改动涉及的事实与推理');
+    const fullEditDecision = await reviewArticle(fullEdited, {
+      changed_passages: fullEditChanges,
+      instruction: '仅检查全篇编辑改动及受影响的论证；未改正文作为上下文。发现事实边界被削弱、归因丢失或论证含义改变时报告。',
     });
-    reviewDecision = combineReviewDecisions(reviewDecision, polishDecision);
+    reviewDecision = combineReviewDecisions(reviewDecision, fullEditDecision);
+    writeFile(paths['06-review-quality-gate.json'], JSON.stringify({ ...reviewDecision, history: reviewHistory }, null, 2));
+  }
+  writeFile(paths['05-full-edited.md'], final);
+  recordStage('full-edit', stageSkills['humanizer-zh'], ['07-length-adjusted.md'], '05-full-edited.md', 'passed');
+
+  onProgress('Step 6 AI 表达精修');
+  const humanized = requireArticle(await textCall(gateway, { ...modelInput, purpose: 'article-humanize' },
+    ARTICLE_PROMPTS.humanize, JSON.stringify({ reader_context: readerContext, article: final }), maxTextTokens));
+  const humanizeChanges = articleChangedPassages(final, humanized);
+  final = humanized;
+  if (humanizeChanges.before.length || humanizeChanges.after.length) {
+    onProgress('核对表达精修改动涉及的事实与推理');
+    const humanizeDecision = await reviewArticle(humanized, {
+      changed_passages: humanizeChanges,
+      instruction: '仅检查表达精修改动及受影响的论证；未改正文作为上下文。只报告精修改动新增或加重的问题。',
+    });
+    reviewDecision = combineReviewDecisions(reviewDecision, humanizeDecision);
     writeFile(paths['06-review-quality-gate.json'], JSON.stringify({ ...reviewDecision, history: reviewHistory }, null, 2));
   }
   writeFile(paths['05-humanized.md'], final);
-  recordStage('humanize', stageSkills['humanizer-zh'], ['07-length-adjusted.md'], '05-humanized.md',
+  recordStage('humanize', stageSkills['humanizer-zh'], ['05-full-edited.md'], '05-humanized.md',
     'passed');
 
-  onProgress('Step 6 根据完成的正文生成发布标题');
+  onProgress('Step 7 根据完成的正文生成发布标题');
   const titlePlan = await generateTitlePlan({ gateway, store, ...modelInput, systemPrompt: ARTICLE_PROMPTS.title,
     purpose: 'article-title-generation-final', fallbackTitle: extractArticleTitle(final) || brief.topic,
     payload: { topic: brief.topic, reader_context: readerContext, article: final,
@@ -800,7 +823,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
     ['事实基座', '02-fact-base.json', factBasePath], ['发布主张登记', '02-publication-claim-register.json', publicationClaimRegisterPath],
     ...Object.entries(paths).map(([name, file]) => [({
       '04-draft.md': '文章初稿', '06-reviewed.md': '审稿稿', '07-length-adjusted.md': '字数调整稿',
-      '07-length-adjustment.json': '字数调整记录', '05-humanized.md': '表达精修稿',
+      '07-length-adjustment.json': '字数调整记录', '05-full-edited.md': '全篇编辑稿', '05-humanized.md': '表达精修稿',
       '06-review-quality-gate.json': '事实与逻辑审稿', '03-titles.md': '标题候选',
       '02-search-fact-checks.json': '联网事实核验记录',
       '03-title-lock.json': '最终标题锁定', '03-title-risk.json': '标题检查',

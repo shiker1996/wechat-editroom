@@ -2,7 +2,7 @@ import { resolvePrompt } from '../../../platform/llm/prompt-registry.mjs';
 
 // Runtime prompts deliberately stand alone. Skill configuration still selects models,
 // length and routing; complete workflow/skill prose is not injected into each call.
-export const ARTICLE_PROMPT_VERSION = 'direct-brief-v6';
+export const ARTICLE_PROMPT_VERSION = 'direct-brief-v7';
 export const ARTICLE_LENGTH_ADJUSTMENT_THRESHOLD = 200;
 
 export function planArticleLengthAdjustment(currentVisibleChars, allowedRange) {
@@ -23,7 +23,7 @@ export function planArticleLengthAdjustment(currentVisibleChars, allowedRange) {
   };
 }
 
-const STAGES = Object.freeze({ facts:'articles.facts', drafting:'articles.draft', review:'articles.review', repair:'articles.repair', lengthAdjust:'articles.length-adjust', humanize:'articles.humanize', title:'articles.title' });
+const STAGES = Object.freeze({ facts:'articles.facts', drafting:'articles.draft', review:'articles.review', repair:'articles.repair', lengthAdjust:'articles.length-adjust', fullEdit:'articles.full-edit', humanize:'articles.humanize', title:'articles.title' });
 const WRITERS = Object.freeze({ 'wechat-mp-tech-deep':'articles.writer-tech-deep', 'wechat-mp-deep-dive':'articles.writer-deep-dive', 'wechat-mp-gossip-chill':'articles.writer-gossip-chill', 'wechat-mp-composite':'articles.writer-composite' });
 const stageAssets = Object.fromEntries(Object.entries(STAGES).map(([name,id])=>[name,name==='drafting'?resolvePrompt(id,{}, {components:[]}):resolvePrompt(id)]));
 export const ARTICLE_PROMPTS = Object.freeze(Object.fromEntries(Object.entries(stageAssets).map(([name,asset])=>[name,asset.text])));

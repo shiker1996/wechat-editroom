@@ -152,7 +152,7 @@ test('主链路 E2E：采集、文章与图文产物均可从真实 HTTP 服务�
     const articleRows = articleArtifacts.filter((item) => Number(item.candidate_row_id) === articleCandidate.id);
     const requiredArticleArtifacts = [
       '00-article-brief.md', '00-writing-brief.json', '00-prompt-manifest.json', '00-stage-executions.json', '02-fact-base.json', '04-draft.md',
-      '05-humanized.md', '06-review-quality-gate.json', '06-reviewed.md', '07-length-adjusted.md', '07-length-adjustment.json', '03-titles.md', '03-title-lock.json',
+      '05-full-edited.md', '05-humanized.md', '06-review-quality-gate.json', '06-reviewed.md', '07-length-adjusted.md', '07-length-adjustment.json', '03-titles.md', '03-title-lock.json',
       '09-FINAL.md', '10-publication-compliance.json',
     ];
     for (const name of requiredArticleArtifacts) {

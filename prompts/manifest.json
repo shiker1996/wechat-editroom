@@ -62,8 +62,19 @@
       }
     },
     {
-      "id": "articles.humanize",
+      "id": "articles.full-edit",
       "version": 1,
+      "file": "articles/full-edit.md",
+      "purpose": "article-humanize",
+      "variables": [],
+      "components": [],
+      "output": {
+        "format": "markdown"
+      }
+    },
+    {
+      "id": "articles.humanize",
+      "version": 2,
       "file": "articles/humanize.md",
       "purpose": "article-humanize",
       "variables": [],
