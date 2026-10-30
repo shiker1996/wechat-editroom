@@ -12,9 +12,9 @@ import { resolveEventShadow } from '../domain/event-resolution-shadow.mjs';
 import { loadShadowHistory } from './event-resolution-shadow-service.mjs';
 import { buildEventHeatRanking } from '../domain/event-heat-ranking.mjs';
 import { loadPreviousEventHeatItems } from './event-heat-ranking-service.mjs';
-import { DISCUSSION_RESEARCH_CATEGORIES, DISCUSSION_RESEARCH_SCHEMA_VERSION, DISCUSSION_RESEARCH_TOP_K, DISCUSSION_RESEARCH_READER_RECALL_LIMIT, buildDiscussionResearch, discussionResearchMarkdown, resolveDiscussionResearchTopK } from '../domain/discussion-research.mjs';
+import { DISCUSSION_RESEARCH_SCHEMA_VERSION, DISCUSSION_RESEARCH_TOP_K, DISCUSSION_RESEARCH_READER_RECALL_LIMIT, buildDiscussionResearch, discussionResearchMarkdown, resolveDiscussionResearchTopK } from '../domain/discussion-research.mjs';
 import { buildTopicCandidates, selectTopicCandidates, topicCandidatesMarkdown } from '../domain/topic-candidate-generation.mjs';
-import { isRepositoryEvent, normalizeEditorialCategory } from '../domain/editorial-categories.mjs';
+import { editorialCategoriesFor, isRepositoryEvent, normalizeEditorialCategory } from '../domain/editorial-categories.mjs';
 import { materializeStableEvents } from '../domain/event-resolution-shadow.mjs';
 import { duplicatePenaltyForHeat } from '../domain/event-resolution-policy.mjs';
 import { clusterItems, freshnessWindowHours, isFreshForBatch, tagsOf } from '../domain/hotspot-clustering.mjs';
@@ -44,7 +44,6 @@ export { applyProjectReaderValuesToHeatRanking, attachProjectReaderValues, selec
 export { DISCUSSION_RESEARCH_TOP_K, DISCUSSION_RESEARCH_READER_RECALL_LIMIT, buildDiscussionResearch, discussionResearchMarkdown, resolveDiscussionResearchTopK };
 export { buildTopicCandidates, selectTopicCandidates, topicCandidatesMarkdown };
 
-const CATEGORIES = DISCUSSION_RESEARCH_CATEGORIES;
 const CATEGORY_PREFERENCE = { '产品与技术动态': 4, '大厂与商业战略': 4, '职场与组织变化': 5, '开源项目与开发者生态': 5, '行业趋势与市场变化': 2, '政策与公共议题': 0 };
 const P_BASE = { '产品与技术动态': 40, '大厂与商业战略': 50, '职场与组织变化': 10, '开源项目与开发者生态': 50, '行业趋势与市场变化': 30, '政策与公共议题': 20 };
 const H_BASE = { worker_social: 48, bigtech: 33, owned_experience: 35, controversial_return: 30, key_person_move: 33, ai_tool_test: 20, financing: 10, career_anxiety: 5, contrarian_bigtech: 35 };
@@ -84,10 +83,11 @@ export function resolveScoring(ctx = getAccountContext()) {
     },
     eventValueWeight: Math.max(0.25, Math.min(0.40, num(scoring.eventValueWeight, DEFAULT_SCORING.eventValueWeight))),
     researchValueWeight: Math.max(0.10, Math.min(0.30, num(scoring.researchValueWeight, DEFAULT_SCORING.researchValueWeight))),
-    categoryPreference: mergeTable(CATEGORY_PREFERENCE, scoring.categoryPreference),
+    categoryPreference: mergeTable(Object.fromEntries(editorialCategoriesFor(ctx).map((category) => [category, CATEGORY_PREFERENCE[category] ?? 0])), scoring.categoryPreference),
     pBase: mergeTable(P_BASE, scoring.pBase),
     hBase: mergeTable(H_BASE, scoring.hBase),
-    accountFitByCategory: Object.fromEntries(CATEGORIES.map((category) => [
+    categories: editorialCategoriesFor(ctx),
+    accountFitByCategory: Object.fromEntries(editorialCategoriesFor(ctx).map((category) => [
       category, clamp(num(accountFitOverrides[category], accountFitForCategory(category, ctx)), 0, 100),
     ])),
     accountFitBonus: num(scoring.accountFitBonus, DEFAULT_SCORING.accountFitBonus),
@@ -130,7 +130,7 @@ function accountSnapshot(workspaceRoot) {
   return entries;
 }
 
-// 账号内容支柱 → 六类主榜单映射。contentPillars 形如“AI 行业热点：描述”，按前缀匹配。
+// 旧账号内容支柱 → 默认主榜单映射。新分类以账号分类配置为准。
 const PILLAR_CATEGORY_MAP = {
   'AI 行业热点': ['产品与技术动态', '大厂与商业战略'],
   '产品与技术动态': ['产品与技术动态', '大厂与商业战略'],
@@ -144,6 +144,9 @@ const PILLAR_CATEGORY_MAP = {
 };
 
 export function focusedCategories(ctx = getAccountContext()) {
+  if (Array.isArray(ctx?.editorialCategories) && ctx.editorialCategories.length) {
+    return new Set(editorialCategoriesFor(ctx));
+  }
   const pillars = Array.isArray(ctx?.contentPillars) ? ctx.contentPillars : [];
   const names = pillars.map((pillar) => String(pillar).split(/[：:]/)[0].trim());
   return new Set(names.flatMap((name) => PILLAR_CATEGORY_MAP[name] || []));
@@ -345,7 +348,7 @@ function articleBoardEventIds(eventHeatRanking, ranking, limit = 50) {
   const boards = eventHeatRanking?.rankings || {};
   const ids = new Set();
   let foundBoard = false;
-  for (const category of DISCUSSION_RESEARCH_CATEGORIES) {
+  for (const category of Object.keys(eventHeatRanking?.categoryRankings || {}).filter((key) => key !== 'repository_projects')) {
     const items = boards[category]?.items;
     if (!Array.isArray(items)) continue;
     foundBoard = true;
@@ -353,7 +356,7 @@ function articleBoardEventIds(eventHeatRanking, ranking, limit = 50) {
   }
   // 榜单结构已存在但符合文章路线的事件为空时，回退到综合热榜；文章资格仍由项目来源门禁控制。
   if (foundBoard && ids.size) return ids;
-  return new Set((ranking || []).filter((item) => !item.repositoryProject && CATEGORIES.includes(item.editorialCategory) && Number.isFinite(Number(item.eventHeatRank)))
+  return new Set((ranking || []).filter((item) => !item.repositoryProject && item.editorialCategory && Number.isFinite(Number(item.eventHeatRank)))
     .sort((left, right) => Number(left.eventHeatRank) - Number(right.eventHeatRank))
     .slice(0, limit).map((item) => item.eventId));
 }
@@ -647,6 +650,8 @@ const GENERIC_WORDS_HOTWORD = new Set(['ai','公司','发布','消息','最新',
 
 export async function runResearchPipeline({ gateway, store, batchId, provider, workspaceRoot, maxAgeHours = 168, onProgress = () => {}, resumeFrom = '' }) {
   const batch = store.getBatch(batchId); if (!batch) throw new Error('批次不存在');
+  const accountContext = getAccountContext({ workspaceRoot });
+  const editorialCategories = editorialCategoriesFor(accountContext);
   if(batch.batch_type==='breaking')throw new Error('突发专题必须执行事实基座与双评分分析，不能进入常规 8+2 研判');
   if (!batch.hotspots.length) throw new Error('当前批次没有热点，请先完成采集');
   const scopedHotspots=batch.hotspots.filter(isResearchEligibleHotspot);
@@ -719,18 +724,18 @@ export async function runResearchPipeline({ gateway, store, batchId, provider, w
     const member = event.articles?.find((article) => cardsByEvent.has(article.legacy_event_id));
     if (member) event.card = cardsByEvent.get(member.legacy_event_id);
   }
-  // 六类主榜单共用账号化 T_account，保证榜间分数可比较。
+  // 账号配置的各类主榜单共用 T_account，保证榜间分数可比较。
   const eventHeatPath = path.join(sourcesDir, 'event-heat-ranking.json');
   try {
     const previousItems = loadPreviousEventHeatItems({ store, workspaceRoot, batch });
-    eventHeatRanking = buildEventHeatRanking({ store, batch, previousItems, events: researchEvents });
+    eventHeatRanking = buildEventHeatRanking({ store, batch, previousItems, events: researchEvents, categories: editorialCategories });
     const projectFeedback = store.getLatestAppliedGithubProjectFeedbackSnapshot?.();
     if (projectFeedback) {
       eventHeatRanking = applyProjectDiscoveryFeedbackToHeatRanking(eventHeatRanking, projectFeedback);
       onProgress(`已应用项目发现反馈：${projectFeedback.id}，只调整下一批项目排序偏置`);
     }
     writeFile(eventHeatPath, JSON.stringify(eventHeatRanking, null, 2));
-    onProgress(`六类题材榜单生成完成：${eventHeatRanking.totalEvents || 0} 个稳定事件`);
+    onProgress(`${editorialCategories.length} 类题材榜单生成完成：${eventHeatRanking.totalEvents || 0} 个稳定事件`);
   } catch (error) {
     eventHeatRanking = { schemaVersion: 1, generatedAt: new Date().toISOString(), batchId: batch.id, status: 'error', error: String(error?.message || error), items: [] };
     writeFile(eventHeatPath, JSON.stringify(eventHeatRanking, null, 2));
@@ -775,7 +780,7 @@ export async function runResearchPipeline({ gateway, store, batchId, provider, w
   const currentDiscussionResearchBase = buildDiscussionResearch({
     events: clusters, eventHeatRanking, batchId: batch.id, topK: discussionResearchTopK,
     readerScreening: readerScreening.items, readerScreeningStatus: readerScreening.status,
-    readerRecallLimit: DISCUSSION_RESEARCH_READER_RECALL_LIMIT, freshnessWindowHours: maxAgeHours,
+    readerRecallLimit: DISCUSSION_RESEARCH_READER_RECALL_LIMIT, freshnessWindowHours: maxAgeHours, categories: editorialCategories,
   });
   const discussionResearchBase = resumeSnapshot?.base_report || currentDiscussionResearchBase;
   const topkResearchScopePath = path.join(sourcesDir, 'topk-research-scope.json');
@@ -1021,7 +1026,6 @@ export async function runResearchPipeline({ gateway, store, batchId, provider, w
   onProgress('执行事件级预评估；文章候选先通过近期触发事实、可回答性和研判依据门禁，再进入角度展开');
   const breaking=batch.batch_type==='breaking';
   if(breaking)onProgress('执行突发事件单题研判，不参与常规 8+2 竞争');
-  const accountContext = getAccountContext({workspaceRoot});
   const scoring = resolveScoring(accountContext);
   const appliedProjectFeedback = store.getLatestAppliedGithubProjectFeedbackSnapshot?.();
   let ranking = preselection(clusters, batch.batch_date, scoring, eventHeatRanking.items || []);

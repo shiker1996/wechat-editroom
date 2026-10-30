@@ -58,6 +58,7 @@ function hotspotTaggingJson(payload) {
     const what = project ? '工具发布' : '文章发布';
     return {
       id: item.id,
+      category: project ? '开源项目与开发者生态' : '产品与技术动态',
       eventKey: `${who}|${what}`,
       eventParts: { who, what, where: '固定测试', when: item.publishedAt || '2026-09-12', actionType: project ? '开源' : '发布', object: item.title, occasion: '主链路回归' },
       keywords: project ? ['开源工具', 'E2E'] : ['固定来源', 'E2E'],

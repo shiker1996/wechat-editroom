@@ -8,6 +8,7 @@ const EDITABLE_FIELDS = new Set([
   'name', 'description', 'readerProfile', 'contentPillars', 'voiceGuardrails',
   'packagingModes', 'followReason', 'conversionBridge', 'differentiators',
   'articleFramework', 'contentRatio', 'distributionStrategy', 'notificationPolicy', 'scoring',
+  'editorialCategories',
 ]);
 
 export function getDefaultAccountContext() {
@@ -16,6 +17,14 @@ export function getDefaultAccountContext() {
     description: '科技行业观察与深度分析',
     readerProfile: '技术从业者、产品经理、科技行业观察者',
     contentPillars: ['AI/技术动态', '大厂战略分析', '行业深度', '职场与成长'],
+    editorialCategories: [
+      { name: '产品与技术动态', description: '产品发布、技术变化与具体技术事件' },
+      { name: '大厂与商业战略', description: '大厂业务布局、竞争、合作、收购与经营决策' },
+      { name: '职场与组织变化', description: '岗位、薪酬、裁员、管理制度和工作方式变化' },
+      { name: '开源项目与开发者生态', description: '开源项目、开发者社区和生态变化' },
+      { name: '行业趋势与市场变化', description: '跨主体或跨时间的行业发展、市场结构与采用信号' },
+      { name: '政策与公共议题', description: '监管、公共治理及对目标读者有明确影响的公共事件' },
+    ],
     voiceGuardrails: [
       '不写标题党，不夸大事实',
       '保持客观中立的分析立场',
@@ -64,6 +73,7 @@ export function formatAccountContext(context = getDefaultAccountContext()) {
   if (ctx.description) parts.push(`- 简介：${ctx.description}`);
   if (ctx.readerProfile) parts.push(`- 核心读者：${ctx.readerProfile}`);
   if (ctx.contentPillars?.length) parts.push(`\n## 内容支柱\n${ctx.contentPillars.map((p, i) => `${i + 1}. ${p}`).join('\n')}`);
+  if (ctx.editorialCategories?.length) parts.push(`\n## 选题分类\n${ctx.editorialCategories.map((item) => typeof item === 'string' ? `- ${item}` : `- ${item.name}：${item.description}`).join('\n')}`);
   if (ctx.voiceGuardrails?.length) parts.push(`\n## 风格约束\n${ctx.voiceGuardrails.map((g) => `- ${g}`).join('\n')}`);
   if (ctx.packagingModes?.length) parts.push(`\n## 包装模式\n可用模式：${ctx.packagingModes.join('、')}。搜索型优先使用真实主体和事件词，分享型突出冲突和切身影响。`);
   if (ctx.followReason) parts.push(`\n## 关注理由\n${ctx.followReason}`);
@@ -123,7 +133,21 @@ export function normalizeAccountPatch(input) {
   const patch = {};
   for (const [key, value] of Object.entries(input)) {
     if (!EDITABLE_FIELDS.has(key)) continue;
-    if (['contentPillars', 'voiceGuardrails', 'packagingModes', 'differentiators', 'articleFramework'].includes(key)) {
+    if (key === 'editorialCategories') {
+      if (!Array.isArray(value)) throw new Error(`${key} 必须是数组`);
+      const categories = value.map((item) => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error(`${key} 项必须包含 name 和 description`);
+        const name = cleanText(item.name, `${key}.name`);
+        const description = cleanText(item.description, `${key}.description`);
+        if (!name || name.length > 30 || name.includes('|')) throw new Error('分类名称必填、不能超过 30 字且不能包含 |');
+        if (!description || description.length > 200) throw new Error('分类说明必填且不能超过 200 字');
+        return { name, description };
+      });
+      const names = categories.map((item) => item.name);
+      if (categories.length < 2 || categories.length > 12) throw new Error('选题分类数量须为 2 至 12 个');
+      if (new Set(names).size !== names.length) throw new Error('选题分类名称不能重复');
+      patch[key] = categories;
+    } else if (['contentPillars', 'voiceGuardrails', 'packagingModes', 'differentiators', 'articleFramework'].includes(key)) {
       patch[key] = cleanList(value, key);
     } else if (['contentRatio', 'distributionStrategy', 'notificationPolicy', 'scoring'].includes(key)) {
       if (value !== undefined && (!value || typeof value !== 'object' || Array.isArray(value))) throw new Error(`${key} 必须是对象`);
