@@ -169,7 +169,7 @@ test('审稿提示词检查证据和推理，允许明确的作者评价', () =>
   assert.match(ARTICLE_PROMPTS.review, /不因语气鲜明而要求弱化/);
   assert.match(ARTICLE_PROMPTS.review, /不要求用免责声明代替修正/);
   assert.match(ARTICLE_PROMPTS.drafting, /不虚构经历、引语、行为或结果/);
-  assert.match(ARTICLE_PROMPTS.fullEdit, /删掉重复的限定和解释段落/);
+  assert.match(ARTICLE_PROMPTS.fullEdit, /删除重复的限定和解释段落/);
   assert.match(ARTICLE_PROMPTS.humanize, /去掉生硬、模板化的 AI 表达/);
 });
 
