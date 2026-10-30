@@ -7,6 +7,7 @@ const ARTICLE_FILES = new Map([
   ['02-outline.md', '文章大纲'],
   ['03-titles.md', '标题候选'],
   ['04-draft.md', '文章初稿'],
+  ['05-full-edited.md', '全篇编辑稿'],
   ['05-humanized.md', '表达精修稿'],
   ['06-reviewed.md', '审阅稿'],
   ['07-length-adjusted.md', '字数调整稿'],
