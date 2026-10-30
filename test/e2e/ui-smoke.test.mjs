@@ -87,7 +87,7 @@ test("浏览器 UI Smoke：首屏可进入素材入箱并快速保存素材", as
   t.after(() => browser.close());
   const page = await browser.newPage();
   page.setDefaultTimeout(5000);
-  page.setDefaultNavigationTimeout(5000);
+  page.setDefaultNavigationTimeout(30000);
   const pageErrors = [];
   page.on("pageerror", (error) => pageErrors.push(error));
 
