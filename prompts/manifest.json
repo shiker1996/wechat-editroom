@@ -63,7 +63,7 @@
     },
     {
       "id": "articles.full-edit",
-      "version": 1,
+      "version": 2,
       "file": "articles/full-edit.md",
       "purpose": "article-humanize",
       "variables": [],
