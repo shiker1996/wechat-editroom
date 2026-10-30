@@ -169,7 +169,8 @@ test('审稿提示词检查证据和推理，允许明确的作者评价', () =>
   assert.match(ARTICLE_PROMPTS.review, /不因语气鲜明而要求弱化/);
   assert.match(ARTICLE_PROMPTS.review, /不要求用免责声明代替修正/);
   assert.match(ARTICLE_PROMPTS.drafting, /不虚构经历、引语、行为或结果/);
-  assert.match(ARTICLE_PROMPTS.humanize, /删除没有增加信息的重复判断/);
+  assert.match(ARTICLE_PROMPTS.fullEdit, /删除重复的限定和解释段落/);
+  assert.match(ARTICLE_PROMPTS.humanize, /去掉生硬、模板化的 AI 表达/);
 });
 
 test('文章质量门禁开关开启时消费 decision tool，且仍保持内部结果契约', async () => {
@@ -262,9 +263,9 @@ test('技能运行时加载完整写作技能并记录哈希', () => {
 });
 
 test('直写流程使用单阶段提示词，兼容旧技能组合器', () => {
-  assert.deepEqual(ARTICLE_STAGE_CONTRACT.map(({ id }) => id), ['brief', 'fact-base', 'drafting', 'review', 'length-adjustment', 'humanize', 'title-lock']);
+  assert.deepEqual(ARTICLE_STAGE_CONTRACT.map(({ id }) => id), ['brief', 'fact-base', 'drafting', 'review', 'length-adjustment', 'full-edit', 'humanize', 'title-lock']);
   const manifest = articlePromptManifest('wechat-mp-tech-deep');
-  assert.equal(manifest.version, 'direct-brief-v6');
+  assert.equal(manifest.version, 'direct-brief-v7');
   assert.match(manifest.prompts.drafting.prompt, /技术深解需要解释机制/);
   assert.doesNotMatch(manifest.prompts.review.prompt, /## SKILL:|全流程|风格门禁/);
   assert.match(manifest.prompts.review.hash, /^sha256:[a-f0-9]{64}$/);
