@@ -17,11 +17,12 @@ const list = (value) => Array.isArray(value) ? value : [];
 const idOf = (event) => String(event?.event_id || event?.eventId || '').trim();
 const finite = (value, fallback = null) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 
-function categoryOf(event, heat) {
+function categoryOf(event, heat, categories = DISCUSSION_RESEARCH_CATEGORIES) {
   return normalizeEditorialCategory(heat?.editorialCategory || event?.editorial_category || event?.topic_category || event?.category, {
     repository: isRepositoryEvent(event),
     event,
-  }) || EDITORIAL_CATEGORIES[0];
+    categories,
+  }) || categories[0];
 }
 
 function accountAudienceOf(event) {
@@ -331,10 +332,10 @@ function trendRelations(selected) {
 
 export function buildDiscussionResearch({ events = [], eventHeatRanking = {}, topK = DISCUSSION_RESEARCH_TOP_K,
   readerScreening = [], readerRecallLimit = DISCUSSION_RESEARCH_READER_RECALL_LIMIT,
-  readerScreeningStatus = 'not_run', freshnessWindowHours = 168, batchId = '', generatedAt = new Date().toISOString() } = {}) {
+  readerScreeningStatus = 'not_run', freshnessWindowHours = 168, batchId = '', generatedAt = new Date().toISOString(), categories = DISCUSSION_RESEARCH_CATEGORIES } = {}) {
   const heatByEvent = new Map(list(eventHeatRanking.items).map((item) => [String(item.eventId || item.event_id), item]));
   const boardHeatByEvent = new Map();
-  for (const editorialCategory of DISCUSSION_RESEARCH_CATEGORIES) {
+  for (const editorialCategory of categories) {
     for (const item of list((eventHeatRanking.categoryRankings || eventHeatRanking.rankings)?.[editorialCategory]?.items)) {
       const eventId = String(item.eventId || item.event_id || '');
       if (!eventId) continue;
@@ -349,10 +350,10 @@ export function buildDiscussionResearch({ events = [], eventHeatRanking = {}, to
   const heatAvailable = events.map((event) => {
     const eventId = idOf(event);
     const heat = boardHeatByEvent.get(eventId) || heatByEvent.get(eventId);
-    const editorialCategory = categoryOf(event, heat);
+    const editorialCategory = categoryOf(event, heat, categories);
     return { event, heat, editorialCategory, accountAudience: accountAudienceOf(event), repository: isRepositoryEvent(event) };
   }).filter(({ event, heat }) => idOf(event) && heat && heat.state !== 'stale');
-  const isBoardCategory = (category) => DISCUSSION_RESEARCH_CATEGORIES.includes(category);
+  const isBoardCategory = (category) => categories.includes(category);
   const excluded = heatAvailable.filter(({ accountAudience, repository, editorialCategory }) =>
     accountAudience === 0 || repository || !isBoardCategory(editorialCategory));
   const heatEligible = heatAvailable.filter(({ accountAudience, repository, editorialCategory }) =>
@@ -425,11 +426,11 @@ export function buildDiscussionResearch({ events = [], eventHeatRanking = {}, to
       reader_recall_selected: readerRecall.length,
       freshness_window_hours: Math.max(1, Number(freshnessWindowHours) || 168),
       reader_screening_status: readerScreeningStatus,
-      included_categories: [...DISCUSSION_RESEARCH_CATEGORIES],
+      included_categories: [...categories],
       excluded_reasons: {
         account_irrelevant: 'audience score is 0',
         repository_project: 'project discovery remains in the project/social-card lane',
-        unmapped_category: 'not assigned to one of the six editorial boards',
+        unmapped_category: 'not assigned to an editorial board',
       },
       t_unchanged: true, f_unchanged: true, pool_unchanged: true,
       semantic_judgement: 'model_only',
@@ -444,7 +445,7 @@ export function buildDiscussionResearch({ events = [], eventHeatRanking = {}, to
       excluded_account_irrelevant_count: excluded.filter((item) => item.accountAudience === 0).length,
       excluded_repository_project_count: excluded.filter((item) => item.repository).length,
       excluded_unmapped_category_count: excluded.filter((item) => !isBoardCategory(item.editorialCategory)).length,
-      category_counts: Object.fromEntries(DISCUSSION_RESEARCH_CATEGORIES.map((category) => [
+      category_counts: Object.fromEntries(categories.map((category) => [
         category, scope.filter((item) => item.editorial_category === category).length,
       ])),
       items: scope,

@@ -79,7 +79,7 @@ function bindAtlas() {
     }
     const categoryButton = event.target.closest("[data-atlas-category]");
     if (categoryButton && state.atlas) {
-      state.atlasFilters.category = categoryButton.dataset.atlasCategory || "产品与技术动态";
+      state.atlasFilters.category = categoryButton.dataset.atlasCategory || "";
       $$('[data-atlas-category]').forEach((button) => {
         const active = button === categoryButton;
         button.classList.toggle("active", active);
@@ -223,7 +223,6 @@ function toggleGraphNode(nodeId) {
 const LENS_LABELS = { ...dimensionLabels, relation: "关系" };
 const DIMENSION_ROLES = dimensionRoles;
 const LENS_COLORS = { who: "#355f55", what: "#7a5c2e", where: "#6b4a7d", relation: "#9a4e42" };
-const EDITORIAL_CATEGORIES = ["产品与技术动态", "大厂与商业战略", "职场与组织变化", "开源项目与开发者生态", "行业趋势与市场变化", "政策与公共议题"];
 
 export function socialMaterialTypeOf(item) {
   return item?.repositoryProject || item?.materialType === "repository" || item?.repositoryMeta ? "repository" : "event";
@@ -245,7 +244,22 @@ function externalUrl(value) { return /^https?:\/\//.test(value) ? value : null; 
 
 function categoryBadge(item) {
   const category = String(item?.editorial_category || item?.editorialCategory || item?.topic_category || "");
-  return EDITORIAL_CATEGORIES.includes(category) ? `<span class="dimension-tag editorial-category-badge">${escapeHtml(category)}</span>` : "";
+  return category ? `<span class="dimension-tag editorial-category-badge">${escapeHtml(category)}</span>` : "";
+}
+
+function renderEditorialCategoryTabs() {
+  const node = document.getElementById("editorial-category-tabs");
+  if (!node) return;
+  const boards = state.atlas?.eventHeatRankings || {};
+  const categories = Object.keys(boards).filter((key) => key !== "repository_projects");
+  if (boards.repository_projects) categories.push("repository_projects");
+  if (!categories.length) return;
+  if (!categories.includes(state.atlasFilters.category)) state.atlasFilters.category = categories[0];
+  node.innerHTML = categories.map((category) => {
+    const label = category === "repository_projects" ? "GitHub 项目发现" : category;
+    const active = state.atlasFilters.category === category;
+    return `<button class="${active ? "active" : ""}" data-atlas-category="${escapeHtml(category)}" role="tab" aria-selected="${active}">${escapeHtml(label)}</button>`;
+  }).join("");
 }
 
 function eventCardHtml(card) {
@@ -275,7 +289,7 @@ function atlasEvents() {
 
 function atlasHotlistItems() {
   if (!state.atlas) return [];
-  const category = state.atlasFilters.category || EDITORIAL_CATEGORIES[0];
+  const category = state.atlasFilters.category || Object.keys(state.atlas?.eventHeatRankings || {}).find((key) => key !== "repository_projects") || "";
   let items = state.atlas.eventHeatRankings?.[category]?.items || [];
   const f = state.atlasFilters;
   if (f.scope !== "全部") items = items.filter((item) => (item.marketScopes || []).includes(f.scope));
@@ -470,7 +484,7 @@ function renderEventHotlist() {
     return;
   }
   const stateLabels = { new_event: "新事件", new_update: "有增量", continuing: "持续", stale: "过时" };
-  const category = state.atlasFilters.category || EDITORIAL_CATEGORIES[0];
+  const category = state.atlasFilters.category || Object.keys(state.atlas?.eventHeatRankings || {}).find((key) => key !== "repository_projects") || "";
   const summary = `<div class="event-hotlist-summary">${escapeHtml(category)}榜按账号相关度评分；默认展示前 ${Math.min(HOTLIST_DISPLAY_LIMIT, allItems.length)} 条，共 ${allItems.length} 条符合当前筛选。`;
   container.innerHTML = summary + items.map((item) => {
     const stateLabel = stateLabels[item.state] || item.state || "持续";
@@ -611,6 +625,7 @@ function renderAtlas() {
     ...document.querySelectorAll("#view-overview [data-atlas-mode-panel]"),
   ].forEach((section)=>{if(section)section.hidden=noBatchData;});
   if(noBatchData)return;
+  renderEditorialCategoryTabs();
   renderAtlasMode();
   document.getElementById("atlas-filter-count").textContent = `显示 ${events.length} / ${atlas.eventCount} 个事件`;
 

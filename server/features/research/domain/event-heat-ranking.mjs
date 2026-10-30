@@ -59,10 +59,11 @@ function reasonList({ state, newReportCount, sourceCount, repeatDays, currentCou
   return reasons.length ? reasons : ['等待更多可核验信息'];
 }
 
-function editorialCategoryOf(event = {}) {
+function editorialCategoryOf(event = {}, categories = EDITORIAL_CATEGORIES) {
   return normalizeEditorialCategory(event.editorial_category || event.editorialCategory || event.topic_category || event.category, {
     repository: isRepositoryEvent(event),
     event,
+    categories,
   });
 }
 
@@ -203,13 +204,13 @@ function accountNewsScoreParts({ event, currentHotspots, base }) {
 }
 
 /** Score a classified stable event without forcing project/technology/trend into news heat semantics. */
-export function scoreEditorialEvent({ event, currentMemberships = [], historicalMemberships = [], hotspotsById = new Map(), asOf = Date.now() }) {
+export function scoreEditorialEvent({ event, currentMemberships = [], historicalMemberships = [], hotspotsById = new Map(), asOf = Date.now(), categories = EDITORIAL_CATEGORIES }) {
   const base = scoreEventHeat({ event, currentMemberships, historicalMemberships, hotspotsById, asOf });
   const currentHotspots = currentMemberships.map((membership) => hotspotsById.get(Number(membership.hotspot_id))).filter(Boolean);
   const platformImpact = platformImpactOf(currentHotspots, asOf);
   const scoreValue = platformImpact.available ? Number(clamp(base.heatScore * 0.9 + platformImpact.score, 0, 100).toFixed(1)) : base.heatScore;
   const articles = event.articles?.length ? event.articles : currentHotspots;
-  const editorialCategory = editorialCategoryOf({ ...event, articles });
+  const editorialCategory = editorialCategoryOf({ ...event, articles }, categories);
   return {
     ...base,
     editorialCategory,
@@ -337,7 +338,7 @@ export function scoreEventHeat({ event, currentMemberships = [], historicalMembe
   };
 }
 
-export function buildEventHeatRanking({ store, batch, previousItems = [], events = [], asOf = Date.now() }) {
+export function buildEventHeatRanking({ store, batch, previousItems = [], events = [], asOf = Date.now(), categories = EDITORIAL_CATEGORIES }) {
   if (!store || !batch) return { schemaVersion: 2, titleVersion: 2, scoringVersion: EVENT_HEAT_RANKING_VERSION, generatedAt: new Date(asOf).toISOString(), batchId: batch?.id || null, topicGroups: [], items: [] };
   const currentMemberships = store.listEventHotspots?.({ batchId: batch.id, limit: 100000 }) || [];
   if (!currentMemberships.length) return { schemaVersion: 2, titleVersion: 2, scoringVersion: EVENT_HEAT_RANKING_VERSION, generatedAt: new Date(asOf).toISOString(), batchId: batch.id, topicGroups: [], items: [] };
@@ -402,7 +403,7 @@ export function buildEventHeatRanking({ store, batch, previousItems = [], events
     const record = records.get(eventId) || { id: eventId, title: memberships[0]?.title || eventId, event_state: 'continuing' };
     const input = eventInputs.get(eventId) || record;
     const mergedEvent = { ...record, ...input, id: eventId };
-    const scored = scoreClassifiedEvent({ event: mergedEvent, currentMemberships: memberships, historicalMemberships: historyByEvent.get(eventId) || memberships, hotspotsById, asOf });
+    const scored = scoreClassifiedEvent({ event: mergedEvent, currentMemberships: memberships, historicalMemberships: historyByEvent.get(eventId) || memberships, hotspotsById, asOf, categories });
     return input?.mergedEventIds?.length > 1
       ? { ...scored, mergedEventIds: input.mergedEventIds, normalized: input.normalized || record.normalized || {}, whoKey: input.normalized?.whoKey || '' }
       : { ...scored, normalized: input.normalized || record.normalized || {}, whoKey: input.normalized?.whoKey || '' };
@@ -419,7 +420,7 @@ export function buildEventHeatRanking({ store, batch, previousItems = [], events
     return { ...item, rank: index + 1, previousRank: priorRank, rankDelta: priorRank == null ? null : priorRank - (index + 1) };
   });
   const topicGroups = buildEventTopicGroups(ranked);
-  const categoryRankings = Object.fromEntries(EDITORIAL_CATEGORIES.map((editorialCategory) => {
+  const categoryRankings = Object.fromEntries(categories.map((editorialCategory) => {
     const board = ranked.filter((item) => !item.repositoryProject && item.editorialCategory === editorialCategory).map((item, index) => {
       const prior = previous.get(item.eventId);
       const priorRank = prior?.editorialCategory === editorialCategory && Number.isFinite(Number(prior.rank)) ? Number(prior.rank) : null;
@@ -442,7 +443,7 @@ export function buildEventHeatRanking({ store, batch, previousItems = [], events
     generatedAt: new Date(asOf).toISOString(),
     batchId: batch.id,
     scoring: { baseModel: 90, platformImpact: 10, platformMetricReferences: PLATFORM_METRIC_REFERENCES, platformImpactNormalization: 'per-metric log saturation; event-age half-life 7 days; per-platform maximum plus capped corroboration; missing metrics preserve the base score', readerConnection: 40, readerImpact: 25, informationGain: 20, evidenceQuality: 10, freshness: 3, diffusion: 2, historyDecay: -15, eventValue: 100 },
-    scoringModels: Object.fromEntries(EDITORIAL_CATEGORIES.map((category) => [category, 'T_account'])),
+    scoringModels: Object.fromEntries(categories.map((category) => [category, 'T_account'])),
     totalEvents: ranked.length,
     topicGroups,
     excludedAccountIrrelevantCount: excludedIrrelevant.length,

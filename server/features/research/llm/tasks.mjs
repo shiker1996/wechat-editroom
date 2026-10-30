@@ -4,10 +4,17 @@ import { selectionPrompt } from '../../../platform/skills/skill-prompt.mjs';
 import { parseModelJson } from '../../../platform/llm/model-json.mjs';
 import { formatAccountContext } from '../../../shared/domain/account-context-model.mjs';
 import { getAccountContext } from '../../../platform/application/account-context-service.mjs';
+import { editorialCategoryConfigFor } from '../domain/editorial-categories.mjs';
 
 function accountAwareTagPrompt({ basePrompt, workspaceRoot }) {
-  const accountContext = formatAccountContext(getAccountContext({ workspaceRoot }));
-  return `${basePrompt}
+  const context = getAccountContext({ workspaceRoot });
+  const accountContext = formatAccountContext(context);
+  const categories = editorialCategoryConfigFor(context);
+  const categoryNames = categories.map((item) => item.name);
+  const prompt = basePrompt
+    .replaceAll('{{EDITORIAL_CATEGORY_NAMES}}', categoryNames.join('|'))
+    .replaceAll('{{EDITORIAL_CATEGORY_DEFINITIONS}}', categories.map((item) => `- ${item.name}：${item.description}`).join('\n'));
+  return `${prompt}
 
 ## 当前账号上下文
 以下是账号配置，不是新闻事实。受众相关度和相关理由必须依据这份配置判断；不得据此补写事件信息，也不得为了迎合账号定位修改事件本身的分类。
@@ -15,10 +22,10 @@ ${accountContext}
 - 仍然只使用输入的标题、摘要、来源、链接、发布时间和元数据作事件证据；账号上下文只决定“与谁相关”，不提供新闻事实。`;
 }
 
-function hasResearchTags(item) {
+function hasResearchTags(item, categorySignature) {
   try {
     const tags = JSON.parse(item.raw_json).aiTags;
-    return Boolean(tags?.eventKey && tags?.preScores);
+    return Boolean(tags?.eventKey && tags?.preScores && tags?.editorialCategorySignature === categorySignature);
   } catch { return false; }
 }
 
@@ -89,6 +96,9 @@ export function buildTaggingInput({ id, source, source_group, source_type, sourc
 
 export async function tagBatch({ gateway, store, batchId, provider, limit, hotspotIds = null, force = false, maxAgeHours = 168, workspaceRoot, runId = null, onProgress = () => {} }) {
   const { prompt: baseTagSystem } = selectionPrompt({ workspaceRoot, skillName: 'hotspot-tagging' });
+  const accountContext = getAccountContext({ workspaceRoot });
+  const categories = editorialCategoryConfigFor(accountContext);
+  const categorySignature = JSON.stringify(categories);
   const tagSystem = accountAwareTagPrompt({ basePrompt: baseTagSystem, workspaceRoot });
   const batch = store.getBatch(batchId);
   if (!batch) throw new Error('批次不存在');
@@ -99,7 +109,7 @@ export async function tagBatch({ gateway, store, batchId, provider, limit, hotsp
   if (staleCount) onProgress(`已跳过 ${staleCount} 条超过各自来源时效范围的内容，不再打标；仍保留在历史档案`);
   const requestedIds=Array.isArray(hotspotIds)?new Set(hotspotIds.map(Number)):null;
   const targeted=requestedIds?fresh.filter((item)=>requestedIds.has(item.id)):fresh;
-  const available = force ? targeted : targeted.filter((item) => !hasResearchTags(item));
+  const available = force ? targeted : targeted.filter((item) => !hasResearchTags(item, categorySignature));
   const requestedLimit = limit == null ? available.length : Math.max(1, Math.min(Number(limit) || 60, 500));
   const items = available.slice(0, requestedLimit);
   const providerConfig = gateway.config.providers[provider || gateway.config.defaultProvider];
@@ -181,6 +191,7 @@ export async function tagBatch({ gateway, store, batchId, provider, limit, hotsp
       returnedIds.add(Number(tag.id));
       store.updateHotspotTags(Number(tag.id), {
         ...tag,
+        editorialCategorySignature: categorySignature,
         eventKey,
         eventParts,
         keywords: tag.keywords,
