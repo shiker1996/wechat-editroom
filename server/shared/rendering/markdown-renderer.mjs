@@ -262,7 +262,15 @@ export function markdownToHtml(markdown, tokens = {}) {
     // 终端风列表：去掉默认圆点，用绿色 › 光标前缀
     const chevron = variants.list === 'chevron' && list.type === 'ul';
     const listStyle = chevron ? styles.listNone : styles.list;
-    blocks.push(`<${list.type} style="${listStyle}">${list.items.map((item) => `<li style="${styles.li}">${chevron ? `<span style="color:${styles.strongColor};font-weight:700">› </span>` : ''}${styles.liText?`<span style="${styles.liText}">${wrapLiItem(renderInline(item))}</span>`:wrapLiItem(renderInline(item))}</li>`).join('')}</${list.type}>`);
+    blocks.push(`<${list.type} style="${listStyle}">${list.items.map((item) => {
+      const content = wrapLiItem(renderInline(item));
+      // 微信复制时可能把 li 内正文 span 转成块级 section。把终端风 ›
+      // 和正文放进同一个文本叶节点，避免转换后标记独占一行。
+      const liContent = chevron
+        ? `<span leaf=""><span textstyle="" style="color:${styles.strongColor};font-weight:700">› </span>${content}</span>`
+        : content;
+      return `<li style="${styles.li}">${styles.liText ? `<span style="${styles.liText}">${liContent}</span>` : liContent}</li>`;
+    }).join('')}</${list.type}>`);
     list = null;
   };
   const splitTableRow = (line) => {

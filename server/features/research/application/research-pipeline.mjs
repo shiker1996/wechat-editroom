@@ -44,8 +44,6 @@ export { applyProjectReaderValuesToHeatRanking, attachProjectReaderValues, selec
 export { DISCUSSION_RESEARCH_TOP_K, DISCUSSION_RESEARCH_READER_RECALL_LIMIT, buildDiscussionResearch, discussionResearchMarkdown, resolveDiscussionResearchTopK };
 export { buildTopicCandidates, selectTopicCandidates, topicCandidatesMarkdown };
 
-const CATEGORY_PREFERENCE = { '产品与技术动态': 4, '大厂与商业战略': 4, '职场与组织变化': 5, '开源项目与开发者生态': 5, '行业趋势与市场变化': 2, '政策与公共议题': 0 };
-const P_BASE = { '产品与技术动态': 40, '大厂与商业战略': 50, '职场与组织变化': 10, '开源项目与开发者生态': 50, '行业趋势与市场变化': 30, '政策与公共议题': 20 };
 const H_BASE = { worker_social: 48, bigtech: 33, owned_experience: 35, controversial_return: 30, key_person_move: 33, ai_tool_test: 20, financing: 10, career_anxiety: 5, contrarian_bigtech: 35 };
 const ACCOUNT_FIT_LEVEL_SCORE = Object.freeze({ strong: 80, explore: 45, weak: 25 });
 
@@ -57,8 +55,8 @@ const DEFAULT_SCORING = Object.freeze({
   weights: Object.freeze({ h: 0.6, b: 0.25, p: 0.15 }),
   eventValueWeight: 0.25,
   researchValueWeight: 0.20,
-  categoryPreference: CATEGORY_PREFERENCE,
-  pBase: P_BASE,
+  categoryPreference: Object.freeze({}),
+  pBase: Object.freeze({}),
   hBase: H_BASE,
   accountFitBonus: 6,
 });
@@ -83,8 +81,11 @@ export function resolveScoring(ctx = getAccountContext()) {
     },
     eventValueWeight: Math.max(0.25, Math.min(0.40, num(scoring.eventValueWeight, DEFAULT_SCORING.eventValueWeight))),
     researchValueWeight: Math.max(0.10, Math.min(0.30, num(scoring.researchValueWeight, DEFAULT_SCORING.researchValueWeight))),
-    categoryPreference: mergeTable(Object.fromEntries(editorialCategoriesFor(ctx).map((category) => [category, CATEGORY_PREFERENCE[category] ?? 0])), scoring.categoryPreference),
-    pBase: mergeTable(P_BASE, scoring.pBase),
+    categoryPreference: mergeTable(Object.fromEntries(editorialCategoriesFor(ctx).map((category) => [category, 0])), scoring.categoryPreference),
+    marketScopeCategoryPreference: scoring.marketScopeCategoryPreference && typeof scoring.marketScopeCategoryPreference === 'object'
+      ? scoring.marketScopeCategoryPreference : {},
+    // pBase 已退出评分，仅原样保留旧账号配置以兼容历史调用方。
+    pBase: scoring.pBase && typeof scoring.pBase === 'object' ? scoring.pBase : {},
     hBase: mergeTable(H_BASE, scoring.hBase),
     categories: editorialCategoriesFor(ctx),
     accountFitByCategory: Object.fromEntries(editorialCategoriesFor(ctx).map((category) => [
@@ -224,6 +225,9 @@ export function preselection(clusters, batchDate = new Date().toISOString().slic
     };
     const base = Object.values(parts).reduce((sum,n) => sum+n, 0);
     const categoryPreference = scoring.categoryPreference[event.topic_category] ?? 0;
+    // 市场范围 × 账号分类偏好由账号定位配置；避免在评分代码中绑定分类名称。
+    const scopedPreference = scoring.marketScopeCategoryPreference[event.market_scope] || {};
+    const marketScopeCategoryBonus = Number(scopedPreference[event.topic_category]) || 0;
     const credibleScoop = clamp(event.tags.credibleScoop,0,12);
     const saturationPenalty = clamp(event.tags.saturationPenalty,0,15);
     const topicCover = Math.max(0, ...(event.keywords || []).map((kw) => coverage.get(String(kw).trim().toLowerCase()) || 0));
@@ -235,7 +239,7 @@ export function preselection(clusters, batchDate = new Date().toISOString().slic
       category:event.topic_category, marketScope:event.market_scope, chinaRelevance:event.china_relevance_score,
       chinaRelevanceReason:event.china_relevance_reason || '',
       riskLevel:event.tags.riskLevel || '待评估', riskReason:event.tags.riskReason || '', preScores:parts, base,
-      categoryPreference, credibleScoop, saturationPenalty,
+      categoryPreference, marketScopeCategoryBonus, credibleScoop, saturationPenalty,
       keywords:event.keywords || [], articles:event.articles || [], repositoryMeta:event.repositoryMeta||null,
       blackHorseSignals:event.tags.blackHorseSignals || [], topicHeatBonus,
       eventHeatScore: heat.heatScore ?? event.eventHeatScore ?? null,
@@ -250,7 +254,7 @@ export function preselection(clusters, batchDate = new Date().toISOString().slic
       unverifiedCount: Array.isArray(card.unverified) ? card.unverified.length : 0,
       sourceCount,
       duplicatePenalty: Number(event.duplicatePenalty ?? duplicatePenaltyForHeat({ state: heat.state, repeatDays: heat.repeatDays })),
-      finalPreScore:base+categoryPreference+credibleScoop+topicHeatBonus-saturationPenalty };
+      finalPreScore:base+categoryPreference+marketScopeCategoryBonus+credibleScoop+topicHeatBonus-saturationPenalty };
   }).sort((a,b) => b.finalPreScore-a.finalPreScore || b.credibleScoop-a.credibleScoop || b.preScores.informationGain-a.preScores.informationGain || a.title.localeCompare(b.title));
 }
 
