@@ -230,6 +230,12 @@
   ],
   "skills": [
     {
+      "id": "account-context-assistant",
+      "name": "公众号账号画像助手",
+      "requiredCapabilities": [],
+      "optionalCapabilities": []
+    },
+    {
       "id": "article-cover-ai-visual-generator",
       "name": "文章封面 AI 视觉生成",
       "requiredCapabilities": [],

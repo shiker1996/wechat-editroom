@@ -9,6 +9,8 @@
 - `POST /api/ingest/items`：外部采集入口。请求头使用 `Authorization: Bearer <token>`；token 从 `collection.ingestToken` 或环境变量 `WORKBENCH_INGEST_TOKEN` 配置。JSON 正文为 `{ "batchId", "channel": "x|wechat", "sourceId", "sourceName?", "items": [{ "title", "url?", "summary?", "author?", "publishedAt?", "externalId?", "raw?" }] }`，`items` 每次 1–50 条，重复 URL/标题会在本批次内去重。成功返回 `202`，包含 `accepted`、`duplicates`、`batchId`、`channel`、`sourceKey`、`sourceName` 和 `sourceRunId`；无效 token 返回 `401`，未配置 token 返回 `503`，批次或条目无效返回 `400`。
 - `GET /api/system/log-governance`：读取模型调用和工具审计的留存配置。
 - `PUT /api/system/log-governance`：保存留存配置；可附带 `cleanup:true` 立即清理过期记录并将其压缩归档到 `data/audit-archive/`（需管理员确认）。字段为 `modelCallsLimit`、`modelCallsDays`、`toolExecutionsDays`、`archiveEnabled`。
+- `POST /api/system/account-context/assist`：根据账号名称、简介、当前画像草案和对话历史执行一轮画像助手对话，返回回复及更新后的草案。
+- `POST /api/system/account-context/assist/stream`：画像助手 NDJSON 流；按事件返回思考片段、工具调用生命周期、回复增量及最终草案。请求字段与非流式接口相同。
 
 > 当前版本：0.5.x。本文是本地 REST/NDJSON 接口的完整路由参考，并由 `test/api-docs-routes.test.mjs` 与代码双向校验。面向用户的操作流程见 [详细使用手册](./docs/user-guide.md)，扩展契约见 [插件开发指南](./docs/plugin-development.md)。
 

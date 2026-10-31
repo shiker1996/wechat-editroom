@@ -56,6 +56,7 @@ const DEFAULT_SCORING = Object.freeze({
   eventValueWeight: 0.25,
   researchValueWeight: 0.20,
   categoryPreference: Object.freeze({}),
+  marketScopeCategoryPreference: Object.freeze({}),
   pBase: Object.freeze({}),
   hBase: H_BASE,
   accountFitBonus: 6,
@@ -226,7 +227,7 @@ export function preselection(clusters, batchDate = new Date().toISOString().slic
     const base = Object.values(parts).reduce((sum,n) => sum+n, 0);
     const categoryPreference = scoring.categoryPreference[event.topic_category] ?? 0;
     // 市场范围 × 账号分类偏好由账号定位配置；避免在评分代码中绑定分类名称。
-    const scopedPreference = scoring.marketScopeCategoryPreference[event.market_scope] || {};
+    const scopedPreference = scoring.marketScopeCategoryPreference?.[event.market_scope] || {};
     const marketScopeCategoryBonus = Number(scopedPreference[event.topic_category]) || 0;
     const credibleScoop = clamp(event.tags.credibleScoop,0,12);
     const saturationPenalty = clamp(event.tags.saturationPenalty,0,15);
