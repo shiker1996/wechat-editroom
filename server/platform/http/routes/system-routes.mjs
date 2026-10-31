@@ -53,7 +53,7 @@ import { CollectionSourceService, sourceInputForPlugin, assistStaticPage, normal
 import { describeBatchSourceGroups } from '../../../features/collection/application/batch-source-selection.mjs';
 import { createCollectorRuntime, listCollectorPluginStates } from '../../collectors/runtime-registry.mjs';
 import { confirmCollectorPluginFirstRun, installCollectorPlugin, listCollectorPluginEvents, listCollectorPluginVersions, readCollectorPluginCatalog, rollbackCollectorPlugin, setCollectorPluginStatus, uninstallCollectorPlugin, validateCollectorPluginDirectory } from '../../collectors/package-manager.mjs';
-import { boundedLimit } from '../route-helpers.mjs';
+import { boundedLimit, createNdjsonSession } from '../route-helpers.mjs';
 import { cancelAgentRun, isAgentRunActive } from '../../agent/run-control.mjs';
 import { stageSkillPackageRestore, stageWritingSkillRestore } from './system-restore-transactions.mjs';
 import { buildReplayFixture, buildRunMetrics, compareRunTraces } from '../../agent/replay.mjs';
@@ -62,6 +62,8 @@ import { buildRunInput, readRunInputDownload } from '../../agent/run-input.mjs';
 import { runEditorialAgentTurn } from '../../../features/articles/application/agent/editorial-adapter.mjs';
 import { extractLocalProjectPath } from '../../integrations/local-project-reader.mjs';
 import { getAccountContext, isAccountContextConfigured, saveAccountContext } from '../../application/account-context-service.mjs';
+import { runAccountContextAgentTurn } from '../../application/account-context-agent.mjs';
+import { runWithThinkingSink } from '../../llm/gateway.mjs';
 
 function skillsUsingCapabilities(root, capabilities) {
   const expected=new Set(capabilities);
@@ -189,6 +191,72 @@ export async function handleSystemRoutes(context) {
     } catch (error) {
       json(response, 400, { error: error.message });
     }
+    return true;
+  }
+  if (request.method === 'POST' && pathname === '/api/system/account-context/assist') {
+    try {
+      const input = await body(request);
+      const name = String(input.name || '').trim();
+      const description = String(input.description || '').trim();
+      const currentDraft = input.currentDraft && typeof input.currentDraft === 'object' && !Array.isArray(input.currentDraft) ? input.currentDraft : {};
+      const answer = String(input.answer || '').trim();
+      const history = Array.isArray(input.history) ? input.history.slice(-18) : [];
+      if (!name || !description) throw new Error('请先填写公众号名称和简介，再开始账号画像对话');
+      if (name.length > 120 || description.length > 800 || JSON.stringify(currentDraft).length > 12000 || answer.length > 1200 || history.some((item) => !['user', 'assistant'].includes(item?.role) || typeof item.content !== 'string' || item.content.length > 1200)) throw new Error('对话或表单内容过长或格式不正确，请精简后重试');
+      const result = await runAccountContextAgentTurn({ gateway: models, store, registry: await getToolRegistry(), provider: input.provider || models?.config?.defaultProvider, workspaceRoot: root, name, description, draft: currentDraft, history, answer });
+      json(response, 200, result);
+    } catch (error) {
+      json(response, 400, { error: error.message || '账号画像草案生成失败' });
+    }
+    return true;
+  }
+  if (request.method === 'POST' && pathname === '/api/system/account-context/assist/stream') {
+    let input;
+    let name;
+    let description;
+    let currentDraft;
+    let answer;
+    let history;
+    try {
+      input = await body(request);
+      name = String(input.name || '').trim();
+      description = String(input.description || '').trim();
+      currentDraft = input.currentDraft && typeof input.currentDraft === 'object' && !Array.isArray(input.currentDraft) ? input.currentDraft : {};
+      answer = String(input.answer || '').trim();
+      history = Array.isArray(input.history) ? input.history.slice(-18) : [];
+      if (!name || !description) throw new Error('请先填写公众号名称和简介，再开始账号画像对话');
+      if (!answer) throw new Error('请先输入你希望补充或调整的画像信息');
+      if (name.length > 120 || description.length > 800 || JSON.stringify(currentDraft).length > 12000 || answer.length > 1200 || history.some((item) => !['user', 'assistant'].includes(item?.role) || typeof item.content !== 'string' || item.content.length > 1200)) throw new Error('对话或表单内容过长或格式不正确，请精简后重试');
+    } catch (error) {
+      json(response, 400, { error: error.message || '账号画像对话请求格式不正确' });
+      return true;
+    }
+    response.writeHead(200, { 'content-type': 'application/x-ndjson; charset=utf-8', 'cache-control': 'no-store', 'x-accel-buffering': 'no', connection: 'keep-alive' });
+    const stream = createNdjsonSession(request, response);
+    const send = stream.send;
+    try {
+      const registry = await getToolRegistry();
+      const result = await runWithThinkingSink((text) => send({ type: 'thinking', text }), () => runAccountContextAgentTurn({
+        gateway: models,
+        store,
+        registry,
+        provider: input.provider || models?.config?.defaultProvider,
+        workspaceRoot: root,
+        name,
+        description,
+        draft: currentDraft,
+        history,
+        answer,
+        signal: stream.signal,
+        onEvent: (event) => { if (!['done', 'error'].includes(event.type)) send(event); },
+      }));
+      if (result.reply) send({ type: 'assistant.delta', text: result.reply });
+      send({ type: 'done', data: result });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error || '账号画像助手调用失败');
+      send({ type: 'error', code: error?.code || 'ACCOUNT_CONTEXT_AGENT_FAILED', message, error: message });
+    }
+    stream.end();
     return true;
   }
 

@@ -79,16 +79,17 @@
 
 复制 `account-context.example.json` 后按自己的账号修改。被编辑会、选题契合加分和成稿技能读取。字段含义：
 
-- 画像：`name`、`description`、`readerProfile`、`contentPillars`（前缀映射打标五类，决定账号契合加分命中）、`voiceGuardrails`、`packagingModes`、`followReason`、`conversionBridge`、`differentiators`、`articleFramework`、`contentRatio`。格式化逻辑见 `server/shared/domain/account-context.mjs`。
+- 画像：`name`、`description`、`readerProfile`、`contentPillars`、`editorialCategories`（每个账号独立定义选题分类）、`voiceGuardrails`、`packagingModes`、`followReason`、`conversionBridge`、`differentiators`、`articleFramework`、`contentRatio`。格式化逻辑见 `server/shared/domain/account-context-model.mjs`。
 - 双分发策略（可选）：`distributionStrategy.recommendation|notification|experiment`。每个池可配置 `purpose`、`preferredTopics` 和 `titleRule`，由选题、编辑会、标题和成稿技能读取；这些字段只描述内容规划，不授予自动群发或发布权限。
 - 通知资格（可选）：`notificationPolicy.minimumMatchedCriteria`、`minimumNotificationFit`（默认 4/5）、`minimumFactSupport`（默认 4/5）、`maxPerBatch`（默认 2，允许 0）、`blockedRiskLevels`、`readerStakes`、`criteria`。通知池必须有具体读者、明确动作或决策和具体后果；传闻、待核事实及禁入风险会确定性降到实验池，缺失配置时使用内置严格规则。
-- `scoring`（选题评分参数，可整段省略）：只写想改的键，其余回退代码默认值（`server/features/research/application/research-pipeline.mjs` 的 `DEFAULT_SCORING`）；`accountFit` 可按五类内容显式覆盖账号契合分；非法数值安全回退。
+- `scoring`（选题评分参数，可整段省略）：评分设置也保存在账号画像中；可在“账号画像”页面的 JSON 配置框编辑。只写想改的键，其余回退默认值（`server/features/research/application/research-pipeline.mjs` 的 `DEFAULT_SCORING`）；分类偏好按账号配置的选题分类读取，未配置的分类默认 0 分；`accountFit` 可按账号分类显式覆盖账号契合分；非法数值安全回退。
 - `weights`：`{ "h": 0.6, "b": 0.25, "p": 0.15 }`——文章化质量 `A = H×h + B×b + P×p`；H/B/P 只是 A 的内部拆分。
 - `eventValueWeight`（默认 0.25，限制在 0.25–0.40）：事件热度 T 在最终分中的权重。
 - `researchValueWeight`（默认 0.20，限制在 0.10–0.30）：事件内研判与事件间关系形成的研判价值 J 权重。
 - 常规文章最终分为 `F = A×(1-eventValueWeight-researchValueWeight) + T×eventValueWeight + J×researchValueWeight - C`，其中 `C = S + D`，S/D 仅作为内部扣分来源保留。
   - `accountFitBonus`（6）：命中 `contentPillars` 对应类目的维度组加分。
-  - `categoryPreference`：预排序分类偏好分（大厂 6 / AI 4 / 行业 3 / 综合 1 / 职场 0）。调低或调负可让泛热点沉底。
+  - `categoryPreference`：按账号选题分类配置预排序偏好分。调低或调负可让泛热点沉底；未配置的分类默认 0 分。
+  - `marketScopeCategoryPreference`：按市场范围和账号分类配置额外预排序分，例如 `{ "国内": { "大厂与商业战略": 2 } }`；未配置范围或分类不加分。分类名须与账号的选题分类一致。
   - `pBase`：历史维度报告兼容字段，目前不参与最终 P 计算。
   - `hBase`：不同历史内容类型的 H 基准分。
   - 旧版 `toolEngineeringBonus`、`minimumToolCandidates` 不再参与当前评分，示例配置不再提供这两个字段。

@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "account-context-assistant",
+  "name": "公众号账号画像助手",
+  "version": "1.0.0",
+  "kind": "stage",
+  "entryPoints": [],
+  "contentTypes": [],
+  "inputContract": "account_context_draft",
+  "outputContract": "account_context_updates",
+  "requiredCapabilities": [],
+  "optionalCapabilities": [],
+  "compatibleApp": ">=0.1.0",
+  "source": { "type": "builtin", "url": "" },
+  "agentEntryPoints": ["account-context"],
+  "runtimeKind": "agent-skill",
+  "agentGates": [],
+  "budget": {
+    "maxModelSteps": 4,
+    "maxToolCalls": 3,
+    "maxParallelToolCalls": 1,
+    "timeoutMs": 60000,
+    "maxToolResultChars": 3000,
+    "maxTotalToolResultChars": 6000
+  },
+  "gates": []
+}

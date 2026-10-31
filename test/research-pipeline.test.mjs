@@ -620,7 +620,7 @@ test('评分权重可通过 scoring 配置覆盖', () => {
 test('scoring 覆盖分类偏好与账号契合加分，非法值回退默认', () => {
   const scoring=resolveScoring({scoring:{categoryPreference:{'产品与技术动态':-8},accountFitBonus:12,weights:{h:'abc'}}});
   assert.equal(scoring.categoryPreference['产品与技术动态'],-8);
-  assert.equal(scoring.categoryPreference['大厂与商业战略'],4);
+  assert.equal(scoring.categoryPreference['大厂与商业战略'],0);
   assert.equal(scoring.accountFitBonus,12);
   assert.equal(scoring.weights.h,0.6);
   const events=clusterItems([hotspot(1,'A报道','主体|发布|模型')]);
