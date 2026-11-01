@@ -46,13 +46,99 @@ function htmlPageCount(html) {
     .filter((match) => match[1].split(/\s+/).includes('page')).length;
 }
 
+function findHtmlTagEnd(source, start) {
+  let quote = '';
+  for (let index = start; index < source.length; index += 1) {
+    const character = source[index];
+    if (quote) {
+      if (character === quote) quote = '';
+      continue;
+    }
+    if (character === '"' || character === "'") quote = character;
+    else if (character === '>') return index;
+  }
+  return -1;
+}
+
+function parseHtmlTag(source, start) {
+  if (source[start] !== '<') return null;
+  let index = start + 1;
+  let closing = false;
+  if (source[index] === '/') { closing = true; index += 1; }
+  if (!/[a-z]/i.test(source[index] || '')) return null;
+  const nameStart = index;
+  while (/[a-z0-9:-]/i.test(source[index] || '')) index += 1;
+  const end = findHtmlTagEnd(source, index);
+  if (end < 0) return { name: source.slice(nameStart, index).toLowerCase(), closing, end: source.length - 1 };
+  return { name: source.slice(nameStart, index).toLowerCase(), closing, end };
+}
+
+function skipRawTextElement(source, tagName, start) {
+  let index = start;
+  while ((index = source.indexOf('<', index)) >= 0) {
+    const tag = source[index + 1] === '/' ? parseHtmlTag(source, index) : null;
+    if (tag?.closing && tag.name === tagName) return tag.end + 1;
+    index += 1;
+  }
+  return source.length;
+}
+
+function decodeHtmlCharacterReference(source, start) {
+  const semicolon = source.indexOf(';', start + 1);
+  if (semicolon < 0 || semicolon - start > 16) return null;
+  const reference = source.slice(start + 1, semicolon);
+  const named = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: '\u00a0' };
+  if (Object.hasOwn(named, reference.toLowerCase())) return { value: named[reference.toLowerCase()], end: semicolon + 1 };
+  if (!reference.startsWith('#')) return null;
+  const hexadecimal = reference[1]?.toLowerCase() === 'x';
+  const digits = reference.slice(hexadecimal ? 2 : 1);
+  const validDigits = hexadecimal ? /^[\da-f]+$/i.test(digits) : /^\d+$/.test(digits);
+  if (!digits || !validDigits) return null;
+  const codePoint = Number.parseInt(digits, hexadecimal ? 16 : 10);
+  if (!Number.isInteger(codePoint) || codePoint < 0 || codePoint > 0x10ffff || (codePoint >= 0xd800 && codePoint <= 0xdfff)) return null;
+  return { value: String.fromCodePoint(codePoint), end: semicolon + 1 };
+}
+
+function extractVisibleHtmlText(html) {
+  const source = String(html || '');
+  const text = [];
+  let index = 0;
+  while (index < source.length) {
+    if (source.startsWith('<!--', index)) {
+      const commentEnd = source.indexOf('-->', index + 4);
+      if (commentEnd < 0) break;
+      index = commentEnd + 3;
+      continue;
+    }
+    if (source[index] === '<') {
+      const tag = parseHtmlTag(source, index);
+      if (tag) {
+        index = tag.end + 1;
+        if (!tag.closing && (tag.name === 'style' || tag.name === 'script')) index = skipRawTextElement(source, tag.name, index);
+        continue;
+      }
+    }
+    if (source[index] === '&') {
+      const reference = decodeHtmlCharacterReference(source, index);
+      if (reference) {
+        text.push(reference.value);
+        index = reference.end;
+        continue;
+      }
+    }
+    text.push(source[index]);
+    index += 1;
+  }
+  return text.join('');
+}
+
 function validateGeneratedCoverHtml(html, title) {
   const source = String(html || '');
   const issues = [];
   if (/<script\b|<iframe\b|<object\b|<embed\b|\son[a-z]+\s*=|javascript:|@import|<link\b/i.test(source)) issues.push('HTML 含有禁止的脚本、嵌入或外部资源');
   if (/\b(?:src|href)\s*=\s*["']https?:\/\//i.test(source) || /url\(\s*["']?https?:\/\//i.test(source)) issues.push('HTML 引用了远程资源');
   if (htmlPageCount(source) !== 1) issues.push('必须恰好包含一个 .page 页面');
-  const visibleText = source.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, '').replace(/&nbsp;|&#160;/gi, ' ').replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'").replace(/\s+/g, '');
+  const visibleText = extractVisibleHtmlText(source).replace(/\s+/g, '');
   const normalizedTitle = String(title || '').replace(/\s+/g, '');
   if (normalizedTitle && !visibleText.includes(normalizedTitle)) issues.push('封面可见文字未完整保留文章标题原文');
   if (!/width\s*:\s*900px/i.test(source) || !/height\s*:\s*383px/i.test(source)) issues.push('HTML 未声明 900×383 固定画布');
