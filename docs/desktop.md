@@ -36,7 +36,7 @@ npm run desktop:win  # 生成 Windows 安装包
 当前 Windows 包使用 x64、NSIS 和外置 Node.js 24 运行时。构建产物包括：
 
 - `dist/win-unpacked/`：已验证可启动的目录包；
-- `dist/jianzhi-<version>-win-x64.exe`：NSIS 安装包。
+- `dist/jianzi-<version>-win-x64.exe`：NSIS 安装包。
 
 RSSHub、Chrome 和 Python 仍是可选外部依赖，不会把仓库中的 RSSHub 源码和运行数据打进安装包。Reddit 采集使用包内的 Chrome 启动脚本，但 Chrome 浏览器本体仍由用户本机提供。
 
