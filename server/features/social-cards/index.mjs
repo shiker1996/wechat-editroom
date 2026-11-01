@@ -26,7 +26,7 @@ export { SOCIAL_ROUTE_VERSION, contentTypeForSocialRoute, socialRouteForCandidat
 export { CUSTOM_SOCIAL_AGENT_CAPABILITIES, runCustomSocialAgentTurn } from './application/agent/custom-social-adapter.mjs';
 export { SocialTemplateMetricsRepository, createSocialTemplateMetricsRepository } from './application/social-template-metrics-repository.mjs';
 export { SOCIAL_CARD_RENDERER_BLOCK_TYPES, SOCIAL_CARD_CHANNEL_BLOCK_TYPES, SOCIAL_CARD_TEMPLATE_PACKS, DEFAULT_SOCIAL_CARD_TEMPLATE_PACK, getSocialCardTemplatePack, listSocialCardTemplatePacks, socialCardTemplateEditorCatalog } from './rendering/social-card-template-registry.mjs';
-export { createSocialCardStoryboardThemeSnapshot, getSocialCardTemplateCapabilities, resolveSocialCardStoryboardThemeState, resolveSocialCardTemplateContext, resolveSocialCardTemplate, validateSocialCardTemplateCompatibility } from './rendering/social-card-template-resolver.mjs';
+export { createSocialCardStructureSnapshot, getSocialCardTemplateCapabilities, resolveSocialCardStructureState, resolveSocialCardTemplateContext, resolveSocialCardTemplate, validateSocialCardTemplateCompatibility } from './rendering/social-card-template-resolver.mjs';
 export { summarizeSocialTemplateRun, summarizeSocialCardPageRoles, aggregateSocialTemplateMetrics, aggregateSocialTemplateMetricsByDimension, buildSocialTemplateCalibrationReport } from './rendering/social-card-template-metrics.mjs';
 export { buildSocialCardPlanRolloutReport, getSocialCardPlanRolloutProfile, listSocialCardPlanRolloutProfiles } from './rendering/social-card-plan-rollout.mjs';
 export { enrichEventAnalysis, eventGroupsForCandidate, resolveEventAnalysis } from '../research/index.mjs';

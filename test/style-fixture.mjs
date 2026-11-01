@@ -7,7 +7,6 @@ const CSS_SOURCES = [
   "chrome.css",
   "social-card.css",
   "production.css",
-  "theme-picker.css",
   "topics-accessibility.css",
   "editor-themes.css",
   "system-console.css",

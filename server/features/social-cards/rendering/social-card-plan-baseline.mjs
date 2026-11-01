@@ -111,10 +111,9 @@ export function buildSocialCardPlanBaseline({
     template: template ? {
       requested: template.requested || null,
       rendered: template.rendered || null,
-      themeId: String(template.themeId || ''),
       capacityProfileVersion: template.capacityProfileVersion ?? null,
       capacityProfile: capacityProfile || null,
-    } : { requested: null, rendered: null, themeId: '', capacityProfileVersion: null, capacityProfile: capacityProfile || null },
+    } : { requested: null, rendered: null, capacityProfileVersion: null, capacityProfile: capacityProfile || null },
     plans: { original, final },
     changes: {
       pageDelta: final.pageCount - original.pageCount,

@@ -8,15 +8,12 @@ export const SOCIAL_CARD_CANVAS = Object.freeze({ width: 375, height: 667 });
 const finite = (value, fallback) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
-function themeMetrics(themeDefinition = null) {
+function visualMetrics(themeDefinition = null) {
   const tokens = themeDefinition?.tokens || {};
   const typography = tokens.typography || {};
   const spacing = tokens.spacing || {};
   const shape = tokens.shape || {};
   return {
-    themeId: String(themeDefinition?.id || ''),
-    themeVersion: String(themeDefinition?.version || ''),
-    themeHash: String(themeDefinition?.hash || ''),
     bodyPx: finite(typography.bodyPx, 11),
     h1Px: finite(typography.h1Px, 32),
     lineHeight: finite(typography.lineHeight, 1.45),
@@ -60,7 +57,7 @@ function cloneCapacity(value, structural) {
  */
 export function resolveSocialCardCapacityProfile({ templatePack = null, themeDefinition = null, channelMode = 'wechat', contentType = 'repository' } = {}) {
   const pack = templatePack || getSocialCardTemplatePack();
-  const metrics = themeMetrics(themeDefinition);
+  const metrics = visualMetrics(themeDefinition);
   const roles = {};
   for (const role of SOCIAL_CARD_PAGE_ROLES) {
     const declared = pack?.roles?.[role] || {};

@@ -499,21 +499,21 @@
                   </div>
                 </details>
                 <div class="social-picker-group">
-                  <label class="social-theme-picker">
+                  <label class="social-option-picker">
                     <span>发布渠道</span>
                     <select id="social-channel">
                       <option value="wechat">公众号</option>
                       <option value="xiaohongshu">小红书</option>
                     </select>
                   </label>
-                  <label class="social-theme-picker">
+                  <label class="social-option-picker">
                     <span>构图方式</span>
                     <select id="social-composition-mode">
                       <option value="smart">智能构图</option>
                       <option value="template">稳定模板</option>
                     </select>
                   </label>
-                  <label id="social-template-picker" class="social-theme-picker">
+                  <label id="social-template-picker" class="social-option-picker">
                     <span>页面版式</span>
                     <select id="social-layout-style">
                       <option value="auto">智能混排</option>
@@ -526,7 +526,7 @@
                     </select>
                   </label>
                 </div>
-                <div id="social-storyboard-structure-status" class="storyboard-theme-status" role="status" aria-live="polite" hidden></div>
+                <div id="social-storyboard-structure-status" class="storyboard-structure-status" role="status" aria-live="polite" hidden></div>
               </div>
               <div id="card-plan-preview" class="card-plan-preview"></div>
             </section>
@@ -1161,7 +1161,6 @@
   <dialog id="quick-material-dialog" class="modal quick-material-dialog"><form id="quick-material-form"><div class="modal-head"><div><span class="kicker">QUICK CAPTURE</span><h2>记一条素材</h2><p class="modal-form-intro">先保存真实片段，稍后回素材箱分析、补全并选择素材进入自主写作。</p></div><button type="button" class="close-button" data-close-quick-material aria-label="关闭">×</button></div><div class="quick-material-form-grid"><label>来源<select name="sourceType"><option value="conversation">AI 会话</option><option value="reading">阅读</option><option value="life">生活</option><option value="project">项目</option><option value="text">其他文本</option></select></label><label>记录日期<input name="capturedAt" type="date" required></label><label class="quick-material-span">标题（可选）<input name="title" placeholder="例如：这次自动化为什么反而变慢了"></label><label class="quick-material-span">正文 / 原话<textarea name="rawText" rows="8" required placeholder="粘贴一段会话、笔记、日记、日志或刚刚想到的片段……"></textarea></label><label class="quick-material-span">标签（可选）<input name="tags" placeholder="用逗号分隔，例如：失败复盘，AI写作"></label></div><div class="modal-actions"><span class="quick-material-hint">快捷键：Ctrl + Shift + M</span><button type="button" class="ghost-button" data-close-quick-material>取消</button><button type="submit" class="ink-button">存入素材箱</button></div></form></dialog>
   <dialog id="preflight-dialog" class="modal preflight-dialog"><div class="preflight-dialog-body"><div class="modal-head"><div><span class="kicker">PUBLISH READINESS</span><h2>发布前检查</h2></div><button type="button" class="close-button" data-close-preflight aria-label="关闭">×</button></div><div class="preflight-hero"><b id="preflight-title">正在检查当前文稿</b><span id="preflight-summary"></span></div><div id="preflight-list" class="preflight-list"></div><p class="fine-print">自动审核只提供修改建议，不会自动修改正文，也不会强制阻止发布。你确认可以接受当前建议后即可继续。</p><div class="modal-actions"><button type="button" class="outline-button" id="preflight-confirm-review" hidden>确认建议，允许发布</button><button type="button" class="ghost-button" data-close-preflight>稍后处理</button><button type="button" class="ink-button" id="preflight-primary">查看待处理项</button></div></div></dialog>
   <dialog id="quality-dialog" class="modal quality-dialog"><div class="quality-dialog-body"><div class="modal-head"><div><span class="kicker">QUALITY REVIEW</span><h2>文稿质量检查</h2></div><button type="button" class="close-button" data-close-quality aria-label="关闭">×</button></div><p id="quality-summary" class="quality-summary"></p><div id="quality-issue-list" class="quality-issue-list"></div><div class="modal-actions"><button type="button" class="ink-button" data-close-quality>完成检查</button></div></div></dialog>
-  <dialog id="theme-picker-dialog" class="theme-picker-dialog"><div class="theme-picker-shell"><div class="theme-picker-head"><div><span class="kicker">VISUAL THEME</span><h2 id="theme-picker-title">选择主题</h2><p>颜色只是第一眼，版式语气与内容类型同样重要。</p></div><button type="button" class="close-button" id="close-theme-picker" aria-label="关闭主题选择">×</button></div><div class="theme-picker-tabs" role="tablist"><button type="button" class="active" data-theme-filter="all">全部</button><button type="button" data-theme-filter="builtin">内置主题</button><button type="button" data-theme-filter="user">我的主题</button><select id="theme-picker-scene" aria-label="按内容场景筛选"><option value="all">全部场景</option></select></div><div id="theme-picker-grid" class="theme-picker-grid"></div><div class="theme-picker-foot"><span id="theme-picker-selection">请选择一个主题</span><button type="button" class="primary-button" id="confirm-theme-picker">使用此主题</button></div></div></dialog>
   <dialog id="first-run-dialog" class="modal first-run-dialog"><div class="first-run-shell"><aside class="first-run-rail"><div class="first-run-brand"><span class="run-mark">字</span><div><b>见字工作台</b><small>FIRST RUN GUIDE</small></div></div><p class="first-run-rail-intro">用几分钟完成本机配置，然后交付第一篇文章和第一组图文。</p><div id="first-run-steps" class="first-run-steps"></div><div class="first-run-rail-foot"><span>本地优先</span><span>可随时重开</span></div></aside><section class="first-run-content"><div class="first-run-head"><div><span class="kicker">WELCOME TO JIANZI</span><h2>第一次使用，从这里开始</h2></div><button type="button" class="close-button" data-first-run-later aria-label="稍后处理">×</button></div><div id="first-run-body" class="first-run-body"></div><div class="first-run-foot"><button type="button" class="ghost-button" data-first-run-later>稍后处理</button><div><button type="button" class="outline-button" data-first-run-back hidden>上一步</button><button type="button" class="primary-button" id="first-run-next" data-first-run-next>下一步</button></div></div></section></div></dialog>
   <dialog id="desktop-shortcuts-dialog" class="modal desktop-shortcuts-dialog"><div class="desktop-shortcuts-body"><div class="modal-head"><div><span class="kicker">DESKTOP WORKFLOW</span><h2>桌面快捷操作</h2><p class="modal-form-intro">常用动作可以直接通过键盘或窗口菜单完成。</p></div><button type="button" class="close-button" data-close-shortcuts aria-label="关闭快捷键说明">×</button></div><div class="shortcut-list"><div><span>工作台总览</span><kbd>Ctrl</kbd><b>＋</b><kbd>1</kbd></div><div><span>批次管理</span><kbd>Ctrl</kbd><b>＋</b><kbd>2</kbd></div><div><span>采集源</span><kbd>Ctrl</kbd><b>＋</b><kbd>3</kbd></div><div><span>文章编辑器</span><kbd>Ctrl</kbd><b>＋</b><kbd>4</kbd></div><div><span>新建今日批次</span><kbd>Ctrl</kbd><b>＋</b><kbd>N</kbd></div><div><span>快速记素材</span><kbd>Ctrl</kbd><b>＋</b><kbd>Shift</kbd><b>＋</b><kbd>M</kbd></div><div><span>收起 / 展开侧栏</span><kbd>Ctrl</kbd><b>＋</b><kbd>B</kbd></div><div><span>显示本说明</span><kbd>Ctrl</kbd><b>＋</b><kbd>/</kbd></div></div></div></dialog>
   <dialog id="command-palette-dialog" class="modal command-palette-dialog" aria-labelledby="command-palette-title"><div class="command-palette-body"><div class="command-palette-head"><div><span class="kicker">COMMAND PALETTE</span><h2 id="command-palette-title">跳转或执行操作</h2></div><kbd>Esc</kbd></div><input id="command-palette-input" class="command-palette-input" type="search" autocomplete="off" placeholder="搜索工作区、操作或快捷键…" aria-label="搜索命令"><div id="command-palette-list" class="command-palette-list" role="listbox" aria-label="可用命令"></div><p class="command-palette-hint"><span><kbd>↑</kbd><kbd>↓</kbd>选择</span><span><kbd>Enter</kbd>执行</span><span><kbd>Esc</kbd>关闭</span></p></div></dialog>

@@ -234,7 +234,8 @@ export function buildBeautifyContext({ workdir, original, candidate, editorial, 
   const pages = Array.isArray(editorialPlan) && editorialPlan.length
     ? editorialPlan
     : Array.isArray(planEnvelope?.pages) ? planEnvelope.pages : [];
-  const structureSnapshot = readJsonFile(path.join(workdir, 'social-theme-snapshot.json'), {});
+  const structureSnapshot = readJsonFile(path.join(workdir, 'social-structure-snapshot.json'),
+    readJsonFile(path.join(workdir, 'social-theme-snapshot.json'), {}));
   const rawChannelMode = planEnvelope?.channel_mode || structureSnapshot?.channelMode || bodyData(original, 'channel') || String(editorial?.output_mode || 'wechat');
   const candidateContentType = candidate?.material_type === 'repository'
     ? 'repository'

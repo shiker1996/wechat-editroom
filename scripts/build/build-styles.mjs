@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const stylesRoot = path.join(root, 'public', 'styles');
 const generatedRoot = path.join(root, 'public', 'assets', 'styles');
-const styleVersion = '20260907-css-split-26';
+const styleVersion = '20260907-css-split-27';
 
 function readStyle(name) {
   return fs.readFileSync(path.join(stylesRoot, name), 'utf8').replace(/\s+$/, '');
@@ -20,7 +20,7 @@ function writeGenerated(name, parts) {
 
 // The browser loads this small common bundle first, then route bundles on demand.
 const generated = {
-  'common.css': writeGenerated('common.css', ['tokens-base.css', 'chrome.css', 'production.css', 'theme-picker.css', 'office-desktop.css']),
+  'common.css': writeGenerated('common.css', ['tokens-base.css', 'chrome.css', 'production.css', 'office-desktop.css']),
   'office.css': writeGenerated('office.css', ['office-workspaces.css']),
   'social.css': writeGenerated('social.css', ['social-card.css']),
   'topics.css': writeGenerated('topics.css', ['topics-accessibility.css']),

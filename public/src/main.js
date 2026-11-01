@@ -425,9 +425,6 @@ function bindGlobal() {
     if (view === "models" || view in titles) {
       navigatingFromHistory = true;
       go(route).finally(() => { navigatingFromHistory = false; });
-    } else if (view === "themes") {
-      navigatingFromHistory = true;
-      go("dashboard").finally(() => { navigatingFromHistory = false; });
     }
   });
   window.addEventListener("keydown", (event) => {

@@ -12,8 +12,6 @@ import { enrichEventAnalysis, eventGroupsForCandidate, resolveEventAnalysis } fr
 import { bindGenerationSnapshot, bindPipelineHarnessGateway, prepareSkillRun } from '../../../platform/skills/pipeline-runtime.mjs';
 import { configuredRepairAttempts, evaluateConfiguredGates } from '../../../platform/skills/configuration.mjs';
 import { compileSocialTheme, socialThemeDefinition } from '../../../shared/themes/social-theme-compiler.mjs';
-import { resolveWorkspaceTheme } from '../../../platform/application/themes/user-theme-service.mjs';
-import { buildSocialThemeRoutingContext, resolveAutoTheme } from '../../../platform/application/themes/auto-theme-router.mjs';
 import { budgetCardPlan, layoutAuditFailureMessage, normalizeCoverTitleLines, underfilledDensityTier } from '../rendering/social-card-plan.mjs';
 import { compileTemplateAwareCardPlan, estimateSocialCardPageLoad, normalizeEventStoryboardPages, normalizeRepositoryStoryboardPages, rebalanceContinuationPages, scaleSocialCardCapacityProfile } from '../rendering/social-card-reflow.mjs';
 import { applySocialCardRestructureOperations, buildDeterministicSocialCardRestructureOperations, cardPlanHash, socialCardRepairStateSignature, structuralLayoutPages } from '../rendering/social-card-repair-policy.mjs';
@@ -24,7 +22,7 @@ import { describeCardLayouts, normalizeCardComposition } from '../rendering/soci
 import { cardPlanRepairStructureIssues, sanitizeCardPlan } from '../rendering/storyboard-content.mjs';
 import { renderStoryboardSections } from '../rendering/storyboard-page-renderer.mjs';
 import { renderStoryboardDocument } from '../rendering/storyboard-document-renderer.mjs';
-import { createSocialCardStoryboardThemeSnapshot, getSocialCardTemplateCapabilities, resolveSocialCardTemplateContext, validateSocialCardTemplateCompatibility } from '../rendering/social-card-template-resolver.mjs';
+import { createSocialCardStructureSnapshot, getSocialCardTemplateCapabilities, resolveSocialCardTemplateContext, validateSocialCardTemplateCompatibility } from '../rendering/social-card-template-resolver.mjs';
 import { buildSocialCardPlanBaseline } from '../rendering/social-card-plan-baseline.mjs';
 import { buildSocialCardContentAtomSnapshot, buildSocialCardSupplementUsageIndex, compareSocialCardContentAtomConservation } from '../rendering/social-card-content-atoms.mjs';
 import { auditSocialCardJointPacking, buildSocialCardComponentPackingOperations, buildSocialCardContentComponents, buildSocialCardContinuationSupplementOperations, sanitizeSocialCardPlanFactBindings, selectBestSocialCardJointPackingOperations, validateSocialCardContentComponents } from '../rendering/social-card-content-components.mjs';
@@ -245,25 +243,14 @@ export async function runSocialCardPipeline({ gateway, store, batchId, candidate
   const facts = store.getRepositoryFactSheet(candidateId);
   let eventAnalysisRecord=contentType==='event'?resolveEventAnalysis({store,workspaceRoot,candidate}):null;
   const editorial = store.getCardEditorial(candidateId);
-  let themeRouting = null;
-  let visualStyle = editorial.visual_style || 'auto';
-  if (visualStyle === 'auto') {
-    themeRouting = await resolveAutoTheme({
-      gateway, provider, store, batchId, candidateId, target: 'social',
-      context: buildSocialThemeRoutingContext({ candidate, contentType, channelMode, facts }),
-      log: onProgress,
-    });
-    visualStyle = themeRouting?.themeId || 'ice-blue';
-  }
-  const themeDefinition=resolveWorkspaceTheme(store,visualStyle,'social')||socialThemeDefinition(visualStyle,{fallback:false});
-  if(!themeDefinition)throw new Error(`未知图文视觉主题：${editorial.visual_style}`);
+  const visualStyle='baseline';
+  const themeDefinition=socialThemeDefinition();
   const templateCapabilities=getSocialCardTemplateCapabilities({themeDefinition,channelMode,contentType});
   const rolloutProfile=getSocialCardPlanRolloutProfile(templateCapabilities.templatePack.id);
-  store.recordThemeUsage?.({themeId:themeDefinition.id,version:themeDefinition.version,target:'social',source:themeDefinition.source,batchId,candidateId});
   const batch = store.getBatch(batchId);
   const workdir = candidateSocialCardDir(workspaceRoot, batch, candidate);
   fs.mkdirSync(workdir, { recursive:true });
-  const themeSnapshotPath=path.join(workdir,'social-theme-snapshot.json');
+  const structureSnapshotPath=path.join(workdir,'social-structure-snapshot.json');
   const generator = loadSkillBundle({ workspaceRoot, skillName:'xiaohongshu-article-generator' });
   const screenshotSkill = loadSkillBundle({ workspaceRoot, skillName:'html-pages-to-images' });
   const eventAnalysisSkill = contentType==='event' ? loadSkillBundle({ workspaceRoot, skillName:'event-research-analyzer' }) : null;
@@ -282,8 +269,8 @@ export async function runSocialCardPipeline({ gateway, store, batchId, candidate
   }
   const gate = contentType==='event'?evaluateEventCardGate(candidate,eventAnalysisRecord,editorial):contentType==='custom'?evaluateCustomCardGate(candidate,facts,editorial):evaluateCardGate(candidate, facts, editorial);
   if (!gate.ready) throw new Error(`卡片故事板尚未就绪：${gate.issues.join('；')}`);
-  store.saveCardEditorial?.(candidateId,{...editorial,storyboard_theme_snapshot_json:JSON.stringify(createSocialCardStoryboardThemeSnapshot({themeDefinition,channelMode,contentType}))});
-  writeFile(themeSnapshotPath,JSON.stringify({schemaVersion:2,id:themeDefinition.id,label:themeDefinition.label,version:themeDefinition.version,source:themeDefinition.source,hash:themeDefinition.hash,autoRouting:themeRouting,templatePack:templateCapabilities.templatePack,templateSource:templateCapabilities.source,templateFallback:templateCapabilities.fallback,capacityProfileVersion:templateCapabilities.capacityProfileVersion,capacityProfile:templateCapabilities.capacityProfile,rolloutProfile},null,2));
+  store.saveCardEditorial?.(candidateId,{...editorial,storyboard_structure_snapshot_json:JSON.stringify(createSocialCardStructureSnapshot({channelMode,contentType}))});
+  writeFile(structureSnapshotPath,JSON.stringify({schemaVersion:3,templatePack:templateCapabilities.templatePack,templateSource:templateCapabilities.source,templateFallback:templateCapabilities.fallback,capacityProfileVersion:templateCapabilities.capacityProfileVersion,capacityProfile:templateCapabilities.capacityProfile,rolloutProfile},null,2));
 
   const stages = [];
   const storyboardSnapshot=store.findLatestGenerationSnapshot?.({
@@ -545,7 +532,6 @@ export async function runSocialCardPipeline({ gateway, store, batchId, candidate
       template:{
         requested:{...templateCapabilities.templatePack,source:templateCapabilities.source},
         rendered:{...templateCompatibility.templatePack,source:templateCompatibility.source},
-        themeId:themeDefinition.id,
         capacityProfileVersion:templateCapabilities.capacityProfileVersion,
       },
       capacityProfile:templateCapabilities.capacityProfile,
@@ -587,7 +573,6 @@ export async function runSocialCardPipeline({ gateway, store, batchId, candidate
       operation:'generation',success:report?.valid===true,
       initialLayoutPass:auditAttempts[0]?.valid === true,
       auditAttempts:auditAttempts.length,
-      themeId:themeDefinition.id,
       pageRoleStats:summarizeSocialCardPageRoles(cardPlan,report),
       structuralReflowAttempted:structuralReflowAttempted || structureRepairAttempted,
       structuralReflowSuccess:(structuralReflowAttempted || structureRepairAttempted) && report?.valid===true,
@@ -1141,7 +1126,7 @@ export async function runSocialCardPipeline({ gateway, store, batchId, candidate
   writeFile(planPath, JSON.stringify({ ...planningMeta, composition_seed:`${candidate.batch_id}|${candidate.id}`, composition_safety:safeCompositionApplied?'safe':'standard', pages:cardPlan }, null, 2));
   persistEffectiveCardPlan(cardPlan, 'AI_READY');
   persistContentAtomSnapshot('final');
-  writeFile(themeSnapshotPath, JSON.stringify({schemaVersion:2,id:themeDefinition.id,label:themeDefinition.label,version:themeDefinition.version,source:themeDefinition.source,hash:themeDefinition.hash,autoRouting:themeRouting,templatePack:templateCompatibility.templatePack,templateSource:templateCompatibility.source,templateFallback:templateCompatibility.fallback,capacityProfileVersion:templateCapabilities.capacityProfileVersion,capacityProfile:templateCapabilities.capacityProfile,rolloutProfile},null,2));
+  writeFile(structureSnapshotPath, JSON.stringify({schemaVersion:3,templatePack:templateCompatibility.templatePack,templateSource:templateCompatibility.source,templateFallback:templateCompatibility.fallback,capacityProfileVersion:templateCapabilities.capacityProfileVersion,capacityProfile:templateCapabilities.capacityProfile,rolloutProfile},null,2));
   recordRepairPhase({attempt:auditAttempts.length,phase:'final-gate',action:report?.valid===true?'pass':'fail',changed:false,rerender:false,details:`valid=${report?.valid===true?'true':'false'}`});
   persistPlanBaseline();
   persistTemplateMetrics();
@@ -1174,9 +1159,9 @@ export async function runSocialCardPipeline({ gateway, store, batchId, candidate
   if (!delivery.valid) throw new Error(`图文交付门禁未通过：${delivery.issues.join('；')}`);
   record('delivery-gate', 'fixed-program', deliveryPath);
 
-  for (const [kind, file] of [['图文事实清单',factPath],['图文事实候选索引',factIndexPath],['图文原始卡片规划',originalPlanPath],['图文卡片重排记录',reflowPath],['图文内容原子快照',contentAtomsPath],['图文内容计划调整记录',contentPlanAdjustmentsPath],['图文内容计划基线',planBaselinePath],['图文联合装箱审计',jointPackingAuditPath],['图文卡片规划',planPath],['公众号发布标题',publishTitlePath],['图文配套文案',copyPath],['图文设计 HTML',htmlPath],['图文初始布局审计',initialReportPath],['图文布局审计',reportPath],['图文交付报告',deliveryPath],['图文主题快照',themeSnapshotPath],['图文模板指标',templateMetricsPath]]) addArtifact(store,batchId,candidateId,kind,file,{rootRunId,workflowRunId,stageId:'social-card-pipeline'});
+  for (const [kind, file] of [['图文事实清单',factPath],['图文事实候选索引',factIndexPath],['图文原始卡片规划',originalPlanPath],['图文卡片重排记录',reflowPath],['图文内容原子快照',contentAtomsPath],['图文内容计划调整记录',contentPlanAdjustmentsPath],['图文内容计划基线',planBaselinePath],['图文联合装箱审计',jointPackingAuditPath],['图文卡片规划',planPath],['公众号发布标题',publishTitlePath],['图文配套文案',copyPath],['图文设计 HTML',htmlPath],['图文初始布局审计',initialReportPath],['图文布局审计',reportPath],['图文交付报告',deliveryPath],['图文结构快照',structureSnapshotPath],['图文模板指标',templateMetricsPath]]) addArtifact(store,batchId,candidateId,kind,file,{rootRunId,workflowRunId,stageId:'social-card-pipeline'});
   for (const image of images) addArtifact(store,batchId,candidateId,'图文卡片 PNG',image,{rootRunId,workflowRunId,stageId:'social-card-pipeline'});
   store.updateCandidateTrack(candidateId, 'social_cards', { status:'completed' });
   onProgress(`图文 6/6：完成，共生成 ${images.length} 张卡片`);
-  return { workdir, copy:copyPath, publishTitle:publishTitlePath, html:htmlPath, layoutReport:reportPath, deliveryReport:deliveryPath, templateMetrics:templateMetricsPath, contentPlanAdjustments:contentPlanAdjustmentsPath, jointPackingAudit:jointPackingAuditPath, theme:{id:themeDefinition.id,version:themeDefinition.version,hash:themeDefinition.hash}, themeRouting, template:{pack:templateCompatibility.templatePack,source:templateCompatibility.source,fallback:templateCompatibility.fallback,warnings:templateCompatibility.warnings,capacityProfileVersion:templateCapabilities.capacityProfileVersion,capacityProfile:templateCapabilities.capacityProfile,rolloutProfile}, pageBudget, themeSnapshot:themeSnapshotPath, images, pageCount:images.length };
+  return { workdir, copy:copyPath, publishTitle:publishTitlePath, html:htmlPath, layoutReport:reportPath, deliveryReport:deliveryPath, templateMetrics:templateMetricsPath, contentPlanAdjustments:contentPlanAdjustmentsPath, jointPackingAudit:jointPackingAuditPath, template:{pack:templateCompatibility.templatePack,source:templateCompatibility.source,fallback:templateCompatibility.fallback,warnings:templateCompatibility.warnings,capacityProfileVersion:templateCapabilities.capacityProfileVersion,capacityProfile:templateCapabilities.capacityProfile,rolloutProfile}, pageBudget, structureSnapshot:structureSnapshotPath, images, pageCount:images.length };
 }

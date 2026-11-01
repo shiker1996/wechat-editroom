@@ -135,51 +135,9 @@
     },
     {
       "file": "public/styles/social-card.css",
-      "selector": ".theme-picker-trigger:after",
-      "property": "border-top",
-      "token": "--social-theme-picker-trigger-shadow",
-      "maxOccurrences": 1
-    },
-    {
-      "file": "public/styles/social-card.css",
-      "selector": ".theme-choice-sample",
-      "property": "border",
-      "token": "--card-ink",
-      "maxOccurrences": 1
-    },
-    {
-      "file": "public/styles/social-card.css",
-      "selector": ".theme-catalog-preview",
-      "property": "border",
-      "token": "--theme-preview-ink",
-      "maxOccurrences": 1
-    },
-    {
-      "file": "public/styles/social-card.css",
       "selector": ".social-publish-title .outline-button",
       "property": "color",
       "token": "--social-social-delivery-head-outline-button-border",
-      "maxOccurrences": 1
-    },
-    {
-      "file": "public/styles/system-console.css",
-      "selector": ".theme-choice-sample .sample-rule",
-      "property": "background",
-      "token": "--card-ink",
-      "maxOccurrences": 1
-    },
-    {
-      "file": "public/styles/system-console.css",
-      "selector": ".theme-choice-sample .sample-inverse",
-      "property": "color",
-      "token": "--card-bg",
-      "maxOccurrences": 1
-    },
-    {
-      "file": "public/styles/system-console.css",
-      "selector": ".theme-choice-sample code",
-      "property": "border",
-      "token": "--card-ink",
       "maxOccurrences": 1
     },
     {
@@ -236,13 +194,6 @@
       "selector": ".storyboard-reflow-preview",
       "property": "border-left",
       "token": "--system-storyboard-ai-restructure-text",
-      "maxOccurrences": 1
-    },
-    {
-      "file": "public/styles/theme-picker.css",
-      "selector": ".theme-choice-sample",
-      "property": "border",
-      "token": "--card-ink",
       "maxOccurrences": 1
     },
     {

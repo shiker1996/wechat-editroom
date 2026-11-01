@@ -83,15 +83,12 @@ function parseStoryboardSnapshot(value) {
   }
 }
 
-export function createSocialCardStoryboardThemeSnapshot({ themeDefinition = null, channelMode = 'wechat', contentType = 'repository' } = {}) {
-  const capabilities = getSocialCardTemplateCapabilities({ themeDefinition, channelMode, contentType });
+export function createSocialCardStructureSnapshot({ channelMode = 'wechat', contentType = 'repository' } = {}) {
+  const capabilities = getSocialCardTemplateCapabilities({ channelMode, contentType });
   const capacityProfile = capabilities.capacityProfile;
   const capacityHash = `sha256:${createHash('sha256').update(JSON.stringify(capacityProfile)).digest('hex')}`;
   return Object.freeze({
     schemaVersion: 2,
-    themeId: themeDefinition?.id || '',
-    themeVersion: themeDefinition?.version || '',
-    themeHash: themeDefinition?.hash || '',
     templatePack: { ...capabilities.templatePack },
     capacityProfileVersion: capabilities.capacityProfileVersion,
     capacityHash,
@@ -101,11 +98,13 @@ export function createSocialCardStoryboardThemeSnapshot({ themeDefinition = null
   });
 }
 
-export function resolveSocialCardStoryboardThemeState({ editorial = null, themeDefinition = null, channelMode = 'wechat', contentType = 'repository' } = {}) {
+export function resolveSocialCardStructureState({ editorial = null, channelMode = 'wechat', contentType = 'repository' } = {}) {
   const cardPlan = parseStoryboardSnapshot(editorial?.card_plan_json);
   const hasStoryboard = Array.isArray(cardPlan) && cardPlan.length > 0;
-  const current = createSocialCardStoryboardThemeSnapshot({ themeDefinition, channelMode, contentType });
-  const snapshot = parseStoryboardSnapshot(editorial?.storyboard_theme_snapshot_json);
+  const current = createSocialCardStructureSnapshot({ channelMode, contentType });
+  const currentSnapshot = parseStoryboardSnapshot(editorial?.storyboard_structure_snapshot_json);
+  const legacySnapshot = parseStoryboardSnapshot(editorial?.storyboard_theme_snapshot_json);
+  const snapshot = currentSnapshot?.templatePack?.id ? currentSnapshot : legacySnapshot;
   if (!hasStoryboard) return Object.freeze({ status: 'empty', canRender: false, requiresStoryboard: true, hasStoryboard: false, current, snapshot: null, reason: '尚未生成故事板' });
   // 故事板只锁定结构能力；历史主题 ID 不参与兼容判断。
   if (!snapshot?.templatePack?.id) return Object.freeze({ status: 'needs-storyboard', canRender: false, requiresStoryboard: true, hasStoryboard: true, current, snapshot: null, reason: '历史故事板未记录页面结构快照，请先重新生成故事板' });

@@ -1,6 +1,6 @@
 import { colorContrast } from '../../../shared/themes/theme-validator.mjs';
 import { socialThemeDefinition } from '../../../shared/themes/social-theme-compiler.mjs';
-import { SOCIAL_THEME_SPECIMEN } from './theme-preview.mjs';
+import { SOCIAL_TEMPLATE_PROPOSAL_SPECIMEN } from './social-template-proposal-specimen.mjs';
 import { renderStoryboardHtml } from '../../../features/social-cards/index.mjs';
 import { SOCIAL_CARD_PAGE_ROLES } from '../../../features/social-cards/rendering/social-card-role.mjs';
 import { SOCIAL_CARD_RENDERER_BLOCK_TYPES, getSocialCardTemplatePack } from '../../../features/social-cards/rendering/social-card-template-registry.mjs';
@@ -115,7 +115,7 @@ export function auditSocialTemplateProposal({ proposal, themeDefinition = null, 
     if (/<script\b|\son[a-z]+\s*=|<iframe\b|javascript:|https?:\/\//i.test(html)) { checks.unsafe = false; issues.push(issue('html', 'UNSAFE_HTML', '正式样稿包含脚本、事件属性或外部资源')); }
     const pages = (html.match(/<section class="page /g) || []).length;
     const stacks = (html.match(/class="page-content-stack"/g) || []).length;
-    if (pages !== SOCIAL_THEME_SPECIMEN.pages.length || stacks !== pages || !html.includes('width:375px;height:667px;overflow:hidden')) { checks.layout = false; issues.push(issue('html', 'LAYOUT_STRUCTURE', '固定样稿未保持 375×667 画布或逐页内容栈')); }
+    if (pages !== SOCIAL_TEMPLATE_PROPOSAL_SPECIMEN.pages.length || stacks !== pages || !html.includes('width:375px;height:667px;overflow:hidden')) { checks.layout = false; issues.push(issue('html', 'LAYOUT_STRUCTURE', '固定样稿未保持 375×667 画布或逐页内容栈')); }
     if ((html.match(/data-template-id="[^"]+"/g) || []).length !== pages) { checks.layout = false; issues.push(issue('html', 'TEMPLATE_METADATA_MISSING', '逐页模板元数据不完整')); }
     for (const [className, label] of [['stat-row', '数据组件'], ['step-col', '步骤组件'], ['compare-block', '对比组件'], ['note-block', '提示组件'], ['tl', '时间线组件']]) {
       if (!html.includes(className)) { checks.componentVisibility = false; issues.push(issue(`components.${className}`, 'COMPONENT_NOT_VISIBLE', `${label}未出现在正式固定样稿`)); }
@@ -135,11 +135,11 @@ export function compileSocialTemplateProposal({ proposal, themeDefinition = null
   const theme = safeTheme(themeDefinition);
   const templatePack = compileSocialTemplateProposalPack(value);
   const html = renderStoryboardHtml({
-    topic: SOCIAL_THEME_SPECIMEN.topic,
-    repository: SOCIAL_THEME_SPECIMEN.repository,
-    pages: SOCIAL_THEME_SPECIMEN.pages,
-    contentType: SOCIAL_THEME_SPECIMEN.contentType,
-    sourceLabel: SOCIAL_THEME_SPECIMEN.sourceLabel,
+    topic: SOCIAL_TEMPLATE_PROPOSAL_SPECIMEN.topic,
+    repository: SOCIAL_TEMPLATE_PROPOSAL_SPECIMEN.repository,
+    pages: SOCIAL_TEMPLATE_PROPOSAL_SPECIMEN.pages,
+    contentType: SOCIAL_TEMPLATE_PROPOSAL_SPECIMEN.contentType,
+    sourceLabel: SOCIAL_TEMPLATE_PROPOSAL_SPECIMEN.sourceLabel,
     channelMode,
     visualStyle: theme.id,
     themeDefinition: theme,

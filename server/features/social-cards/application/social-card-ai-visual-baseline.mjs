@@ -18,6 +18,7 @@ export const SOCIAL_CARD_AI_VISUAL_ARTIFACTS = Object.freeze([
   { name: 'event-analysis.json', stage: 'inputs', required: false },
   { name: 'custom-fact-sheet.json', stage: 'inputs', required: false },
   { name: 'ai-visual-card-plan.json', stage: 'inputs', required: false },
+  { name: 'social-structure-snapshot.json', stage: 'structure', required: false },
   { name: 'social-theme-snapshot.json', stage: 'legacy', required: false },
   { name: 'social-design-scheme.json', stage: 'inputs', required: true },
   { name: 'social-design-scheme.md', stage: 'inputs', required: false },

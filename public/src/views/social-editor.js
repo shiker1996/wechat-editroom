@@ -58,7 +58,7 @@ function renderStoryboardStructureState(state) {
   storyboardStructureState=state||null;
   const status=document.getElementById('social-storyboard-structure-status');
   if(!status)return;
-  if(!state||state.status==='empty'){status.hidden=true;status.textContent='';status.className='storyboard-theme-status';return;}
+  if(!state||state.status==='empty'){status.hidden=true;status.textContent='';status.className='storyboard-structure-status';return;}
   const copy={
     current:'当前故事板符合页面结构与容量约束，可以生成图文。',
     'render-only':'页面结构约束未变化，可以重新生成图文。',
@@ -66,7 +66,7 @@ function renderStoryboardStructureState(state) {
     'needs-storyboard':'页面结构、渠道或内容类型约束改变，请先重新生成故事板。',
   }[state.status]||state.reason||'';
   status.hidden=!copy;
-  status.className=`storyboard-theme-status ${state.status}`;
+  status.className=`storyboard-structure-status ${state.status}`;
   status.textContent=copy;
   const regenerate=document.getElementById('analyze-card-editorial');
   if(regenerate&&state.status==='needs-storyboard')regenerate.textContent='重新生成故事板（必需）';

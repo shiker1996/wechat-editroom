@@ -176,23 +176,17 @@ select option { color: var(--ink); background: var(--surface); }
 button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 
 /* Custom dialogs use the same outer elevation even when their inner layout differs. */
-.theme-picker-dialog, .material-dialog { border: 0; background: transparent; box-shadow: none; }
-.theme-picker-shell, .material-dialog-shell {
+.material-dialog { border: 0; background: transparent; box-shadow: none; }
+.material-dialog-shell {
   border: 1px solid var(--line-strong);
   border-radius: 8px;
   background: var(--surface);
   box-shadow: var(--shadow-popover);
 }
-.theme-picker-dialog::backdrop, .material-dialog::backdrop { background: var(--overlay); backdrop-filter: none; }
-.theme-picker-head, .material-dialog-head { padding: 20px 24px 16px; border-bottom-color: var(--line); background: var(--surface); }
-.theme-picker-head h2, .material-dialog-head h3 { font-family: var(--body); font-weight: 650; }
-.theme-picker-tabs { padding-inline: 24px; border-bottom-color: var(--line); }
-.theme-picker-tabs button.active { border-color: var(--blue); color: var(--ink); }
-.theme-picker-foot { border-top-color: var(--line); background: var(--surface-subtle); }
+.material-dialog::backdrop { background: var(--overlay); backdrop-filter: none; }
+.material-dialog-head { padding: 20px 24px 16px; border-bottom-color: var(--line); background: var(--surface); }
 .material-dialog-foot { border-top-color: var(--line); background: var(--surface-subtle); }
 .material-dialog-body details { border-radius: 6px; background: var(--surface-subtle); }
-.theme-choice-card:hover, .theme-choice-card.selected { transform: none; box-shadow: none; }
-.theme-picker-trigger { border-radius: 6px; box-shadow: none; }
 .topbar-menu { border-radius: 8px; background: var(--surface); box-shadow: var(--shadow-popover); }
 .command-palette-dialog { box-shadow: var(--shadow-popover); }
 
@@ -218,14 +212,10 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
 .event-rank > em { color: var(--green); }
 
 /* Theme generation is a light management form, not a dark hero panel. */
-#view-themes .ai-theme-creator > header {
   background: var(--surface-subtle);
   color: var(--ink);
   border-bottom-color: var(--line);
 }
-#view-themes .ai-theme-creator > header h4,
-#view-themes .ai-theme-creator > header .text-button { color: var(--ink); }
-#view-themes .ai-theme-creator > header p { color: var(--muted); }
 
 @media (max-width: 760px) {
   .shell { padding-inline: 18px; }

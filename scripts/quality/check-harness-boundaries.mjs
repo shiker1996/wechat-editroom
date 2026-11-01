@@ -5,10 +5,6 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const checks = [
   {
-    file: 'server/platform/http/routes/theme-routes.mjs',
-    forbidden: [/generateAiThemeCandidate\(\{gateway\s*:\s*models\b/, /generateSocialTemplateProposal\(\{gateway\s*:\s*models\b/],
-  },
-  {
     file: 'server/platform/http/routes/system-routes.mjs',
     forbidden: [/assistStaticPage\([^\n]*gateway\s*:\s*models\b/],
   },

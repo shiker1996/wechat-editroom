@@ -3,7 +3,7 @@ import { buildSocialCardFactEnvelope, buildSocialCardStoryboardSystemPrompt, enr
 import { listSocialCardStageSkillSlots, resolveSocialCardStageSkills } from '../../skills/entry-routing.mjs';
 import { requestGitHubJson } from '../../plugin-sdk/github-client.mjs';
 import { pipeFile } from '../route-helpers.mjs';
-import { createSocialCardStoryboardThemeSnapshot, getSocialCardTemplateCapabilities, resolveSocialCardStoryboardThemeState, validateSocialCardTemplateCompatibility } from '../../../features/social-cards/rendering/social-card-template-resolver.mjs';
+import { createSocialCardStructureSnapshot, getSocialCardTemplateCapabilities, resolveSocialCardStructureState, validateSocialCardTemplateCompatibility } from '../../../features/social-cards/rendering/social-card-template-resolver.mjs';
 import { summarizeSocialTemplateRun, summarizeSocialCardPageRoles } from '../../../features/social-cards/rendering/social-card-template-metrics.mjs';
 import { getSocialCardPlanRolloutProfile } from '../../../features/social-cards/rendering/social-card-plan-rollout.mjs';
 import { applySocialCardRestructureOperations, buildDeterministicSocialCardRestructureOperations } from '../../../features/social-cards/rendering/social-card-repair-policy.mjs';
@@ -19,11 +19,8 @@ const SOCIAL_CARD_ENTRY_POINTS=Object.freeze({
 });
 const eventBackedContentType=(contentType)=>contentType==='event';
 
-function socialTemplateContext(_store, _editorial, channelMode, contentType) {
-  // Storyboard planning uses only the fixed structural pack. Per-run visual style
-  // is selected later by the AI design scheme and cannot alter page capacity.
-  const themeDefinition=null;
-  return { themeDefinition, capabilities:getSocialCardTemplateCapabilities({channelMode,contentType}) };
+function socialStructureContext(channelMode, contentType) {
+  return { capabilities:getSocialCardTemplateCapabilities({channelMode,contentType}) };
 }
 
 function invalidateSocialCardArtifacts({writeUtf8, workspaceDir, reason}) {
@@ -58,9 +55,8 @@ export async function handleSocialCardRoutes(context) {
   const socialCardsMatch = pathname.match(/^\/api\/candidates\/(\d+)\/social-cards$/);
   if(pathname==='/api/social/template-metrics'&&request.method==='GET'){
     const templatePackId=searchParams.get('templatePackId')||searchParams.get('template')||null;
-    const themeId=searchParams.get('themeId')||searchParams.get('theme')||null;
     const pageRole=searchParams.get('pageRole')||searchParams.get('role')||null;
-    return json(response,200,store.socialTemplateMetricsStats?.({templatePackId,themeId,pageRole})||{usageCount:0,calibration:{schemaVersion:1,sampleCount:0,dimensions:[]}});
+    return json(response,200,store.socialTemplateMetricsStats?.({templatePackId,pageRole})||{usageCount:0,calibration:{schemaVersion:1,sampleCount:0,dimensions:[]}});
   }
   if(socialCardsMatch&&request.method==='GET'){
     const candidate=store.getCandidate(Number(socialCardsMatch[1]));if(!candidate)return json(response,404,{error:'候选不存在'});const batch=store.getBatch(candidate.batch_id);const workspace=socialCardFiles(batch,candidate);
@@ -108,8 +104,7 @@ export async function handleSocialCardRoutes(context) {
     const contentType=socialContentType(candidate),eventAnalysis=eventBackedContentType(contentType)?resolveEventAnalysisFor(candidate):null;
     const gate=socialCardGate(candidate,contentType,facts,editorial,eventAnalysis);
     const cardPlan=JSON.parse(editorial.card_plan_json||'[]');const channelMode=socialChannelMode(candidate);
-    const themeContext=socialTemplateContext(store,editorial,channelMode,contentType);
-    const structureState=resolveSocialCardStoryboardThemeState({editorial,themeDefinition:themeContext.themeDefinition,channelMode,contentType});
+    const structureState=resolveSocialCardStructureState({editorial,channelMode,contentType});
     return json(response,200,{candidate,editorial,facts,score,contentType,channelMode,eventAnalysis,gate,structureState,layoutReport,reflowState,contentPlanAdjustments,factIndex,layoutDecisions:describeCardLayouts(cardPlan,{layoutStyle:editorial.layout_style,compositionMode:editorial.composition_mode,channelMode})});
   }
   if(cardPageLayoutMatch&&request.method==='PUT'){
@@ -136,7 +131,7 @@ export async function handleSocialCardRoutes(context) {
     if(eventBackedContentType(contentType)&&!eventAnalysis?.analysis?.eventSummary)return json(response,409,{error:'该分类尚无事件卡事实基座，请先完成事件研判'});
     if(contentType==='custom'&&facts?.data?.kind!=='custom')return json(response,409,{error:'请先填写自定义事实基座'});
     const channelMode=socialChannelMode(candidate);
-    const templateContext=socialTemplateContext(store,current,channelMode,contentType);
+    const templateContext=socialStructureContext(channelMode,contentType);
     const rolloutProfile=getSocialCardPlanRolloutProfile(templateContext.capabilities.templatePack.id);
     let layoutPage=null;
     let harness=null;
@@ -180,9 +175,9 @@ export async function handleSocialCardRoutes(context) {
         }
         if(!applied.valid)throw new Error(`结构修复未通过程序校验：${applied.issues.join('；')}`);
         if(!applied.changed)throw new Error('结构修复未改变故事板，已停止无效重试');
-        const templateCompatibility=validateSocialCardTemplateCompatibility(applied.pages,{themeDefinition:templateContext.themeDefinition,channelMode,contentType});
+        const templateCompatibility=validateSocialCardTemplateCompatibility(applied.pages,{channelMode,contentType});
         const editorial=store.saveCardEditorial(candidate.id,{...current,card_plan_json:JSON.stringify(applied.pages),status:'AI_READY'});
-        const pageMetric=summarizeSocialTemplateRun({requestedTemplate:{...templateContext.capabilities.templatePack,source:templateContext.capabilities.source},renderedTemplate:{...templateCompatibility.templatePack,source:templateCompatibility.source},channelMode,contentType,themeId:templateContext.themeDefinition.id,report:layoutPage?{valid:false,pages:[layoutPage]}:null,fallback:templateContext.capabilities.fallback,operation:'page-regeneration',success:true,editMode,targetPage:pageIndex+1,pageRoleStats:summarizeSocialCardPageRoles(applied.pages,{valid:false,pages:applied.pages.map((item,index)=>index===pageIndex?layoutPage||{}:{valid:true,issues:[]})}),pagesAdded:applied.pages.length-beforePlan.length,structuralReflowAttempted:true,structuralReflowSuccess:false,rolloutProfile});
+        const pageMetric=summarizeSocialTemplateRun({requestedTemplate:{...templateContext.capabilities.templatePack,source:templateContext.capabilities.source},renderedTemplate:{...templateCompatibility.templatePack,source:templateCompatibility.source},channelMode,contentType,report:layoutPage?{valid:false,pages:[layoutPage]}:null,fallback:templateContext.capabilities.fallback,operation:'page-regeneration',success:true,editMode,targetPage:pageIndex+1,pageRoleStats:summarizeSocialCardPageRoles(applied.pages,{valid:false,pages:applied.pages.map((item,index)=>index===pageIndex?layoutPage||{}:{valid:true,issues:[]})}),pagesAdded:applied.pages.length-beforePlan.length,structuralReflowAttempted:true,structuralReflowSuccess:false,rolloutProfile});
         store.recordSocialTemplateMetric?.({...pageMetric,batchId:candidate.batch_id,candidateId:candidate.id});
         const preview=buildSocialCardReflowPreview({beforePlan,afterPlan:applied.pages,operations});
         harness.finish('completed'); return json(response,200,{editorial,cardPlan:applied.pages,page:applied.pages[pageIndex]||applied.pages.find((item)=>item.continuation_of===pageIndex+1),template:{...templateCompatibility,target:templateCompatibility.pages?.[pageIndex]||null,context:targetTemplateContext},templateMetrics:pageMetric,gate:socialCardGate(candidate,contentType,facts,editorial,eventAnalysis),layoutDecisions:describeCardLayouts(applied.pages,{layoutStyle:editorial.layout_style,compositionMode:editorial.composition_mode,channelMode}),reasoning:typeof result.reasoning==='string'?result.reasoning:'',restructure:{operations,preview},renderState:{status:'storyboard-updated',pendingRender:true,htmlUpdated:false,pngUpdated:false}});
@@ -201,14 +196,14 @@ export async function handleSocialCardRoutes(context) {
       if(generated.content_blocks.length>Math.min(3,targetTemplateContext.maxBlocks)||generated.content_blocks.some((block)=>!allowedBlockTypes.has(block?.type)))throw new Error('单页重生成返回了不支持的内容块结构');
       const normalized=normalizeCardComposition({...previousPage,...generated,kind:previousPage.kind,role:previousPage.role,goal:previousPage.goal,evidence:previousPage.evidence,layout_style:previousPage.layout_style},{pageIndex,seed:`${candidate.batch_id}|${candidate.id}`});
       cardPlan[pageIndex]={...previousPage,...generated,kind:previousPage.kind,role:normalized.role,composition:normalized.composition,goal:previousPage.goal,evidence:previousPage.evidence,layout_style:previousPage.layout_style,layout_intent:previousPage.layout_intent,title:normalizeSocialCardPageTitle(String(generated.title||previousPage.title).trim(),{kind:previousPage.kind}),content_blocks:generated.content_blocks};
-      const templateCompatibility=validateSocialCardTemplateCompatibility(cardPlan,{themeDefinition:templateContext.themeDefinition,channelMode,contentType});
+      const templateCompatibility=validateSocialCardTemplateCompatibility(cardPlan,{channelMode,contentType});
       const editorial=store.saveCardEditorial(candidate.id,{...current,card_plan_json:JSON.stringify(cardPlan),status:'AI_READY'});
-      const pageMetric=summarizeSocialTemplateRun({requestedTemplate:{...templateContext.capabilities.templatePack,source:templateContext.capabilities.source},renderedTemplate:{...templateCompatibility.templatePack,source:templateCompatibility.source},channelMode,contentType,themeId:templateContext.themeDefinition.id,report:layoutPage?{valid:!Array.isArray(layoutPage.issues)||!layoutPage.issues.length,pages:[layoutPage]}:null,fallback:templateContext.capabilities.fallback,operation:'page-regeneration',success:true,editMode,targetPage:pageIndex+1,pageRoleStats:summarizeSocialCardPageRoles(cardPlan,{valid:true,pages:cardPlan.map((item,index)=>index===pageIndex?layoutPage||{valid:true,issues:[]}:{valid:true,issues:[]})}),textRepairCount:1,rolloutProfile});
+      const pageMetric=summarizeSocialTemplateRun({requestedTemplate:{...templateContext.capabilities.templatePack,source:templateContext.capabilities.source},renderedTemplate:{...templateCompatibility.templatePack,source:templateCompatibility.source},channelMode,contentType,report:layoutPage?{valid:!Array.isArray(layoutPage.issues)||!layoutPage.issues.length,pages:[layoutPage]}:null,fallback:templateContext.capabilities.fallback,operation:'page-regeneration',success:true,editMode,targetPage:pageIndex+1,pageRoleStats:summarizeSocialCardPageRoles(cardPlan,{valid:true,pages:cardPlan.map((item,index)=>index===pageIndex?layoutPage||{valid:true,issues:[]}:{valid:true,issues:[]})}),textRepairCount:1,rolloutProfile});
       store.recordSocialTemplateMetric?.({...pageMetric,batchId:candidate.batch_id,candidateId:candidate.id});
       harness.finish('completed'); return json(response,200,{editorial,cardPlan,page:cardPlan[pageIndex],template:{...templateCompatibility,target:templateCompatibility.pages?.[pageIndex]||null,context:targetTemplateContext},templateMetrics:pageMetric,gate:socialCardGate(candidate,contentType,facts,editorial,eventAnalysis),layoutDecisions:describeCardLayouts(cardPlan,{layoutStyle:editorial.layout_style,compositionMode:editorial.composition_mode,channelMode}),reasoning:typeof result.reasoning==='string'?result.reasoning:'',renderState:{status:'storyboard-updated',pendingRender:true,htmlUpdated:false,pngUpdated:false}});
     }catch(error){
       harness?.finish('failed',error.message);
-      const failedMetric=summarizeSocialTemplateRun({requestedTemplate:{...templateContext.capabilities.templatePack,source:templateContext.capabilities.source},renderedTemplate:{...templateContext.capabilities.templatePack,source:templateContext.capabilities.source},channelMode,contentType,themeId:templateContext.themeDefinition.id,report:layoutPage?{valid:!Array.isArray(layoutPage.issues)||!layoutPage.issues.length,pages:[layoutPage]}:null,fallback:templateContext.capabilities.fallback,operation:'page-regeneration',success:false,editMode:input.mode,targetPage:pageIndex+1,hardGateFailure:true,rolloutProfile});
+      const failedMetric=summarizeSocialTemplateRun({requestedTemplate:{...templateContext.capabilities.templatePack,source:templateContext.capabilities.source},renderedTemplate:{...templateContext.capabilities.templatePack,source:templateContext.capabilities.source},channelMode,contentType,report:layoutPage?{valid:!Array.isArray(layoutPage.issues)||!layoutPage.issues.length,pages:[layoutPage]}:null,fallback:templateContext.capabilities.fallback,operation:'page-regeneration',success:false,editMode:input.mode,targetPage:pageIndex+1,hardGateFailure:true,rolloutProfile});
       store.recordSocialTemplateMetric?.({...failedMetric,batchId:candidate.batch_id,candidateId:candidate.id});
       return json(response,502,{error:`单页故事板重生成失败：${error.message}`});
     }
@@ -246,13 +241,11 @@ export async function handleSocialCardRoutes(context) {
     const input=await body(request);
     if(input.layout_style&&!SOCIAL_CARD_LAYOUTS.includes(input.layout_style))return json(response,400,{error:'不支持的图文版式'});
     if(input.composition_mode&&!SOCIAL_CARD_COMPOSITION_MODES.includes(input.composition_mode))return json(response,400,{error:'不支持的构图模式'});
-    const { visual_style: _legacyVisualStyle, ...editorialInput }=input;
-    let editorial=store.saveCardEditorial(candidate.id,editorialInput); const facts=store.getRepositoryFactSheet(candidate.id);
+    let editorial=store.saveCardEditorial(candidate.id,input); const facts=store.getRepositoryFactSheet(candidate.id);
     const contentType=socialContentType(candidate),eventAnalysis=eventBackedContentType(contentType)?resolveEventAnalysisFor(candidate):null;
     let cardPlan=[];try{cardPlan=JSON.parse(editorial.card_plan_json||'[]');}catch{}
     const channelMode=socialChannelMode(candidate);
-    const themeContext=socialTemplateContext(store,editorial,channelMode,contentType);
-    let structureState=resolveSocialCardStoryboardThemeState({editorial,themeDefinition:themeContext.themeDefinition,channelMode,contentType});
+    let structureState=resolveSocialCardStructureState({editorial,channelMode,contentType});
     return json(response,200,{editorial,contentType,gate:socialCardGate(candidate,contentType,facts,editorial,eventAnalysis),structureState,cardPlan,layoutDecisions:describeCardLayouts(cardPlan,{layoutStyle:editorial.layout_style,compositionMode:editorial.composition_mode,channelMode})});
   }
   // 渠道切换：只换 output_mode 的渠道前缀（wechat-* ↔ xiaohongshu-*），类型部分不动，轨道与卡片决策同步
@@ -274,7 +267,7 @@ export async function handleSocialCardRoutes(context) {
     }
     const updated=store.getCandidate(candidate.id);
     const editorial=store.getCardEditorial(candidate.id);const cardPlan=JSON.parse(editorial.card_plan_json||'[]');
-    const contentType=socialContentType(candidate);const themeContext=socialTemplateContext(store,editorial,channel,contentType);const structureState=resolveSocialCardStoryboardThemeState({editorial,themeDefinition:themeContext.themeDefinition,channelMode:channel,contentType});
+    const contentType=socialContentType(candidate);const structureState=resolveSocialCardStructureState({editorial,channelMode:channel,contentType});
     return json(response,200,{outputMode:nextMode,channelMode:channel,hasPlan:Boolean(cardPlan.length),candidate:updated,structureState,layoutDecisions:describeCardLayouts(cardPlan,{layoutStyle:editorial.layout_style,compositionMode:editorial.composition_mode,channelMode:channel})});
   }
   const cardEditorialAiMatch = pathname.match(/^\/api\/candidates\/(\d+)\/ai\/card-editorial$/);
@@ -320,7 +313,7 @@ export async function handleSocialCardRoutes(context) {
       const eventAnalysisSkill=contentType==='event'?loadSkillBundle({workspaceRoot:root,skillName:'event-research-analyzer'}):null;
       if(eventAnalysisSkill?.fallback)throw new Error('事件深度分析技能缺失');
       const channelMode=socialChannelMode(candidate);
-      const templateContext=socialTemplateContext(store,current,channelMode,contentType);
+      const templateContext=socialStructureContext(channelMode,contentType);
       const storyboardSystem=buildSocialCardStoryboardSystemPrompt({
         workspaceRoot:root,resourceRoot,skillId:storyboardSelection.selectedSkill,
         skillPrompt:socialSkill.prompt,contentType,channelMode,templateCapabilities:templateContext.capabilities,
@@ -360,14 +353,14 @@ export async function handleSocialCardRoutes(context) {
         const smart=normalizeCardComposition(page,{pageIndex,seed:`${candidate.batch_id}|${candidate.id}`});
         return { ...page, role:smart.role, composition:smart.composition, layout_style:SOCIAL_CARD_LAYOUTS.includes(page.layout_style)?page.layout_style:'auto', title:normalizeSocialCardPageTitle(clean(page.title),{kind:page.kind}), goal:clean(page.goal), evidence:(Array.isArray(page.evidence)?page.evidence:[]).map(clean), content_blocks:(Array.isArray(page.content_blocks)?page.content_blocks:[]).map((b)=>({...b,title:clean(b.title),content:clean(b.content)})) };
       });
-      const templateCompatibility=validateSocialCardTemplateCompatibility(cardPlan,{themeDefinition:templateContext.themeDefinition,channelMode,contentType});
+      const templateCompatibility=validateSocialCardTemplateCompatibility(cardPlan,{channelMode,contentType});
       const asText=(value,fallback='')=>typeof value==='string'?value.trim():value==null?fallback:Array.isArray(value)?value.map((item)=>typeof item==='string'?item:JSON.stringify(item)).join('\n'):JSON.stringify(value);
       const editorial=store.saveCardEditorial(candidate.id,{...current,
         target_reader:asText(parsed.target_reader,current.target_reader),pain_point:asText(parsed.pain_point,current.pain_point),
         tool_positioning:asText(parsed.tool_positioning,current.tool_positioning),must_highlight:asText(parsed.must_highlight,current.must_highlight),
         must_disclose:asText(parsed.must_disclose,current.must_disclose),getting_started:asText(parsed.getting_started,current.getting_started),
         forbidden_claims:asText(parsed.forbidden_claims,current.forbidden_claims),
-         recommended_pages:Math.max(4,Math.min(pageBudget.absolute,Number(parsed.recommended_pages)||cardPlan.length||pageBudget.recommended)),card_plan_json:JSON.stringify(cardPlan),storyboard_theme_snapshot_json:JSON.stringify(createSocialCardStoryboardThemeSnapshot({themeDefinition:templateContext.themeDefinition,channelMode,contentType})),status:'AI_READY'});
+         recommended_pages:Math.max(4,Math.min(pageBudget.absolute,Number(parsed.recommended_pages)||cardPlan.length||pageBudget.recommended)),card_plan_json:JSON.stringify(cardPlan),storyboard_structure_snapshot_json:JSON.stringify(createSocialCardStructureSnapshot({channelMode,contentType})),status:'AI_READY'});
       // 故事板重生成后，上一版 HTML/PNG 的内容计划调整记录不再属于当前故事板。
       // 保留文件但清空 rounds，避免编辑器把旧计划误显示为新故事板的调整结果。
       try {
@@ -376,7 +369,7 @@ export async function handleSocialCardRoutes(context) {
         invalidateSocialCardArtifacts({writeUtf8,workspaceDir:workspace.dir,reason:'storyboard-regenerated'});
       } catch {}
       const gate=socialCardGate(candidate,contentType,facts,editorial,eventAnalysis);
-      const structureState=resolveSocialCardStoryboardThemeState({editorial,themeDefinition:templateContext.themeDefinition,channelMode,contentType});
+      const structureState=resolveSocialCardStructureState({editorial,channelMode,contentType});
         harness.finish('completed');
         return json(response,200,{editorial,gate,structureState,cardPlan,contentType,eventAnalysis,pageBudget,layoutDecisions:describeCardLayouts(cardPlan,{layoutStyle:editorial.layout_style,compositionMode:editorial.composition_mode,channelMode}),
         template:templateCompatibility,

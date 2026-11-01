@@ -279,10 +279,9 @@ export function applyWorkbenchSchema(db) {
         getting_started TEXT NOT NULL DEFAULT '',
         forbidden_claims TEXT NOT NULL DEFAULT '',
         output_mode TEXT NOT NULL DEFAULT 'wechat-tool-cards',
-        visual_style TEXT NOT NULL DEFAULT 'auto',
         composition_mode TEXT NOT NULL DEFAULT 'smart',
         layout_style TEXT NOT NULL DEFAULT 'auto',
-        storyboard_theme_snapshot_json TEXT NOT NULL DEFAULT '{}',
+        storyboard_structure_snapshot_json TEXT NOT NULL DEFAULT '{}',
         recommended_pages INTEGER NOT NULL DEFAULT 6,
         card_plan_json TEXT NOT NULL DEFAULT '[]',
         status TEXT NOT NULL DEFAULT 'DISCUSS',
@@ -540,77 +539,6 @@ export function applyWorkbenchSchema(db) {
         FOREIGN KEY(batch_id) REFERENCES batches(id) ON DELETE CASCADE,
         FOREIGN KEY(candidate_row_id) REFERENCES candidates(id) ON DELETE SET NULL
       );
-      CREATE TABLE IF NOT EXISTS theme_definitions (
-        id TEXT PRIMARY KEY,
-        owner_scope TEXT NOT NULL DEFAULT 'workspace',
-        target TEXT NOT NULL CHECK(target IN ('article','social','cover')),
-        label TEXT NOT NULL,
-        source TEXT NOT NULL DEFAULT 'user',
-        active_version_id INTEGER,
-        status TEXT NOT NULL DEFAULT 'draft',
-        draft_json TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        FOREIGN KEY(active_version_id) REFERENCES theme_versions(id) ON DELETE SET NULL
-      );
-      CREATE TABLE IF NOT EXISTS theme_versions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        theme_id TEXT NOT NULL,
-        version TEXT NOT NULL,
-        schema_version INTEGER NOT NULL DEFAULT 1,
-        definition_json TEXT NOT NULL,
-        content_hash TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'published',
-        created_at TEXT NOT NULL,
-        published_at TEXT,
-        UNIQUE(theme_id,version),
-        FOREIGN KEY(theme_id) REFERENCES theme_definitions(id) ON DELETE RESTRICT
-      );
-      CREATE TABLE IF NOT EXISTS theme_metadata (
-        theme_id TEXT PRIMARY KEY,
-        creation_method TEXT NOT NULL DEFAULT 'manual' CHECK(creation_method IN ('manual','ai','import','clone')),
-        based_on_json TEXT NOT NULL DEFAULT '{}',
-        intent_json TEXT NOT NULL DEFAULT '{}',
-        ai_provenance_json TEXT NOT NULL DEFAULT '{}',
-        design_summary_json TEXT NOT NULL DEFAULT '[]',
-        repairs_json TEXT NOT NULL DEFAULT '[]',
-        template_match_evidence_json TEXT NOT NULL DEFAULT '{}',
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        FOREIGN KEY(theme_id) REFERENCES theme_definitions(id) ON DELETE CASCADE
-      );
-      CREATE TABLE IF NOT EXISTS theme_version_metadata (
-        theme_version_id INTEGER PRIMARY KEY,
-        metadata_json TEXT NOT NULL DEFAULT '{}',
-        created_at TEXT NOT NULL,
-        FOREIGN KEY(theme_version_id) REFERENCES theme_versions(id) ON DELETE CASCADE
-      );
-      CREATE TABLE IF NOT EXISTS theme_usage (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        theme_id TEXT NOT NULL,
-        version TEXT NOT NULL,
-        target TEXT NOT NULL CHECK(target IN ('article','social','cover')),
-        source TEXT NOT NULL,
-        batch_id TEXT,
-        candidate_row_id INTEGER,
-        used_at TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS theme_routing_decisions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        batch_id TEXT,
-        candidate_row_id INTEGER,
-        candidate_key TEXT NOT NULL,
-        target TEXT NOT NULL CHECK(target IN ('article','social','cover')),
-        content_hash TEXT NOT NULL,
-        mode TEXT NOT NULL DEFAULT 'auto' CHECK(mode IN ('auto','fallback','manual')),
-        selected_theme_id TEXT NOT NULL,
-        ranked_themes_json TEXT NOT NULL DEFAULT '[]',
-        reason TEXT NOT NULL DEFAULT '',
-        created_at TEXT NOT NULL,
-        UNIQUE(batch_id,candidate_key,target,content_hash),
-        FOREIGN KEY(batch_id) REFERENCES batches(id) ON DELETE CASCADE,
-        FOREIGN KEY(candidate_row_id) REFERENCES candidates(id) ON DELETE SET NULL
-      );
       CREATE TABLE IF NOT EXISTS social_template_metrics (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         operation TEXT NOT NULL CHECK(operation IN ('generation','page-regeneration')),
@@ -623,7 +551,6 @@ export function applyWorkbenchSchema(db) {
         rendered_template_source TEXT NOT NULL DEFAULT '',
         channel_mode TEXT NOT NULL DEFAULT 'wechat',
         content_type TEXT NOT NULL DEFAULT 'repository',
-        theme_id TEXT NOT NULL DEFAULT '',
         batch_id TEXT,
         candidate_row_id INTEGER,
         page_count INTEGER NOT NULL DEFAULT 0,
@@ -665,7 +592,6 @@ export function applyWorkbenchSchema(db) {
         proposal_id TEXT NOT NULL DEFAULT '',
         candidate_id TEXT NOT NULL DEFAULT '',
         template_pack_id TEXT NOT NULL DEFAULT '',
-        theme_id TEXT NOT NULL DEFAULT '',
         production_eligible INTEGER,
         audit_valid INTEGER,
         failed_roles_json TEXT NOT NULL DEFAULT '[]',
@@ -700,12 +626,6 @@ export function applyWorkbenchSchema(db) {
       CREATE INDEX IF NOT EXISTS idx_subscription_runs_batch ON subscription_runs(batch_id,id);
       CREATE INDEX IF NOT EXISTS idx_subscription_runs_source ON subscription_runs(source_key,id);
       CREATE INDEX IF NOT EXISTS idx_visual_decisions_type ON visual_decisions(visual_type,action);
-      CREATE INDEX IF NOT EXISTS idx_theme_versions_theme ON theme_versions(theme_id,id DESC);
-      CREATE INDEX IF NOT EXISTS idx_theme_metadata_method ON theme_metadata(creation_method,updated_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_theme_version_metadata_created ON theme_version_metadata(created_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_theme_usage_theme ON theme_usage(theme_id,used_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_theme_routing_recent ON theme_routing_decisions(target,created_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_theme_routing_batch ON theme_routing_decisions(batch_id,target,created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_social_template_metrics_pack ON social_template_metrics(requested_template_id,recorded_at DESC);
       CREATE INDEX IF NOT EXISTS idx_social_template_metrics_candidate ON social_template_metrics(candidate_row_id,recorded_at DESC);
       CREATE INDEX IF NOT EXISTS idx_social_template_proposal_metrics_pack ON social_template_proposal_metrics(template_pack_id,recorded_at DESC);
@@ -742,7 +662,6 @@ export function applyWorkbenchSchema(db) {
     const socialProposalMetricColumns=new Set(db.prepare('PRAGMA table_info(social_template_proposal_metrics)').all().map((column)=>column.name));
     if(socialProposalMetricColumns.size && !socialProposalMetricColumns.has('page_count'))db.exec("ALTER TABLE social_template_proposal_metrics ADD COLUMN page_count INTEGER NOT NULL DEFAULT 0");
     const socialTemplateMetricColumns=new Set(db.prepare('PRAGMA table_info(social_template_metrics)').all().map((column)=>column.name));
-    if(!socialTemplateMetricColumns.has('theme_id'))db.exec("ALTER TABLE social_template_metrics ADD COLUMN theme_id TEXT NOT NULL DEFAULT ''");
     if(!socialTemplateMetricColumns.has('page_roles_json'))db.exec("ALTER TABLE social_template_metrics ADD COLUMN page_roles_json TEXT NOT NULL DEFAULT '{}'");
     if(!socialTemplateMetricColumns.has('structural_reflow_attempted'))db.exec('ALTER TABLE social_template_metrics ADD COLUMN structural_reflow_attempted INTEGER NOT NULL DEFAULT 0');
     if(!socialTemplateMetricColumns.has('structural_reflow_success'))db.exec('ALTER TABLE social_template_metrics ADD COLUMN structural_reflow_success INTEGER NOT NULL DEFAULT 0');
@@ -821,46 +740,6 @@ export function applyWorkbenchSchema(db) {
     if(!hotspotColumns.has('source_type'))db.exec("ALTER TABLE hotspots ADD COLUMN source_type TEXT NOT NULL DEFAULT ''");
     if(!hotspotColumns.has('source_name'))db.exec("ALTER TABLE hotspots ADD COLUMN source_name TEXT NOT NULL DEFAULT ''");
     if(!hotspotColumns.has('research_eligible'))db.exec("ALTER TABLE hotspots ADD COLUMN research_eligible INTEGER NOT NULL DEFAULT 1");
-    // Migration：主题 target CHECK 放宽到 cover（SQLite 不能改 CHECK，重建两张主题表；幂等——新库 DDL 已含 cover）
-    const themeTableSql=(name)=>db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name=?").get(name)?.sql||'';
-    if(themeTableSql('theme_definitions').includes("CHECK(target IN ('article','social'))")||themeTableSql('theme_usage').includes("CHECK(target IN ('article','social'))")){
-      db.exec('PRAGMA foreign_keys=OFF');
-      try {
-        if(themeTableSql('theme_usage').includes("CHECK(target IN ('article','social'))")){
-          db.exec(`CREATE TABLE theme_usage_new (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            theme_id TEXT NOT NULL,
-            version TEXT NOT NULL,
-            target TEXT NOT NULL CHECK(target IN ('article','social','cover')),
-            source TEXT NOT NULL,
-            batch_id TEXT,
-            candidate_row_id INTEGER,
-            used_at TEXT NOT NULL
-          )`);
-          db.exec('INSERT INTO theme_usage_new (id,theme_id,version,target,source,batch_id,candidate_row_id,used_at) SELECT id,theme_id,version,target,source,batch_id,candidate_row_id,used_at FROM theme_usage');
-          db.exec('DROP TABLE theme_usage');
-          db.exec('ALTER TABLE theme_usage_new RENAME TO theme_usage');
-        }
-        if(themeTableSql('theme_definitions').includes("CHECK(target IN ('article','social'))")){
-          db.exec(`CREATE TABLE theme_definitions_new (
-            id TEXT PRIMARY KEY,
-            owner_scope TEXT NOT NULL DEFAULT 'workspace',
-            target TEXT NOT NULL CHECK(target IN ('article','social','cover')),
-            label TEXT NOT NULL,
-            source TEXT NOT NULL DEFAULT 'user',
-            active_version_id INTEGER,
-            status TEXT NOT NULL DEFAULT 'draft',
-            draft_json TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            FOREIGN KEY(active_version_id) REFERENCES theme_versions(id) ON DELETE SET NULL
-          )`);
-          db.exec('INSERT INTO theme_definitions_new (id,owner_scope,target,label,source,active_version_id,status,draft_json,created_at,updated_at) SELECT id,owner_scope,target,label,source,active_version_id,status,draft_json,created_at,updated_at FROM theme_definitions');
-          db.exec('DROP TABLE theme_definitions');
-          db.exec('ALTER TABLE theme_definitions_new RENAME TO theme_definitions');
-        }
-      } finally { db.exec('PRAGMA foreign_keys=ON'); }
-    }
     db.exec(`UPDATE hotspots SET research_eligible=0 WHERE id IN (
       SELECT c.hotspot_id FROM candidates c
       JOIN candidate_tracks ct ON ct.candidate_row_id=c.id
@@ -959,7 +838,7 @@ export function applyWorkbenchSchema(db) {
     if(!cardEditorialColumns.has('card_plan_json'))db.exec("ALTER TABLE card_editorial_sessions ADD COLUMN card_plan_json TEXT NOT NULL DEFAULT '[]'");
     if(!cardEditorialColumns.has('layout_style'))db.exec("ALTER TABLE card_editorial_sessions ADD COLUMN layout_style TEXT NOT NULL DEFAULT 'auto'");
     if(!cardEditorialColumns.has('composition_mode'))db.exec("ALTER TABLE card_editorial_sessions ADD COLUMN composition_mode TEXT NOT NULL DEFAULT 'template'");
-    if(!cardEditorialColumns.has('storyboard_theme_snapshot_json'))db.exec("ALTER TABLE card_editorial_sessions ADD COLUMN storyboard_theme_snapshot_json TEXT NOT NULL DEFAULT '{}'");
+    if(!cardEditorialColumns.has('storyboard_structure_snapshot_json'))db.exec("ALTER TABLE card_editorial_sessions ADD COLUMN storyboard_structure_snapshot_json TEXT NOT NULL DEFAULT '{}'");
     const artifactColumns=new Set(db.prepare('PRAGMA table_info(artifacts)').all().map((column)=>column.name));
     if(!artifactColumns.has('candidate_row_id'))db.exec('ALTER TABLE artifacts ADD COLUMN candidate_row_id INTEGER REFERENCES candidates(id) ON DELETE SET NULL');
     if(!artifactColumns.has('track'))db.exec("ALTER TABLE artifacts ADD COLUMN track TEXT NOT NULL DEFAULT ''");
