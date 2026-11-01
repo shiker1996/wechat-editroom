@@ -9,24 +9,7 @@ const DEFAULT_PROFILE = Object.freeze({
   textRepairMaxRounds: 2,
 });
 
-const PROFILES = Object.freeze({
-  'clean-v1': Object.freeze({ ...DEFAULT_PROFILE, mode: 'gray', grayBatch: true }),
-  'editorial-v1': Object.freeze({ ...DEFAULT_PROFILE, mode: 'gray', grayBatch: true }),
-  'brutalist-v1': Object.freeze({
-    ...DEFAULT_PROFILE,
-    mode: 'conservative',
-    maxPlanRounds: 2,
-    maxOperationsPerRound: 3,
-    structuralReflowScale: 0.78,
-  }),
-  'neon-v1': Object.freeze({
-    ...DEFAULT_PROFILE,
-    mode: 'conservative',
-    maxPlanRounds: 2,
-    maxOperationsPerRound: 3,
-    structuralReflowScale: 0.78,
-  }),
-});
+const PROFILES = Object.freeze({});
 
 function numberOrNull(value) {
   const n = Number(value);
@@ -114,11 +97,11 @@ export function buildSocialCardPlanRolloutReport(rows = [], { minSamples = 3 } =
     const newer = gray || conservative;
     const sourceAtomLossZero = (newer?.sourceAtomLossCount ?? 0) === 0;
     const enoughSamples = Boolean(newer?.enoughSamples);
-    const successNotWorse = !baseline || newer.successRate == null || baseline.successRate == null || newer.successRate >= baseline.successRate;
-    const overflowNotWorse = !baseline || newer.overflowRate == null || baseline.overflowRate == null || newer.overflowRate <= baseline.overflowRate;
-    const repairNotWorse = !baseline || newer.averagePlanAdjustmentRounds <= baseline.averagePlanAdjustmentRounds + 0.5;
-    const auditAlignmentNotWorse = !baseline || newer.averageJointPackingMismatchRate == null || baseline.averageJointPackingMismatchRate == null || newer.averageJointPackingMismatchRate <= baseline.averageJointPackingMismatchRate;
-    const targetDensityNotWorse = !baseline || newer.targetDensityRate == null || baseline.targetDensityRate == null || newer.targetDensityRate >= baseline.targetDensityRate;
+    const successNotWorse = !baseline || !newer || newer.successRate == null || baseline.successRate == null || newer.successRate >= baseline.successRate;
+    const overflowNotWorse = !baseline || !newer || newer.overflowRate == null || baseline.overflowRate == null || newer.overflowRate <= baseline.overflowRate;
+    const repairNotWorse = !baseline || !newer || newer.averagePlanAdjustmentRounds <= baseline.averagePlanAdjustmentRounds + 0.5;
+    const auditAlignmentNotWorse = !baseline || !newer || newer.averageJointPackingMismatchRate == null || baseline.averageJointPackingMismatchRate == null || newer.averageJointPackingMismatchRate <= baseline.averageJointPackingMismatchRate;
+    const targetDensityNotWorse = !baseline || !newer || newer.targetDensityRate == null || baseline.targetDensityRate == null || newer.targetDensityRate >= baseline.targetDensityRate;
     return {
       templatePackId,
       currentMode: current?.mode || 'unknown',

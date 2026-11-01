@@ -103,7 +103,6 @@ export function summarizeSocialTemplateRun({
   targetPage = null,
   initialLayoutPass = null,
   auditAttempts = null,
-  themeId = '',
   pageRoleStats = null,
   structuralReflowAttempted = false,
   structuralReflowSuccess = false,
@@ -143,7 +142,6 @@ export function summarizeSocialTemplateRun({
     renderedTemplate: renderedTemplate ? { id: String(renderedTemplate.id || ''), version: renderedTemplate.version ?? null, source: String(renderedTemplate.source || '') } : null,
     channelMode: channelMode === 'xiaohongshu' ? 'xiaohongshu' : 'wechat',
     contentType: String(contentType || 'repository'),
-    themeId: String(themeId || ''),
     pageCount: pages.length,
     layoutPass,
     fallback: Boolean(fallback),
@@ -206,14 +204,13 @@ export function aggregateSocialTemplateMetricsByDimension(rows = []) {
   for (const row of Array.isArray(rows) ? rows : []) {
     if (row.operation !== 'generation') continue;
     const template = String(row.requested_template_id || row.requestedTemplate?.id || 'unknown');
-    const theme = String(row.theme_id || row.themeId || 'unknown');
     const roleStats = row.pageRoleStats && Object.keys(row.pageRoleStats).length ? row.pageRoleStats : { all: {
       pages: numberOrZero(row.page_count), layoutPass: row.layout_pass ? numberOrZero(row.page_count) : 0,
       underfilledPages: numberOrZero(row.underfilled_pages), overflowPages: numberOrZero(row.overflow_pages),
     } };
     for (const [role, value] of Object.entries(roleStats)) {
-      const key = `${template}|${theme}|${role}`;
-      const current = groups.get(key) || { templatePackId: template, themeId: theme, role, runs: 0, pages: 0, layoutPass: 0, underfilledPages: 0, overflowPages: 0, pagesAdded: 0, pagesSplit: 0, pagesMerged: 0, blocksMoved: 0, factBlocksAdded: 0, contentPlanAdjustmentRounds: 0, sourceAtomLossCount: 0, utilizationTotal: 0, utilizationSamples: 0, structuralReflowRuns: 0, structuralReflowSuccesses: 0, textRepairRuns: 0, jointPackingAuditAttempts: 0, jointPackingMismatchCount: 0, jointPackingBrowserOnlyOverflowPages: 0, jointPackingStaticOnlyOverflowPages: 0, jointPackingDeltaTotal: 0, jointPackingDeltaSamples: 0 };
+      const key = `${template}|${role}`;
+      const current = groups.get(key) || { templatePackId: template, role, runs: 0, pages: 0, layoutPass: 0, underfilledPages: 0, overflowPages: 0, pagesAdded: 0, pagesSplit: 0, pagesMerged: 0, blocksMoved: 0, factBlocksAdded: 0, contentPlanAdjustmentRounds: 0, sourceAtomLossCount: 0, utilizationTotal: 0, utilizationSamples: 0, structuralReflowRuns: 0, structuralReflowSuccesses: 0, textRepairRuns: 0, jointPackingAuditAttempts: 0, jointPackingMismatchCount: 0, jointPackingBrowserOnlyOverflowPages: 0, jointPackingStaticOnlyOverflowPages: 0, jointPackingDeltaTotal: 0, jointPackingDeltaSamples: 0 };
       current.runs += 1;
       current.pages += numberOrZero(value?.pages);
       current.layoutPass += numberOrZero(value?.layoutPass);
@@ -250,7 +247,7 @@ export function aggregateSocialTemplateMetricsByDimension(rows = []) {
     averageUtilization: item.utilizationSamples ? item.utilizationTotal / item.utilizationSamples : null,
     jointPackingMismatchRate: item.jointPackingAuditAttempts ? item.jointPackingMismatchCount / item.jointPackingAuditAttempts : null,
     averageJointPackingMeanAbsoluteUtilizationDelta: item.jointPackingDeltaSamples ? item.jointPackingDeltaTotal / item.jointPackingDeltaSamples : null,
-  })).sort((a, b) => `${a.templatePackId}|${a.themeId}|${a.role}`.localeCompare(`${b.templatePackId}|${b.themeId}|${b.role}`));
+  })).sort((a, b) => `${a.templatePackId}|${a.role}`.localeCompare(`${b.templatePackId}|${b.role}`));
 }
 
 export function buildSocialTemplateCalibrationReport(rows = [], { minSamples = 3 } = {}) {

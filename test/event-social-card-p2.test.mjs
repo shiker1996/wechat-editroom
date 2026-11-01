@@ -7,7 +7,6 @@ import { evaluateEventCardGate } from '../server/features/social-cards/index.mjs
 import { renderStoryboardHtml } from '../server/features/social-cards/application/social-card-pipeline.mjs';
 import { Store } from '../server/platform/core/store.mjs';
 import { routeBreakingAnalysis } from '../server/features/articles/llm/breaking-analysis-pipeline.mjs';
-import { socialThemeDefinition } from '../server/shared/themes/social-theme-compiler.mjs';
 
 test('事件图文门禁要求事实边界、来源审计和故事板',()=>{
   const analysis={eventSummary:'事件摘要',sources:[{status:'ok'}],factBase:{confirmedFacts:[{claim:'事实'}],claims:[]},sourceAudit:{issues:[]}};
@@ -17,8 +16,7 @@ test('事件图文门禁要求事实边界、来源审计和故事板',()=>{
 });
 
 test('事件故事板 HTML 使用事件标签和事实边界页脚',()=>{
-  const legacyTheme=structuredClone(socialThemeDefinition('peach')); delete legacyTheme.social.templatePack; delete legacyTheme.hash; delete legacyTheme.file;
-  const html=renderStoryboardHtml({topic:'突发事件',contentType:'event',sourceLabel:'突发专题',visualStyle:'peach',themeDefinition:legacyTheme,pages:[
+  const html=renderStoryboardHtml({topic:'突发事件',contentType:'event',sourceLabel:'突发专题',pages:[
     {kind:'cover',title:'发生了什么',goal:'核心事件',content_blocks:[{type:'text',content:'确认事实'}]},
     {kind:'evidence',title:'证据核验',content_blocks:[{type:'note',content:'该主张尚未获独立证实'}]},
     {kind:'risk',title:'事实边界',content_blocks:[{type:'list',content:'来源单一\n等待回应'}]},
@@ -27,7 +25,7 @@ test('事件故事板 HTML 使用事件标签和事实边界页脚',()=>{
   assert.match(html,/BREAKING FOCUS/);assert.match(html,/EVIDENCE CHECK/);assert.match(html,/据公开素材整理 · 未核实内容已标注/);assert.doesNotMatch(html,/OPEN SOURCE/);
 });
 
-test('事件图文分流设置正式输出模式并交给自动主题路由',()=>{
+test('事件图文分流设置正式输出模式，不写入旧视觉主题字段',()=>{
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'event-social-route-'));const store=new Store(path.join(root,'test.db'));
   try{
     const batch=store.createBreakingBatch({date:'2026-07-23',title:'事件',urls:['https://example.com'],requestedTracks:['social_cards']});
@@ -35,7 +33,7 @@ test('事件图文分流设置正式输出模式并交给自动主题路由',()=
     const {candidate}=routeBreakingAnalysis({store,batchId:batch.id,tracks:['social_cards']});
     const track=store.listCandidateTracks(candidate.id).find((item)=>item.track==='social_cards');
     const editorial=store.getCardEditorial(candidate.id);
-    assert.equal(track.output_mode,'wechat-event-cards');assert.equal(editorial.output_mode,'wechat-event-cards');assert.equal(editorial.visual_style,'auto');assert.equal(editorial.recommended_pages,7);
+    assert.equal(track.output_mode,'wechat-event-cards');assert.equal(editorial.output_mode,'wechat-event-cards');assert.equal(editorial.visual_style,undefined);assert.equal(editorial.recommended_pages,7);
   }finally{store.close();fs.rmSync(root,{recursive:true,force:true});}
 });
 

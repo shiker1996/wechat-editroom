@@ -83,15 +83,12 @@ function parseStoryboardSnapshot(value) {
   }
 }
 
-export function createSocialCardStoryboardThemeSnapshot({ themeDefinition = null, channelMode = 'wechat', contentType = 'repository' } = {}) {
-  const capabilities = getSocialCardTemplateCapabilities({ themeDefinition, channelMode, contentType });
+export function createSocialCardStructureSnapshot({ channelMode = 'wechat', contentType = 'repository' } = {}) {
+  const capabilities = getSocialCardTemplateCapabilities({ channelMode, contentType });
   const capacityProfile = capabilities.capacityProfile;
   const capacityHash = `sha256:${createHash('sha256').update(JSON.stringify(capacityProfile)).digest('hex')}`;
   return Object.freeze({
     schemaVersion: 2,
-    themeId: themeDefinition?.id || '',
-    themeVersion: themeDefinition?.version || '',
-    themeHash: themeDefinition?.hash || '',
     templatePack: { ...capabilities.templatePack },
     capacityProfileVersion: capabilities.capacityProfileVersion,
     capacityHash,
@@ -101,20 +98,20 @@ export function createSocialCardStoryboardThemeSnapshot({ themeDefinition = null
   });
 }
 
-export function resolveSocialCardStoryboardThemeState({ editorial = null, themeDefinition = null, channelMode = 'wechat', contentType = 'repository' } = {}) {
+export function resolveSocialCardStructureState({ editorial = null, channelMode = 'wechat', contentType = 'repository' } = {}) {
   const cardPlan = parseStoryboardSnapshot(editorial?.card_plan_json);
   const hasStoryboard = Array.isArray(cardPlan) && cardPlan.length > 0;
-  const current = createSocialCardStoryboardThemeSnapshot({ themeDefinition, channelMode, contentType });
-  const snapshot = parseStoryboardSnapshot(editorial?.storyboard_theme_snapshot_json);
+  const current = createSocialCardStructureSnapshot({ channelMode, contentType });
+  const currentSnapshot = parseStoryboardSnapshot(editorial?.storyboard_structure_snapshot_json);
+  const legacySnapshot = parseStoryboardSnapshot(editorial?.storyboard_theme_snapshot_json);
+  const snapshot = currentSnapshot?.templatePack?.id ? currentSnapshot : legacySnapshot;
   if (!hasStoryboard) return Object.freeze({ status: 'empty', canRender: false, requiresStoryboard: true, hasStoryboard: false, current, snapshot: null, reason: '尚未生成故事板' });
-  // 新链路要求故事板在生成时锁定模板能力。历史故事板没有快照，
-  // 无法证明页面组件与当前模板可承载范围一致，因此不得直接进入渲染。
-  if (!snapshot?.templatePack?.id) return Object.freeze({ status: 'needs-storyboard', canRender: false, requiresStoryboard: true, hasStoryboard: true, current, snapshot: null, reason: '历史故事板未记录主题快照，请先重新生成故事板' });
+  // 故事板只锁定结构能力；历史主题 ID 不参与兼容判断。
+  if (!snapshot?.templatePack?.id) return Object.freeze({ status: 'needs-storyboard', canRender: false, requiresStoryboard: true, hasStoryboard: true, current, snapshot: null, reason: '历史故事板未记录页面结构快照，请先重新生成故事板' });
   const samePack = snapshot.templatePack.id === current.templatePack.id && Number(snapshot.templatePack.version) === Number(current.templatePack.version);
   const sameContext = samePack && snapshot.channelMode === current.channelMode && snapshot.contentType === current.contentType;
-  if (sameContext && snapshot.themeId === current.themeId) return Object.freeze({ status: 'current', canRender: true, requiresStoryboard: false, hasStoryboard: true, current, snapshot, reason: '故事板与当前主题、模板能力一致' });
-  if (sameContext) return Object.freeze({ status: 'render-only', canRender: true, requiresStoryboard: false, hasStoryboard: true, current, snapshot, reason: '模板能力未变化，可直接换肤并重新渲染图文' });
-  return Object.freeze({ status: 'needs-storyboard', canRender: false, requiresStoryboard: true, hasStoryboard: true, current, snapshot, reason: '当前主题或渠道的模板能力已变化，请先重新生成故事板' });
+  if (sameContext) return Object.freeze({ status: 'current', canRender: true, requiresStoryboard: false, hasStoryboard: true, current, snapshot, reason: '故事板与当前页面结构、渠道和内容类型一致' });
+  return Object.freeze({ status: 'needs-storyboard', canRender: false, requiresStoryboard: true, hasStoryboard: true, current, snapshot, reason: '当前页面结构、渠道或内容类型的约束已变化，请先重新生成故事板' });
 }
 
 export function buildSocialCardTemplateCapabilityPrompt(capabilities) {
@@ -124,7 +121,7 @@ export function buildSocialCardTemplateCapabilityPrompt(capabilities) {
     .join('\n');
   return [
     '## Social 版式能力约束（由程序提供）',
-    `当前主题模板包：${capabilities.templatePack.id} v${capabilities.templatePack.version}；渠道：${capabilities.channelMode}。`,
+    `固定结构包：${capabilities.templatePack.id} v${capabilities.templatePack.version}；渠道：${capabilities.channelMode}。`,
     '故事板先决定页面目标、事实和内容块；以下信息仅用于生成可被当前版式承载的内容，不是要求固定卡片数量。',
     roleLines,
     `当前渠道允许的内容块：${capabilities.allowedBlockTypes.join('、')}`,

@@ -1,8 +1,4 @@
 import { compileSocialTheme, socialThemeDefinition } from '../../../shared/themes/social-theme-compiler.mjs';
-import { NEON_V1_CSS, renderNeonStoryboardSections } from './templates/social/neon-v1.mjs';
-import { BRUTALIST_V1_CSS, renderBrutalistStoryboardSections } from './templates/social/brutalist-v1.mjs';
-import { EDITORIAL_V1_CSS, renderEditorialStoryboardSections } from './templates/social/editorial-v1.mjs';
-import { CLEAN_V1_CSS, renderCleanStoryboardSections } from './templates/social/clean-v1.mjs';
 import { renderStoryboardSections } from './storyboard-page-renderer.mjs';
 import { renderStoryboardDocument } from './storyboard-document-renderer.mjs';
 import { resolveSocialCardTemplateContext } from './social-card-template-resolver.mjs';
@@ -87,15 +83,7 @@ export function renderStoryboardHtml({ topic, repository, pages, visualStyle = '
   const customTemplatePack = templatePackOverride && typeof templatePackOverride === 'object' ? templatePackOverride : null;
   const templatePackId = typeof templatePackOverride === 'string' ? templatePackOverride : '';
   const templateContext = resolveSocialCardTemplateContext({ themeDefinition, channelMode, contentType, templatePackId, templatePack: customTemplatePack });
-  let sections = templateContext.pack.id === 'neon-v1'
-    ? renderNeonStoryboardSections({ topic, repository, pages, compiledTheme, compositionMode, compositionSeed, forceSafeComposition, relaxedDensityPages, expandedDensityPages, fitContentPages, contentType, sourceLabel, disclosure, channelMode, coverTitleLines })
-    : templateContext.pack.id === 'brutalist-v1'
-      ? renderBrutalistStoryboardSections({ topic, repository, pages, compositionMode, compositionSeed, forceSafeComposition, relaxedDensityPages, expandedDensityPages, fitContentPages, contentType, sourceLabel, disclosure, channelMode, coverTitleLines })
-      : templateContext.pack.id === 'editorial-v1'
-        ? renderEditorialStoryboardSections({ topic, repository, pages, compositionMode, compositionSeed, forceSafeComposition, relaxedDensityPages, expandedDensityPages, fitContentPages, contentType, sourceLabel, disclosure, channelMode, coverTitleLines })
-        : templateContext.pack.id === 'clean-v1'
-          ? renderCleanStoryboardSections({ topic, repository, pages, compiledTheme, compositionMode, compositionSeed, forceSafeComposition, relaxedDensityPages, expandedDensityPages, fitContentPages, contentType, sourceLabel, disclosure, channelMode, coverTitleLines })
-          : renderStoryboardSections({ topic, repository, pages, compiledTheme, layoutStyle, compositionMode, compositionSeed, forceSafeComposition, relaxedDensityPages, expandedDensityPages, fitContentPages, contentType, sourceLabel, disclosure, channelMode, coverTitleLines, templatePackId, templatePack: customTemplatePack });
+  let sections = renderStoryboardSections({ topic, repository, pages, compiledTheme, layoutStyle, compositionMode, compositionSeed, forceSafeComposition, relaxedDensityPages, expandedDensityPages, fitContentPages, contentType, sourceLabel, disclosure, channelMode, coverTitleLines, templatePackId, templatePack: customTemplatePack });
   if (fitContentPages) {
     const indexes = fitContentPages === true
       ? new Set((Array.isArray(pages) ? pages : []).map((page, index) => page?.kind === 'cover' || page?.kind === 'ending' ? -1 : index).filter((index) => index >= 0))
@@ -107,5 +95,5 @@ export function renderStoryboardHtml({ topic, repository, pages, visualStyle = '
   }
   return renderStoryboardDocument({ topic, contentType, channelMode, compiledTheme, sections,
     templatePackId: templateContext.pack.id, templateVersion: templateContext.pack.version, templateSource: templateContext.source,
-    templateCss: templateCssOverride || templateContext.pack.css || (templateContext.pack.id === 'neon-v1' ? NEON_V1_CSS : templateContext.pack.id === 'brutalist-v1' ? BRUTALIST_V1_CSS : templateContext.pack.id === 'editorial-v1' ? EDITORIAL_V1_CSS : templateContext.pack.id === 'clean-v1' ? CLEAN_V1_CSS : '') });
+    templateCss: templateCssOverride || templateContext.pack.css || '' });
 }

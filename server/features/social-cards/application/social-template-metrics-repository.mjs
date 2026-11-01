@@ -13,16 +13,16 @@ export class SocialTemplateMetricsRepository {
     const rendered = input.renderedTemplate || {};
     const result = this.db.prepare(`INSERT INTO social_template_metrics
       (operation,success,requested_template_id,requested_template_version,requested_template_source,
-       rendered_template_id,rendered_template_version,rendered_template_source,channel_mode,content_type,theme_id,
+       rendered_template_id,rendered_template_version,rendered_template_source,channel_mode,content_type,
        batch_id,candidate_row_id,page_count,layout_pass,fallback,underfilled_pages,overflow_pages,edit_mode,target_page,
        page_roles_json,structural_reflow_attempted,structural_reflow_success,structure_repair_count,text_repair_count,content_plan_adjustment_count,
        pages_added,pages_split,pages_merged,blocks_moved,fact_blocks_added,plan_operation_counts_json,source_atom_loss_count,avg_utilization,rollout_profile_json,
        no_op_repair,hard_gate_failure,joint_packing_audit_attempts,joint_packing_mismatch_count,joint_packing_browser_only_overflow,joint_packing_static_only_overflow,joint_packing_mean_delta,recorded_at)
-      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
       input.operation === 'page-regeneration' ? 'page-regeneration' : 'generation', input.success === false ? 0 : 1,
       String(requested.id || ''), requested.version == null ? null : String(requested.version), String(requested.source || ''),
       String(rendered.id || ''), rendered.version == null ? null : String(rendered.version), String(rendered.source || ''),
-      String(input.channelMode || 'wechat'), String(input.contentType || 'repository'), String(input.themeId || ''), input.batchId || null, input.candidateId || null,
+      String(input.channelMode || 'wechat'), String(input.contentType || 'repository'), input.batchId || null, input.candidateId || null,
       Number.isFinite(Number(input.pageCount)) ? Number(input.pageCount) : 0, input.layoutPass == null ? null : (input.layoutPass ? 1 : 0),
       input.fallback ? 1 : 0, Number(input.underfilledPages || 0), Number(input.overflowPages || 0), String(input.editMode || ''),
       input.targetPage == null ? null : Number(input.targetPage), JSON.stringify(input.pageRoleStats && typeof input.pageRoleStats === 'object' ? input.pageRoleStats : {}),
@@ -49,7 +49,6 @@ export class SocialTemplateMetricsRepository {
       fallback: Number(row.fallback) !== 0,
       operation: row.operation,
       pageRoleStats: json(row.page_roles_json, {}),
-      themeId: row.theme_id || '',
       structuralReflowAttempted: Number(row.structural_reflow_attempted) !== 0,
       structuralReflowSuccess: Number(row.structural_reflow_success) !== 0,
       structureRepairCount: Number(row.structure_repair_count || 0),
@@ -80,15 +79,14 @@ export class SocialTemplateMetricsRepository {
     }));
   }
 
-  stats({ templatePackId = null, themeId = null, pageRole = null } = {}) {
-    const rows = this.list({ templatePackId, limit: 5000 }).filter((row) => !themeId || row.themeId === String(themeId));
+  stats({ templatePackId = null, pageRole = null } = {}) {
+    const rows = this.list({ templatePackId, limit: 5000 });
     const aggregate = aggregateSocialTemplateMetrics(rows);
     const totalRows = this.list({ limit: 5000 });
     const totalGenerations = totalRows.filter((row) => row.operation === 'generation').length;
     return {
       ...aggregate,
       templatePackId: templatePackId || null,
-      themeId: themeId || null,
       usageRate: aggregate.usageCount && totalGenerations ? aggregate.usageCount / totalGenerations : null,
       calibration: buildSocialTemplateCalibrationReport(rows, { minSamples: 3 }),
       rollout: buildSocialCardPlanRolloutReport(rows, { minSamples: 3 }),

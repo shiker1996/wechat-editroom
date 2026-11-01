@@ -1,5 +1,4 @@
 import { colorContrast } from '../themes/theme-validator.mjs';
-import { articleThemeDefinition, compileArticleTheme } from '../themes/article-theme-compiler.mjs';
 import { fontStack } from '../themes/font-utils.mjs';
 import { escapeHtml } from './html-utils.mjs';
 
@@ -15,15 +14,32 @@ export function normalizeDesignTokens(input = {}) {
       text: hex(colors.text || legacy.textColor, '#202522'),
       muted: hex(colors.muted || legacy.mutedColor, '#6C736E'),
       accent: hex(colors.accent || legacy.accentColor, '#C4473A'),
+      surface: hex(colors.surface, hex(colors.background, '#FFFFFF')),
+      accentSecondary: hex(colors.accentSecondary, hex(colors.accent || legacy.accentColor, '#C4473A')),
+      line: hex(colors.line, hex(colors.muted || legacy.mutedColor, '#D8D3C9')),
+      inverseText: hex(colors.inverseText, '#FFFFFF'),
+      codeBackground: hex(colors.codeBackground, hex(colors.surface || colors.background, '#FFFFFF')),
     },
     typography: {
-      body_px: number(input.typography?.body_px, 16, 15, 18),
-      line_height: number(input.typography?.line_height, 1.8, 1.5, 2.1),
-      h2_px: number(input.typography?.h2_px, 22, 19, 28),
+      family: ['sans','serif','song','kai','hei','mono'].includes(input.typography?.family) ? input.typography.family : 'sans',
+      heading_family: ['sans','serif','song','kai','hei','mono'].includes(input.typography?.heading_family ?? input.typography?.headingFamily) ? (input.typography?.heading_family ?? input.typography.headingFamily) : 'sans',
+      body_px: number(input.typography?.body_px ?? input.typography?.bodyPx, 16, 15, 18),
+      h1_px: number(input.typography?.h1_px ?? input.typography?.h1Px, 30, 24, 40),
+      line_height: number(input.typography?.line_height ?? input.typography?.lineHeight, 1.8, 1.5, 2.1),
+      h2_px: number(input.typography?.h2_px ?? input.typography?.h2Px, 22, 19, 28),
+      caption_px: number(input.typography?.caption_px ?? input.typography?.captionPx, 13, 11, 15),
+      letter_spacing_em: number(input.typography?.letter_spacing_em ?? input.typography?.letterSpacingEm, 0, -0.1, 0.1),
     },
     spacing: {
+      article_padding_px: number(input.spacing?.article_padding_px ?? input.spacing?.articlePaddingPx, 18, 12, 32),
       section_px: number(input.spacing?.section_px, 30, 20, 42),
       paragraph_px: number(input.spacing?.paragraph_px, 16, 10, 24),
+      card_gap_px: number(input.spacing?.card_gap_px ?? input.spacing?.cardGapPx, 12, 6, 24),
+    },
+    shape: {
+      radius_px: number(input.shape?.radius_px ?? input.shape?.radiusPx, 0, 0, 16),
+      border_width_px: number(input.shape?.border_width_px ?? input.shape?.borderWidthPx, 1, 0, 3),
+      shadow: ['none','soft','hard','glow'].includes(input.shape?.shadow) ? input.shape.shadow : 'none',
     },
     image: {
       radius_px: number(input.image?.radius_px, 0, 0, 16),
@@ -32,8 +48,7 @@ export function normalizeDesignTokens(input = {}) {
   };
 }
 
-// 自动主题：与成稿链 writerSkill 的判定保持一致——八卦吃瓜类走卡片风，
-// 其余按选题分类映射到对应主题；综合文按研报处理。
+// Legacy themed renderer remains available for explicitly requested deterministic output.
 function hexToRgba(hex, alpha) {
   const n = parseInt(String(hex).slice(1), 16);
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
@@ -49,8 +64,18 @@ function lighten(hex, ratio) {
 // 由 design tokens 推导每个元素的内联样式。公众号编辑器只保留内联样式，
 // 确定性渲染直接输出 style 属性，避免再经浏览器内联化。
 // 注意：门禁禁止流式标签出现固定像素宽高，这里只用百分比/自动尺寸。
-function buildInlineStyles(tokens, themeName = 'magazine-warm') {
-  const theme = compileArticleTheme(tokens.themeDefinition||articleThemeDefinition(themeName));
+function buildInlineStyles(tokens) {
+  const sourceTypography=tokens.typography||{},sourceSpacing=tokens.spacing||{},sourceShape=tokens.shape||{};
+  const theme = {
+    definition:{article:{components:{}}},components:{},
+    variants:{frame:'design-scheme',rhythm:'standard',bodyFont:sourceTypography.family||'sans',justify:false,strong:'accent',h1:'standard',h2:'standard',lead:false,quote:'standard',divider:'hairline',list:'default',table:'tinted-header',image:'plain',kicker:null},
+    variables:{
+      colors:tokens.colors||{},
+      typography:{h1Px:sourceTypography.h1_px,headingFamily:sourceTypography.heading_family,letterSpacingEm:sourceTypography.letter_spacing_em,captionPx:sourceTypography.caption_px},
+      spacing:{articlePaddingPx:sourceSpacing.article_padding_px,cardGapPx:sourceSpacing.card_gap_px},
+      shape:{radiusPx:sourceShape.radius_px,borderWidthPx:sourceShape.border_width_px,shadow:sourceShape.shadow},
+    },
+  };
   const variants = theme.variants;
   const components = theme.components;
   const themeVariables = theme.variables;
@@ -85,18 +110,18 @@ function buildInlineStyles(tokens, themeName = 'magazine-warm') {
   const paragraphPx = design.spacing.paragraph_px;
   const radiusPx = design.image.radius_px;
   const captionPx = design.image.caption_px;
-  const h1Px = Number(themeVariables.typography.h1Px);
-  const letterSpacing = Number(themeVariables.typography.letterSpacingEm);
-  const articlePaddingPx = Number(themeVariables.spacing.articlePaddingPx);
-  const cardGapPx = Number(themeVariables.spacing.cardGapPx);
-  const borderWidthPx = Number(themeVariables.shape.borderWidthPx);
+  const h1Px = design.typography.h1_px;
+  const letterSpacing = design.typography.letter_spacing_em;
+  const articlePaddingPx = design.spacing.article_padding_px;
+  const cardGapPx = design.spacing.card_gap_px;
+  const borderWidthPx = design.shape.border_width_px;
   const rhythm=tokens.themeDefinition?variants.rhythm||'standard':'standard';
   const rhythmSectionPx=Math.max(16,Math.min(56,sectionPx+(rhythm==='airy'?8:rhythm==='dense'?-8:0)));
   const rhythmParagraphPx=Math.max(8,Math.min(28,paragraphPx+(rhythm==='airy'?4:rhythm==='dense'?-4:0)));
   const rhythmCardGapPx=Math.max(4,Math.min(28,cardGapPx+(rhythm==='airy'?3:rhythm==='dense'?-3:0)));
   const rhythmLineHeight=Math.max(1.35,Math.min(2.1,lineHeight+(rhythm==='airy'?.08:rhythm==='dense'?-.08:0)));
-  const themeRadiusPx = Number(themeVariables.shape.radiusPx);
-  const shadow = ({none:'none',soft:`0 10px 28px ${hexToRgba(ink,.12)}`,hard:`6px 6px 0 ${accentSecondary}`,glow:`0 0 22px ${hexToRgba(accent,.28)}`})[themeVariables.shape.shadow] || 'none';
+  const themeRadiusPx = design.shape.radius_px;
+  const shadow = ({none:'none',soft:`0 10px 28px ${hexToRgba(ink,.12)}`,hard:`6px 6px 0 ${accentSecondary}`,glow:`0 0 22px ${hexToRgba(accent,.28)}`})[design.shape.shadow] || 'none';
   const font = fontStack('sans', { singleQuotes:true });
   // 主题字体角色映射到本机常见中文字体；没有安装扩展字体时也不会全部回退到微软雅黑。
   const serif = fontStack('serif', { singleQuotes:true });
@@ -216,7 +241,7 @@ function inline(text, styles) {
 }
 
 export function markdownToHtml(markdown, tokens = {}) {
-  const { styles, variants } = buildInlineStyles(tokens, tokens.theme);
+  const { styles, variants } = buildInlineStyles(tokens);
   const kicker = String(tokens.kicker || '').trim();
   const renderInline = (text) => inline(text, styles);
   const dividerHtml = variants.divider === 'hairline'

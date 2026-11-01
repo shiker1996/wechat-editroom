@@ -13,7 +13,7 @@ test('侧栏按六个工作区组织并自动展开当前工作区', () => {
     assert.match(html, new RegExp(label));
   }
   assert.equal((html.match(/class="nav-group"/g) || []).length, 6);
-  assert.equal((html.match(/class="nav-item/g) || []).length, 25);
+  assert.equal((html.match(/class="nav-item/g) || []).length, 24);
   assert.match(html, /data-view="material-inbox"[^>]*>[\s\S]*?nav-label">素材入箱/);
   assert.match(html, /data-view="wechat-review-prep"[^>]*>[\s\S]*?nav-label">复盘数据台/);
   assert.match(html, /data-view="wechat-review"[^>]*>[\s\S]*?nav-label">公众号复盘/);
@@ -54,8 +54,9 @@ test('侧栏按六个工作区组织并自动展开当前工作区', () => {
   assert.match(html,/data-view="editorial"[^>]*>[\s\S]*?nav-label">热点事件/);
   assert.doesNotMatch(html, /data-view="models">模型运行/);
   assert.match(html, /class="rail-utility-group" aria-label="扩展与定制"/);
-  for (const view of ['skills', 'themes', 'system']) assert.match(html, new RegExp(`class="nav-utility" data-view="${view}"`));
-  assert.ok(html.indexOf('data-view="skills"') < html.indexOf('data-view="themes"'));
+  for (const view of ['skills', 'system']) assert.match(html, new RegExp(`class="nav-utility" data-view="${view}"`));
+  assert.doesNotMatch(html, /data-view="themes"/);
+  assert.ok(html.indexOf('data-view="skills"') < html.indexOf('data-view="system"'));
   assert.match(main, /group\.open = Boolean\(activeNavItem && group\.contains\(activeNavItem\)\)/);
   assert.match(main, /setAttribute\("aria-current", "page"\)/);
   assert.match(main, /\.nav-item\.active,\.nav-utility\.active/);

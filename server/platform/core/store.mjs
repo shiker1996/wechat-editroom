@@ -8,7 +8,6 @@ import { SourceRunRepository } from '../persistence/repositories/source-run-repo
 import { HotspotRepository } from '../persistence/repositories/hotspot-repository.mjs';
 import { CandidateRepository } from '../persistence/repositories/candidate-repository.mjs';
 import { runDatabaseMigrations } from '../persistence/migrations.mjs';
-import { ThemeRepository } from '../persistence/repositories/theme-repository.mjs';
 import { VisualDecisionRepository } from '../persistence/repositories/visual-decision-repository.mjs';
 import { WorkbenchQueryService } from '../persistence/queries/workbench-query-service.mjs';
 import { EditorialRepository } from '../persistence/repositories/editorial-repository.mjs';
@@ -20,7 +19,6 @@ import { CollectionSourceRepository } from '../persistence/repositories/collecti
 import { EventResolutionRepository } from '../persistence/repositories/event-resolution-repository.mjs';
 import { EventResolutionReviewRepository } from '../persistence/repositories/event-resolution-review-repository.mjs';
 import { AgentRunRepository } from '../persistence/repositories/agent-run-repository.mjs';
-import { SocialTemplateProposalMetricsRepository } from '../persistence/repositories/social-template-proposal-metrics-repository.mjs';
 import { ContentPlanningRepository } from '../persistence/repositories/content-planning-repository.mjs';
 import { MaterialRepository } from '../persistence/repositories/material-repository.mjs';
 import { ArticleArtifactRepository } from '../persistence/repositories/article-artifact-repository.mjs';
@@ -54,7 +52,6 @@ export class Store {
       sourceRuns: new SourceRunRepository(this.db),
       hotspots: new HotspotRepository(this.db),
       candidates: new CandidateRepository(this.db),
-      themes: new ThemeRepository(this.db),
       visualDecisions: new VisualDecisionRepository(this.db),
       editorial: new EditorialRepository(this.db),
       socialCandidates: new SocialCandidateRepository(this.db),
@@ -66,7 +63,6 @@ export class Store {
       eventResolutionReview: new EventResolutionReviewRepository(this.db),
       agentRuns: new AgentRunRepository(this.db),
       socialTemplateMetrics: null,
-      socialTemplateProposalMetrics: new SocialTemplateProposalMetricsRepository(this.db),
       contentPlanning,
       material,
       articleArtifacts: new ArticleArtifactRepository(this.db),
@@ -745,37 +741,7 @@ export class Store {
     return this.repositories.visualDecisions.stats();
   }
 
-  listUserThemes({target=null,includeArchived=false}={}) {
-    return this.repositories.themes.list({ target, includeArchived });
-  }
-
-  getUserTheme(id) { return this.repositories.themes.get(id); }
-
-  saveUserThemeDraft({id,target,label,definitionJson,metadata=null}) {
-    return this.repositories.themes.saveDraft({ id, target, label, definitionJson, metadata });
-  }
-
-  publishUserTheme({id,version,definitionJson,contentHash,metadata=null}) {
-    return this.repositories.themes.publish({ id, version, definitionJson, contentHash, metadata });
-  }
-
-  archiveUserTheme(id) { return this.repositories.themes.archive(id); }
-  userThemeVersions(id) { return this.repositories.themes.versions(id); }
-  getUserThemeVersion(id,version) { return this.repositories.themes.getVersion(id, version); }
-  getThemeMetadata(id) { return this.repositories.themes.getMetadata(id); }
-  saveThemeMetadata(input) { return this.repositories.themes.saveMetadata(input); }
-  getThemeVersionMetadata(id) { return this.repositories.themes.getVersionMetadata(id); }
-  recordThemeUsage(input) { return this.repositories.themes.recordUsage(input); }
-  themeUsageStats(id) { return this.repositories.themes.usageStats(id); }
-  getThemeRoutingDecision(input) { return this.repositories.themes.getRoutingDecision(input); }
-  saveThemeRoutingDecision(input) { return this.repositories.themes.saveRoutingDecision(input); }
-  listRecentThemeRouting(input) { return this.repositories.themes.listRecentRouting(input); }
-  listBatchThemeRouting(input) { return this.repositories.themes.listBatchRouting(input); }
-  themeArchiveImpact(id) { return this.repositories.themes.archiveImpact(id); }
   recordSocialTemplateMetric(input) { return this.repositories.socialTemplateMetrics?.record(input) ?? null; }
   listSocialTemplateMetrics(input = {}) { return this.repositories.socialTemplateMetrics?.list(input) ?? []; }
   socialTemplateMetricsStats(input = {}) { return this.repositories.socialTemplateMetrics?.stats(input) ?? { usageCount: 0, calibration: { schemaVersion: 1, sampleCount: 0, dimensions: [] }, rollout: null }; }
-  recordSocialTemplateProposalMetric(input) { return this.repositories.socialTemplateProposalMetrics.record(input); }
-  listSocialTemplateProposalMetrics(input = {}) { return this.repositories.socialTemplateProposalMetrics.list(input); }
-  socialTemplateProposalMetricsStats(input = {}) { return this.repositories.socialTemplateProposalMetrics.stats(input); }
 }

@@ -8,7 +8,7 @@ import { deriveWritingStance, visualPolicyForStance } from '../../../shared/doma
 // capability-call: cap_diagram_mermaid_render, cap_diagram_echarts_render
 
 export async function handleMediaRoutes(context) {
-  const { request, response, pathname, searchParams, store, config, json, body, path, fs, os, mime, root, execFileAsync, isInsideRoots, getImageWorkspace, getCdnUploadConfiguration, batchArticlesDir, saveLocalImage, uploadImageToCdn, articleWorkdir, models, planImagePlaceholders, writeUtf8, saveImageMetadata, imageManifestFile, aiJobs, planArticleVisuals, defaultTypesetTheme, TYPESET_THEMES, analyzeVisualComplexity } = context;
+  const { request, response, pathname, searchParams, store, config, json, body, path, fs, os, mime, root, execFileAsync, isInsideRoots, getImageWorkspace, getCdnUploadConfiguration, batchArticlesDir, saveLocalImage, uploadImageToCdn, articleWorkdir, models, planImagePlaceholders, writeUtf8, saveImageMetadata, imageManifestFile, aiJobs, planArticleVisuals, analyzeVisualComplexity } = context;
   const imageWorkspaceResponse = async (workdir, extras = {}) => {
     const cdn = await getCdnUploadConfiguration();
     return { ...getImageWorkspace(workdir), ...cdn, deliveryMode:cdn.cdnConfigured === true ? 'cdn' : 'local', ...extras };
@@ -17,22 +17,22 @@ export async function handleMediaRoutes(context) {
     const imageDir = path.dirname(coverPath);
     const reportPath = path.join(imageDir, 'cover-ai-generation.json');
     const htmlPath = path.join(imageDir, 'ai-cover.html');
-    const standard = { mode: 'standard', aiVisualFallback: false, aiVisualError: '', aiVisualHtmlAvailable: false };
-    if (!fs.existsSync(reportPath) || !fs.existsSync(coverPath)) return standard;
+    const legacy = { mode: 'legacy', aiVisualFallback: false, aiVisualError: '', aiVisualHtmlAvailable: false };
+    if (!fs.existsSync(reportPath) || !fs.existsSync(coverPath)) return legacy;
     try {
       const reportStat = fs.statSync(reportPath);
       const coverStat = fs.statSync(coverPath);
-      if (reportStat.mtimeMs < coverStat.mtimeMs) return standard;
+      if (reportStat.mtimeMs < coverStat.mtimeMs) return legacy;
       const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
       const fallback = report.status === 'fallback';
       return {
-        mode: fallback ? 'standard' : String(report.mode || 'standard'),
+        mode: report.mode === 'ai-visual' && !fallback ? 'ai-visual' : 'legacy',
         aiVisualFallback: fallback,
         aiVisualError: fallback ? String(report.fallbackReason || '') : '',
         aiVisualHtmlAvailable: fs.existsSync(htmlPath),
       };
     } catch {
-      return standard;
+      return legacy;
     }
   };
   const dailyImageMatch = pathname.match(/^\/api\/batches\/([^/]+)\/daily\/images$/);
@@ -51,7 +51,7 @@ export async function handleMediaRoutes(context) {
     if (!item?.generate) return json(response, 400, { error:'该占位未标记为可生成' });
     try {
       const input = await body(request);
-      const { localPath } = await generateArticleImage({ workspaceRoot:root, workdir, slotId:id, generate:item.generate, ratio:item.ratio, theme:input.theme || '' });
+      const { localPath } = await generateArticleImage({ workspaceRoot:root, workdir, slotId:id, generate:item.generate, ratio:item.ratio });
       const updated = registerGeneratedSlotImage(workdir, id, localPath);
       const manifestPath = imageManifestFile(workdir); const stat = fs.statSync(manifestPath);
       store.upsertArtifact({ batchId:batch.id, kind:'配图资产清单', name:path.basename(manifestPath), path:manifestPath, size:stat.size, modifiedAt:stat.mtime.toISOString() });
@@ -92,9 +92,8 @@ export async function handleMediaRoutes(context) {
     if (!batch) return json(response, 404, { error:'批次不存在' });
     if (!store.getDocument(batch.id, null, 'daily-final')) return json(response, 409, { error:'缺少早报终稿，请先完成批次早报' });
     const input = await body(request);
-    const mode = String(input.mode || 'standard');
-    if (!['standard', 'ai-visual'].includes(mode)) return json(response, 400, { error:'封面生成模式必须是 standard 或 ai-visual' });
-    return json(response, 202, aiJobs.start({ batchId:batch.id, candidateId:null, provider:input.provider||null, type:'cover-image', theme:input.theme||'auto', mode }));
+    if (input.mode && input.mode !== 'ai-visual') return json(response, 400, { error:'标准封面已停用，封面仅支持 AI 视觉生成' });
+    return json(response, 202, aiJobs.start({ batchId:batch.id, candidateId:null, provider:input.provider||null, type:'cover-image', mode:'ai-visual' }));
   }
   const dailyCoverLocalMatch = pathname.match(/^\/api\/batches\/([^/]+)\/daily\/cover\/local$/);
   if (dailyCoverLocalMatch && request.method === 'GET') {
@@ -186,7 +185,7 @@ export async function handleMediaRoutes(context) {
     if (!item?.generate) return json(response, 400, { error:'该占位未标记为可生成' });
     try {
       const input = await body(request);
-      const { localPath } = await generateArticleImage({ workspaceRoot: root, workdir, slotId: id, generate: item.generate, ratio: item.ratio, theme:input.theme || '' });
+      const { localPath } = await generateArticleImage({ workspaceRoot: root, workdir, slotId: id, generate: item.generate, ratio: item.ratio });
       const updated = registerGeneratedSlotImage(workdir, id, localPath);
       const manifestPath = imageManifestFile(workdir); const stat = fs.statSync(manifestPath);
       store.upsertArtifact({ batchId:batch.id, kind:'配图资产清单', name:path.basename(manifestPath), path:manifestPath, size:stat.size, modifiedAt:stat.mtime.toISOString() });
@@ -202,9 +201,8 @@ export async function handleMediaRoutes(context) {
     const batch = store.getBatch(candidate.batch_id);
     if (!store.getDocument(batch.id, candidate.id, 'final')) return json(response, 409, { error:'缺少成稿终稿，请先完成成稿链' });
     const input = await body(request);
-    const mode = String(input.mode || 'standard');
-    if (!['standard', 'ai-visual'].includes(mode)) return json(response, 400, { error:'封面生成模式必须是 standard 或 ai-visual' });
-    return json(response, 202, aiJobs.start({ batchId:batch.id, candidateId:candidate.id, provider:input.provider||null, type:'cover-image', theme:input.theme||'auto', mode }));
+    if (input.mode && input.mode !== 'ai-visual') return json(response, 400, { error:'标准封面已停用，封面仅支持 AI 视觉生成' });
+    return json(response, 202, aiJobs.start({ batchId:batch.id, candidateId:candidate.id, provider:input.provider||null, type:'cover-image', mode:'ai-visual' }));
   }
   const coverLocalMatch = pathname.match(/^\/api\/candidates\/(\d+)\/cover\/local$/);
   if (coverLocalMatch && request.method === 'GET') {
@@ -269,7 +267,7 @@ export async function handleMediaRoutes(context) {
     // 排版只依据系统设置中的配置状态决定交付方式；健康检查属于配置流程。
     const imageDeliveryMode = requestedMode === 'local' || cdnConfiguration.cdnConfigured !== true ? 'local' : 'cdn';
     return json(response, 202, aiJobs.start({ batchId, candidateId: candidate?.id??null,documentKind:daily?'daily-final':null,
-      provider:previousSnapshot?null:input.provider,type:'typeset',theme:input.theme,snapshotId:previousSnapshot?.id||null,
+      provider:previousSnapshot?null:input.provider,type:'typeset',snapshotId:previousSnapshot?.id||null,
       imageDeliveryMode }));
   }
   const documentsMatch = pathname.match(/^\/api\/batches\/([^/]+)\/documents$/);
@@ -305,8 +303,7 @@ export async function handleMediaRoutes(context) {
       preferences:store.visualDecisionStats(),
       maxOutputTokens:Math.min(5000, providerConfig.maxOutputTokens), workspaceRoot:config.workspaceRoot, visualPolicy: visualDecision.policy,
     }); harness.finish('completed'); } catch (error) { harness.finish('failed',error.message); throw error; }
-    const theme = defaultTypesetTheme(daily ? { daily:true } : candidate);
-    return json(response, 200, { ...result, writingStance: stanceDecision.stance, visualPolicy: visualDecision.policy, theme, themeLabel:TYPESET_THEMES[theme]?.label || theme });
+    return json(response, 200, { ...result, writingStance: stanceDecision.stance, visualPolicy: visualDecision.policy });
   }
   if (pathname === '/api/visual-decisions' && request.method === 'POST') {
     const input = await body(request);
@@ -337,8 +334,7 @@ export async function handleMediaRoutes(context) {
       const imageDir = path.join(tempDir, 'images');
       const tokensPath = path.join(tempDir, 'tokens.json');
       fs.writeFileSync(source, `\`\`\`${type}\n${code}\n\`\`\`\n`, 'utf8');
-      const themeTokens = TYPESET_THEMES[input.theme]?.tokens || {};
-      fs.writeFileSync(tokensPath, JSON.stringify({ ...themeTokens, ...(input.tokens || {}), colors:{ ...(themeTokens.colors || {}), ...(input.tokens?.colors || {}) } }), 'utf8');
+      fs.writeFileSync(tokensPath, JSON.stringify(input.tokens || {}), 'utf8');
       const rendered = await executeCapability({consumerId:'feature.diagram-preview',capability:`cap_diagram_${String(type).replace(/[^A-Za-z0-9_]/g,'_')}_render`,input:{
         inputPath:source, outputPath:output, imageDir, tokensPath,
       },context:{allowedRoots:[tempDir],cwd:root,timeoutMs:180000,executionLog:createStoreExecutionLogger(store,{skillId:'visual-preview'})}});

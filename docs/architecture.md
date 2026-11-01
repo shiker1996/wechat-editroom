@@ -16,7 +16,7 @@
 
 1. `loadEnv`（`server/platform/core/env.mjs`）→ `loadConfig`（`server/platform/core/config.mjs`，全部默认值内置，`config.local.json` 覆盖）。
 2. 组装单例：`Store`（`data/workbench.db`）、`JobManager`（采集任务）、`ModelGateway`、`AiJobManager`，构造函数传参，无 DI 框架。
-3. 路由注册是**顺序链式**：`/api/` 请求先依次经过 `server/platform/http/routes/` 的 12 个路由模块（返回 falsy 则继续），最后由顶层入口决定 404。路由模块只负责 HTTP 适配，业务编排通过显式上下文调用 feature 或平台应用服务。
+3. 路由注册是**顺序链式**：`/api/` 请求先依次经过 `server/platform/http/routes/` 的 11 个路由模块（返回 falsy 则继续），最后由顶层入口决定 404。路由模块只负责 HTTP 适配，业务编排通过显式上下文调用 feature 或平台应用服务。
 4. 静态资源只服务 `public/`，路径越界检查 + `no-store`，无 SPA fallback。
 5. 引导时异步自启 RSSHub（失败只记日志不阻塞）；端口被占用时探测既有实例 `/api/overview`，已运行则提示退出。除 RSSHub 外无常驻守护，后台任务均为请求触发。
 
@@ -25,12 +25,11 @@
 | 模块 | 职责 |
 |---|---|
 | `model-routes.mjs` | 模型服务商列表、增删、连通性测试 |
-| `theme-routes.mjs` | 用户主题 CRUD、预览、自动匹配与发布门禁 |
 | `material-routes.mjs` | 素材捕获、查询、编辑、状态流转与就绪度评估 |
 | `content-feedback-routes.mjs` | 公众号导出、内容复盘、反馈上下文与建议 |
 | `content-routes.mjs` | 热点、文章、日历、日志、产物柜（含 reindex / preview） |
 | `system-routes.mjs` | 最大模块：设置、技能包与插件的安装 / 状态 / 回滚 / 删除、能力槽位、执行日志、RSSHub / Reddit 控制、订阅 CRUD、备份导出 / 校验 / 恢复 |
-| `media-routes.mjs` | 配图工作区、排版 `/ai/typeset`、文章封面（标准 / AI 视觉）、文档列表、可视化规划与决策 |
+| `media-routes.mjs` | 配图工作区、排版 `/ai/typeset`、AI 视觉文章封面、文档列表、可视化规划与决策 |
 | `article-routes.mjs` | 编辑会（同步与流式）、writer / stage 技能选择、文档修订、来源抓取、`/ai/draft`、`/ai/article` |
 | `social-card-routes.mjs` | 卡片编辑会、卡片页 CRUD / layout、social-cards 文件与 ZIP、渠道、仓库巡检、`/ai/social-card` |
 | `batch-routes.mjs` | 批次 CRUD、采集、排名、社交排名、热点全景和删除影响评估 |
@@ -38,7 +37,7 @@
 | `task-routes.mjs` | 打标、研究、自动化、事件卡、日报与任务查询 |
 | `route-helpers.mjs` | 路由响应、批次装饰、事件卡关联、事件事实和文件写入辅助 |
 
-路由目录另含 `system-restore-transactions.mjs`（恢复事务辅助）和 README；它们不计入 12 个 HTTP 路由模块。
+路由目录另含 `system-restore-transactions.mjs`（恢复事务辅助）和 README；它们不计入 11 个 HTTP 路由模块。
 
 两个横切约定：
 
@@ -186,23 +185,23 @@ Agent Harness 改造把运行时概念收敛为四种对象分工：**Skill**（
           → humanize → title-lock；初稿直接依据锁定简报与事实基座写作，不生成独立大纲；
           每阶段产物落候选工作目录，具体返修按阶段契约执行；SEO 不属于自动成稿链）
        → 排版（typeset-pipeline：rendered → design → images → draft → normalized → gate；
-          确定性 markdownToHtml + 主题 tokens，只输出内联样式，含 CDN 上传开关）
-       → 封面图（cover-image-generator：界面默认 AI 视觉模式，由单 Agent 生成 HTML/CSS 后截图；
-          也可切换标准模式由 cover.spec 确定性渲染，AI 视觉生成或截图失败时任务直接失败，
-          不自动回退，最终统一输出 900×383 cover.png）
+          每篇生成设计方案后由 AI 生成 HTML，再规范化为内联样式并执行结构门禁，含 CDN 上传开关）
+       → 封面图（cover-image-generator：每篇生成并校验封面设计方案，再由 AI 生成 HTML/CSS 后截图；
+          无标准封面切换，生成或截图失败时任务直接失败，最终输出 900×383 cover.png）
 ```
 
-封面 AI 视觉模式位于 `server/features/articles/application/`：`ai-visual-cover-generator.mjs` 负责冻结主题与文章输入并调用通用视觉文档 Agent，`ai-visual-cover-composer.mjs` 负责构建输入和最小 HTML 起始文档，`ai-visual-cover-pipeline.mjs` 负责阶段记录、截图和图片交付检查。它只开放项目文件读取与当前封面目录内的分块写入，不调用文生图、网络搜索或文章写入能力；HTTP API 未指定模式时仍以 `standard` 作为兼容默认，当前封面页面默认选择 `ai-visual`。
+封面视觉生成位于 `server/features/articles/application/`：`ai-visual-cover-generator.mjs` 负责文章输入和设计方案，调用通用视觉文档 Agent；`ai-visual-cover-composer.mjs` 负责构建输入和最小 HTML 起始文档；`ai-visual-cover-pipeline.mjs` 负责阶段记录、截图和图片交付检查。它只开放项目文件读取与当前封面目录内的分块写入，不调用文生图、网络搜索或文章写入能力。
 
 ### 图文链
 
 ```text
 图文事实基座（repository-fact-sheet / 事件事实基座 / 自定义）
-  → social-card-pipeline（SOCIAL_CARD_STAGE_CONTRACT：
-     facts → planning（故事板技能选择）→ generation（card_plan + copy.txt）
-     → layout-audit（不过则 layout-repair 只改 card_plan）
-     → screenshots（html-pages-to-images 确定性渲染逐页 PNG）→ delivery-gate）
+  → 故事板 → 每次生成 social-design-scheme.json（页数、角色、版式、颜色和字阶校验）
+  → AI 视觉 Agent（读取冻结输入、写 HTML/CSS，并通过本地浏览器审计工具逐页检查和复审）
+  → screenshots（逐页 PNG）→ delivery-gate
 ```
+
+图文视觉审计发生在 AI 生成过程中，作为 Agent 可调用工具反馈每页溢出；它不是仅在生成结束时运行的终态门禁。浏览器执行由 `server/platform/browser/` 提供通用 Puppeteer 适配，图文 Feature 保留溢出判定与修正策略。故事板、页容量与页面结构契约仍作为硬约束，本次设计方案只决定视觉表达。
 
 输入输出契约以字符串命名贯穿两条链（`article_fact_base` → `wechat_markdown`、`social_card_fact_base` → `social_card_storyboard` 等，定义在 `entry-routing.mjs`）。配图由 `image-workflow.mjs` 负责（占位规划、本地上传、CDN、回填）。
 
@@ -218,9 +217,9 @@ Agent Harness 改造把运行时概念收敛为四种对象分工：**Skill**（
 | `prompts/` | 由 `manifest.json` 登记、按业务域分类的版本化 Markdown Prompt 资产 |
 | `server/features/*/llm/` | 各业务垂直专用的模型任务、Prompt 编排和结构化输出适配 |
 | `server/platform/persistence/` | SQLite 连接、完整 Schema/兼容迁移、外键校验、按领域拆分的数据仓储与跨领域只读 Query Service；`Store` 作为兼容 facade 暴露旧 API |
-| `server/shared/rendering/` | 无文件系统和模型副作用的 Markdown/HTML、故事板和主题输出纯函数 |
-| `server/platform/application/themes/` | 主题生成、用户主题服务、预览和发布门禁等应用编排 |
-| `server/shared/themes/` | 无副作用的主题值对象、默认主题、注册 / 校验 / 编译基元与主题渲染辅助 |
+| `server/shared/rendering/` | 无文件系统和模型副作用的 Markdown/HTML 渲染纯函数 |
+| `server/platform/browser/` | Puppeteer 浏览器启动与通用 HTML 布局测量适配 |
+| `server/shared/themes/` | 保留的跨模块颜色、设计值校验与兼容编译基元；不提供主题中心或用户主题 CRUD |
 | `server/platform/skills/` | 技能注册、清单、路由、包管理 |
 | `server/platform/tools/` | 工具注册中心、策略、插件包管理、远程适配 |
 | `server/platform/jobs/` | 采集任务编排 |

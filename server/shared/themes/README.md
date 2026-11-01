@@ -1,9 +1,5 @@
-# themes
+# Visual design primitives
 
-## 职责
-
-纯主题值对象、默认主题和主题渲染基元。
-
-## 依赖边界
-
-通用主题规则不依赖业务 HTTP、任务调度或持久化；Social 模板能力由对应 feature 提供，主题协调层只通过受控能力使用它。
+This directory contains color, typography, component, and token validation helpers
+used to validate per-run cover and visual design schemes. It does not provide a
+theme catalog, theme manager, or user-selectable preset themes.

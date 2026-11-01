@@ -29,7 +29,7 @@ import { createZip } from './server/platform/artifacts/zip-bundle.mjs';
 import { batchArticlesDir, batchTopicsDir, candidateArticleDir, candidateSocialCardDir } from './server/platform/core/workspace-paths.mjs';
 import { getBatchDeleteImpact, deleteBatchPermanently } from './server/features/batches/index.mjs';
 import { SOCIAL_CARD_COMPOSITION_MODES, SOCIAL_CARD_LAYOUTS, describeCardLayouts, normalizeCardComposition } from './server/features/social-cards/index.mjs';
-import { analyzeVisualComplexity, planArticleVisuals, defaultTypesetTheme, TYPESET_THEMES } from './server/features/articles/index.mjs';
+import { analyzeVisualComplexity, planArticleVisuals } from './server/features/articles/index.mjs';
 import { handleContentRoutes } from './server/platform/http/routes/content-routes.mjs';
 import { handleContentFeedbackRoutes } from './server/platform/http/routes/content-feedback-routes.mjs';
 import { handleMaterialRoutes } from './server/platform/http/routes/material-routes.mjs';
@@ -38,7 +38,6 @@ import { handleSystemRoutes } from './server/platform/http/routes/system-routes.
 import { handleMediaRoutes } from './server/platform/http/routes/media-routes.mjs';
 import { handleArticleRoutes } from './server/platform/http/routes/article-routes.mjs';
 import { handleSocialCardRoutes } from './server/platform/http/routes/social-card-routes.mjs';
-import { handleThemeRoutes } from './server/platform/http/routes/theme-routes.mjs';
 import { handleBatchRoutes } from './server/platform/http/routes/batch-routes.mjs';
 import { handleCandidateRoutes } from './server/platform/http/routes/candidate-routes.mjs';
 import { handleTaskRoutes } from './server/platform/http/routes/task-routes.mjs';
@@ -457,13 +456,12 @@ async function api(request, response, url) {
     return json(response, 200, store.overview());
   }
   if (await handleModelRoutes({ request, response, pathname, root, config, store, models, body, json })) return;
-  if (await handleThemeRoutes({ request, response, pathname, searchParams, json, store, body, models })) return;
   if (await handleMaterialRoutes({ request, response, pathname, searchParams, store, json, body, root })) return;
   if (await handleContentFeedbackRoutes({ request, response, pathname, searchParams, store, artifactRoots, json, body, root, models })) return;
   if (await handleContentRoutes({ request, response, pathname, searchParams, store, artifactRoots, mime, json, body, root, models })) return;
   if (await handleSystemRoutes({ request, response, pathname, searchParams, root, resourceRoot: runtimePaths.appRoot, config, store, batchWorkdir, json, body, aiJobs,
     binaryBody, createWorkbenchBackup, models, candidateEventGroups })) return;
-  const mediaResult = await handleMediaRoutes({ request, response, pathname, searchParams, store, config, json, body, path, fs, os, mime, root, execFileAsync, isInsideRoots, getImageWorkspace, getCdnUploadConfiguration, batchArticlesDir, saveLocalImage, uploadImageToCdn, articleWorkdir, models, planImagePlaceholders, writeUtf8, saveImageMetadata, imageManifestFile, aiJobs, planArticleVisuals, defaultTypesetTheme, TYPESET_THEMES, analyzeVisualComplexity });
+  const mediaResult = await handleMediaRoutes({ request, response, pathname, searchParams, store, config, json, body, path, fs, os, mime, root, execFileAsync, isInsideRoots, getImageWorkspace, getCdnUploadConfiguration, batchArticlesDir, saveLocalImage, uploadImageToCdn, articleWorkdir, models, planImagePlaceholders, writeUtf8, saveImageMetadata, imageManifestFile, aiJobs, planArticleVisuals, analyzeVisualComplexity });
   if (mediaResult !== false) return mediaResult;
   const articleResult = await handleArticleRoutes({ request, response, pathname, store, json, body, candidateEventGroups, fetchCandidateSource, config, root, writeUtf8, path, batchWorkdir, lockedBrief, draftArticle, models, aiJobs, localSecurity });
   if (articleResult !== false) return articleResult;

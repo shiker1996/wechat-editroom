@@ -19,10 +19,18 @@ function imported(source, pattern) {
 }
 
 const violations = [];
+const sharedRoot = path.join(root, 'server', 'shared');
+for (const file of walk(sharedRoot)) {
+  const name = relative(file);
+  const source = fs.readFileSync(file, 'utf8');
+  if (imported(source, /from ['"][^'"]*\/features\//)) violations.push({ rule: 'shared-no-feature', file: name });
+}
+
 const featureRoot = path.join(root, 'server', 'features');
 for (const file of walk(featureRoot)) {
   const name = relative(file);
   const source = fs.readFileSync(file, 'utf8');
+  if (imported(source, /from ['"](?:puppeteer|playwright|selenium-webdriver)(?:\/[^'"]*)?['"]/)) violations.push({ rule: 'feature-no-browser-runtime', file: name });
   const featureMatch = name.match(/^server\/features\/([^/]+)\//);
   if (!featureMatch) continue;
   const feature = featureMatch[1];
@@ -47,7 +55,7 @@ for (const file of walk(platformRoot)) {
 const report = {
   mode: 'report',
   generatedAt: new Date().toISOString(),
-  scanned: { features: walk(featureRoot).length, platform: walk(platformRoot).length },
+  scanned: { shared: walk(sharedRoot).length, features: walk(featureRoot).length, platform: walk(platformRoot).length },
   violationCount: violations.length,
   rules: [...new Set(violations.map((item) => item.rule))].sort(),
   violations,

@@ -45,22 +45,3 @@ export function extractHtmlModelOutput(value) {
   if (htmlEnd >= 0) html = html.slice(0, htmlEnd + 7);
   return html.replace(/^```(?:html)?\s*/i, '').replace(/\s*```$/i, '').trim();
 }
-
-export function defaultTypesetTheme(candidate) {
-  if (candidate?.daily || candidate?.contentType === 'daily') return 'news-digest';
-  if (['🏢 大厂战略', '大厂与商业战略'].includes(candidate?.category) && /趣|离谱|八卦/.test(candidate?.angle || '')) return 'gossip-card';
-  if (candidate?.composite) return 'research-report';
-  switch (candidate?.editorial_category || candidate?.editorialCategory || candidate?.category) {
-    case '🤖 AI/技术动态': return 'tech-wire';
-    case '产品与技术动态': return 'tech-wire';
-    case '📈 行业趋势':
-    case '行业趋势与市场变化':
-    case '🏢 大厂战略': return 'research-report';
-    case '💼 职场生态': return 'career-essay';
-    case '职场与组织变化': return 'career-essay';
-    case '📰 综合资讯': return 'news-digest';
-    case '政策与公共议题': return 'news-digest';
-    case '大厂与商业战略': return 'research-report';
-    default: return 'magazine-warm';
-  }
-}

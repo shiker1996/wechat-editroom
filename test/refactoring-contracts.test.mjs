@@ -9,7 +9,7 @@ import { handleModelRoutes } from '../server/platform/http/routes/model-routes.m
 import { handleContentRoutes } from '../server/platform/http/routes/content-routes.mjs';
 import { AI_JOB_TYPES, createAiJobHandlers } from '../server/features/batches/application/ai-job-handlers.mjs';
 import { applyWorkbenchSchema, runDatabaseMigrations } from '../server/platform/persistence/migrations.mjs';
-import { extractHtmlModelOutput as extractPureHtml, defaultTypesetTheme as selectPureTheme } from '../server/shared/rendering/typeset-output.mjs';
+import { extractHtmlModelOutput as extractPureHtml } from '../server/shared/rendering/typeset-output.mjs';
 import { budgetCardPlan } from '../server/features/social-cards/rendering/social-card-plan.mjs';
 import { resolveCardLayoutDecision as resolvePureLayout } from '../server/features/social-cards/rendering/social-card-layout.mjs';
 import { inferCardPageRole as inferPureRole, stableCardCompositionSeed as pureCompositionSeed } from '../server/features/social-cards/rendering/social-card-role.mjs';
@@ -186,7 +186,7 @@ test('refactoring baseline: supported AI job types are accepted and persisted', 
 
     const types = [
       'tag', 'retag', 'event-cards', 'research', 'breaking-analysis',
-      'article', 'daily', 'tutorial', 'typeset', 'social-card', 'cover-image', 'auto',
+      'article', 'daily', 'tutorial', 'typeset', 'cover-image', 'auto',
     ];
     const jobs = types.map((type, index) => manager.start({
       batchId: batch.id,
@@ -260,7 +260,6 @@ test('refactoring stage 3: Store remains a facade over domain repositories', () 
     assert.equal(ctx.store.repositories.sourceRuns.db, ctx.store.db);
     assert.equal(ctx.store.repositories.hotspots.db, ctx.store.db);
     assert.equal(ctx.store.repositories.candidates.db, ctx.store.db);
-    assert.equal(ctx.store.repositories.themes.db, ctx.store.db);
     assert.equal(ctx.store.repositories.visualDecisions.db, ctx.store.db);
 
     const batch = ctx.store.createBatch({ date: '2026-08-09', title: 'repository contract' });
@@ -270,8 +269,6 @@ test('refactoring stage 3: Store remains a facade over domain repositories', () 
     ctx.store.updateAiRun('repository-job', { status: 'completed', progress: 'done' });
     assert.equal(ctx.store.repositories.aiRuns.get('repository-job').status, 'completed');
 
-    ctx.store.saveUserThemeDraft({ id: 'repository-theme', target: 'article', label: 'Repository theme', definitionJson: '{}' });
-    assert.deepEqual(ctx.store.getUserTheme('repository-theme'), ctx.store.repositories.themes.get('repository-theme'));
 
     ctx.store.saveVisualDecision({ batchId: batch.id, visualType: 'mermaid', action: 'inserted' });
     assert.deepEqual(ctx.store.visualDecisionStats(), ctx.store.repositories.visualDecisions.stats());
@@ -295,9 +292,8 @@ test('refactoring stage 5: schema ownership lives outside the Store facade', () 
   assert.equal(Object.hasOwn(Store.prototype, 'migrateSchema'), false);
 });
 
-test('refactoring stage 4: typeset output cleanup and theme selection are pure rendering functions', () => {
+test('refactoring stage 4: typeset output cleanup is a pure rendering function', () => {
   assert.equal(extractPureHtml('说明\n```html\n<article>正文</article>\n```'), '<article>正文</article>');
-  assert.equal(selectPureTheme({ category: '🤖 AI/技术动态' }), 'tech-wire');
 });
 
 test('refactoring stage 4: storyboard density budgeting is a pure rendering function', () => {

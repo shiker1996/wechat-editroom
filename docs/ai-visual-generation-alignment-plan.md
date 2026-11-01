@@ -1,6 +1,6 @@
 # AI 视觉生成对齐方案
 
-> 当前状态：生成链路已按本文目标实施。当前生效口径以 `docs/design/social-card-ai-visual-pipeline-agent-design.md` 和代码为准；本文保留实施过程和决策记录。
+> 历史实施记录：本文包含已过期的阶段边界与审计状态。当前图文生成口径以代码及 `docs/design/social-card-ai-visual-pipeline-agent-design.md` 顶部状态说明为准；当前 AI Agent 生成期间会调用浏览器视觉审计工具，并基于反馈修改和复审。
 
 ## 1. 目标
 

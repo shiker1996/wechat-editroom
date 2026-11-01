@@ -2,7 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { createThemeRegistry } from "../../server/shared/themes/theme-registry.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const publicDir = path.join(root, "public");
@@ -10,7 +9,7 @@ const cssSourceDir = path.join(publicDir, "styles");
 const generatedStyleDir = path.join(publicDir, "assets", "styles");
 const legacyStylePath = path.join(publicDir, "styles.css");
 const generatedStyles = {
-  "common.css": ["tokens-base.css", "chrome.css", "production.css", "theme-picker.css", "office-desktop.css"],
+  "common.css": ["tokens-base.css", "chrome.css", "production.css", "office-desktop.css"],
   "office.css": ["office-workspaces.css"],
   "social.css": ["social-card.css"],
   "topics.css": ["topics-accessibility.css"],
@@ -62,13 +61,6 @@ const sourceFiles = [
 let ok = true;
 if (fs.existsSync(legacyStylePath)) {
   console.error("  检测到已移除的 public/styles.css；页面只允许使用 public/assets/styles 下的按需分片");
-  ok = false;
-}
-try {
-  const themes = createThemeRegistry({ builtinRoot:path.join(root, "themes") });
-  console.log(`主题校验完成：${themes.list({ target:"article" }).length} 个文章主题，${themes.list({ target:"social" }).length} 个图文主题，${themes.list({ target:"cover" }).length} 个封面主题`);
-} catch (error) {
-  console.error(`  内置主题校验失败：${error.message}`);
   ok = false;
 }
 const packageBytes = fs.readFileSync(path.join(root, "package.json"));

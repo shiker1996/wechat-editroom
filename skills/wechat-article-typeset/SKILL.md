@@ -45,7 +45,7 @@ description: 将项目成稿 09-FINAL.md 编排为适合微信公众号编辑器
 
 ### 4. `draft`
 
-默认走确定性渲染：执行器读取图片工作稿和设计 tokens，用内置 Markdown 转换器直接输出内联样式的 `article.ai.draft.html`，不调用模型。版式由主题决定（`magazine-warm` 暖纸杂志风为默认，`gossip-card` 卡片吃瓜风可选），主题 tokens 作底色、design tokens 叠加；转换器遵循 normalizer SPEC 的正文约定：加粗用 `<span leaf=""><span textstyle="" style="font-weight: bold">` 嵌套形式（列表项加粗前缀后用 `font-weight: normal` 断开），引用块输出 `<section>` 而非 `<blockquote>`（左侧直角 + `border-left`），不使用 `div`、`flex`、绝对定位。`draftMode: 'llm'` 为实验路径：同时加载本技能与 `wechat-md-to-draft`，由模型生成初稿；模型输出必须通过标题、章节、链接和图片保真门禁，不通过时回退到确定性转换器，回退结果仍须通过同一门禁。
+默认使用 AI 排版：模型读取图片就绪的 Markdown、设计方案和 tokens，根据内容结构为本篇文章决定标题、章节、导语、重点句、引用、数据和结尾的样式，不复用固定版式模板。设计方案与 tokens 是本篇 HTML、图表和结构化配图的唯一视觉来源，不再另行选择文章排版主题。所有样式受设计方案与 tokens 约束，并保持移动端可读及公众号 HTML 兼容。模型初稿必须通过标题、章节、链接和图片保真门禁，再由规范化脚本内联样式；未通过时回退到基于本篇设计 tokens 的确定性渲染器。
 
 ### 5. `normalized`
 

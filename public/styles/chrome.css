@@ -122,7 +122,6 @@ body.rail-collapsed .rail-foot { border-top:0; }
 .nav-item>.nav-icon { color:var(--nav-accent); background:var(--nav-accent-soft); border-color:var(--nav-accent-line); }
 .nav-item:hover>.nav-icon, .nav-item.active>.nav-icon { border-color:var(--nav-accent); color:var(--nav-accent); background:color-mix(in srgb,var(--nav-accent) 22%,transparent); }
 .nav-utility[data-view="skills"] { --nav-accent:var(--nav-accent-collection); --nav-accent-soft:var(--nav-accent-collection-soft); --nav-accent-line:var(--nav-accent-collection-line); }
-.nav-utility[data-view="themes"] { --nav-accent:var(--nav-accent-themes); --nav-accent-soft:var(--nav-accent-themes-soft); --nav-accent-line:var(--nav-accent-themes-line); }
 .nav-utility[data-view="system"] { --nav-accent:var(--nav-accent-system); --nav-accent-soft:var(--nav-accent-system-soft); --nav-accent-line:var(--nav-accent-system-line); }
 .nav-utility>.nav-icon { color:var(--nav-accent); background:var(--nav-accent-soft); border-color:var(--nav-accent-line); }
 .desktop-shortcuts-dialog { width:min(520px,92vw); }

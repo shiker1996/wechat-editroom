@@ -111,7 +111,7 @@ function imageCard(item) {
     preview = `<img src="${imageApiBase()}/${encoded}/local?v=${encodeURIComponent(item.updatedAt || "")}" alt="${escapeHtml(item.content)}" data-zoom-image title="点击放大查看；拖拽图片到此处可替换">`;
   } else if (generatable) {
     // 结构化图片与 Mermaid/ECharts 一样在正式排版阶段生成，工作台只展示预期状态。
-    preview = `<div class="generate-empty auto-generate-empty" role="status" title="点击“生成 / 更新排版 HTML”时按当前主题自动生成">
+    preview = `<div class="generate-empty auto-generate-empty" role="status" title="点击“生成 / 更新排版 HTML”时按本篇设计方案自动生成">
       <span class="generate-empty-mark">✦</span>
       <span class="generate-empty-label">排版时生成</span>
       <span class="generate-empty-hint">${escapeHtml(item.ratio)} · 跟随当前主题</span>
@@ -134,7 +134,7 @@ function imageCard(item) {
       ${fileInput}
     </div></div>
     <div class="image-slot-meta"><span>位置：${escapeHtml(item.position)}</span><span>比例：${escapeHtml(item.ratio)}</span><span>建议来源：${escapeHtml(item.suggestedSource)}</span></div>
-    <div class="image-slot-actions">${hasImage ? `<span class="muted">${item.generated ? "排版时按当前主题处理" : "本地已保存"}</span>` : ""}${uploadAction}</div>
+    <div class="image-slot-actions">${hasImage ? `<span class="muted">${item.generated ? "排版时按本篇设计方案处理" : "本地已保存"}</span>` : ""}${uploadAction}</div>
     ${item.url ? `<a class="image-cdn-url" href="${escapeHtml(item.url)}" target="_blank">${escapeHtml(item.url)}</a>` : ""}
   </article>`;
 }
@@ -193,7 +193,7 @@ function renderImageWorkspace() {
       status.textContent = manual.length
         ? localOnly ? `将输出 ${manual.length} 个人工配图占位符：${manual.join('、')}` : `人工配图 ${manual.length} 张将在排版时自动上传 CDN：${manual.join('、')}`
         : automatic.length
-          ? localOnly ? `${automatic.length} 张自动图片将在排版结果中输出为空占位符` : `人工配图已就绪；${automatic.length} 张自动生成图片（Mermaid、ECharts、统计卡或时间线）将在排版时按当前主题生成并上传 CDN`
+          ? localOnly ? `${automatic.length} 张自动图片将在排版结果中输出为空占位符` : `人工配图已就绪；${automatic.length} 张自动生成图片（Mermaid、ECharts、统计卡或时间线）将在排版时按本篇设计方案生成并上传 CDN`
           : `配图已就绪 ${data.ready||0} / ${data.total} · 可以进入正式排版`;
     }
   }
@@ -239,16 +239,6 @@ function renderProductionCandidate(candidateId) {
   if (!pp) return;
   const candidate = pp.candidates.find((c) => String(c.id) === String(candidateId));
   if (!candidate) return;
-  // 与后端 defaultTypesetTheme 同一映射：八卦吃瓜类默认卡片风，其余按分类映射
-  const themeSelect = document.getElementById('typeset-theme');
-  const autoOption = themeSelect?.querySelector('option[value="auto"]');
-  if (autoOption) {
-    const category = candidate.editorial_category || candidate.editorialCategory || candidate.category;
-    const suggested = ['🏢 大厂战略', '大厂与商业战略'].includes(category) && /趣|离谱|八卦/.test(candidate.angle || '') ? '卡片吃瓜风'
-      : candidate.composite ? '财经印刷'
-      : { '🤖 AI/技术动态': '暗色终端', '产品与技术动态': '暗色终端', '📈 行业趋势': '财经印刷', '行业趋势与市场变化': '财经印刷', '🏢 大厂战略': '财经印刷', '大厂与商业战略': '财经印刷', '💼 职场生态': '书信手账', '职场与组织变化': '书信手账', '📰 综合资讯': '黑白快讯', '政策与公共议题': '黑白快讯' }[category] || '暖纸杂志风';
-    autoOption.textContent = `自动（${suggested}）`;
-  }
   const artifacts = candidateArtifacts(candidate);
   const names = new Set(artifacts.map((a) => a.name));
   const steps = candidate.daily

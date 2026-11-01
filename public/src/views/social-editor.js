@@ -15,12 +15,12 @@ let currentCardPlan=[];
 let currentLayoutDecisions=[];
 let currentLayoutReportPages=[];
 let socialSkillSlots=null;
-let storyboardThemeState=null;
+let storyboardStructureState=null;
 let storyboardReflowPreview=null;
 let storyboardRenderState=null;
 let currentContentPlanAdjustments=null;
 let currentFactIndex=null;
-let deliveryViewMode='original';
+let deliveryViewMode='beautified';
 const socialBeautifyJobs=new Map();
 // 故事板 <details> 编辑器存在未保存修改时置位；任何 renderCardPlan 重建都会丢失这些修改，
 // 触发重建的操作（整组/逐页版式、构图模式、渠道）需先 confirmAction 警告
@@ -54,19 +54,19 @@ const CARD_DECORATION_LABELS={none:'无装饰',orbit:'轨道圆环','index-line'
 const CARD_OVERLAP_LABELS={none:'标准层级','title-card':'标题叠卡','accent-edge':'边缘错位'};
 const CARD_AUDIT_ISSUE_LABELS={underfilled:'内容偏少',overfilled:'内容过满',overflow:'内容溢出',clipped:'内容被裁切',horizontal_overflow:'横向溢出'};
 
-function renderStoryboardThemeState(state) {
-  storyboardThemeState=state||null;
-  const status=document.getElementById('social-storyboard-theme-status');
+function renderStoryboardStructureState(state) {
+  storyboardStructureState=state||null;
+  const status=document.getElementById('social-storyboard-structure-status');
   if(!status)return;
-  if(!state||state.status==='empty'){status.hidden=true;status.textContent='';status.className='storyboard-theme-status';return;}
+  if(!state||state.status==='empty'){status.hidden=true;status.textContent='';status.className='storyboard-structure-status';return;}
   const copy={
-    current:'当前故事板与所选主题模板一致，可直接生成图文。',
-    'render-only':'已切换同模板主题，故事板内容可复用，生成图文时会直接换肤渲染。',
-    legacy:'这是历史故事板，未记录主题快照，可直接按当前主题渲染。',
-    'needs-storyboard':'当前主题或渠道改变了模板能力，请先重新生成故事板，再生成图文。',
+    current:'当前故事板符合页面结构与容量约束，可以生成图文。',
+    'render-only':'页面结构约束未变化，可以重新生成图文。',
+    legacy:'这是历史故事板；如结构校验未通过，请先重新生成故事板。',
+    'needs-storyboard':'页面结构、渠道或内容类型约束改变，请先重新生成故事板。',
   }[state.status]||state.reason||'';
   status.hidden=!copy;
-  status.className=`storyboard-theme-status ${state.status}`;
+  status.className=`storyboard-structure-status ${state.status}`;
   status.textContent=copy;
   const regenerate=document.getElementById('analyze-card-editorial');
   if(regenerate&&state.status==='needs-storyboard')regenerate.textContent='重新生成故事板（必需）';
@@ -81,8 +81,14 @@ function syncStoryboardActionLabels() {
     inspect.textContent='分析仓库';
   }
   if(generate){
-    generate.disabled=storyboardThemeState?.status==='needs-storyboard';
-    if(storyboardThemeState?.status!=='needs-storyboard')generate.textContent=currentCardPlan.length?'重新生成故事板':'生成故事板';
+    generate.disabled=false;
+    if(storyboardStructureState?.status==='needs-storyboard'){
+      generate.textContent='重新生成故事板（必需）';
+      generate.title=storyboardStructureState.reason||'页面结构约束已改变，请重新生成故事板';
+    }else{
+      generate.textContent=currentCardPlan.length?'重新生成故事板':'生成故事板';
+      generate.title='根据当前事实与页面结构约束生成故事板';
+    }
   }
 }
 
@@ -145,8 +151,8 @@ function syncCurrentHtmlLink(){
   const url=isAiVisual?delivery?.beautifiedHtmlUrl:delivery?.htmlUrl;
   link.hidden=!url;
   link.href=url||'';
-  link.textContent=isAiVisual?'打开 AI 视觉 HTML':'打开程序版 HTML';
-  link.setAttribute('aria-label',isAiVisual?'打开当前 AI 视觉版 HTML':'打开当前程序版 HTML');
+  link.textContent=isAiVisual?'打开 AI 图文 HTML':'打开历史图文 HTML';
+  link.setAttribute('aria-label',isAiVisual?'打开当前 AI 图文 HTML':'打开历史图文 HTML');
 }
 
 function renderDeliveryImage(){
@@ -164,7 +170,7 @@ function renderDeliveryImage(){
     if(next)next.hidden=true;
     if(counter)counter.hidden=true;
     if(download)download.hidden=true;
-    if(emptyNode){emptyNode.hidden=false;emptyNode.textContent=delivery?.beautifyReport?'当前 AI 视觉版尚未生成可交付 PNG；可打开 AI 视觉 HTML 或查看运行记录。':'暂无可预览图片。';}
+    if(emptyNode){emptyNode.hidden=false;emptyNode.textContent=delivery?.beautifyReport?'当前 AI 图文尚未生成可交付 PNG；可打开 HTML 或查看运行记录。':'暂无可预览图片。';}
     return;
   }
   if(imageNode)imageNode.hidden=false;
@@ -179,15 +185,6 @@ function renderDeliveryImage(){
   if(counter)counter.textContent=`${deliveryIndex+1} / ${images.length}`;
   if(download)download.href=image.downloadUrl;
   document.getElementById('social-gallery-film').querySelectorAll('button').forEach((button,index)=>button.classList.toggle('active',index===deliveryIndex));
-}
-
-function renderDeliveryVersions(){
-  const container=document.getElementById('social-delivery-versions');
-  if(!container)return;
-  const hasOriginal=Boolean(delivery?.images?.length);
-  const hasBeautified=Boolean(delivery?.beautifiedImages?.length);
-  container.hidden=!hasBeautified;
-  container.innerHTML=hasBeautified?`<span class="social-delivery-versions-label">预览版本</span><div class="social-delivery-version-tabs" role="tablist" aria-label="图文预览版本">${hasOriginal?`<button type="button" role="tab" aria-selected="${deliveryViewMode==='original'}" data-social-delivery-mode="original" class="${deliveryViewMode==='original'?'active':''}"><i aria-hidden="true"></i>程序版</button>`:''}<button type="button" role="tab" aria-selected="${deliveryViewMode==='beautified'}" data-social-delivery-mode="beautified" class="${deliveryViewMode==='beautified'?'active':''}"><i aria-hidden="true"></i>AI 视觉版</button></div>`:'';
 }
 
 function renderDeliveryFilm(){
@@ -216,7 +213,7 @@ function aiVisualStatusHtml(report,stages){
 function socialBeautifyProgressLabel(progress=''){
   const text=String(progress||'');
   if(/排队/.test(text))return '排队等待执行…';
-  if(/读取已有 HTML|读取现有 HTML|读取故事板|主题契约|页面壳/.test(text))return '读取故事板与主题…';
+  if(/读取已有 HTML|读取现有 HTML|读取故事板|页面壳/.test(text))return '读取故事板与参考排版…';
   if(/校验/.test(text))return '校验 AI 视觉页面…';
   if(/输出变化不足|强化视觉/.test(text))return '强化视觉层级…';
   if(/受控视觉增强/.test(text))return '应用视觉增强…';
@@ -231,12 +228,12 @@ function syncBeautifyButton(){
   const job=selectedId?socialBeautifyJobs.get(Number(selectedId)):null;
   const active=job&&(job.status==='running'||job.status==='queued');
   const generate=document.getElementById('generate-social-card');
-  const storyboardReady=generate?.dataset.ready==='true'&&storyboardThemeState?.status!=='needs-storyboard';
+  const storyboardReady=generate?.dataset.ready==='true'&&storyboardStructureState?.status!=='needs-storyboard';
   button.hidden=false;
   button.disabled=Boolean(active)||!storyboardReady;
   button.setAttribute('aria-busy',active?'true':'false');
-  button.textContent=active?(job.status==='queued'?'排队等待执行…':socialBeautifyProgressLabel(job.progress)):delivery?.beautifiedHtmlUrl?'重新 AI 视觉生成':'AI 视觉生成';
-  button.title=active?'正在根据故事板生成 AI 页面并截图…':storyboardReady?'根据当前故事板和主题契约独立生成 AI 图文':'请先生成故事板';
+  button.textContent=active?(job.status==='queued'?'排队等待执行…':socialBeautifyProgressLabel(job.progress)):delivery?.beautifiedHtmlUrl?'重新生成 AI 图文':'生成 AI 图文';
+  button.title=active?'正在根据本篇设计方案生成页面并截图…':storyboardReady?'根据当前故事板和本篇设计方案生成 AI 图文':'请先生成故事板';
   const status=document.getElementById('social-beautify-status');
   const meta=document.getElementById('social-delivery-meta');
   const showAiStatus=Boolean(active||delivery?.beautifyReport||delivery?.beautifiedHtmlUrl);
@@ -282,9 +279,7 @@ async function loadDelivery(candidateId=selectedId){
   const data=await request(`/api/candidates/${candidateId}/social-cards`);
   if(candidateId!==selectedId)return;
   delivery=data;
-  if(data.beautifiedImages?.length&&!data.images?.length)deliveryViewMode='beautified';
-  else if(!data.images?.length&&data.beautifiedHtmlUrl)deliveryViewMode='beautified';
-  else if(!data.beautifiedImages?.length)deliveryViewMode='original';
+  deliveryViewMode=data.beautifiedImages?.length||data.beautifiedHtmlUrl?'beautified':'original';
   currentFactIndex=data.factIndex||currentFactIndex;
   const panel=document.getElementById('social-delivery');
   const hasAiDiagnostics=Boolean(data.beautifyReport||data.beautifiedHtmlUrl);
@@ -296,7 +291,9 @@ async function loadDelivery(candidateId=selectedId){
   const metricSummary=data.templateStats?.usageCount?` · 通过率 ${metricRate(data.templateStats.layoutPassRate)} · 过空 ${metricRate(data.templateStats.underfilledRate)} · 溢出 ${metricRate(data.templateStats.overflowRate)}`:'';
   const planSummary=data.contentPlanAdjustments?.rounds?.length?` · 内容计划调整 ${data.contentPlanAdjustments.rounds.length} 轮`:'';
   const deliveryCount=data.images?.length?`${data.images.length} 张`:(data.beautifiedImages?.length?`AI 视觉版 ${data.beautifiedImages.length} 张`:'暂无可交付 PNG');
-  document.getElementById('social-delivery-meta').textContent=`${deliveryCount} · 程序化布局审计${data.layout?.valid?'通过':'待确认'}${metricLabel}${metricSummary}${planSummary}`;
+  document.getElementById('social-delivery-meta').textContent=`${deliveryCount} · 页面布局校验${data.layout?.valid?'通过':'待确认'}${metricLabel}${metricSummary}${planSummary}`;
+  const schemeLink=document.getElementById('social-design-scheme-link');
+  if(schemeLink){schemeLink.hidden=!data.designSchemeUrl;schemeLink.href=data.designSchemeUrl||'';schemeLink.textContent=data.designScheme?.visualDirection?`查看本篇设计方案 · ${data.designScheme.visualDirection}`:'查看本篇设计方案';}
   const titlePanel=document.getElementById('social-publish-title');
   const titleLabel=document.getElementById('social-publish-title-label');
   const titleValue=document.getElementById('social-publish-title-value');
@@ -307,7 +304,6 @@ async function loadDelivery(candidateId=selectedId){
   if(deliveryMeta)deliveryMeta.hidden=hasAiDiagnostics;
   if(beautifyStatus){beautifyStatus.hidden=!hasAiDiagnostics;beautifyStatus.classList.toggle('is-failed',Boolean(data.beautifyReport&&data.beautifyReport.status!=='passed'));beautifyStatus.innerHTML=aiVisualStatusHtml(data.beautifyReport,data.beautifyStages);}
   document.getElementById('social-download-all').href=data.bundleUrl;
-  renderDeliveryVersions();
   renderDeliveryFilm();
   renderProof();
   syncBeautifyButton();
@@ -315,10 +311,10 @@ async function loadDelivery(candidateId=selectedId){
 
 let lastGate=null;
 function renderGate(gate) {
-  lastGate=gate;  const themeBlocked=storyboardThemeState?.status==='needs-storyboard';document.getElementById("card-ready-title").textContent=themeBlocked?"请先重新生成故事板":gate.ready?"故事板已就绪":selectedContentType==='event'?"请先生成事件故事板":selectedContentType==='custom'?"请先完善自定义事实基座":"请先分析仓库，再生成故事板";
+  lastGate=gate;  const structureBlocked=storyboardStructureState?.status==='needs-storyboard';document.getElementById("card-ready-title").textContent=structureBlocked?"请先重新生成故事板":gate.ready?"故事板已就绪":selectedContentType==='event'?"请先生成事件故事板":selectedContentType==='custom'?"请先完善自定义事实基座":"请先分析仓库，再生成故事板";
   const generate=document.getElementById("generate-social-card");
-  generate.disabled=!gate.ready||themeBlocked;generate.dataset.ready=String(gate.ready);
-  generate.title=themeBlocked?(storyboardThemeState.reason||'当前主题模板能力与故事板不一致'):gate.ready?"根据当前卡片故事板开始生成":selectedContentType==='event'?"请先根据事实基座生成事件故事板":selectedContentType==='custom'?"门禁项全部通过后才能生成图文":"请先分析仓库，再生成故事板";
+  generate.disabled=!gate.ready||structureBlocked;generate.dataset.ready=String(gate.ready);
+  generate.title=structureBlocked?(storyboardStructureState.reason||'故事板与当前页面结构约束不一致'):gate.ready?"根据当前卡片故事板开始生成":selectedContentType==='event'?"请先根据事实基座生成事件故事板":selectedContentType==='custom'?"门禁项全部通过后才能生成图文":"请先分析仓库，再生成故事板";
   syncGenerateButton();
   syncBeautifyButton();
 }
@@ -393,9 +389,9 @@ export async function openSocialEditor(id) {
   inspect.textContent='分析仓库';
   reanalyze.textContent=data.editorial?.card_plan_json?.length?'重新生成故事板':'生成故事板';
   reanalyze.hidden=false;
-  renderFacts(data.facts,data.eventAnalysis);renderScore(data.score);currentFactIndex=data.factIndex||null;currentContentPlanAdjustments=data.contentPlanAdjustments||null;currentLayoutReportPages=Array.isArray(data.layoutReport?.pages)?data.layoutReport.pages:[];renderCardPlan(data.editorial?.card_plan_json,data.layoutDecisions,currentLayoutReportPages,null,null);renderStoryboardThemeState(data.themeState);renderGate(data.gate);
+  renderFacts(data.facts,data.eventAnalysis);renderScore(data.score);currentFactIndex=data.factIndex||null;currentContentPlanAdjustments=data.contentPlanAdjustments||null;currentLayoutReportPages=Array.isArray(data.layoutReport?.pages)?data.layoutReport.pages:[];renderCardPlan(data.editorial?.card_plan_json,data.layoutDecisions,currentLayoutReportPages,null,null);renderStoryboardStructureState(data.structureState);renderGate(data.gate);
   syncStoryboardActionLabels();
-  document.getElementById('social-channel').value=selectedChannelMode;document.getElementById('social-composition-mode').value=selectedCompositionMode;document.getElementById('social-layout-style').value=data.editorial?.layout_style||'auto';currentGroupLayout=data.editorial?.layout_style||'auto';document.getElementById('social-visual-style').value=data.editorial?.visual_style||'auto';document.getElementById('social-visual-style').dataset.previousValue=document.getElementById('social-visual-style').value;document.getElementById('social-visual-style').dispatchEvent(new Event('theme-ui-sync'));syncCompositionControls();await Promise.all([loadSocialSkillControls(data),loadDelivery(selectedId),loadSimilarSocialCards(selectedId)]);
+  document.getElementById('social-channel').value=selectedChannelMode;document.getElementById('social-composition-mode').value=selectedCompositionMode;document.getElementById('social-layout-style').value=data.editorial?.layout_style||'auto';currentGroupLayout=data.editorial?.layout_style||'auto';syncCompositionControls();await Promise.all([loadSocialSkillControls(data),loadDelivery(selectedId),loadSimilarSocialCards(selectedId)]);
 }
 
 async function analyzeEditorial(candidateId=selectedId) {
@@ -418,7 +414,7 @@ async function analyzeEditorial(candidateId=selectedId) {
       plan.length?`页面规划：${plan.length} 页（${plan.map((page)=>page.title||page.kind).filter(Boolean).join(' → ')}）`:''
     ].filter(Boolean).join('\n');
     if(preview&&summary)preview.insertAdjacentHTML('afterbegin',`<details class="thinking-box"><summary>故事板规划摘要</summary><div class="thinking-text">${escapeHtml(summary)}</div></details>`);
-    renderStoryboardThemeState(data.themeState);renderGate(data.gate);if(data.eventAnalysis)renderFacts(null,data.eventAnalysis);toast(selectedContentType==='event'?'AI 已根据突发事实基座生成事件故事板':selectedContentType==='custom'?'AI 已根据自定义事实基座生成故事板':'AI 已根据仓库事实生成卡片故事板');}return data;
+    renderStoryboardStructureState(data.structureState);renderGate(data.gate);if(data.eventAnalysis)renderFacts(null,data.eventAnalysis);toast(selectedContentType==='event'?'AI 已根据突发事实基座生成事件故事板':selectedContentType==='custom'?'AI 已根据自定义事实基座生成故事板':'AI 已根据仓库事实生成卡片故事板');}return data;
 }
 
 let storyboardProgressTimer=null;
@@ -511,24 +507,8 @@ function socialGenerationProgressLabel(progress='') {
   return '正在生成图文…';
 }
 function syncGenerateButton() {
-  const generate = document.getElementById("generate-social-card"); if (!generate) return;
-  const job = selectedId ? socialJobs.get(Number(selectedId)) : null;
-  const active = job && (job.status === 'running' || job.status === 'queued');
-  if (active) {
-    // 任务进度可能包含页码、校验原因和来源 URL，不能直接塞进按钮文本，
-    // 否则会把底部操作栏撑成一条很长的灰色提示条。完整进度仍保留在任务日志，
-    // 并通过 title 给需要快速查看的用户提供悬浮提示。
-    generate.disabled = true;
-    generate.textContent = job.status === 'queued' ? '排队等待执行…' : socialGenerationProgressLabel(job.progress);
-    generate.title = '图文任务执行中，详细进度请查看任务日志';
-    return;
-  }
-  const ready=generate.dataset.ready!=='false';
-  if (storyboardThemeState?.status==='needs-storyboard') { generate.disabled=true;generate.textContent='请先重新生成故事板';generate.title=storyboardThemeState.reason||'当前主题模板能力与故事板不一致';return; }
-  generate.disabled=!ready;
-  if (job && job.status === 'completed') { generate.textContent = '重新程序化生成'; return; }
-  if(generate.dataset.pendingRender==='true'){generate.textContent='重新程序化生成';generate.title='故事板已更新，确认页面关系后重新生成整组 HTML/PNG';return;}
-  generate.textContent = '程序化生成';
+  const generate=document.getElementById('generate-social-card');
+  if(generate)generate.hidden=true;
 }
 async function watchSocialJob(jobId, candidateId) {
   while (true) { await new Promise((resolve) => setTimeout(resolve, 2000)); const job = await request(`/api/jobs/${jobId}`);
@@ -703,8 +683,6 @@ if(!window.__socialPageEditorBound){window.__socialPageEditorBound=true;
 if(!window.__socialDeliveryBound){
   window.__socialDeliveryBound=true;
   document.addEventListener('click',(event)=>{
-    const mode=event.target.closest('[data-social-delivery-mode]');
-    if(mode&&delivery){deliveryViewMode=mode.dataset.socialDeliveryMode==='beautified'&&delivery.beautifiedImages?.length?'beautified':'original';renderDeliveryVersions();renderDeliveryFilm();}
     const image=event.target.closest('[data-social-image]');
     if(image){deliveryIndex=Number(image.dataset.socialImage);renderDeliveryImage();}
     const tab=event.target.closest('[data-social-proof]');
@@ -716,22 +694,6 @@ if(!window.__socialDeliveryBound){
     // 翻页按钮在视图加载前可能尚未渲染，顶层 ?. 绑定会变成死按钮，统一走 document 委托
     if(event.target.closest('#social-gallery-prev')){deliveryIndex-=1;renderDeliveryImage();}
     if(event.target.closest('#social-gallery-next')){deliveryIndex+=1;renderDeliveryImage();}
-  });
-}
-if(!window.__socialThemeBound){
-  window.__socialThemeBound=true;
-  document.getElementById('social-visual-style')?.addEventListener('change',async(event)=>{
-    if(!selectedId)return;
-    const previous=storyboardThemeState?.current?.themeId||document.getElementById('social-visual-style').dataset.previousValue||event.target.value;
-    if(!await confirmDiscardStoryboardEdits()){event.target.value=previous;event.target.dispatchEvent(new Event('theme-ui-sync'));return;}
-    event.target.disabled=true;
-    try{
-      const data=await request(`/api/candidates/${selectedId}/card-editorial`,{method:'PUT',body:JSON.stringify({visual_style:event.target.value})});
-      renderStoryboardThemeState(data.themeState);renderGate(data.gate);
-      toast(data.themeState?.status==='needs-storyboard'?'已切换主题；该主题需要重新生成故事板':'已切换主题；当前故事板可直接重新渲染');
-      event.target.dataset.previousValue=event.target.value;
-    }catch(error){event.target.value=previous;event.target.dispatchEvent(new Event('theme-ui-sync'));toast(error.message, "error");}
-    finally{event.target.disabled=false;}
   });
 }
 if(!window.__socialCompositionBound){
@@ -774,7 +736,7 @@ if(!window.__socialChannelBound){
     try{
       const data=await request(`/api/candidates/${selectedId}/card-channel`,{method:'POST',body:JSON.stringify({channel})});
       selectedChannelMode=data.channelMode;
-      renderCardPlan(currentCardPlan,data.layoutDecisions);renderStoryboardThemeState(data.themeState);renderGate(data.themeState?.status==='needs-storyboard'?{...(lastGate||{}),ready:false}:lastGate||{ready:false});
+      renderCardPlan(currentCardPlan,data.layoutDecisions);renderStoryboardStructureState(data.structureState);renderGate(data.structureState?.status==='needs-storyboard'?{...(lastGate||{}),ready:false}:lastGate||{ready:false});
       if(selectedContentType==='custom')document.getElementById('social-facts-title').textContent=`自定义事实基座（${selectedChannelMode==='xiaohongshu'?'小红书':'公众号'}）`;
     }catch(error){event.target.value=selectedChannelMode;toast(error.message, "error");}
   });
@@ -797,17 +759,15 @@ const inspectButton=freshButton("inspect-repository");
 inspectButton?.addEventListener("click",inspectRepository);
 const analyzeButton=freshButton("analyze-card-editorial");
 analyzeButton?.addEventListener("click",()=>runStoryboard());
-const generateButton=freshButton("generate-social-card");
-generateButton?.addEventListener("click", async () => { if (!selectedId) return; const candidateId = Number(selectedId); if (delivery?.ready && !await confirmAction("重新生成图文将覆盖当前已生成的整组交付物（HTML 与逐页 PNG），是否继续？", { confirmText: "重新生成" })) return; socialJobs.set(candidateId, { status: 'running', progress: '正在启动…' }); syncGenerateButton(); try { const job = await request(`/api/candidates/${candidateId}/ai/social-card`, { method: 'POST', body: '{}' }); socialJobs.set(candidateId, { status: 'running', progress: '图文任务执行中…' }); syncGenerateButton(); toast("图文生成任务已启动，可在任务日志查看进度"); watchSocialJob(job.id, candidateId).catch((error) => { socialJobs.set(candidateId, { status: 'failed', error: error.message }); syncGenerateButton(); toast(error.message, "error"); }); } catch (error) { socialJobs.delete(candidateId); syncGenerateButton(); renderGate(lastGate); toast(error.message, "error"); } });
 const beautifyButton=document.getElementById('ai-beautify-social-card');
 beautifyButton?.addEventListener('click',async()=>{
   if(!selectedId)return;
   const candidateId=Number(selectedId);
-  if(delivery?.beautifiedHtmlUrl&&!await confirmAction('重新生成 AI 视觉版会覆盖当前 AI 视觉版 HTML 与 PNG，程序版不会改变，是否继续？',{confirmText:'重新生成'}))return;
+  if(delivery?.beautifiedHtmlUrl&&!await confirmAction('重新生成将覆盖当前 AI 图文 HTML 与 PNG，是否继续？',{confirmText:'重新生成'}))return;
   try{
     socialBeautifyJobs.set(candidateId,{status:'running',progress:'正在启动…'});syncBeautifyButton();
     const job=await request(`/api/candidates/${candidateId}/ai/social-card-beautify`,{method:'POST',body:JSON.stringify({})});
-    socialBeautifyJobs.set(candidateId,{status:'running',progress:'正在生成 AI 视觉页面…'});syncBeautifyButton();toast('AI 视觉生成任务已启动，完成后可切换查看 AI 视觉版');
+    socialBeautifyJobs.set(candidateId,{status:'running',progress:'正在生成 AI 视觉页面…'});syncBeautifyButton();toast('AI 图文生成任务已启动，完成后会自动打开新产物');
     watchSocialBeautifyJob(job.id,candidateId).catch((error)=>{socialBeautifyJobs.set(candidateId,{status:'failed',error:error.message});syncBeautifyButton();toast(error.message,'error');loadDelivery(candidateId).catch(()=>{});});
   }catch(error){socialBeautifyJobs.delete(candidateId);syncBeautifyButton();toast(error.message,'error');}
 });

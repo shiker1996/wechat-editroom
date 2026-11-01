@@ -1,4 +1,3 @@
-import { getBuiltinThemeRegistry } from './theme-registry.mjs';
 import { resolveSocialComponents } from './component-catalog.mjs';
 import { fontStack } from './font-utils.mjs';
 import { colorContrast, mixHex } from './color-utils.mjs';
@@ -40,12 +39,22 @@ export function resolveSocialCoverTitleShadowRole(definition,components=resolveS
   return candidates.reduce((best,role)=>metrics(role).score>metrics(best).score?role:best,candidates[0]||'text');
 }
 
-export function socialThemeDefinition(themeId,{fallback=false}={}){
-  const registry=getBuiltinThemeRegistry(),theme=registry.get(themeId);
-  if(theme?.targets.includes('social'))return theme;
-  if(fallback)return registry.require('ice-blue');
-  return null;
-}
+// Legacy storyboard HTML is an intermediate input to the AI visual generator.
+// Keep one neutral renderer baseline in code; users no longer select or manage
+// visual themes, and final styling comes from the per-run design scheme.
+const SOCIAL_RENDER_BASELINE=Object.freeze({
+  schemaVersion:1,id:'social-render-baseline',label:'图文中间渲染基线',version:'1',
+  targets:['social'],status:'internal',source:'builtin',
+  tokens:{
+    colors:{background:'#E4F0F6',surface:'#FCFEFF',page:'#F7FBFD',text:'#102033',muted:'#49657A',accent:'#176F98',accentSecondary:'#EA6845',line:'#B5D2E2',inverseText:'#FFFFFF',codeBackground:'#102C3D'},
+    typography:{family:'sans',headingFamily:'sans',bodyPx:11,h1Px:32,h2Px:13,captionPx:10,codePx:11,lineHeight:1.5,letterSpacingEm:0},
+    spacing:{articlePaddingPx:18,sectionPx:24,paragraphPx:12,cardGapPx:12},
+    shape:{radiusPx:18,borderWidthPx:1,shadow:'soft'},
+  },
+  social:{templatePack:{id:'standard-v1',version:1},recipes:{surface:'base',frame:'soft-orbit',decoration:'orbit',eyebrow:'accent',coverTitle:'classic',skeleton:'stacked',coverSupport:'lead',ending:'dark-fill',list:'soft-card',code:'dark-panel'},effects:{texture:'none',decorationOpacity:.25,contentTiltDeg:0},components:{}},
+});
+
+export function socialThemeDefinition(){return SOCIAL_RENDER_BASELINE;}
 
 function variables(theme){
   const c=theme.tokens.colors,t=theme.tokens.typography,sp=theme.tokens.spacing,s=theme.tokens.shape,effects={...DEFAULT_EFFECTS,...theme.social?.effects};
@@ -61,7 +70,7 @@ export function compileSocialThemeVariables(theme){
 export function compileSocialTheme(theme){
   const definition=typeof theme==='string'?socialThemeDefinition(theme):theme;
   if(!definition?.social)throw new Error(`未知图文视觉主题：${definition?.id||theme}`);
-  const id=definition.id,scope=`.theme-${id}`,baseRecipes=definition.social.recipes||{},skeleton=baseRecipes.skeleton||'stacked',recipes={coverTitle:'classic',skeleton,coverSupport:skeleton==='impact-band'?'statement':skeleton==='terminal-rail'?'metric':'lead',...baseRecipes},effects={...DEFAULT_EFFECTS,...definition.social.effects},components=resolveSocialComponents(definition),coverTitleShadowRole=resolveSocialCoverTitleShadowRole(definition,components),brandColorRole=recipes.surface==='brutalist'||definition.social.templatePack?.id==='brutalist-v1'?'inverseText':'accent',colors=definition.tokens.colors,highlightTitleTextRole=colorContrast(colors.inverseText,colors.codeBackground)>=colorContrast(colors.text,colors.codeBackground)?'inverseText':'text';
+  const id=definition.id,scope=`.theme-${id}`,baseRecipes=definition.social.recipes||{},skeleton=baseRecipes.skeleton||'stacked',recipes={coverTitle:'classic',skeleton,coverSupport:skeleton==='impact-band'?'statement':skeleton==='terminal-rail'?'metric':'lead',...baseRecipes},effects={...DEFAULT_EFFECTS,...definition.social.effects},components=resolveSocialComponents(definition),coverTitleShadowRole=resolveSocialCoverTitleShadowRole(definition,components),brandColorRole=recipes.surface==='brutalist'?'inverseText':'accent',colors=definition.tokens.colors,highlightTitleTextRole=colorContrast(colors.inverseText,colors.codeBackground)>=colorContrast(colors.text,colors.codeBackground)?'inverseText':'text';
   const palette=recipes.surface==='palette';
   const className=`theme-${id}${palette?' theme-palette':''}`;
   let css=`${scope}{${variables(definition)};--cover-title-shadow:${colorVar(coverTitleShadowRole)}}`;

@@ -153,28 +153,6 @@
 #view-skills .extension-management-grid .runtime-commandbar .outline-button { color: var(--ink); border-color: var(--line-strong); background: var(--surface); }
 #view-skills .extension-card, #view-skills .remote-plugin-installer { box-shadow: none; }
 
-#view-themes .theme-library-launch button,
-#view-themes .theme-manager-panel,
-#view-themes .user-theme-form,
-#view-themes .user-theme-row { border-color: var(--line); box-shadow: none; }
-#view-themes .theme-library-launch button { border-top: 2px solid var(--blue); background: var(--surface); }
-#view-themes .theme-library-launch button:first-child,
-#view-themes .theme-library-launch button:nth-child(2),
-#view-themes .theme-library-launch button:last-child { border-top-color: var(--blue); }
-#view-themes .theme-library-launch button:hover { background: var(--surface-hover); }
-#view-themes .theme-library-launch span { color: var(--muted); }
-#view-themes .theme-manager-panel { background: var(--surface); }
-#view-themes .user-theme-row.active { border-color: var(--blue); background: var(--blue-soft); }
-#view-themes .ai-theme-creator { border-color: var(--line); background: var(--surface); box-shadow: none; }
-#view-themes .ai-theme-creator > header {
-  background: var(--surface-subtle);
-  color: var(--ink);
-  border-bottom-color: var(--line);
-}
-#view-themes .ai-theme-creator > header h4,
-#view-themes .ai-theme-creator > header .text-button { color: var(--ink); }
-#view-themes .ai-theme-creator > header p { color: var(--muted); }
-#view-themes .theme-editor-actions { border-top: 1px solid var(--line); padding-top: 14px; }
 
 #view-system .configuration-console,
 #view-system .runtime-config-panel { border: 1px solid var(--line); border-top-width: 1px; background: var(--surface); box-shadow: none; }
@@ -402,9 +380,9 @@
 #view-social-editor .social-production-bar .primary-button:hover,
 #view-social-editor .social-production-bar .outline-button:hover { background: var(--blue-soft); border-color: var(--blue); }
 #view-social-editor .social-skill-settings > summary,
-#view-social-editor .social-theme-picker,
+#view-social-editor .social-option-picker,
 #view-social-editor .storyboard-layout-control { color: var(--ink); background: var(--surface); border-color: var(--line); }
-#view-social-editor .social-theme-picker select { color: var(--ink); background: var(--surface-subtle); border-color: var(--line-strong); }
+#view-social-editor .social-option-picker select { color: var(--ink); background: var(--surface-subtle); border-color: var(--line-strong); }
 
 @media (max-width: 640px) {
   #view-social-editor .social-publish-title {

@@ -8,26 +8,12 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { loadSkillBundle, selectSkillPromptReferences } from '../server/platform/llm/skill-runtime.mjs';
-import { SOCIAL_CARD_COMPOSITION_MODES, SOCIAL_CARD_LAYOUTS, SOCIAL_CARD_STAGE_CONTRACT, acceptSoftDensityOnlyLayoutReport, adaptiveContentPageIndexes, cardPageDensity, cardPlanRepairStructureIssues, describeCardLayouts, inferCardPageRole, normalizeCardComposition, renderStoryboardHtml as renderStoryboardHtmlBase, resolveCardCompositionDecision, resolveCardLayout, resolveCardLayoutDecision, softDensityPageIndexes, stableCardCompositionSeed, underfilledDensityTier, underfilledPageIndexes, layoutAuditFailureMessage } from '../server/features/social-cards/application/social-card-pipeline.mjs';
+import { SOCIAL_CARD_COMPOSITION_MODES, SOCIAL_CARD_LAYOUTS, SOCIAL_CARD_STAGE_CONTRACT, acceptSoftDensityOnlyLayoutReport, adaptiveContentPageIndexes, cardPageDensity, cardPlanRepairStructureIssues, describeCardLayouts, inferCardPageRole, normalizeCardComposition, renderStoryboardHtml, resolveCardCompositionDecision, resolveCardLayout, resolveCardLayoutDecision, softDensityPageIndexes, stableCardCompositionSeed, underfilledDensityTier, underfilledPageIndexes, layoutAuditFailureMessage } from '../server/features/social-cards/application/social-card-pipeline.mjs';
 import { createZip } from '../server/platform/artifacts/zip-bundle.mjs';
 import { skipBrowser } from './helpers/tiers.mjs';
-import { socialThemeDefinition } from '../server/shared/themes/social-theme-compiler.mjs';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const execFileAsync = promisify(execFile);
-
-function legacyTheme(id='peach') {
-  const definition=structuredClone(socialThemeDefinition(id));
-  delete definition.social.templatePack;
-  delete definition.hash;delete definition.file;
-  return definition;
-}
-
-// 这些构图断言验证的是迁移前 standard-v1 的骨架；批次 B/C 的新主题单独由 Phase 6 测试覆盖。
-function renderStoryboardHtml(options={}){
-  if ((!options.visualStyle || options.visualStyle==='peach') && !options.themeDefinition) options={...options,visualStyle:'peach',themeDefinition:legacyTheme()};
-  return renderStoryboardHtmlBase(options);
-}
 
 test('图文管线在内部使用版式白名单时建立本地 ESM 绑定', () => {
   const pipeline = fs.readFileSync(path.join(root, 'server', 'features', 'social-cards', 'application', 'social-card-pipeline.mjs'), 'utf8');
@@ -83,9 +69,10 @@ test('故事板保存通过共享类型判断解析结构化内容，不引用�
 
 test('图文生成任务结束后按故事板门禁恢复生成按钮',()=>{
   const editor=fs.readFileSync(path.join(root,'public','src','views','social-editor.js'),'utf8');
-  assert.match(editor,/generate\.disabled=!gate\.ready\|\|themeBlocked/);
-  assert.match(editor,/const ready=generate\.dataset\.ready!=='false';[\s\S]*generate\.disabled=!ready;/);
-  assert.match(editor,/job && job\.status === 'completed'\) \{ generate\.textContent = '重新程序化生成'; return; \}/);
+  assert.match(editor,/generate\.disabled=!gate\.ready/);
+  assert.doesNotMatch(editor,/themeBlocked/);
+  assert.match(editor,/status==='needs-storyboard'[\s\S]*重新生成故事板（必需）/);
+  assert.match(editor,/图文生成完成，已输出 HTML 和逐页 PNG/);
 });
 
 test('项目图文技能加载完整文案、标题、设计与布局契约', () => {
@@ -226,51 +213,6 @@ test('11 项紧凑清单通过真实浏览器布局审计',async(t)=>{
   }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
 
-test('四种图文模板的对比表正文保持 11px 以上并通过真实浏览器布局审计',async(t)=>{
-  if (skipBrowser(t)) return;
-  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'social-card-compare-text-'));
-  try{
-    const page={kind:'positions',role:'compare',title:'市场反应与争议焦点',content_blocks:[{type:'compare',title:'市场反应对比',headers:['事件','市场反应','关键争议'],rows:[
-      ['阿里巴巴配售','开盘跌近10%','配售细节未披露，市场担忧摊薄'],
-      ['希音IPO','发行价区间确定','基石投资者名单未披露'],
-      ['商汤医疗融资','估值突破百亿元','Pre-IPO阶段具体细节未披露'],
-      ['脑器时代融资','种子轮完成','具体金额未披露，产品性能未验证'],
-    ]}]};
-    for (const visualStyle of ['ice-blue','neon','paper-craft','brutalist']) {
-      const htmlPath=path.join(dir,`${visualStyle}.html`);
-      const reportPath=path.join(dir,`${visualStyle}.json`);
-      const html=renderStoryboardHtml({topic:'融资事件',contentType:'event',channelMode:'wechat',visualStyle,themeDefinition:socialThemeDefinition(visualStyle),pages:[page]});
-      assert.match(html,/typographyStyle|font-size:11px/);
-      fs.writeFileSync(htmlPath,html,'utf8');
-      await execFileAsync(process.execPath,[path.join(root,'skills','xiaohongshu-article-generator','scripts','layout-audit.mjs'),htmlPath,'--json',reportPath],{cwd:dir,windowsHide:true});
-      const report=JSON.parse(fs.readFileSync(reportPath,'utf8'));
-      assert.equal(report.valid,true,`${visualStyle}: ${JSON.stringify(report.pages)}`);
-      assert.doesNotMatch(JSON.stringify(report.pages),/text_too_small/);
-    }
-  }finally{fs.rmSync(dir,{recursive:true,force:true});}
-});
-
-test('clean-v1 的页脚与视觉徽章不被文字字号门禁误判',async(t)=>{
-  if (skipBrowser(t)) return;
-  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'social-card-clean-text-floor-'));
-  try{
-    const htmlPath=path.join(dir,'clean.html'),reportPath=path.join(dir,'report.json');
-    const pages=[
-      {kind:'cover',title:'事件简报',content_blocks:[]},
-      {kind:'evidence',role:'timeline',title:'关键事实',content_blocks:[
-        {type:'text',title:'发生了什么',content:'马云连续增持阿里港股，总额超过 6 亿港元。',visual:{icon:'↗',badge:'核心事件',emphasis:'strong',tone:'accent'}},
-        {type:'list',title:'已核验信息',content:'公开公告已披露\n关键日期已记录\n未披露细节单独标注'},
-      ]},
-      {kind:'ending',title:'继续观察',content_blocks:[{type:'highlight',content:'后续披露与业务表现'}]},
-    ];
-    const html=renderStoryboardHtml({topic:'清爽模板字号审计',contentType:'event',channelMode:'wechat',visualStyle:'solarized',themeDefinition:socialThemeDefinition('solarized'),pages});
-    fs.writeFileSync(htmlPath,html,'utf8');
-    await execFileAsync(process.execPath,[path.join(root,'skills','xiaohongshu-article-generator','scripts','layout-audit.mjs'),htmlPath,'--json',reportPath],{cwd:dir,windowsHide:true}).catch(()=>{});
-    const report=JSON.parse(fs.readFileSync(reportPath,'utf8'));
-    assert.doesNotMatch(JSON.stringify(report.pages),/text_too_small/);
-  }finally{fs.rmSync(dir,{recursive:true,force:true});}
-});
-
 test('列表装饰标记不被正文最小字号门禁误判',async(t)=>{
   if (skipBrowser(t)) return;
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'social-card-decorative-mark-floor-'));
@@ -317,12 +259,12 @@ test('封面利用率 90% 到 96% 只提示密度偏高，不阻断布局审计'
   }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
 
-test('图文编辑室可以独立选择版式和视觉主题',()=>{
+test('图文编辑室可以编辑版式，且不再提供固定视觉主题',()=>{
   const html=fs.readFileSync(path.join(root,'public','index.html'),'utf8');
   const source=fs.readFileSync(path.join(root,'public','src','views','social-editor.js'),'utf8');
   const styles=readStyles(root);
   assert.match(html,/id="social-layout-style"[\s\S]*智能混排[\s\S]*海报大字[\s\S]*杂志分栏[\s\S]*数据报告[\s\S]*卡片清单[\s\S]*教程步骤[\s\S]*极简留白/);
-  assert.match(html,/id="social-storyboard-theme-status"/);
+  assert.doesNotMatch(html,/social-storyboard-theme-status|visual-style-select/);
   assert.match(html,/id="inspect-repository"[\s\S]*分析仓库/);
   assert.match(html,/id="analyze-card-editorial"[\s\S]*生成故事板/);
   assert.match(html,/social-facts-stage[\s\S]*id="inspect-repository"/);
@@ -343,7 +285,6 @@ test('图文编辑室可以独立选择版式和视觉主题',()=>{
   assert.match(source,/card-pages\/\$\{pageNumber\}\/ai/);
   assert.match(source,/data-storyboard-block-content/);
   assert.match(source,/生成图文时会整组重新渲染/);
-  assert.match(source,/storyboardThemeState/);
   assert.match(source,/needs-storyboard/);
   assert.match(source,/social-facts-title[\s\S]*factsActions\.prepend\(channelPicker\)/);
   assert.match(source,/card-pages\/\$\{page\}\/layout/);
@@ -402,7 +343,7 @@ test('图文文案由模型生成，HTML 根据故事板确定性组装', () => 
   assert.match(source, /purpose:\s*['"]social-card-copy['"]/);
   assert.doesNotMatch(source, /purpose:'social-card-html'/);
   assert.doesNotMatch(source, /purpose:'social-card-generation'/);
-  const html = renderStoryboardHtml({ visualStyle:'peach', topic:'测试工具', repository:'org/repo', pages:[
+  const html = renderStoryboardHtml({ topic:'测试工具', repository:'org/repo', pages:[
     { kind:'cover', title:'封面', goal:'说明价值', evidence:['事实一'], content_blocks:[{type:'list',title:'能力',content:'功能一\n功能二'},{type:'code',title:'安装',content:'npm i demo'}] },
     { kind:'ending', title:'结尾', continuation_index:2, evidence:['仓库地址'] },
   ] });
@@ -414,17 +355,8 @@ test('图文文案由模型生成，HTML 根据故事板确定性组装', () => 
   assert.match(html, /class="continuation-badge" data-text-role="auxiliary"/);
   assert.match(html, /\.page-body\{[^}]*min-width:0/);
   assert.match(html, /\.page-ending \.note-block h2[^}]*color:inherit/);
-  assert.match(html, /\.theme-peach \.page-ending \.note-block[^}]*color:var\(--ink\)/);
+  assert.doesNotMatch(html, /data-visual-style="(?:peach|neon|tokyo-night|solarized|brutalist)"|class="theme-(?:peach|neon|tokyo-night|solarized|brutalist)/);
   assert.match(html, /\.page-ending \.highlight-block h2[^}]*color:inherit/);
-});
-
-test('故事板渲染支持设计系统的完整视觉主题',()=>{
-  const pages=[{kind:'cover',title:'主题测试',goal:'验证主题'}];
-  for(const visualStyle of ['neon','tokyo-night','brutalist','solarized','retro-terminal','paper-craft','charcoal','peach','orange','ice-blue','mocha','lavender','crimson','bone-white']){
-    const html=renderStoryboardHtml({topic:'主题测试',repository:'org/repo',pages,visualStyle});
-    assert.match(html,new RegExp(`class="theme-${visualStyle}(?: |")`));
-    assert.match(html,new RegExp(`data-visual-style="${visualStyle}"`));
-  }
 });
 
 test('图文编辑室异步按钮使用稳定节点引用并清理旧监听器', () => {
@@ -603,15 +535,14 @@ test('安全回退优先单列稳定变体且支持按页启用',()=>{
   assert.equal(sources[1],'safe');
 });
 
-test('暗色主题下标题卡对比度与步骤文本断行有保障',()=>{
-  const html=renderStoryboardHtml({topic:'暗色主题',pages:[{kind:'cover',title:'封面',content_blocks:[{type:'text',content:'说明'}]}],visualStyle:'neon',compositionMode:'smart'});
+test('智能构图下标题卡与步骤文本有明确排版约束',()=>{
+  const html=renderStoryboardHtml({topic:'标题排版',pages:[{kind:'cover',title:'封面',content_blocks:[{type:'text',content:'说明'}]}],compositionMode:'smart'});
   assert.match(html,/\.composition-smart\.overlap-title-card h1\{[^}]*color:var\(--ink\)/);
   assert.match(html,/\.composition-smart\.page-ending\.overlap-title-card h1\{color:var\(--inverse\)\}/);
   assert.match(html,/\.composition-smart\.page-ending \.scene h3/);
   assert.match(html,/\.composition-smart\.page-ending \.stat b/);
   assert.match(html,/\.step p\{[^}]*overflow-wrap:anywhere/);
   assert.match(html,/\.step h3\{[^}]*overflow-wrap:anywhere/);
-  assert.match(html,/\.theme-neon\{--bg:#050809;--page:#07100e;--surface:#0c1c17;--ink:#eafff7;--muted:#9bd8c2;--accent:#55ffb6/);
   // 卡片内不再重复渲染页码，decor-index-line 只保留短装饰线
   assert.match(html,/\.decor-index-line \.page-content-stack:before\{content:"";/);
   assert.doesNotMatch(html,/attr\(data-card-index\)/);

@@ -9,21 +9,6 @@ test('Mermaid receives article design colors without replacing explicit init', (
   assert.equal(mermaidSourceWithTheme('%%{init: {"theme":"dark"} }%%\nflowchart LR\nA-->B'), '%%{init: {"theme":"dark"} }%%\nflowchart LR\nA-->B');
 });
 
-test('formal typeset theme gives Mermaid a distinctive surface treatment', () => {
-  const config = mermaidConfigForTheme({ theme:'news-digest', colors:{ background:'#FFFFFF', text:'#111111', accent:'#D61F26' } });
-  assert.equal(config.themeVariables.primaryColor, '#111111');
-  assert.equal(config.themeVariables.primaryTextColor, '#FFFFFF');
-  assert.equal(config.themeVariables.primaryBorderColor, '#D61F26');
-});
-
-test('gossip-card Mermaid uses light rounded cards instead of the news dark nodes', () => {
-  const config = mermaidConfigForTheme({ theme:'gossip-card', colors:{ background:'#FFFFFF', text:'#1F2937', accent:'#FF6B35' } });
-  assert.equal(config.themeVariables.primaryColor, '#FFF1E8');
-  assert.equal(config.themeVariables.primaryTextColor, '#1F2937');
-  assert.match(config.themeCSS, /rx:14px/);
-  assert.match(config.themeCSS, /drop-shadow/);
-});
-
 test('Mermaid edge labels keep readable contrast against the page background', () => {
   const config = mermaidConfigForTheme({ colors:{ background:'#FFFFFF', text:'#1A1A1A', accent:'#D61F26' } });
   assert.equal(config.themeVariables.edgeLabelBackground, '#FFFFFF');
@@ -37,14 +22,6 @@ test('ECharts inherits theme defaults while article option keeps priority', () =
   assert.equal(option.title.left, 'left');
   assert.equal(option.grid.left, 80);
   assert.equal(option.animation, false);
-});
-
-test('formal typeset theme overrides ECharts presentation colors but keeps data', () => {
-  const option = echartsOptionWithTheme({
-    series:[{ type:'bar', data:[1, 2], itemStyle:{ color:'#C4473A' } }],
-  }, { theme:'news-digest', colors:{ accent:'#D61F26', background:'#FFFFFF', text:'#111111' } });
-  assert.equal(option.series[0].itemStyle.color, '#D61F26');
-  assert.deepEqual(option.series[0].data, [1, 2]);
 });
 
 test('ECharts article presets improve labels and chart-type hierarchy', () => {

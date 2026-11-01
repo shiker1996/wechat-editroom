@@ -1,4 +1,3 @@
-import { articleThemeDefinition } from '../../../shared/themes/article-theme-compiler.mjs';
 import { fontStack } from '../../../shared/themes/font-utils.mjs';
 
 const DEFAULT_COLORS = {
@@ -85,22 +84,11 @@ function chartShapeDefaults(series, theme) {
 
 export function mermaidConfigForTheme(tokens = {}) {
   const theme = chartTheme(tokens);
-  const formalTheme = Boolean(tokens.theme);
-  const definition=tokens.theme?articleThemeDefinition(tokens.theme,{fallback:false}):null;
-  const recipes=definition?.article?.recipes;
-  const inverted=recipes?.h1==='invert-block';
-  const terminal=recipes?.frame==='terminal-frame';
-  const gossip=recipes?.frame==='gossip-frame';
-  const explicitSurface = tokens.colors && Object.prototype.hasOwnProperty.call(tokens.colors, 'surface');
-  const themeSurface = explicitSurface ? theme.colors.surface : (definition?.tokens?.colors?.surface || theme.colors.surface);
-  const radius=gossip?14:terminal?3:definition?.tokens?.shape?.radiusPx||0;
-  const surface = definition ? {
-    fill:inverted?theme.colors.text:themeSurface,
-    text:inverted?theme.colors.background:theme.colors.text,
-      css:`.node rect,.node polygon,.node circle{rx:${radius}px;ry:${radius}px${gossip?';filter:drop-shadow(0 5px 7px rgba(31,41,55,.16))':''}}\n.node .label,.nodeLabel{font-family:${theme.fontFamily};font-size:${theme.typography.nodePx}px}\n.node.aiFocus rect,.node.aiFocus polygon,.node.aiFocus circle{stroke-width:3px}\n.node.aiFocus .label{font-weight:700}`,
-  } : {
-    fill:formalTheme ? theme.colors.text : theme.colors.background,
-    text:formalTheme ? theme.colors.background : theme.colors.text,
+  const themeSurface = theme.colors.surface;
+  const radius = theme.shape.radius;
+  const surface = {
+    fill:theme.colors.background,
+    text:theme.colors.text,
     css:`.node rect,.node polygon,.node circle{rx:${radius}px;ry:${radius}px}\n.node .label,.nodeLabel{font-family:${theme.fontFamily};font-size:${theme.typography.nodePx}px}\n.node.aiFocus rect,.node.aiFocus polygon,.node.aiFocus circle{stroke-width:3px}\n.node.aiFocus .label{font-weight:700}`,
   };
   return {

@@ -366,46 +366,10 @@
       }
     },
     {
-      "id": "themes.auto-router",
-      "version": 1,
-      "file": "themes/auto-theme-router.md",
-      "purpose": "visual-theme-routing",
-      "variables": [
-        "target",
-        "catalog"
-      ],
-      "components": [],
-      "output": {
-        "format": "json"
-      }
-    },
-    {
       "id": "research.event-analysis-fallback",
       "version": 1,
       "file": "research/event-analysis-fallback.md",
       "purpose": "event-analysis-skill-missing-fallback",
-      "variables": [],
-      "components": [],
-      "output": {
-        "format": "json"
-      }
-    },
-    {
-      "id": "themes.ai-theme-json-repair",
-      "version": 1,
-      "file": "themes/ai-theme-json-repair.md",
-      "purpose": "ai-theme-json-format-repair",
-      "variables": [],
-      "components": [],
-      "output": {
-        "format": "json"
-      }
-    },
-    {
-      "id": "themes.social-template-json-repair",
-      "version": 1,
-      "file": "themes/social-template-json-repair.md",
-      "purpose": "social-template-json-format-repair",
       "variables": [],
       "components": [],
       "output": {
@@ -524,49 +488,6 @@
       "variables": [],
       "components": [],
       "output": { "format": "json" }
-    },
-    {
-      "id": "themes.ai-generator",
-      "version": 1,
-      "file": "themes/ai-generator.md",
-      "purpose": "ai-theme-generation",
-      "variables": [
-        "target",
-        "targetDirection",
-        "coverTitleConstraint",
-        "exactContract",
-        "ranges",
-        "recipeSegment",
-        "componentCatalogInstructions",
-        "differenceHint",
-        "signatures"
-      ],
-      "components": [],
-      "output": {
-        "format": "json"
-      }
-    },
-    {
-      "id": "themes.social-template-proposal",
-      "version": 1,
-      "file": "themes/social-template-proposal.md",
-      "purpose": "social-template-proposal-generation",
-      "variables": [
-        "draftField",
-        "packId",
-        "packVersion",
-        "packLabel",
-        "rolePromptText",
-        "draftLine",
-        "outputShape",
-        "pageRoles",
-        "blockTypes",
-        "themePromptText"
-      ],
-      "components": [],
-      "output": {
-        "format": "json"
-      }
     },
     {
       "id": "social-cards.browser-audit-plan-adjustment",

@@ -133,7 +133,7 @@ test('主链路 E2E：采集、文章与图文产物均可从真实 HTTP 服务�
     const browserFlow = await runBrowserMainlineFlow({ baseUrl: workbench.baseUrl, socialCandidateId: socialCandidate.id, factsText: '固定仓库分析 Fixture 工具', diagnosticsDir: path.join(root, 'diagnostics'), visualBaselinePath: path.join(projectRoot, 'test/e2e/fixtures/social-card-plan.sha256'), waitForJob: (jobId, options) => waitForJob(workbench.api, jobId, options), readServerLogs: () => workbench.logs.join('') });
     timings.browserSocialFlowMs = Math.round(performance.now() - browserFlowStartedAt);
     assert.ok(timings.browserSocialFlowMs <= PERFORMANCE_THRESHOLDS.browserSocialFlowMs, `图文浏览器主链路超出性能阈值：${timings.browserSocialFlowMs}ms > ${PERFORMANCE_THRESHOLDS.browserSocialFlowMs}ms`);
-    assert.deepEqual(browserFlow.actions, ['打开工具图文', '选择图文候选', '分析仓库', '生成故事板', '生成图文并等待交付']);
+    assert.deepEqual(browserFlow.actions, ['打开工具图文', '选择图文候选', '分析仓库', '生成故事板', '生成 AI 图文并等待交付']);
     assert.match(browserFlow.deliveryMeta, /\d+ 张/);
     assert.match(browserFlow.visualSignature, /^[a-f0-9]{64}$/, '图文视觉回归未生成有效签名');
     assert.deepEqual(github.requests.sort(), ['/repos/example/e2e-tool', '/repos/example/e2e-tool/license', '/repos/example/e2e-tool/readme', '/repos/example/e2e-tool/releases/latest'].sort(), `仓库分析必须通过固定 GitHub API 完成：${github.requests.join(', ')}`);
@@ -194,7 +194,7 @@ test('主链路 E2E：采集、文章与图文产物均可从真实 HTTP 服务�
     assert.ok(model.requests.every((request) => request.replayId), '每次模型请求都必须可追踪到 Replay');
     const socialArtifacts = await workbench.api(`/api/artifacts?batch_id=${encodeURIComponent(batch.id)}`);
     const socialRows = socialArtifacts.filter((item) => Number(item.candidate_row_id) === socialCandidate.id);
-    const requiredSocialArtifacts = ['fact-sheet.md', 'card-plan.json', 'copy.txt', 'my-design.html', 'layout-report.json', 'delivery-report.json'];
+    const requiredSocialArtifacts = ['social-design-scheme.json', 'ai-visual-baseline.json', 'copy.txt', 'ai-beautified.html', 'ai-beautified-delivery-gate.json'];
     for (const name of requiredSocialArtifacts) {
       const artifact = socialRows.find((item) => item.name === name);
       assert.ok(artifact, `图文产物缺少 ${name}`);
@@ -205,15 +205,13 @@ test('主链路 E2E：采集、文章与图文产物均可从真实 HTTP 服务�
     const socialView = await workbench.api(`/api/candidates/${socialCandidate.id}/social-cards`);
     const socialPages = Array.isArray(socialView.cardPlan) ? socialView.cardPlan : socialView.cardPlan?.pages;
     assert.equal(socialView.ready, true, '图文交付接口应报告 ready');
-    assert.ok(socialView.htmlUrl, '图文交付接口应暴露 HTML 预览地址');
+    assert.ok(socialView.beautifiedHtmlUrl, '图文交付接口应暴露 AI 视觉 HTML 地址');
     assert.ok(Array.isArray(socialPages) && socialPages.length >= 4, `图文故事板至少需要 4 页：${JSON.stringify(socialView.cardPlan).slice(0, 500)}`);
     assert.ok(socialPages.some((page) => page.role === 'cover'), '图文故事板缺少封面页');
     assert.ok(socialPages.some((page) => page.role === 'ending'), '图文故事板缺少收尾页');
-    assert.ok(Array.isArray(socialView.images) && socialView.images.length === socialPages.length, '图文卡片数量应与故事板页数一致');
-    assert.equal(socialView.delivery?.valid, true, '图文交付门禁应通过');
-    assert.ok(Array.isArray(socialView.layout?.pages) && socialView.layout.pages.length === socialView.images.length, '图文布局报告应覆盖每一页');
-    const layoutIssues = socialView.layout.pages.flatMap((page) => Array.isArray(page.issues) ? page.issues : []);
-    assert.doesNotMatch(layoutIssues.join(','), /overflow|clipped|horizontal_overflow/i, '图文布局不应有溢出或裁切');
+    assert.ok(Array.isArray(socialView.beautifiedImages) && socialView.beautifiedImages.length === 4, 'AI 视觉 PNG 应与固定测试 HTML 的页面数一致');
+    assert.equal(socialView.beautifyDeliveryGate?.status, 'passed', 'AI 视觉交付门禁应通过');
+    assert.equal(socialView.beautifyReport?.visualAudit?.valid, true, 'AI 视觉报告应包含通过的逐页浏览器审计');
 
     const browserSmoke = await runBrowserSmoke({
       baseUrl: workbench.baseUrl,

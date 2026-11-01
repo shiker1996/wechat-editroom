@@ -2,7 +2,7 @@ import { applyWorkbenchSchema } from './workbench-schema.mjs';
 import { applyAgentHarnessSchema } from './agent-harness-schema.mjs';
 export { applyWorkbenchSchema };
 
-export const WORKBENCH_SCHEMA_VERSION = 46;
+export const WORKBENCH_SCHEMA_VERSION = 47;
 
 export function runDatabaseMigrations(db, migrateSchema) {
   if (!db || typeof db.exec !== 'function') throw new TypeError('数据库连接无效');
@@ -35,10 +35,9 @@ export function runDatabaseMigrations(db, migrateSchema) {
     // v6：collection_sources 增加 dismissed 软删除标记（用户在采集源页删除的配置来源不被同步重建）
     if(applied<6){db.exec('BEGIN IMMEDIATE');try{const columns=new Set(db.prepare('PRAGMA table_info(collection_sources)').all().map((column)=>column.name));if(!columns.has('dismissed'))db.exec('ALTER TABLE collection_sources ADD COLUMN dismissed INTEGER NOT NULL DEFAULT 0');db.prepare('INSERT INTO schema_migrations(version,applied_at) VALUES(6,?)').run(new Date().toISOString());db.exec('COMMIT');}catch(error){db.exec('ROLLBACK');throw error;}}
     if(applied<7){db.exec('BEGIN IMMEDIATE');try{applyWorkbenchSchema(db);db.prepare('INSERT INTO schema_migrations(version,applied_at) VALUES(7,?)').run(new Date().toISOString());db.exec('COMMIT');}catch(error){db.exec('ROLLBACK');throw error;}}
-    if(applied<8){db.exec('BEGIN IMMEDIATE');try{const columns=new Set(db.prepare('PRAGMA table_info(card_editorial_sessions)').all().map((column)=>column.name));if(!columns.has('storyboard_theme_snapshot_json'))db.exec("ALTER TABLE card_editorial_sessions ADD COLUMN storyboard_theme_snapshot_json TEXT NOT NULL DEFAULT '{}'");db.prepare('INSERT INTO schema_migrations(version,applied_at) VALUES(8,?)').run(new Date().toISOString());db.exec('COMMIT');}catch(error){db.exec('ROLLBACK');throw error;}}
+    if(applied<8){db.exec('BEGIN IMMEDIATE');try{db.prepare('INSERT INTO schema_migrations(version,applied_at) VALUES(8,?)').run(new Date().toISOString());db.exec('COMMIT');}catch(error){db.exec('ROLLBACK');throw error;}}
     // v9：Social 模板运行指标增加主题、页面角色和结构重排校准字段。
     if(applied<9){db.exec('BEGIN IMMEDIATE');try{const columns=new Set(db.prepare('PRAGMA table_info(social_template_metrics)').all().map((column)=>column.name));
-      if(!columns.has('theme_id'))db.exec("ALTER TABLE social_template_metrics ADD COLUMN theme_id TEXT NOT NULL DEFAULT ''");
       if(!columns.has('page_roles_json'))db.exec("ALTER TABLE social_template_metrics ADD COLUMN page_roles_json TEXT NOT NULL DEFAULT '{}'");
       if(!columns.has('structural_reflow_attempted'))db.exec('ALTER TABLE social_template_metrics ADD COLUMN structural_reflow_attempted INTEGER NOT NULL DEFAULT 0');
       if(!columns.has('structural_reflow_success'))db.exec('ALTER TABLE social_template_metrics ADD COLUMN structural_reflow_success INTEGER NOT NULL DEFAULT 0');
@@ -184,52 +183,15 @@ export function runDatabaseMigrations(db, migrateSchema) {
       db.prepare('INSERT INTO schema_migrations(version,applied_at) VALUES(20,?)').run(new Date().toISOString());
       db.exec('COMMIT');
     }catch(error){db.exec('ROLLBACK');throw error;}}
-    // v21：保存自动主题路由的内容版本、候选排序和受控轮换结果；与实际渲染使用记录分离。
+    // v21：旧版主题路由已退役；保留迁移编号以兼容升级历史。
     if(applied<21){db.exec('BEGIN IMMEDIATE');try{
-      db.exec(`CREATE TABLE IF NOT EXISTS theme_routing_decisions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        batch_id TEXT,
-        candidate_row_id INTEGER,
-        candidate_key TEXT NOT NULL,
-        target TEXT NOT NULL CHECK(target IN ('article','social','cover')),
-        content_hash TEXT NOT NULL,
-        mode TEXT NOT NULL DEFAULT 'auto' CHECK(mode IN ('auto','fallback','manual')),
-        selected_theme_id TEXT NOT NULL,
-        ranked_themes_json TEXT NOT NULL DEFAULT '[]',
-        reason TEXT NOT NULL DEFAULT '',
-        created_at TEXT NOT NULL,
-        UNIQUE(batch_id,candidate_key,target,content_hash),
-        FOREIGN KEY(batch_id) REFERENCES batches(id) ON DELETE CASCADE,
-        FOREIGN KEY(candidate_row_id) REFERENCES candidates(id) ON DELETE SET NULL
-      );
-      CREATE INDEX IF NOT EXISTS idx_theme_routing_recent ON theme_routing_decisions(target,created_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_theme_routing_batch ON theme_routing_decisions(batch_id,target,created_at DESC);`);
+      // Retired theme-routing migration: version marker retained for upgrade history.
       db.prepare('INSERT INTO schema_migrations(version,applied_at) VALUES(21,?)').run(new Date().toISOString());
       db.exec('COMMIT');
     }catch(error){db.exec('ROLLBACK');throw error;}}
-    // v22：主题创建元数据与发布版本快照独立落库，保持视觉定义 JSON 契约纯净。
+    // v22：旧版主题元数据已退役；保留迁移编号以兼容升级历史。
     if(applied<22){db.exec('BEGIN IMMEDIATE');try{
-      db.exec(`CREATE TABLE IF NOT EXISTS theme_metadata (
-        theme_id TEXT PRIMARY KEY,
-        creation_method TEXT NOT NULL DEFAULT 'manual' CHECK(creation_method IN ('manual','ai','import','clone')),
-        based_on_json TEXT NOT NULL DEFAULT '{}',
-        intent_json TEXT NOT NULL DEFAULT '{}',
-        ai_provenance_json TEXT NOT NULL DEFAULT '{}',
-        design_summary_json TEXT NOT NULL DEFAULT '[]',
-        repairs_json TEXT NOT NULL DEFAULT '[]',
-        template_match_evidence_json TEXT NOT NULL DEFAULT '{}',
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        FOREIGN KEY(theme_id) REFERENCES theme_definitions(id) ON DELETE CASCADE
-      );
-      CREATE TABLE IF NOT EXISTS theme_version_metadata (
-        theme_version_id INTEGER PRIMARY KEY,
-        metadata_json TEXT NOT NULL DEFAULT '{}',
-        created_at TEXT NOT NULL,
-        FOREIGN KEY(theme_version_id) REFERENCES theme_versions(id) ON DELETE CASCADE
-      );
-      CREATE INDEX IF NOT EXISTS idx_theme_metadata_method ON theme_metadata(creation_method,updated_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_theme_version_metadata_created ON theme_version_metadata(created_at DESC);`);
+      // Retired theme-metadata migration: version marker retained for upgrade history.
       db.prepare('INSERT INTO schema_migrations(version,applied_at) VALUES(22,?)').run(new Date().toISOString());
       db.exec('COMMIT');
     }catch(error){db.exec('ROLLBACK');throw error;}}
@@ -918,6 +880,15 @@ export function runDatabaseMigrations(db, migrateSchema) {
     const batchColumns = new Set(db.prepare('PRAGMA table_info(batches)').all().map((column) => column.name));
     if (!batchColumns.has('daily_sequence')) db.exec("ALTER TABLE batches ADD COLUMN daily_sequence INTEGER NOT NULL DEFAULT 0");
     db.exec('CREATE TABLE IF NOT EXISTS batch_daily_sequences (batch_date TEXT PRIMARY KEY, next_sequence INTEGER NOT NULL DEFAULT 1)');
+  }
+  if (arguments.length < 2 && !db.prepare('SELECT 1 FROM schema_migrations WHERE version=47').get()) {
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      const columns = new Set(db.prepare('PRAGMA table_info(card_editorial_sessions)').all().map((column) => column.name));
+      if (!columns.has('storyboard_structure_snapshot_json')) db.exec("ALTER TABLE card_editorial_sessions ADD COLUMN storyboard_structure_snapshot_json TEXT NOT NULL DEFAULT '{}'");
+      db.prepare('INSERT INTO schema_migrations(version,applied_at) VALUES(47,?)').run(new Date().toISOString());
+      db.exec('COMMIT');
+    } catch (error) { db.exec('ROLLBACK'); throw error; }
   }
   const violations = db.prepare('PRAGMA foreign_key_check').all();
   if (violations.length) throw new Error(`数据库迁移后存在 ${violations.length} 项外键完整性错误`);
