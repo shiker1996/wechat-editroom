@@ -1,0 +1,21 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/marketplace.schema.json",
+  "name": "jianzi-workbench",
+  "owner": {
+    "name": "见字工作台"
+  },
+  "plugins": [
+    {
+      "name": "jianzi-workbench-setup",
+      "source": {
+        "source": "local",
+        "path": "./plugin"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
