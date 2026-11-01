@@ -17,11 +17,18 @@ function sourceBelongsToGroup(source, group) {
   return group.sourceTypes.includes(source.source_type);
 }
 
+function requiresRsshubRuntime(source) {
+  return source?.plugin_id === 'rsshub-collector' || ['rsshub', 'twitter'].includes(source?.source_type);
+}
+
 export function describeBatchSourceGroups(sources = [], options = {}) {
   const enabled = sources.filter((source) => source?.enabled !== false && source?.dismissed !== true);
   return BATCH_SOURCE_GROUPS.map((group) => {
     const matching = enabled.filter((source) => sourceBelongsToGroup(source, group));
-    const runtimeBlocked = group.id === 'rsshub' && options.rsshubReady === false && matching.length > 0;
+    const runtimeBlocked = group.id === 'rsshub'
+      && options.rsshubReady === false
+      && matching.length > 0
+      && matching.every(requiresRsshubRuntime);
     return {
       id: group.id,
       label: group.label,

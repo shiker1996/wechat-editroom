@@ -53,3 +53,20 @@ test('RSSHub 未安装时不会把已有 RSSHub 来源放进批次', () => {
   assert.deepEqual(result.selected, []);
   assert.equal(result.available.find((item) => item.id === 'rsshub')?.reason, '尚未安装 RSSHub');
 });
+
+test('RSSHub 未安装时，直连 Feed 来源仍可进入批次采集', () => {
+  const result = selectBatchSourceGroups(['rsshub'], [
+    { plugin_id: 'feed-collector', source_type: 'direct', enabled: true },
+  ], { rsshubReady: false, rsshubReason: '尚未安装 RSSHub' });
+  assert.deepEqual(result.selected, ['rsshub']);
+  assert.equal(result.available.find((item) => item.id === 'rsshub')?.ready, true);
+});
+
+test('直连 Feed 与 RSSHub 来源并存时，未安装 RSSHub 不会阻断整个来源组', () => {
+  const result = selectBatchSourceGroups(['rsshub'], [
+    { plugin_id: 'feed-collector', source_type: 'direct', enabled: true },
+    { plugin_id: 'rsshub-collector', source_type: 'rsshub', enabled: true },
+  ], { rsshubReady: false, rsshubReason: '尚未安装 RSSHub' });
+  assert.deepEqual(result.selected, ['rsshub']);
+  assert.equal(result.available.find((item) => item.id === 'rsshub')?.ready, true);
+});
