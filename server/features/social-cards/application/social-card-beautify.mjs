@@ -237,12 +237,10 @@ export function buildBeautifyContext({ workdir, original, candidate, editorial, 
   const structureSnapshot = readJsonFile(path.join(workdir, 'social-structure-snapshot.json'),
     readJsonFile(path.join(workdir, 'social-theme-snapshot.json'), {}));
   const rawChannelMode = planEnvelope?.channel_mode || structureSnapshot?.channelMode || bodyData(original, 'channel') || String(editorial?.output_mode || 'wechat');
-  const candidateContentType = candidate?.material_type === 'repository'
-    ? 'repository'
-    : candidate?.material_type === 'custom'
-      ? 'custom'
-      : 'event';
-  const contentType = String(planEnvelope?.pageBudget?.contentType || structureSnapshot?.contentType || candidateContentType);
+  // Candidate routing and the database storyboard are authoritative. Older
+  // render snapshots can describe a previous route, so they must not override
+  // the current candidate's fact-base type.
+  const contentType = contentTypeForSocialRoute(candidate);
   const requiredPageCount = pages.length || htmlPageCount(original);
   return {
     topic: String(candidate?.hotspot_title || ''),

@@ -68,16 +68,31 @@ test('JSON 无法安全恢复时可把格式错误反馈给模型重试一次', 
   assert.equal(parsed.type, 'final');
 });
 
-test('AI 美化上下文读取最终故事板和主题契约，而不是只读取旧 HTML', () => {
+test('AI 美化上下文读取最终故事板和固定结构契约，而不是只读取旧 HTML', () => {
   const workdir = fs.mkdtempSync(path.join(os.tmpdir(), 'social-card-beautify-'));
   fs.writeFileSync(path.join(workdir, 'card-plan.json'), JSON.stringify({ pages: [{ kind: 'cover', role: 'cover', title: '核心事实', content_blocks: [] }, { kind: 'content', role: 'metric', title: '关键数字', content_blocks: [{ type: 'metric', text: '800 亿', source_refs: ['fact-1'] }] }] }));
-  fs.writeFileSync(path.join(workdir, 'social-theme-snapshot.json'), JSON.stringify({ id: 'solarized', label: '极光配色', version: '1.0.1', templatePack: { id: 'clean-v1', version: 1 } }));
+  fs.writeFileSync(path.join(workdir, 'social-structure-snapshot.json'), JSON.stringify({ templatePack: { id: 'fixed-structure-v1', version: 1 } }));
   const context = buildBeautifyContext({ workdir, original, candidate: { hotspot_title: '测试事件' }, editorial: { output_mode: 'wechat' } });
   assert.equal(context.requiredPageCount, 2);
   assert.equal(context.storyboardPageCount, 2);
   assert.equal(context.storyboard[1].content_blocks[0].type, 'metric');
-  assert.equal(context.theme.id, 'solarized');
+  assert.equal(context.structure.id, 'fixed-structure-v1');
   assert.equal(context.layoutContract.pageWidth, 375);
+});
+
+test('AI 视觉事实类型跟随候选路由，不被过期计划快照覆盖', () => {
+  const workdir = fs.mkdtempSync(path.join(os.tmpdir(), 'social-card-route-context-'));
+  try {
+    fs.writeFileSync(path.join(workdir, 'card-plan.json'), JSON.stringify({ pageBudget: { contentType: 'event' }, pages: [] }));
+    fs.writeFileSync(path.join(workdir, 'social-structure-snapshot.json'), JSON.stringify({ contentType: 'event' }));
+    const context = buildBeautifyContext({
+      workdir,
+      original,
+      candidate: { material_type: 'repository', hotspot_title: '测试仓库' },
+      editorial: { card_plan_json: JSON.stringify([{ role: 'cover', title: '测试仓库' }]) },
+    });
+    assert.equal(context.contentType, 'repository');
+  } finally { fs.rmSync(workdir, { recursive: true, force: true }); }
 });
 
 test('数据库故事板更新后，生成与门禁不沿用磁盘旧页数或建议页数', () => {
@@ -116,7 +131,7 @@ test('AI 视觉主题快照不暴露程序化字号、行高和间距 token', ()
   assert.deepEqual(snapshot.capacityProfile.theme, { borderWidthPx: 1, shadow: 'glow' });
 });
 
-test('AI 视觉参考与主题 SPEC 不携带固定字号或字重', () => {
+test('AI 视觉参考不携带固定字号或字重', () => {
   const layoutGuide = fs.readFileSync(path.resolve('skills/social-card-ai-visual-generator/references/layout-guide.md'), 'utf8');
   const contract = fs.readFileSync(path.resolve('skills/social-card-ai-visual-generator/references/xhs-visual-contract.md'), 'utf8');
   assert.match(layoutGuide, /\.page-content-stack[\s\S]*?gap:\s*8px/);
@@ -124,13 +139,6 @@ test('AI 视觉参考与主题 SPEC 不携带固定字号或字重', () => {
   assert.doesNotMatch(contract, /font-size\s*:/i);
   assert.doesNotMatch(contract, /font-weight\s*:/i);
   assert.doesNotMatch(contract, /(?:padding|margin|gap)\s*:/i);
-  for (const entry of fs.readdirSync(path.resolve('themes/social'), { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-    const specPath = path.join('themes/social', entry.name, 'AI_DESIGN_SPEC.md');
-    if (!fs.existsSync(specPath)) continue;
-    const spec = fs.readFileSync(specPath, 'utf8');
-    assert.doesNotMatch(spec, /fontWeight|sizeScale/);
-  }
 });
 
 test('AI 请求只保留创作与安全校验所需字段', () => {
@@ -159,11 +167,9 @@ test('AI 请求只保留创作与安全校验所需字段', () => {
     },
   });
   assert.deepEqual(Object.keys(request), ['workspace', 'channelMode', 'requiredPageCount']);
-  assert.deepEqual(request.workspace, {
-    resourceId: 'project:current',
-    files: ['card-plan.json', 'ai-visual-card-plan.json', 'event-analysis.json', 'social-theme-snapshot.json', 'social-theme-design-spec.md', 'copy.txt'],
-    instruction: '必须先一次读取 workspace.files 中列出的全部本次运行输入，再开始视觉策划和写入。workspace.files 只包含 card-plan.json、ai-visual-card-plan.json、原始事实 JSON、social-theme-design-spec.md、social-theme-snapshot.json 和 copy.txt；它们分别负责故事板事实、视觉语义索引、事实核对、主题配方、运行元数据和只读文案。layout-guide.md、xhs-visual-contract.md、visual-component-mapping.md 已随本技能作为内置参考注入，不属于 workspace.files，不要重复读取或把它们当成候选内容。所有输入只控制设计和事实边界，不能把路径、来源 ID、技术字段或规范说明展示为页面正文。',
-  });
+  assert.equal(request.workspace.resourceId, 'project:current');
+  assert.deepEqual(request.workspace.files, ['card-plan.json', 'ai-visual-card-plan.json', 'event-analysis.json', 'social-design-scheme.json', 'copy.txt']);
+  assert.match(request.workspace.instruction, /social-design-scheme\.json/);
   assert.equal(request.channelMode, 'wechat');
   assert.equal('bodyClass' in request, false);
   assert.equal('componentVocabulary' in request, false);

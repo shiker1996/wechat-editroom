@@ -142,8 +142,66 @@ function synthesisJson(payload) {
   return { items: [{ candidateId, saturationPenalty: 0, duplicatePenalty: 0, readerStakeScore: 5, reason: '固定测试候选具备明确验证价值。' }] };
 }
 
+function aiVisualAgentJson(payload) {
+  const instruction = String(userContent(payload));
+  const assistantHistory = (payload.messages || []).filter((item) => item?.role === 'assistant').flatMap((item) => {
+    try {
+      const parsed = JSON.parse(String(item.content || ''));
+      return parsed.type === 'tool_requests' ? parsed.requests || [] : [];
+    } catch { return []; }
+  });
+  const wrotePages = assistantHistory.some((item) => item.capability === 'cap_filesystem_project_document_write' && item.arguments?.operation === 'append');
+  const audited = assistantHistory.some((item) => item.capability === 'cap_social_card_visual_audit');
+  const finished = assistantHistory.some((item) => item.capability === 'cap_filesystem_project_document_write' && item.arguments?.operation === 'finish');
+  const requestId = `tr_fixture_${(payload.messages || []).length}`;
+  const request = (capability, args, reason) => ({
+    type: 'tool_requests',
+    assistant_note: '执行固定 E2E 的 AI 视觉生成步骤',
+    requests: [{ requestId, capability, arguments: args, reason }],
+  });
+  if (finished || /文档 ai-beautified\.html 已完成 finish/.test(instruction)) {
+    return { type: 'final', assistantReply: '已完成 AI 视觉 HTML 生成' };
+  }
+  if (audited || (/最近一次 .*审计已通过/.test(instruction) && wrotePages)) {
+    return request('cap_filesystem_project_document_write', { operation: 'finish' }, '完成固定视觉 HTML 写入');
+  }
+  if (wrotePages || /必须先调用 cap_social_card_visual_audit|重新调用 cap_social_card_visual_audit/.test(instruction)) {
+    return request('cap_social_card_visual_audit', { auditAttempt: 1 }, '检查固定视觉页面的纵向容量');
+  }
+  if (!wrotePages) {
+    // The fixture writes once, then audits and finishes the same document.
+    return fixtureVisualAppend(request);
+  }
+  return { type: 'final', assistantReply: '已完成 AI 视觉 HTML 生成' };
+}
+
+function fixtureVisualAppend(request) {
+  const pages = [
+    ['page-cover', 'E2E 主链路测试', '固定输入与可追踪输出'],
+    ['page-content', '为什么需要', '每次改动都应确认采集、文章与图文产物保持连通。'],
+    ['page-content', '验证步骤', '使用固定来源检查事实、故事板和最终页面。'],
+    ['page-ending', '完成标准', '页面结构完整，事实边界清晰，交付可以复核。'],
+  ];
+  const html = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>
+*{box-sizing:border-box}html,body{margin:0;padding:0;background:#102018;color:#f4f0e5;font-family:Arial,"Microsoft YaHei",sans-serif}.page{position:relative;width:375px;height:667px;overflow:hidden;padding:28px;background:#102018;display:flex;flex-direction:column;gap:20px}.page-cover{background:linear-gradient(145deg,#102018,#1a2b23)}.page-body{height:520px;min-height:0;overflow:hidden}.page-content-stack{height:100%;overflow:hidden;display:flex;flex-direction:column;gap:18px}.eyebrow{color:#39c98a;font-size:12px;letter-spacing:.16em}.page h1{font-size:34px;line-height:1.2;margin:0}.page h2{font-size:25px;line-height:1.25;margin:0}.page p{font-size:14px;line-height:1.55;margin:0;color:#f4f0e5}.bottom-strip{margin-top:auto;border-top:1px solid #496052;padding-top:12px;color:#b0c0b5;font-size:12px}
+</style></head><body>${pages.map(([kind,title,body],index)=>`<section class="page ${kind}"><div class="eyebrow">${String(index+1).padStart(2,'0')} · E2E FIXTURE</div><div class="page-body"><div class="page-content-stack"><h${index===0?'1':'2'}>${title}</h${index===0?'1':'2'}><p>${body}</p></div></div><footer class="bottom-strip">固定测试 · ${index+1} / ${pages.length}</footer></section>`).join('')}</body></html>`;
+  return request('cap_filesystem_project_document_write', { operation: 'append', content: html }, '写入四页固定测试视觉 HTML');
+}
+
 function jsonForRequest(payload) {
   const text = JSON.stringify(payload.messages || []);
+  if (/当前 Agent 阶段：单一 AI 视觉生成/.test(text)) return aiVisualAgentJson(payload);
+  if (/你是公众号与小红书图文设计师/.test(text)) {
+    const input = parseEmbeddedJson(userContent(payload)) || {};
+    const pages = Array.isArray(input.pages) ? input.pages : [];
+    return { designScheme: {
+      visualDirection: '以清晰的信息层级和克制的绿色强调呈现固定测试内容',
+      palette: { background: '#102018', surface: '#1A2B23', text: '#F4F0E5', muted: '#B0C0B5', accent: '#39C98A', accentSecondary: '#D98253' },
+      typography: { family: 'sans', titlePx: 34, bodyPx: 14, captionPx: 12, lineHeight: 1.55 },
+      composition: { grid: '单列信息网格', density: '中等', rhythm: '标题后接短段和重点块', motif: '细线与绿色节点' },
+      pages: pages.map((page, index) => ({ page: index + 1, role: page.role, layout: page.role === 'cover' ? 'poster' : page.role === 'ending' ? 'minimal' : 'editorial', focus: `突出第 ${index + 1} 页的核心信息`, treatment: '保留清晰标题、正文和页脚边界' })),
+    } };
+  }
   if (/为这篇公众号文章生成\s*5 个发布标题|生成 5 个发布标题|唯一推荐标题/.test(text)) return {
     selectedTitle: 'E2E 文章采集样本：固定事实如何进入最终内容',
     titleCandidates: [{ title: 'E2E 文章采集样本：固定事实如何进入最终内容', reason: '固定主链路标题夹具' }],
@@ -209,6 +267,8 @@ function replayIdForRequest(payload) {
   const tools = Array.isArray(payload.tools) ? payload.tools : [];
   const toolName = tools[0]?.function?.name || '';
   if (toolName) return `tool:${toolName}`;
+  if (/当前 Agent 阶段：单一 AI 视觉生成/.test(text)) return 'social-card-ai-visual-generation';
+  if (/你是公众号与小红书图文设计师/.test(text)) return 'social-card-design-scheme';
   if (/为这篇公众号文章生成\s*5 个发布标题|生成 5 个发布标题|唯一推荐标题/.test(text)) return 'article-title-plan';
   if (/请审核文章中的事实与论证/.test(text)) return 'article-review';
   if (/请判断这篇文章是否存在明显、影响阅读体验的模板化\/AI 腔/.test(text)) return 'article-voice-quality-gate';
