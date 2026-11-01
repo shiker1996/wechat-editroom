@@ -15,6 +15,7 @@
 | 文档 | 内容 |
 |---|---|
 | [user-guide.md](./user-guide.md) | 面向使用者的完整手册：安装、配置、采集、选题、成稿、图文、自主写作、对话 Agent 失败提示、备份与排障 |
+| [agent-usage-guide.md](./agent-usage-guide.md) | 使用 Codex 或 WorkBuddy 初始化/连接项目，配置模型、账号画像和采集源，并完成采集到文章/图文生产 |
 | [configuration.md](./configuration.md) | 配置项参考：`.env`、`config.local.json`、`account-context.json`（含选题评分）、技能覆盖层 |
 | [release.md](./release.md) | 发布、升级、降级、备份恢复流程 |
 | [data-flow.md](./data-flow.md) | 第三方服务数据流：发送什么、何时发送、保存多久、如何删除 |
