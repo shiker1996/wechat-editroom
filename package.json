@@ -14,6 +14,7 @@
         "desktop:win": "npm run desktop:dir && npm run desktop:win:from-dir",
         "desktop:win:from-dir": "electron-builder --win --prepackaged dist\\win-unpacked --publish never --config.npmRebuild=false",
         "setup": "node scripts/runtime/setup.mjs",
+        "jianzi": "node scripts/agent-integration/cli.mjs",
         "dev": "node scripts/runtime/start-server.mjs --watch --watch-path=server.mjs --watch-path=server",
         "test": "node --disable-warning=ExperimentalWarning --test test/**/*.test.mjs",
         "test:e2e": "node --disable-warning=ExperimentalWarning --test test/e2e/**/*.test.mjs",
@@ -76,6 +77,8 @@
             "writing-skills/**/*",
             "config/**/*",
             "scripts/runtime/**/*",
+            "scripts/agent-integration/**/*",
+            "agent-integrations/**/*",
             "package.json",
             "account-context.example.json",
             "!RSSHub/**/*",
@@ -126,7 +129,7 @@
                     ]
                 }
             ],
-            "artifactName": "jianzhi-${version}-win-${arch}.${ext}"
+            "artifactName": "jianzi-${version}-win-${arch}.${ext}"
         },
         "nsis": {
             "oneClick": false,
