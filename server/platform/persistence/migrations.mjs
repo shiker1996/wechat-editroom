@@ -881,7 +881,7 @@ export function runDatabaseMigrations(db, migrateSchema) {
     if (!batchColumns.has('daily_sequence')) db.exec("ALTER TABLE batches ADD COLUMN daily_sequence INTEGER NOT NULL DEFAULT 0");
     db.exec('CREATE TABLE IF NOT EXISTS batch_daily_sequences (batch_date TEXT PRIMARY KEY, next_sequence INTEGER NOT NULL DEFAULT 1)');
   }
-  if (arguments.length < 2 && applied < 47) {
+  if (arguments.length < 2 && !db.prepare('SELECT 1 FROM schema_migrations WHERE version=47').get()) {
     db.exec('BEGIN IMMEDIATE');
     try {
       const columns = new Set(db.prepare('PRAGMA table_info(card_editorial_sessions)').all().map((column) => column.name));
