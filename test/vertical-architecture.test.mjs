@@ -128,7 +128,6 @@ test('研究与图文生产调用方通过业务垂直入口访问核心流水�
     'server/features/batches/application/ai-job-handlers.mjs',
     'server/features/research/llm/tasks.mjs',
     'server/features/articles/llm/daily-pipeline.mjs',
-    'server/platform/application/themes/theme-preview.mjs',
   ];
   for (const file of callers) {
     const source = read(file);
@@ -142,7 +141,7 @@ test('研究和图文垂直入口暴露稳定的业务能力集合', async () =>
   for (const name of ['runResearchPipeline', 'ensureBatchEventCards', 'clusterItems', 'dimensionSelections', 'scoreCards', 'buildHotspotAtlas']) {
     assert.equal(typeof research[name], 'function', `research 入口缺少 ${name}`);
   }
-  for (const name of ['runSocialCardPipeline', 'renderStoryboardHtml', 'cleanCardPlanJson', 'evaluateCardGate', 'buildSocialCardFactEnvelope']) {
+  for (const name of ['renderStoryboardHtml', 'cleanCardPlanJson', 'evaluateCardGate', 'buildSocialCardFactEnvelope']) {
     assert.equal(typeof socialCards[name], 'function', `social-cards 入口缺少 ${name}`);
   }
 });
@@ -243,7 +242,6 @@ test('文章与采集生产调用方通过业务垂直入口访问核心能力',
     'server/features/batches/application/auto-pipeline.mjs',
     'server/features/collection/application/collection-job-manager.mjs',
     'server/features/batches/application/pipeline-failure-retry.mjs',
-    'server/platform/application/themes/theme-preview.mjs',
   ];
   for (const file of callers) {
     const source = read(file);

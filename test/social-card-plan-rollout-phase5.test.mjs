@@ -3,15 +3,15 @@ import assert from 'node:assert/strict';
 import { buildSocialCardPlanRolloutReport, getSocialCardPlanRolloutProfile, summarizeSocialCardPlanRolloutRows } from '../server/features/social-cards/rendering/social-card-plan-rollout.mjs';
 import { summarizeSocialTemplateRun } from '../server/features/social-cards/rendering/social-card-template-metrics.mjs';
 
-test('Phase 5 模板灰度档案区分默认、保守和兼容策略', () => {
+test('Phase 5 未注册专用档案时统一回退到兼容策略', () => {
   const clean = getSocialCardPlanRolloutProfile('clean-v1');
   const brutalist = getSocialCardPlanRolloutProfile('brutalist-v1');
   const unknown = getSocialCardPlanRolloutProfile('unknown-v1');
-  assert.equal(clean.mode, 'gray');
+  assert.equal(clean.mode, 'compatibility');
   assert.equal(clean.maxPlanRounds, 3);
-  assert.equal(brutalist.mode, 'conservative');
-  assert.equal(brutalist.maxPlanRounds, 2);
-  assert.ok(brutalist.maxOperationsPerRound < clean.maxOperationsPerRound);
+  assert.equal(brutalist.mode, 'compatibility');
+  assert.equal(brutalist.maxPlanRounds, 3);
+  assert.equal(brutalist.maxOperationsPerRound, clean.maxOperationsPerRound);
   assert.equal(unknown.mode, 'compatibility');
 });
 
@@ -19,7 +19,7 @@ test('Phase 5 灰度报告统一比较成功率、利用率、计划轮次和原
   const rows = [
     ...Array.from({ length: 3 }, () => summarizeSocialTemplateRun({
       requestedTemplate: { id: 'clean-v1' }, report: { valid: true, pages: [{ valid: true, utilization: 0.72, issues: [] }] },
-      contentPlanAdjustmentCount: 1, textRepairCount: 0, rolloutProfile: getSocialCardPlanRolloutProfile('clean-v1'),
+      contentPlanAdjustmentCount: 1, textRepairCount: 0, rolloutProfile: { ...getSocialCardPlanRolloutProfile('clean-v1'), mode: 'gray' },
     })),
     ...Array.from({ length: 3 }, () => ({
       operation: 'generation', success: true, layoutPass: true, pageCount: 1, avgUtilization: 0.7,

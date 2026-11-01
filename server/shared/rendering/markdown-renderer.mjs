@@ -110,18 +110,18 @@ function buildInlineStyles(tokens) {
   const paragraphPx = design.spacing.paragraph_px;
   const radiusPx = design.image.radius_px;
   const captionPx = design.image.caption_px;
-  const h1Px = Number(themeVariables.typography.h1Px);
-  const letterSpacing = Number(themeVariables.typography.letterSpacingEm);
-  const articlePaddingPx = Number(themeVariables.spacing.articlePaddingPx);
-  const cardGapPx = Number(themeVariables.spacing.cardGapPx);
-  const borderWidthPx = Number(themeVariables.shape.borderWidthPx);
+  const h1Px = design.typography.h1_px;
+  const letterSpacing = design.typography.letter_spacing_em;
+  const articlePaddingPx = design.spacing.article_padding_px;
+  const cardGapPx = design.spacing.card_gap_px;
+  const borderWidthPx = design.shape.border_width_px;
   const rhythm=tokens.themeDefinition?variants.rhythm||'standard':'standard';
   const rhythmSectionPx=Math.max(16,Math.min(56,sectionPx+(rhythm==='airy'?8:rhythm==='dense'?-8:0)));
   const rhythmParagraphPx=Math.max(8,Math.min(28,paragraphPx+(rhythm==='airy'?4:rhythm==='dense'?-4:0)));
   const rhythmCardGapPx=Math.max(4,Math.min(28,cardGapPx+(rhythm==='airy'?3:rhythm==='dense'?-3:0)));
   const rhythmLineHeight=Math.max(1.35,Math.min(2.1,lineHeight+(rhythm==='airy'?.08:rhythm==='dense'?-.08:0)));
-  const themeRadiusPx = Number(themeVariables.shape.radiusPx);
-  const shadow = ({none:'none',soft:`0 10px 28px ${hexToRgba(ink,.12)}`,hard:`6px 6px 0 ${accentSecondary}`,glow:`0 0 22px ${hexToRgba(accent,.28)}`})[themeVariables.shape.shadow] || 'none';
+  const themeRadiusPx = design.shape.radius_px;
+  const shadow = ({none:'none',soft:`0 10px 28px ${hexToRgba(ink,.12)}`,hard:`6px 6px 0 ${accentSecondary}`,glow:`0 0 22px ${hexToRgba(accent,.28)}`})[design.shape.shadow] || 'none';
   const font = fontStack('sans', { singleQuotes:true });
   // 主题字体角色映射到本机常见中文字体；没有安装扩展字体时也不会全部回退到微软雅黑。
   const serif = fontStack('serif', { singleQuotes:true });

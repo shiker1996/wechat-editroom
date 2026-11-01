@@ -14,7 +14,7 @@ test('第三步持久化事实候选索引并通过图文接口暴露', () => {
   assert.match(route, /social-card-fact-index\.json/);
   assert.match(route, /reason:'storyboard-regenerated'/);
   assert.match(route, /invalidateSocialCardArtifacts/);
-  assert.match(route, /reason:'theme-changed'/);
+  assert.doesNotMatch(route, /reason:'theme-changed'/);
   assert.match(route, /reason:'channel-changed'/);
   assert.match(route, /layout-report\.json/);
 });

@@ -5,7 +5,6 @@ import path from 'node:path';
 import test from 'node:test';
 import { normalizePlanningResult, selectWriterSkill } from '../server/features/articles/application/article-pipeline-contract.mjs';
 import { stageSkillPackageRestore, stageWritingSkillRestore } from '../server/platform/http/routes/system-restore-transactions.mjs';
-import { socialTokenLimits, targetLabel } from '../public/src/views/theme-manager-fields.js';
 
 test('R5.4 文章流水线契约可脱离执行器独立使用',()=>{
   assert.deepEqual(normalizePlanningResult({coreKeywords:'Agent；ToolCall'}).coreKeywords,['Agent','ToolCall']);
@@ -33,9 +32,4 @@ test('R5.4 包恢复事务支持提交并保留新目录',()=>{
   transaction.commit();
   assert.equal(fs.readFileSync(path.join(root,'data','installed-skills','new.txt'),'utf8'),'new');
   fs.rmSync(root,{recursive:true,force:true});
-});
-
-test('R5.4 主题字段元数据可脱离 DOM 独立加载',()=>{
-  assert.equal(targetLabel('social'),'图文');
-  assert.deepEqual(socialTokenLimits.bodyPx,[9,13]);
 });

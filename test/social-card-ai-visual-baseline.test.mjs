@@ -5,7 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { classifySocialCardAiVisualFailure, collectSocialCardAiVisualArtifacts, SOCIAL_CARD_AI_VISUAL_FAILURE_CODES, writeSocialCardAiVisualBaseline } from '../server/features/social-cards/application/social-card-ai-visual-baseline.mjs';
 import { createSocialCardAiVisualStageRecorder, SOCIAL_CARD_AI_VISUAL_STAGE_CONTRACT, writeSocialCardAiVisualSkillManifest } from '../server/features/social-cards/application/social-card-ai-visual-pipeline.mjs';
-import { filterAiVisualGenerationCatalog, runSocialCardAiVisualGenerationAgent, shouldUseAiVisualPlanningThinking } from '../server/features/social-cards/application/social-card-ai-visual-agent.mjs';
+import { filterAiVisualGenerationCatalog, shouldUseAiVisualPlanningThinking } from '../server/features/social-cards/application/social-card-ai-visual-agent.mjs';
+import { runAiVisualDocumentAgent } from '../server/platform/agent/ai-visual-document-agent.mjs';
 import { normalizeToolRequest, validateToolRequest } from '../server/platform/agent/tool-protocol.mjs';
 
 test('AI 视觉 Agent 的工具理由过长时在严格校验前截断', () => {
@@ -29,18 +30,20 @@ test('AI 视觉基线枚举输入和输出产物，不读取候选目录之外�
   assert.equal(artifacts.find((item) => item.name === 'ai-beautified.html').exists, true);
   assert.equal(artifacts.find((item) => item.name === 'card-plan.json').required, true);
   assert.equal(artifacts.find((item) => item.name === 'ai-visual-card-plan.json').required, false);
-  assert.equal(artifacts.find((item) => item.name === 'social-theme-snapshot.json').required, true);
+  assert.equal(artifacts.find((item) => item.name === 'social-theme-snapshot.json').required, false);
+  assert.equal(artifacts.find((item) => item.name === 'social-design-scheme.json').required, true);
   assert.equal(artifacts.some((item) => item.name === 'layout-guide.md'), false);
   assert.equal(artifacts.some((item) => item.name.includes('..')), false);
 });
 
 test('AI 视觉运行开始时写入可追溯基线文件', () => {
   const workdir = fs.mkdtempSync(path.join(os.tmpdir(), 'social-card-ai-visual-baseline-'));
-  const result = writeSocialCardAiVisualBaseline({ workdir, candidateId: 1017, batchId: 'batch-1', contentType: 'event', channelMode: 'xiaohongshu', themeId: 'ice-blue', requiredPageCount: 5, storyboardPageCount: 5 });
+  const result = writeSocialCardAiVisualBaseline({ workdir, candidateId: 1017, batchId: 'batch-1', contentType: 'event', channelMode: 'xiaohongshu', designSchemeId: 'scheme-1', requiredPageCount: 5, storyboardPageCount: 5 });
   const baseline = JSON.parse(fs.readFileSync(result.path, 'utf8'));
   assert.equal(baseline.candidateId, 1017);
   assert.equal(baseline.currentFlow.generationPhase, 'document_write begin + append + finish');
   assert.equal(baseline.currentFlow.programmaticFallback, false);
+  assert.equal(baseline.designSchemeId, 'scheme-1');
   assert.equal(baseline.requiredPageCount, 5);
   assert.equal(fs.existsSync(result.path), true);
 });
@@ -94,7 +97,7 @@ test('AI 视觉生成只在首次实际写入前开启 thinking', () => {
 });
 
 test('AI 视觉分块 JSON 完整时直接写入，不受 content.length 人为门槛影响', async () => {
-  const oversizedContent = '<section class="page">P1</section>' + 'x'.repeat(8_001);
+  const oversizedContent = '<section class="page">P1</section>' + 'x'.repeat(7_001);
   const replies = [
     JSON.stringify({ type: 'tool_requests', assistant_note: '追加页面', requests: [{ requestId: 'tr_visual_oversized', capability: 'cap_filesystem_project_document_write', arguments: { operation: 'append', content: oversizedContent }, reason: '追加 HTML' }] }),
     JSON.stringify({ type: 'tool_requests', assistant_note: '完成文档', requests: [{ requestId: 'tr_visual_finish', capability: 'cap_filesystem_project_document_write', arguments: { operation: 'finish' }, reason: '结束文档写入' }] }),
@@ -117,7 +120,7 @@ test('AI 视觉分块 JSON 完整时直接写入，不受 content.length 人为�
       return { status: 'ok', data: { operation: args.operation } };
     },
   };
-  const result = await runSocialCardAiVisualGenerationAgent({
+  const result = await runAiVisualDocumentAgent({
     gateway,
     store: null,
     batchId: 'batch-oversized',
@@ -127,6 +130,9 @@ test('AI 视觉分块 JSON 完整时直接写入，不受 content.length 人为�
     catalog: [{ capability: 'cap_filesystem_project_read' }, { capability: 'cap_filesystem_project_document_write' }],
     agentSystem: '',
     renderRequest: {},
+    outputPath: 'ai-beautified.html',
+    documentLabel: '社交卡',
+    auditCapability: null,
     workspaceFiles: ['card-plan.json'],
     requiredPageCount: 1,
     getPageCount: () => (html.match(/class="page"/g) || []).length,

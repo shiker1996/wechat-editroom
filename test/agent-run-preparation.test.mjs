@@ -104,7 +104,7 @@ test('v37 数据库迁移保留已有 Run，可重复打开', (t) => {
     DELETE FROM schema_migrations WHERE version=38;`);
   f.reopen();
   assert.equal(f.store.getAgentRun('existing').status, 'running');
-  assert.equal(f.store.db.prepare('SELECT MAX(version) AS version FROM schema_migrations').get().version, 46);
+  assert.equal(f.store.db.prepare('SELECT MAX(version) AS version FROM schema_migrations').get().version, 47);
   f.store.appendAgentRunEvent('existing', { type: 'run.failed' });
   f.reopen();
   assert.equal(f.store.listAgentRunEvents('existing')[0].event.type, 'run.failed');
@@ -120,7 +120,7 @@ test('已记录 v46 的数据库会恢复候选分类字段', (t) => {
   assert.equal(columns.has('content_class'), true);
   assert.equal(columns.has('classification_status'), true);
   assert.equal(columns.has('article_eligible'), true);
-  assert.equal(f.store.db.prepare('SELECT MAX(version) AS version FROM schema_migrations').get().version, 46);
+  assert.equal(f.store.db.prepare('SELECT MAX(version) AS version FROM schema_migrations').get().version, 47);
 });
 
 test('冻结的工具目录不执行后来替换的插件版本', async () => {
