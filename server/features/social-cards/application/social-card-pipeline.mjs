@@ -33,10 +33,6 @@ import { acceptSoftDensityOnlyLayoutReport, adaptiveContentPageIndexes, buildSoc
 import { contentTypeForSocialRoute, socialStoryboardClassForMaterialType, socialStoryboardSkillForMaterialType } from '../domain/social-routing.mjs';
 import { formatSocialCardCopyArtifact, generateSocialCardCopy } from './social-card-copy.mjs';
 // 交付门禁继续报告“配套文案话题标签不足”，实现已下沉到渲染契约模块。
-import { NEON_V1_CSS, renderNeonStoryboardSections } from '../rendering/templates/social/neon-v1.mjs';
-import { BRUTALIST_V1_CSS, renderBrutalistStoryboardSections } from '../rendering/templates/social/brutalist-v1.mjs';
-import { EDITORIAL_V1_CSS, renderEditorialStoryboardSections } from '../rendering/templates/social/editorial-v1.mjs';
-import { CLEAN_V1_CSS, renderCleanStoryboardSections } from '../rendering/templates/social/clean-v1.mjs';
 import { summarizeSocialTemplateRun, summarizeSocialCardPageRoles } from '../rendering/social-card-template-metrics.mjs';
 import { cleanCardPlanJson, renderStoryboardHtml } from '../rendering/presentation.mjs';
 

@@ -9,24 +9,7 @@ const DEFAULT_PROFILE = Object.freeze({
   textRepairMaxRounds: 2,
 });
 
-const PROFILES = Object.freeze({
-  'clean-v1': Object.freeze({ ...DEFAULT_PROFILE, mode: 'gray', grayBatch: true }),
-  'editorial-v1': Object.freeze({ ...DEFAULT_PROFILE, mode: 'gray', grayBatch: true }),
-  'brutalist-v1': Object.freeze({
-    ...DEFAULT_PROFILE,
-    mode: 'conservative',
-    maxPlanRounds: 2,
-    maxOperationsPerRound: 3,
-    structuralReflowScale: 0.78,
-  }),
-  'neon-v1': Object.freeze({
-    ...DEFAULT_PROFILE,
-    mode: 'conservative',
-    maxPlanRounds: 2,
-    maxOperationsPerRound: 3,
-    structuralReflowScale: 0.78,
-  }),
-});
+const PROFILES = Object.freeze({});
 
 function numberOrNull(value) {
   const n = Number(value);

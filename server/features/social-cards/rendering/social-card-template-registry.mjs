@@ -16,7 +16,7 @@ export const SOCIAL_CARD_CHANNEL_BLOCK_TYPES = Object.freeze({
   xiaohongshu: SOCIAL_CARD_RENDERER_BLOCK_TYPES,
 });
 
-// 阶段 1 的容量基线：这是模板感知预检使用的“安全估算”，不是最终布局门禁。
+// 阶段 1 的容量基线：这是页面结构预检使用的“安全估算”，不是最终布局门禁。
 // 最终是否溢出仍以 375×667 浏览器审计为准；阶段 2 才会用这些字段驱动拆页。
 const ROLE_CAPACITY_BASELINES = Object.freeze({
   cover: Object.freeze({ bodyHeightPx: 470, maxTitleLines: 4, maxTextChars: 180, maxListItemLines: 2, minBodyUtilization: .45, maxBodyUtilization: .90, splitAllowed: false, splitBlockTypes: [] }),
@@ -31,25 +31,16 @@ const ROLE_CAPACITY_BASELINES = Object.freeze({
   ending: Object.freeze({ bodyHeightPx: 430, maxTitleLines: 3, maxTextChars: 180, maxListItemLines: 2, minBodyUtilization: .20, maxBodyUtilization: .90, splitAllowed: false, splitBlockTypes: [] }),
 });
 
-const PACK_CAPACITY_DELTAS = Object.freeze({
-  'standard-v1': 0,
-  'neon-v1': -16,
-  'brutalist-v1': -34,
-  'editorial-v1': -22,
-  'clean-v1': -10,
-});
-
-function roleCapacity(packId, role) {
+function roleCapacity(role) {
   const baseline = ROLE_CAPACITY_BASELINES[role] || ROLE_CAPACITY_BASELINES.concept;
   return Object.freeze({
     ...baseline,
-    bodyHeightPx: Math.max(320, baseline.bodyHeightPx + (PACK_CAPACITY_DELTAS[packId] || 0)),
     calibration: 'phase1-baseline',
   });
 }
 
-function roleCapability(packId, role, values) {
-  return Object.freeze({ ...values, supplementSlots: getSocialCardSupplementSlots(role), capacity: roleCapacity(packId, role) });
+function roleCapability(role, values) {
+  return Object.freeze({ ...values, supplementSlots: getSocialCardSupplementSlots(role), capacity: roleCapacity(role) });
 }
 
 const STANDARD_ROLE_TEMPLATES = Object.freeze({
@@ -66,7 +57,7 @@ const STANDARD_ROLE_TEMPLATES = Object.freeze({
 });
 
 const STANDARD_ROLE_CAPABILITIES = Object.freeze(Object.fromEntries(
-  SOCIAL_CARD_PAGE_ROLES.map((role) => [role, roleCapability('standard-v1', role, {
+  SOCIAL_CARD_PAGE_ROLES.map((role) => [role, roleCapability(role, {
     template: STANDARD_ROLE_TEMPLATES[role],
     supportedBlocks: SOCIAL_CARD_RENDERER_BLOCK_TYPES,
     maxBlocks: role === 'cover' ? 2 : role === 'ending' ? 2 : 4,
@@ -74,111 +65,15 @@ const STANDARD_ROLE_CAPABILITIES = Object.freeze(Object.fromEntries(
   })]),
 ));
 
-const NEON_ROLE_TEMPLATES = Object.freeze({
-  cover: 'hero-metrics', concept: 'problem-stack', feature: 'feature-stack', steps: 'steps-rail',
-  data: 'metric-board', compare: 'comparison-board', evidence: 'evidence-ledger',
-  timeline: 'timeline-rail', risk: 'risk-frame', ending: 'closing-cta',
-});
-
-const NEON_ROLE_CAPABILITIES = Object.freeze(Object.fromEntries(
-  SOCIAL_CARD_PAGE_ROLES.map((role) => [role, roleCapability('neon-v1', role, {
-    template: NEON_ROLE_TEMPLATES[role],
-    supportedBlocks: SOCIAL_CARD_RENDERER_BLOCK_TYPES,
-    maxBlocks: role === 'cover' ? 3 : role === 'ending' ? 3 : 4,
-    maxItems: role === 'cover' ? 6 : 9,
-  })]),
-));
-
-const BRUTALIST_ROLE_TEMPLATES = Object.freeze({
-  cover: 'poster-cover', concept: 'thesis-split', feature: 'feature-grid', steps: 'numbered-steps',
-  data: 'stat-stamp', compare: 'versus-board', evidence: 'proof-ledger', timeline: 'event-strip',
-  risk: 'warning-panel', ending: 'hard-cta',
-});
-
-const BRUTALIST_ROLE_CAPABILITIES = Object.freeze(Object.fromEntries(
-  SOCIAL_CARD_PAGE_ROLES.map((role) => [role, roleCapability('brutalist-v1', role, {
-    template: BRUTALIST_ROLE_TEMPLATES[role],
-    supportedBlocks: SOCIAL_CARD_RENDERER_BLOCK_TYPES,
-    maxBlocks: role === 'cover' ? 2 : role === 'ending' ? 2 : 4,
-    maxItems: role === 'cover' ? 5 : 9,
-  })]),
-));
-
-const EDITORIAL_ROLE_TEMPLATES = Object.freeze({
-  cover: 'paper-poster', concept: 'margin-thesis', feature: 'column-notes', steps: 'numbered-margin',
-  data: 'data-table', compare: 'compare-sheet', evidence: 'source-ledger', timeline: 'timeline-strip',
-  risk: 'risk-note', ending: 'closing-editor',
-});
-
-const EDITORIAL_ROLE_CAPABILITIES = Object.freeze(Object.fromEntries(
-  SOCIAL_CARD_PAGE_ROLES.map((role) => [role, roleCapability('editorial-v1', role, {
-    template: EDITORIAL_ROLE_TEMPLATES[role],
-    supportedBlocks: SOCIAL_CARD_RENDERER_BLOCK_TYPES,
-    maxBlocks: role === 'cover' ? 2 : role === 'ending' ? 3 : 4,
-    maxItems: role === 'cover' ? 5 : 9,
-  })]),
-));
-
-const CLEAN_ROLE_TEMPLATES = Object.freeze({
-  cover: 'clean-cover', concept: 'clean-problem', feature: 'clean-feature', steps: 'clean-steps',
-  data: 'clean-data', compare: 'clean-compare', evidence: 'clean-evidence', timeline: 'clean-timeline',
-  risk: 'clean-risk', ending: 'clean-ending',
-});
-
-const CLEAN_ROLE_CAPABILITIES = Object.freeze(Object.fromEntries(
-  SOCIAL_CARD_PAGE_ROLES.map((role) => [role, roleCapability('clean-v1', role, {
-    template: CLEAN_ROLE_TEMPLATES[role],
-    supportedBlocks: SOCIAL_CARD_RENDERER_BLOCK_TYPES,
-    maxBlocks: role === 'cover' ? 2 : role === 'ending' ? 3 : 4,
-    maxItems: role === 'cover' ? 6 : 9,
-  })]),
-));
-
 export const SOCIAL_CARD_TEMPLATE_PACKS = freeze({
   'standard-v1': {
     id: 'standard-v1',
     version: 1,
-    label: '标准兼容模板',
+    label: '页面结构约束',
     renderer: 'current-deterministic-renderer',
     roleTemplates: STANDARD_ROLE_TEMPLATES,
     roles: STANDARD_ROLE_CAPABILITIES,
     fallbackTemplate: null,
-  },
-  'neon-v1': {
-    id: 'neon-v1',
-    version: 1,
-    label: '霓虹编辑卡',
-    renderer: 'neon-v1',
-    roleTemplates: NEON_ROLE_TEMPLATES,
-    roles: NEON_ROLE_CAPABILITIES,
-    fallbackTemplate: 'standard-v1',
-  },
-  'brutalist-v1': {
-    id: 'brutalist-v1',
-    version: 1,
-    label: '野兽硬卡',
-    renderer: 'brutalist-v1',
-    roleTemplates: BRUTALIST_ROLE_TEMPLATES,
-    roles: BRUTALIST_ROLE_CAPABILITIES,
-    fallbackTemplate: 'standard-v1',
-  },
-  'editorial-v1': {
-    id: 'editorial-v1',
-    version: 1,
-    label: '编辑纸页',
-    renderer: 'editorial-v1',
-    roleTemplates: EDITORIAL_ROLE_TEMPLATES,
-    roles: EDITORIAL_ROLE_CAPABILITIES,
-    fallbackTemplate: 'standard-v1',
-  },
-  'clean-v1': {
-    id: 'clean-v1',
-    version: 1,
-    label: '清爽编辑卡',
-    renderer: 'clean-v1',
-    roleTemplates: CLEAN_ROLE_TEMPLATES,
-    roles: CLEAN_ROLE_CAPABILITIES,
-    fallbackTemplate: 'standard-v1',
   },
 });
 

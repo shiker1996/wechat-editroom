@@ -9,12 +9,7 @@ const ROLE_TARGETS = Object.freeze({
   risk: 0.68,
 });
 
-const TEMPLATE_DELTAS = Object.freeze({
-  'clean-v1': 0,
-  'editorial-v1': 0,
-  'brutalist-v1': -0.04,
-  'neon-v1': -0.04,
-});
+const TEMPLATE_DELTAS = Object.freeze({});
 
 export const SOCIAL_CARD_DENSITY_TARGETS = Object.freeze({
   schemaVersion: 1,

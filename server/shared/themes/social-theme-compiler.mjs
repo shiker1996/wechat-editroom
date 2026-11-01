@@ -51,7 +51,7 @@ const SOCIAL_RENDER_BASELINE=Object.freeze({
     spacing:{articlePaddingPx:18,sectionPx:24,paragraphPx:12,cardGapPx:12},
     shape:{radiusPx:18,borderWidthPx:1,shadow:'soft'},
   },
-  social:{templatePack:{id:'clean-v1',version:1},recipes:{surface:'base',frame:'soft-orbit',decoration:'orbit',eyebrow:'accent',coverTitle:'classic',skeleton:'stacked',coverSupport:'lead',ending:'dark-fill',list:'soft-card',code:'dark-panel'},effects:{texture:'none',decorationOpacity:.25,contentTiltDeg:0},components:{}},
+  social:{templatePack:{id:'standard-v1',version:1},recipes:{surface:'base',frame:'soft-orbit',decoration:'orbit',eyebrow:'accent',coverTitle:'classic',skeleton:'stacked',coverSupport:'lead',ending:'dark-fill',list:'soft-card',code:'dark-panel'},effects:{texture:'none',decorationOpacity:.25,contentTiltDeg:0},components:{}},
 });
 
 export function socialThemeDefinition(){return SOCIAL_RENDER_BASELINE;}
@@ -70,7 +70,7 @@ export function compileSocialThemeVariables(theme){
 export function compileSocialTheme(theme){
   const definition=typeof theme==='string'?socialThemeDefinition(theme):theme;
   if(!definition?.social)throw new Error(`未知图文视觉主题：${definition?.id||theme}`);
-  const id=definition.id,scope=`.theme-${id}`,baseRecipes=definition.social.recipes||{},skeleton=baseRecipes.skeleton||'stacked',recipes={coverTitle:'classic',skeleton,coverSupport:skeleton==='impact-band'?'statement':skeleton==='terminal-rail'?'metric':'lead',...baseRecipes},effects={...DEFAULT_EFFECTS,...definition.social.effects},components=resolveSocialComponents(definition),coverTitleShadowRole=resolveSocialCoverTitleShadowRole(definition,components),brandColorRole=recipes.surface==='brutalist'||definition.social.templatePack?.id==='brutalist-v1'?'inverseText':'accent',colors=definition.tokens.colors,highlightTitleTextRole=colorContrast(colors.inverseText,colors.codeBackground)>=colorContrast(colors.text,colors.codeBackground)?'inverseText':'text';
+  const id=definition.id,scope=`.theme-${id}`,baseRecipes=definition.social.recipes||{},skeleton=baseRecipes.skeleton||'stacked',recipes={coverTitle:'classic',skeleton,coverSupport:skeleton==='impact-band'?'statement':skeleton==='terminal-rail'?'metric':'lead',...baseRecipes},effects={...DEFAULT_EFFECTS,...definition.social.effects},components=resolveSocialComponents(definition),coverTitleShadowRole=resolveSocialCoverTitleShadowRole(definition,components),brandColorRole=recipes.surface==='brutalist'?'inverseText':'accent',colors=definition.tokens.colors,highlightTitleTextRole=colorContrast(colors.inverseText,colors.codeBackground)>=colorContrast(colors.text,colors.codeBackground)?'inverseText':'text';
   const palette=recipes.surface==='palette';
   const className=`theme-${id}${palette?' theme-palette':''}`;
   let css=`${scope}{${variables(definition)};--cover-title-shadow:${colorVar(coverTitleShadowRole)}}`;
