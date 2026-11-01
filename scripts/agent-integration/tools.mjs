@@ -1,10 +1,37 @@
 const id = (name, description, required = true) => ({ type: 'integer', ...(required ? { minimum: 1 } : {}), description });
 const string = (description, extra = {}) => ({ type: 'string', description, ...extra });
+const sensitiveField = /^(?:api[_-]?key|token|secret|password|authorization|cookie|credential|credentials)$/i;
+
+function redactSensitive(value) {
+  if (Array.isArray(value)) return value.map(redactSensitive);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [
+    key,
+    sensitiveField.test(key) && typeof item !== 'boolean' ? { configured: item !== '' && item != null } : redactSensitive(item),
+  ]));
+}
+
+function safeSource(source) {
+  if (!source || typeof source !== 'object') return source;
+  const { source_key: _sourceKey, ...safe } = source;
+  return redactSensitive(safe);
+}
 
 export const JIANZI_TOOLS = [
   { name: 'jianzi_doctor', description: '检查见字工作台连接、Node 运行时和核心功能是否可用。', inputSchema: { type: 'object', properties: {} }, readOnlyHint: true },
   { name: 'jianzi_account_profile', description: '读取账号画像，用于选题定位、语气和受众判断。', inputSchema: { type: 'object', properties: {} }, readOnlyHint: true },
+  { name: 'jianzi_account_profile_update', description: '保存用户确认过的账号画像。至少包含公众号名称、简介、核心读者和一个内容支柱。', inputSchema: { type: 'object', properties: { context: { type: 'object', description: '符合 account-context.json 格式的账号画像字段。' } }, required: ['context'] }, readOnlyHint: false },
   { name: 'jianzi_settings_summary', description: '读取非敏感设置与模型配置状态；不会返回 API Key、API 地址或调用日志。', inputSchema: { type: 'object', properties: {} }, readOnlyHint: true },
+  { name: 'jianzi_collectors_list', description: '列出可用采集器及其配置状态；秘密字段只返回是否已配置。', inputSchema: { type: 'object', properties: {} }, readOnlyHint: true },
+  { name: 'jianzi_collection_capabilities', description: '读取采集能力状态，包含各来源组就绪情况和 RSSHub 状态。', inputSchema: { type: 'object', properties: {} }, readOnlyHint: true },
+  { name: 'jianzi_collector_configuration_catalog', description: '读取采集器配置目录和字段 schema；不返回凭据值。', inputSchema: { type: 'object', properties: {} }, readOnlyHint: true },
+  { name: 'jianzi_collector_configuration_get', description: '读取指定采集器的配置状态与 schema，不返回已保存的秘密值。', inputSchema: { type: 'object', properties: { collectorId: string('采集器 ID。') }, required: ['collectorId'] }, readOnlyHint: true },
+  { name: 'jianzi_collector_configuration_save', description: '保存用户确认的采集器配置。先读取配置 schema；凭据只提交，不复述或写入输出。', inputSchema: { type: 'object', properties: { collectorId: string('采集器 ID。'), configuration: { type: 'object', description: '按配置 schema 提供的字段。' } }, required: ['collectorId', 'configuration'] }, readOnlyHint: false },
+  { name: 'jianzi_collector_configuration_test', description: '检查采集器配置是否完整。', inputSchema: { type: 'object', properties: { collectorId: string('采集器 ID。') }, required: ['collectorId'] }, readOnlyHint: false },
+  { name: 'jianzi_collection_sources_list', description: '列出已配置采集源及启用状态。', inputSchema: { type: 'object', properties: {} }, readOnlyHint: true },
+  { name: 'jianzi_collection_source_create', description: '创建采集源；创建前先向用户确认来源和配置。', inputSchema: { type: 'object', properties: { pluginId: string('采集器 ID。'), label: string('采集源显示名称。'), config: { type: 'object', description: '与采集器 schema 对应的来源配置。' }, enabled: { type: 'boolean', description: '是否立即启用，默认 true。' } }, required: ['pluginId', 'config'] }, readOnlyHint: false, openWorldHint: true },
+  { name: 'jianzi_collection_source_update', description: '修改现有采集源的名称、配置或启用状态。', inputSchema: { type: 'object', properties: { sourceId: id('采集源 ID。'), label: string('采集源显示名称。'), config: { type: 'object', description: '需修改或补充的来源配置字段。' }, enabled: { type: 'boolean' } }, required: ['sourceId'] }, readOnlyHint: false, openWorldHint: true },
+  { name: 'jianzi_collection_source_test', description: '测试采集源是否可以读取内容。', inputSchema: { type: 'object', properties: { sourceId: id('采集源 ID。') }, required: ['sourceId'] }, readOnlyHint: false, openWorldHint: true },
   { name: 'jianzi_batches_list', description: '列出近期内容批次。', inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 100 } } }, readOnlyHint: true },
   { name: 'jianzi_batch_create', description: '新建采集批次。', inputSchema: { type: 'object', properties: { date: string('批次日期 YYYY-MM-DD。'), title: string('批次标题。'), note: string('备注。') } }, readOnlyHint: false },
   { name: 'jianzi_batch_collect', description: '启动批次热点采集；返回后台任务 ID，随后用 jianzi_job_wait 查询。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), maxAgeHours: { type: 'integer', enum: [24, 48, 72, 120, 168] } }, required: ['batchId'] }, readOnlyHint: false, openWorldHint: true },
@@ -40,6 +67,7 @@ export async function executeJianziTool(client, name, input = {}) {
       return { connected: true, node: health.node, health, sampleBatchCount: Array.isArray(batches) ? batches.length : 0 };
     }
     case 'jianzi_account_profile': return client.get('/api/system/account-context');
+    case 'jianzi_account_profile_update': return client.put('/api/system/account-context', input.context || {});
     case 'jianzi_settings_summary': {
       const [settings, models] = await Promise.all([client.get('/api/system/settings'), client.get('/api/models')]);
       return {
@@ -49,6 +77,25 @@ export async function executeJianziTool(client, name, input = {}) {
         providers: (models.providers || []).map(({ name, label, model, configured, enabled }) => ({ name, label, model, configured: Boolean(configured), enabled: enabled !== false })),
       };
     }
+    case 'jianzi_collectors_list': {
+      const data = await client.get('/api/collector-plugins');
+      return { ...data, items: (data.items || []).map(redactSensitive) };
+    }
+    case 'jianzi_collection_capabilities': return client.get('/api/collection-capabilities');
+    case 'jianzi_collector_configuration_catalog': {
+      const data = await client.get('/api/system/configuration/catalog');
+      return { items: (data.items || []).filter((item) => item.type === 'collector').map(redactSensitive) };
+    }
+    case 'jianzi_collector_configuration_get': return redactSensitive(await client.get(`/api/system/collector-plugins/${encodeURIComponent(String(input.collectorId || ''))}/configuration`));
+    case 'jianzi_collector_configuration_save': return redactSensitive(await client.put(`/api/system/collector-plugins/${encodeURIComponent(String(input.collectorId || ''))}/configuration`, input.configuration || {}));
+    case 'jianzi_collector_configuration_test': return redactSensitive(await client.post(`/api/system/configuration/collector/${encodeURIComponent(String(input.collectorId || ''))}/test`, {}));
+    case 'jianzi_collection_sources_list': {
+      const data = await client.get('/api/collection-sources');
+      return { ...data, items: (data.items || []).map(safeSource) };
+    }
+    case 'jianzi_collection_source_create': return safeSource(await client.post('/api/collection-sources', { pluginId: input.pluginId, label: input.label, config: input.config || {}, enabled: input.enabled !== false }));
+    case 'jianzi_collection_source_update': return safeSource(await client.patch(`/api/collection-sources/${encodeURIComponent(String(input.sourceId || ''))}`, { label: input.label, config: input.config, enabled: input.enabled }));
+    case 'jianzi_collection_source_test': return client.post(`/api/collection-sources/${encodeURIComponent(String(input.sourceId || ''))}/test`, {});
     case 'jianzi_batches_list': return client.get(`/api/batches?limit=${Math.min(100, Math.max(1, Number(input.limit) || 30))}`);
     case 'jianzi_batch_create': return client.post('/api/batches', { date: input.date, title: input.title, note: input.note });
     case 'jianzi_batch_collect': return client.post(`/api/batches/${batch}/collect`, { maxAgeHours: input.maxAgeHours });

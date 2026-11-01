@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createJianziClient } from './client.mjs';
@@ -29,12 +30,29 @@ function jsonOption(value, fallback) {
   catch { throw new Error(`JSON 参数无法解析：${value}`); }
 }
 
+function jsonFileOption(filePath, inlineValue, fallback) {
+  if (filePath && filePath !== true) {
+    const resolved = path.resolve(String(filePath));
+    try { return JSON.parse(fs.readFileSync(resolved, 'utf8')); }
+    catch (error) { throw new Error(`无法读取 JSON 文件 ${resolved}：${error.message}`); }
+  }
+  return jsonOption(inlineValue, fallback);
+}
+
+function booleanOption(value, fallback) {
+  if (value == null || value === true) return fallback;
+  if (value === false) return false;
+  if (/^(true|1|yes|on)$/i.test(String(value))) return true;
+  if (/^(false|0|no|off)$/i.test(String(value))) return false;
+  throw new Error(`布尔参数无效：${value}`);
+}
+
 function print(value, asJson = false) {
   process.stdout.write(`${JSON.stringify(value, null, asJson ? 0 : 2)}\n`);
 }
 
 function help() {
-  process.stdout.write(`见字 Agent CLI（jianzi）\n\n用法：\n  node scripts/agent-integration/cli.mjs doctor [--json]\n  node scripts/agent-integration/cli.mjs install --agent codex|workbuddy|both\n  node scripts/agent-integration/cli.mjs workbench-setup [--yes]\n  node scripts/agent-integration/cli.mjs batch list|create|collect|auto|ranking|candidates ...\n  node scripts/agent-integration/cli.mjs candidate add|get|update|lock ...\n  node scripts/agent-integration/cli.mjs article generate|documents|typeset ...\n  node scripts/agent-integration/cli.mjs cover generate ...\n  node scripts/agent-integration/cli.mjs card editorial|storyboard|update|lock|generate ...\n  node scripts/agent-integration/cli.mjs job get|wait ...\n  node scripts/agent-integration/cli.mjs mcp\n\n写操作和长任务返回 JSON；异步任务使用 job get/wait 查询。AI 成稿、排版、封面和图文命令会调用工作台内部模型。\n`);
+  process.stdout.write(`见字 Agent CLI（jianzi）\n\n用法：\n  node scripts/agent-integration/cli.mjs doctor [--json]\n  node scripts/agent-integration/cli.mjs install --agent codex|workbuddy|both\n  node scripts/agent-integration/cli.mjs workbench-setup [--yes]\n  node scripts/agent-integration/cli.mjs batch list|create|collect|auto|ranking|candidates ...\n  node scripts/agent-integration/cli.mjs candidate add|get|update|lock ...\n  node scripts/agent-integration/cli.mjs article generate|documents|typeset ...\n  node scripts/agent-integration/cli.mjs cover generate ...\n  node scripts/agent-integration/cli.mjs account profile|update --file <json>\n  node scripts/agent-integration/cli.mjs collectors list|config-list|config-get|config-set|config-test ...\n  node scripts/agent-integration/cli.mjs sources list|capabilities|add|update|test ...\n  node scripts/agent-integration/cli.mjs card editorial|storyboard|update|lock|generate ...\n  node scripts/agent-integration/cli.mjs job get|wait ...\n  node scripts/agent-integration/cli.mjs mcp\n\n写操作和长任务返回 JSON；异步任务使用 job get/wait 查询。AI 成稿、排版、封面和图文命令会调用工作台内部模型。\n`);
 }
 
 async function dispatch(positional, options) {
@@ -86,7 +104,18 @@ async function dispatch(positional, options) {
     'job:get': ['jianzi_job_get', { jobId: options.job }],
     'job:wait': ['jianzi_job_wait', { jobId: options.job, timeoutSeconds: options.timeout ? Number(options.timeout) : 180 }],
     'account:profile': ['jianzi_account_profile', {}],
+    'account:update': ['jianzi_account_profile_update', { context: jsonFileOption(options.file, options.context, {}) }],
     'settings:summary': ['jianzi_settings_summary', {}],
+    'collectors:list': ['jianzi_collectors_list', {}],
+    'collectors:config-list': ['jianzi_collector_configuration_catalog', {}],
+    'collectors:config-get': ['jianzi_collector_configuration_get', { collectorId: options.id }],
+    'collectors:config-set': ['jianzi_collector_configuration_save', { collectorId: options.id, configuration: jsonFileOption(options.file, options.config, {}) }],
+    'collectors:config-test': ['jianzi_collector_configuration_test', { collectorId: options.id }],
+    'sources:list': ['jianzi_collection_sources_list', {}],
+    'sources:capabilities': ['jianzi_collection_capabilities', {}],
+    'sources:add': ['jianzi_collection_source_create', { pluginId: options.plugin, label: options.label, config: jsonFileOption(options.file, options.config, {}), enabled: booleanOption(options.enabled, true) }],
+    'sources:update': ['jianzi_collection_source_update', { sourceId: options.id, label: options.label, config: options.file || options.config ? jsonFileOption(options.file, options.config, {}) : undefined, enabled: options.enabled == null ? undefined : booleanOption(options.enabled, true) }],
+    'sources:test': ['jianzi_collection_source_test', { sourceId: options.id }],
   };
   toolName = `${group}:${action || ''}`;
   const command = mapped[toolName];

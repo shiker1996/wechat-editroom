@@ -50,6 +50,7 @@ export class JianziApiClient {
   get(pathname) { return this.request('GET', pathname); }
   post(pathname, body = {}) { return this.request('POST', pathname, body); }
   put(pathname, body = {}) { return this.request('PUT', pathname, body); }
+  patch(pathname, body = {}) { return this.request('PATCH', pathname, body); }
 }
 
 async function readResponse(response) {
