@@ -3,7 +3,6 @@ import { SOCIAL_DENSITY_MAX_HIGH_VALUES, socialDensityHighFields, themeNumericLi
 import { ARTICLE_COMPONENT_CATALOG, SOCIAL_COMPONENT_CATALOG } from './component-catalog.mjs';
 import { validateCoverThemeSpec } from './cover-components.mjs';
 import { colorContrast } from './color-utils.mjs';
-import { getSocialCardTemplatePack } from '../../features/social-cards/rendering/social-card-template-registry.mjs';
 export { colorContrast } from './color-utils.mjs';
 
 const TOP_FIELDS=new Set(['schemaVersion','id','label','version','description','targets','status','source','basedOn','tags','tokens','social','cover']);
@@ -101,9 +100,8 @@ export function validateThemeDefinition(input,{filePath='',expectedTarget=null,e
           if(!value.roles||[...roleKeys].some((role)=>!value.roles[role]))issues.push({field:'social.templatePack.roles',code:'ROLE_COVERAGE',message:'自定义模板包必须提供十个角色能力'});
           if(value.css!==undefined&&typeof value.css!=='string')issues.push({field:'social.templatePack.css',code:'TYPE',message:'模板包 CSS 必须是字符串'});
         }
-        const pack=getSocialCardTemplatePack(value.id);
-        if(!pack&&!custom)issues.push({field:'social.templatePack.id',code:'ENUM',message:'模板包不存在'});
-        else if(pack&&!custom&&value.version!==pack.version)issues.push({field:'social.templatePack.version',code:'VERSION_MISMATCH',message:`必须为 ${pack.version}`});
+        if(typeof value.id!=='string'||!ID.test(value.id))issues.push({field:'social.templatePack.id',code:'FORMAT',message:'必须是合法模板包 ID'});
+        if(!Number.isInteger(value.version)||value.version<1)issues.push({field:'social.templatePack.version',code:'FORMAT',message:'必须是正整数版本'});
       }
     }
     if(target==='social'&&config.templateMatch!==undefined){
@@ -120,9 +118,8 @@ export function validateThemeDefinition(input,{filePath='',expectedTarget=null,e
         if(!Number.isInteger(value.margin)||value.margin<-100||value.margin>100)issues.push({field:'social.templateMatch.margin',code:'RANGE',message:'模板匹配分差必须是 -100–100 的整数'});
         if(typeof value.reason!=='string'||!value.reason.trim()||[...value.reason].length>240)issues.push({field:'social.templateMatch.reason',code:'LENGTH',message:'匹配理由必须为 1–240 个字符'});
         if(!Array.isArray(value.signals)||value.signals.length>8||value.signals.some((item)=>typeof item!=='string'||!item.trim()||[...item].length>40))issues.push({field:'social.templateMatch.signals',code:'FORMAT',message:'匹配信号必须是不超过 8 项的短字符串数组'});
-        const pack=getSocialCardTemplatePack(value.packId),configured=config.templatePack,customConfigured=Boolean(configured?.roles&&configured?.roleTemplates&&configured.id===value.packId);
-        if(!pack&&!customConfigured)issues.push({field:'social.templateMatch.packId',code:'ENUM',message:'匹配模板包不存在'});
-        else if(configured&&configured.id!==value.packId)issues.push({field:'social.templateMatch.packId',code:'MISMATCH',message:'匹配摘要必须与 templatePack 一致'});
+        const configured=config.templatePack;
+        if(configured&&configured.id!==value.packId)issues.push({field:'social.templateMatch.packId',code:'MISMATCH',message:'匹配摘要必须与 templatePack 一致'});
       }
     }
     if(config.components!==undefined){

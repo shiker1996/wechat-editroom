@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import puppeteer from 'puppeteer';
+import { probeHtmlLayout } from '../../../platform/browser/html-layout-probe.mjs';
 
 const AUDIT_SELECTORS = Object.freeze(['.page-body', '.page-content-stack']);
 
@@ -19,33 +19,15 @@ export async function auditSocialCardHtmlFit({ htmlPath, width = 375, height = 6
     return result;
   }
 
-  let browser;
   try {
-    browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
-    const page = await browser.newPage();
-    await page.setViewport({ width: result.canvas.width, height: result.canvas.height, deviceScaleFactor: 1 });
-    await page.setContent(fs.readFileSync(htmlPath, 'utf8'), { waitUntil: 'networkidle0' });
-    await page.evaluateHandle(() => document.fonts.ready);
-
-    const measurements = await page.evaluate(({ selectors, selectedPage }) => {
-      const pages = [...document.querySelectorAll('.page')];
-      return pages.map((pageElement, pageIndex) => {
-        const containers = selectors.flatMap((selector) => [...pageElement.querySelectorAll(selector)].map((element) => {
-          const style = getComputedStyle(element);
-          return {
-            selector,
-            visible: style.display !== 'none' && style.visibility !== 'hidden',
-            overflowX: style.overflowX,
-            overflowY: style.overflowY,
-            scrollWidth: element.scrollWidth,
-            clientWidth: element.clientWidth,
-            scrollHeight: element.scrollHeight,
-            clientHeight: element.clientHeight,
-          };
-        }));
-        return { page: pageIndex + 1, containers };
-      }).filter((item) => !selectedPage || item.page === selectedPage);
-    }, { selectors: AUDIT_SELECTORS, selectedPage: Number(selectedPage) || null });
+    const measurements = await probeHtmlLayout({
+      html: fs.readFileSync(htmlPath, 'utf8'),
+      width: result.canvas.width,
+      height: result.canvas.height,
+      pageSelector: '.page',
+      selectors: AUDIT_SELECTORS,
+      selectedPage,
+    });
 
     result.pageCount = measurements.length;
     for (const item of measurements) {
@@ -88,7 +70,5 @@ export async function auditSocialCardHtmlFit({ htmlPath, width = 375, height = 6
   } catch (error) {
     result.issues.push({ code: 'AUDIT_FAILED', message: `浏览器视觉适配审计失败：${error.message}` });
     return result;
-  } finally {
-    if (browser) await browser.close();
   }
 }

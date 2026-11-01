@@ -26,7 +26,6 @@ test('shared 与低层 platform 不反向依赖业务 feature', () => {
   });
   for (const file of walk('server/shared')) {
     const source = read(file);
-    if (file.replaceAll('\\', '/').startsWith('server/shared/themes/')) continue;
     assert.doesNotMatch(source, /from ['"][^'"]*\/(?:features|platform)\//, `shared 文件 ${file} 不应依赖 features/platform`);
   }
   for (const layer of ['core', 'collectors', 'connectors', 'extensions', 'persistence', 'plugin-sdk', 'plugins', 'tools']) {
@@ -53,13 +52,26 @@ test('platform/core Store 只接收业务服务工厂，不反向装配 research
   assert.match(store, /configureStoreServices/);
 });
 
-test('Social Card 模板资产归属 social-cards，shared 只保留通用渲染基元', () => {
+test('Social Card 保留页面结构契约，不再内置视觉主题模板', async () => {
   const sharedTemplates = path.join(root, 'server', 'shared', 'rendering', 'templates', 'social');
   const socialTemplates = path.join(root, 'server', 'features', 'social-cards', 'rendering', 'templates', 'social');
   assert.equal(fs.existsSync(sharedTemplates) && fs.readdirSync(sharedTemplates).some((name) => name.endsWith('.mjs')), false);
-  assert.deepEqual(fs.readdirSync(socialTemplates).filter((name) => name.endsWith('.mjs')).sort(), ['brutalist-v1.mjs', 'clean-v1.mjs', 'editorial-v1.mjs', 'neon-v1.mjs']);
-  assert.match(read('server/features/social-cards/rendering/presentation.mjs'), /\.\/templates\/social\//);
+  assert.equal(fs.existsSync(socialTemplates), false);
+  const { listSocialCardTemplatePacks } = await import('../server/features/social-cards/rendering/social-card-template-registry.mjs');
+  const [contract] = listSocialCardTemplatePacks();
+  assert.equal(listSocialCardTemplatePacks().length, 1);
+  assert.equal(contract.label, '页面结构约束');
+  assert.equal(Object.keys(contract.roles).length, 10);
+  assert.ok(Object.values(contract.roles).every((role) => role.capacity && role.supportedBlocks.length > 0));
+  assert.match(read('server/features/social-cards/rendering/presentation.mjs'), /social-card-template-resolver\.mjs/);
   assert.match(read('server/shared/rendering/README.md'), /业务专属渲染和模板放对应 feature/);
+});
+
+test('浏览器自动化依赖集中在 platform，不由业务 feature 直接启动', () => {
+  for (const file of fs.readdirSync(path.join(root, 'server', 'features'), { recursive: true }).filter((item) => String(item).endsWith('.mjs'))) {
+    const source = read(path.join('server', 'features', file));
+    assert.doesNotMatch(source, /from ['"](?:puppeteer|playwright|selenium-webdriver)(?:\/[^'"]*)?['"]/, `feature 文件 ${file} 应通过 platform/browser 访问浏览器`);
+  }
 });
 
 test('Social Card 专属渲染实现和业务对话编排已物理归属垂直目录', () => {
@@ -117,7 +129,6 @@ test('研究与图文生产调用方通过业务垂直入口访问核心流水�
     'server/features/research/llm/tasks.mjs',
     'server/features/articles/llm/daily-pipeline.mjs',
     'server/platform/application/themes/theme-preview.mjs',
-    'server/platform/application/themes/social-template-proposal-compiler.mjs',
   ];
   for (const file of callers) {
     const source = read(file);

@@ -82,35 +82,6 @@
 - 本 API 面向本机单用户工作台，没有通用登录、会话或公网鉴权。插件安装和备份恢复使用专用确认头，只是防误操作门禁，不是多用户授权机制。
 - 路径参数中的批次 ID、技能 ID、插件 ID 和文件名应 URL 编码。文档中的 `:id` 为路径占位符。
 
-### 主题目录
-
-- `GET /api/themes?target=article|social`：按目标列出已发布主题，包含默认主题、来源、版本、哈希和固定样稿预览色。
-- `GET /api/themes/:id`：读取单个主题的公开元数据；用户主题同时返回五项发布兼容报告、`full/read-only` 编辑模式和目标配方目录。可用 `target=article|social` 校验目标兼容性。
-- `GET /api/themes/manage`：列出当前工作区的用户主题，包括草稿和归档状态。
-- `POST /api/themes`：创建用户主题草稿。
-- `POST /api/themes/ai/generate`：根据文章/图文/封面视觉描述生成短期 AI 主题候选（封面主题为纯 token 主题，无组件配方），执行结构化输出修复、确定性规范化、五项发布审计、正式样稿编译及与内置/用户主题的视觉相似度比较；响应包含最近主题、差异摘要和重新生成建议，候选默认 15 分钟过期且不写入主题草稿。
-- `POST /api/themes/ai/candidates/:candidateId/create`：确认服务端短期候选并创建用户主题草稿；只接受可选名称和描述，不接受前端回传主题定义，成功后候选立即失效。
-- `POST /api/social/template-proposals`：根据 Social 主题意图和可选基础模板包生成短期模板提案。模型只能返回受控 JSON；服务端补齐提案 ID、状态、来源和 provenance，并执行字段、角色、内容块和安全清理。请求可用 `draftMode=html-css` 生成仅隔离预览草稿，默认 `json`；提案默认 20 分钟过期且不会写入生产模板目录。
-- `POST /api/social/template-proposals/ai/generate`：上述模板提案生成接口的语义别名，兼容按 AI 生成路径调用的客户端。
-- `POST /api/themes/social-template-proposals/generate`：主题中心使用的模板提案生成兼容入口，契约与 Social 模板提案接口一致。
-- `GET /api/social/template-proposals/:proposalId`：读取仍在 TTL 内的短期模板提案；过期返回 `410`。提案进入生产前仍需后续编译、正式样稿门禁和用户确认。
-- `POST /api/social/template-proposals/:proposalId/compile`：将受控 JSON 提案编译为正式 Social renderer 配置，生成固定 375×667 样稿并执行角色、内容块、对比度、字体层级、伪元素可见性和安全门禁；仅返回预览与审计结果，不创建生产模板包。
-- `POST /api/social/template-proposals/:proposalId/confirm`：在正式样稿门禁通过后，将模板提案作为版本化自定义模板包绑定到指定 Social 用户主题草稿；不直接发布主题，需继续调用主题发布接口。
-- `GET /api/social/template-proposals/metrics`：读取 Social 模板提案生成、正式编译、确认绑定和门禁失败指标；返回接受率、正式通过率、失败角色、过空/溢出统计，以及是否有足够真实证据进入 renderer 扩展评估。
-- `POST /api/themes/preview`：对请求中的未保存文章或图文主题定义执行严格校验，并用正式生产编译器返回固定样稿 HTML、`usageMap` 和可选字段影响高亮；不写入草稿。
-- `POST /api/themes/:id/clone`：复制内置或已发布用户主题为新草稿。
-- `PUT /api/themes/:id/draft`：保存结构化主题草稿。
-- `POST /api/themes/:id/validate`：执行与发布相同的 Schema、对比度、编译覆盖、固定样稿 HTML 和布局结构五项门禁，问题包含字段与样稿节点。
-- `POST /api/themes/:id/preview`：使用用户主题草稿或请求中的临时定义返回正式编译固定样稿。
-- `POST /api/themes/:id/publish`：发布新的不可变主题版本。
-- `POST /api/themes/:id/archive`：归档用户主题，保留历史版本。
-- `GET /api/themes/:id/versions`：读取版本历史。
-- `POST /api/themes/:id/versions/:version/restore`：从历史版本创建新草稿。
-- `POST /api/themes/import`：导入安全 JSON，并且只创建用户草稿；重复 ID 与未知 Schema 会被拒绝。
-- `GET /api/themes/:id/export`：导出规范主题 JSON；用户主题可用 `draft=1` 导出当前草稿。
-- `GET /api/themes/:id/usage`：读取总使用次数、涉及批次、最近使用时间及版本级统计。
-- `GET /api/themes/:id/archive-impact`：归档前检查历史版本和任务引用影响。
-
 ---
 
 ## 可复制调用示例
@@ -569,7 +540,7 @@ AI 规划配图占位
 ## 文章封面图
 
 ### POST /api/candidates/:id/cover/generate
-生成 900×383 公众号封面图 `{ provider?, theme?, mode? }`；theme 为封面主题 id 或 "auto"（AI 按文章调性选主题），mode 为 `standard`（默认）或 `ai-visual`。AI 视觉模式会基于封面主题 SPEC 生成 HTML/CSS 后直接截图，当前跳过 AI HTML 结构/视觉质量门禁；生成或截图失败时任务直接失败，不自动回退标准封面。缺少成稿终稿时返回 409，mode 非法返回 400。返回 202 AI 任务（type=cover-image）
+生成 900×383 公众号封面图 `{ provider? }`。每次按文章内容生成并校验独立设计方案，再由 AI 生成 HTML/CSS 并截图；不调用文生图模型。缺少成稿终稿时返回 409。返回 202 AI 任务（type=cover-image）
 → 文章封面图
 
 ### GET /api/candidates/:id/cover
@@ -584,7 +555,7 @@ AI 规划配图占位
 → 文章封面图
 
 ### POST /api/batches/:id/daily/cover/generate
-生成批次早报的 900×383 封面图 `{ provider?, theme?, mode? }`；mode 为 `standard`（默认）或 `ai-visual`。AI 视觉模式直接将模型 HTML/CSS 截图为图片，当前跳过 AI HTML 结构/视觉质量门禁；生成或截图失败时任务直接失败，不自动回退标准封面。终稿取批次级 daily-final 文档，产物落 articles/<批次>/daily/images/cover.png。缺少早报终稿时返回 409，mode 非法返回 400。返回 202 AI 任务（type=cover-image，candidateId=null）
+生成批次早报的 900×383 封面图 `{ provider? }`。按早报内容生成并校验独立设计方案，再由 AI 生成 HTML/CSS 并截图；不调用文生图模型。终稿取批次级 daily-final 文档，产物落 articles/<批次>/daily/images/cover.png。缺少早报终稿时返回 409。返回 202 AI 任务（type=cover-image，candidateId=null）
 → 文章封面图
 
 ### GET /api/batches/:id/daily/cover

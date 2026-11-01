@@ -586,22 +586,6 @@ export function applyWorkbenchSchema(db) {
         FOREIGN KEY(batch_id) REFERENCES batches(id) ON DELETE CASCADE,
         FOREIGN KEY(candidate_row_id) REFERENCES candidates(id) ON DELETE SET NULL
       );
-      CREATE TABLE IF NOT EXISTS social_template_proposal_metrics (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        operation TEXT NOT NULL CHECK(operation IN ('generated','compiled','confirmed','rejected')),
-        proposal_id TEXT NOT NULL DEFAULT '',
-        candidate_id TEXT NOT NULL DEFAULT '',
-        template_pack_id TEXT NOT NULL DEFAULT '',
-        production_eligible INTEGER,
-        audit_valid INTEGER,
-        failed_roles_json TEXT NOT NULL DEFAULT '[]',
-        issues_json TEXT NOT NULL DEFAULT '[]',
-        issue_count INTEGER NOT NULL DEFAULT 0,
-        page_count INTEGER NOT NULL DEFAULT 0,
-        underfilled_pages INTEGER NOT NULL DEFAULT 0,
-        overflow_pages INTEGER NOT NULL DEFAULT 0,
-        recorded_at TEXT NOT NULL
-      );
       CREATE INDEX IF NOT EXISTS idx_hotspots_batch ON hotspots(batch_id);
       CREATE INDEX IF NOT EXISTS idx_hotspots_title ON hotspots(title);
       CREATE INDEX IF NOT EXISTS idx_event_records_status ON event_records(status, last_update_at);
@@ -628,8 +612,6 @@ export function applyWorkbenchSchema(db) {
       CREATE INDEX IF NOT EXISTS idx_visual_decisions_type ON visual_decisions(visual_type,action);
       CREATE INDEX IF NOT EXISTS idx_social_template_metrics_pack ON social_template_metrics(requested_template_id,recorded_at DESC);
       CREATE INDEX IF NOT EXISTS idx_social_template_metrics_candidate ON social_template_metrics(candidate_row_id,recorded_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_social_template_proposal_metrics_pack ON social_template_proposal_metrics(template_pack_id,recorded_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_social_template_proposal_metrics_proposal ON social_template_proposal_metrics(proposal_id,recorded_at DESC);
     `);
     db.exec(`
       DELETE FROM documents
@@ -659,8 +641,6 @@ export function applyWorkbenchSchema(db) {
         CREATE INDEX idx_extension_settings_type ON extension_settings(extension_type,extension_id);
       `);
     }
-    const socialProposalMetricColumns=new Set(db.prepare('PRAGMA table_info(social_template_proposal_metrics)').all().map((column)=>column.name));
-    if(socialProposalMetricColumns.size && !socialProposalMetricColumns.has('page_count'))db.exec("ALTER TABLE social_template_proposal_metrics ADD COLUMN page_count INTEGER NOT NULL DEFAULT 0");
     const socialTemplateMetricColumns=new Set(db.prepare('PRAGMA table_info(social_template_metrics)').all().map((column)=>column.name));
     if(!socialTemplateMetricColumns.has('page_roles_json'))db.exec("ALTER TABLE social_template_metrics ADD COLUMN page_roles_json TEXT NOT NULL DEFAULT '{}'");
     if(!socialTemplateMetricColumns.has('structural_reflow_attempted'))db.exec('ALTER TABLE social_template_metrics ADD COLUMN structural_reflow_attempted INTEGER NOT NULL DEFAULT 0');

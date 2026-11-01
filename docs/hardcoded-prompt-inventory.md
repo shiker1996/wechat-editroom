@@ -108,11 +108,9 @@
 - `server/features/social-cards/application/custom-social-chat.mjs`、`server/features/social-cards/application/agent/custom-social-adapter.mjs`：自定义图文的对话式采编指令、工具协议和状态资源上下文。
 - `server/features/social-cards/application/storyboard-contracts.mjs` 等文件还含事实包整理与输出结构契约。具体图文写作风格正文主要由技能目录提供，代码层主要加模板/字段/布局限制。
 
-## 4. 视觉主题与模板生成
+## 4. 视觉方案生成
 
-- `server/platform/application/themes/auto-theme-router.mjs`：自动主题路由 prompt；依据场景、调性、信息密度选择已有主题，严格 JSON，不得创建主题。
-- `server/platform/application/themes/ai-theme-generator.mjs`：主题生成 prompt；注入主题目标、数值范围、token/组件/recipe 精确契约、主题签名与差异化要求；另有仅修 JSON 格式的 repair prompt。
-- `server/shared/themes/social-template-proposal.mjs`：Social 模板提案生成 prompt，限制角色、版式、支持内容块及表面参数；另有 JSON 格式修复 prompt。
+- `server/features/social-cards/application/social-card-design-scheme.mjs`：按每篇图文的故事板生成视觉方案，校验页数、角色、版式、色彩对比和字号范围。
 - `server/features/articles/application/cover-semantics.mjs`：文章封面语义分析（见 1.5）。
 
 ## 5. 内容复盘与配置调整
@@ -127,7 +125,7 @@
 - `server/platform/agent/context.mjs`：上下文压缩时加入“已省略旧重复消息、保留初始任务和最近结果”的系统通知。它是运行时上下文说明，不是业务写作任务。
 - `server/platform/agent/ai-visual-document-agent.mjs`：视觉文档生成/修改 agent 的系统提示和阶段覆盖，包含页数、画布、输出文件、原生工具等运行时约束；具体主指令由 agent 配置/提示词资源合并。
 - `server/platform/http/routes/model-routes.mjs`：模型连通性检查使用“只回复 OK”的探针 prompt。
-- 各 JSON 修复 prompt：主题生成、模板提案等流程在主输出无法解析时会调用只修格式、不改语义的第二次模型调用。
+- 各 JSON 修复 prompt：仍在使用的结构化生成流程在主输出无法解析时调用只修格式、不改语义的第二次模型调用。
 
 ## 7. 提示词来源与运行时组合方式
 
@@ -254,7 +252,7 @@ wechat-mp-composite：围绕简报的共同命题组织多条材料，各事件�
 - 热点研判、选题探索、事件卡和讨论研判：`server/features/research/llm/tasks.mjs`、`server/features/research/application/event-research-analysis.mjs`、`server/features/research/application/research/event-card-stage.mjs`、`editorial-exploration.mjs`、`discussion-research-stage.mjs`、`project-reader-value-service.mjs`。
 - 素材主线简报与综合选题评分：`server/platform/http/routes/content-routes.mjs`、`candidate-routes.mjs`。
 - 采集来源字段识别、排序和 GitHub 仓库发现：`server/features/collection/llm/source-field-enricher.mjs`、`source-candidate-ranker.mjs`、`repo-discovery.mjs`。
-- 主题路由/主题生成/Social 模板提案及 JSON 修复：`server/platform/application/themes/auto-theme-router.mjs`、`ai-theme-generator.mjs`、`server/shared/themes/social-template-proposal.mjs`。
+- 图文视觉方案：`server/features/social-cards/application/social-card-design-scheme.mjs`；文章封面方案：`server/features/articles/application/cover-design-scheme.mjs`。
 - 内容复盘配置调整：`server/features/content-feedback/application/feedback-adjustment-service.mjs`、`social-feedback-adjustment-service.mjs`。
 - 共用安全和探针指令：`server/platform/llm/context-safety.mjs`、`server/platform/agent/context.mjs`、`server/platform/http/routes/model-routes.mjs`。
 
