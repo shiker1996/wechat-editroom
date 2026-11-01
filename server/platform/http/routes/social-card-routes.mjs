@@ -3,8 +3,6 @@ import { buildSocialCardFactEnvelope, buildSocialCardStoryboardSystemPrompt, enr
 import { listSocialCardStageSkillSlots, resolveSocialCardStageSkills } from '../../skills/entry-routing.mjs';
 import { requestGitHubJson } from '../../plugin-sdk/github-client.mjs';
 import { pipeFile } from '../route-helpers.mjs';
-import { socialThemeDefinition } from '../../../shared/themes/social-theme-compiler.mjs';
-import { resolveWorkspaceTheme } from '../../application/themes/user-theme-service.mjs';
 import { createSocialCardStoryboardThemeSnapshot, getSocialCardTemplateCapabilities, resolveSocialCardStoryboardThemeState, validateSocialCardTemplateCompatibility } from '../../../features/social-cards/rendering/social-card-template-resolver.mjs';
 import { summarizeSocialTemplateRun, summarizeSocialCardPageRoles } from '../../../features/social-cards/rendering/social-card-template-metrics.mjs';
 import { getSocialCardPlanRolloutProfile } from '../../../features/social-cards/rendering/social-card-plan-rollout.mjs';
@@ -12,7 +10,6 @@ import { applySocialCardRestructureOperations, buildDeterministicSocialCardRestr
 import { buildSocialCardReflowPreview } from '../../../features/social-cards/rendering/social-card-reflow-preview.mjs';
 import { normalizeSocialCardPageTitle } from '../../../features/social-cards/rendering/social-card-title.mjs';
 import { socialCardPageBudget, socialCardPageBudgetMessage } from '../../../features/social-cards/rendering/social-card-page-budget.mjs';
-import { buildSocialThemeRoutingContext, resolveAutoTheme } from '../../application/themes/auto-theme-router.mjs';
 import { parseModelJson } from '../../llm/model-json.mjs';
 
 const SOCIAL_CARD_ENTRY_POINTS=Object.freeze({
@@ -22,11 +19,11 @@ const SOCIAL_CARD_ENTRY_POINTS=Object.freeze({
 });
 const eventBackedContentType=(contentType)=>contentType==='event';
 
-function socialTemplateContext(store, editorial, channelMode, contentType) {
-  const requested=editorial?.visual_style||'auto';
-  const themeId=requested==='auto'?'ice-blue':requested;
-  const themeDefinition=resolveWorkspaceTheme(store,themeId,'social')||socialThemeDefinition(themeId,{fallback:false});
-  return { themeDefinition, capabilities:getSocialCardTemplateCapabilities({themeDefinition,channelMode,contentType}) };
+function socialTemplateContext(_store, _editorial, channelMode, contentType) {
+  // Storyboard planning uses only the fixed structural pack. Per-run visual style
+  // is selected later by the AI design scheme and cannot alter page capacity.
+  const themeDefinition=null;
+  return { themeDefinition, capabilities:getSocialCardTemplateCapabilities({channelMode,contentType}) };
 }
 
 function invalidateSocialCardArtifacts({writeUtf8, workspaceDir, reason}) {
@@ -74,10 +71,12 @@ export async function handleSocialCardRoutes(context) {
     const beautifyReport=parse('ai-beautify-report.json',null);
     const beautifyStages=parse('social-card-ai-visual-stage-executions.json',null);
     const beautifyDeliveryGate=parse('ai-beautified-delivery-gate.json',null);
+    const designScheme=parse('social-design-scheme.json',null);
+    const designSchemeUrl=fs.existsSync(path.join(workspace.dir,'social-design-scheme.md'))?`/api/candidates/${candidate.id}/social-cards/files/social-design-scheme.md`:'';
     const copyText=read('copy.txt');
     const publishTitle=read('publish-title.txt').trim()||copyText.match(/^(?:公众号发布标题|小红书笔记标题)\s*[:：]\s*(.+)$/m)?.[1]?.trim()||'';
     const publishTitleLabel=socialChannelMode(candidate)==='xiaohongshu'?'小红书笔记标题':'公众号发布标题';
-    return json(response,200,{candidateId:candidate.id,code:candidate.candidate_id,title:candidate.hotspot_title,ready:images.length>0||beautifiedImages.length>0,images,beautifiedImages,copy:copyText,publishTitle,publishTitleLabel,facts:read('fact-sheet.md'),cardPlan:parse('card-plan.json',{}),layout:parse('layout-report.json',{}),delivery:parse('delivery-report.json',{}),beautifyReport,beautifyStages,beautifyDeliveryGate,contentPlanAdjustments:parse('social-card-content-plan-adjustments.json',null),factIndex:parse('social-card-fact-index.json',null),templateMetrics:parse('social-template-metrics.json',null),templateStats:store.socialTemplateMetricsStats?.()||null,htmlUrl:fs.existsSync(path.join(workspace.dir,'my-design.html'))?`/api/candidates/${candidate.id}/social-cards/files/my-design.html`:'',beautifiedHtmlUrl:fs.existsSync(path.join(workspace.dir,'ai-beautified.html'))?`/api/candidates/${candidate.id}/social-cards/files/ai-beautified.html`:'',bundleUrl:images.length||beautifiedImages.length?`/api/candidates/${candidate.id}/social-cards/download`:''});
+    return json(response,200,{candidateId:candidate.id,code:candidate.candidate_id,title:candidate.hotspot_title,ready:images.length>0||beautifiedImages.length>0,images,beautifiedImages,copy:copyText,publishTitle,publishTitleLabel,facts:read('fact-sheet.md'),cardPlan:parse('card-plan.json',{}),layout:parse('layout-report.json',{}),delivery:parse('delivery-report.json',{}),beautifyReport,beautifyStages,beautifyDeliveryGate,designScheme:designScheme?{id:designScheme.id,audit:designScheme.audit,visualDirection:designScheme.designScheme?.visualDirection||''}:null,designSchemeUrl,contentPlanAdjustments:parse('social-card-content-plan-adjustments.json',null),factIndex:parse('social-card-fact-index.json',null),templateMetrics:parse('social-template-metrics.json',null),templateStats:store.socialTemplateMetricsStats?.()||null,htmlUrl:fs.existsSync(path.join(workspace.dir,'my-design.html'))?`/api/candidates/${candidate.id}/social-cards/files/my-design.html`:'',beautifiedHtmlUrl:fs.existsSync(path.join(workspace.dir,'ai-beautified.html'))?`/api/candidates/${candidate.id}/social-cards/files/ai-beautified.html`:'',bundleUrl:images.length||beautifiedImages.length?`/api/candidates/${candidate.id}/social-cards/download`:''});
   }
   const socialCardFileMatch=pathname.match(/^\/api\/candidates\/(\d+)\/social-cards\/files\/(.+)$/);
   if(socialCardFileMatch&&request.method==='GET'){
@@ -109,12 +108,9 @@ export async function handleSocialCardRoutes(context) {
     const contentType=socialContentType(candidate),eventAnalysis=eventBackedContentType(contentType)?resolveEventAnalysisFor(candidate):null;
     const gate=socialCardGate(candidate,contentType,facts,editorial,eventAnalysis);
     const cardPlan=JSON.parse(editorial.card_plan_json||'[]');const channelMode=socialChannelMode(candidate);
-    const cachedThemeRouting=editorial.visual_style==='auto'
-      ? await resolveAutoTheme({gateway:null,store,batchId:candidate.batch_id,candidateId:candidate.id,target:'social',context:buildSocialThemeRoutingContext({candidate,contentType,channelMode,facts}),cachedOnly:true})
-      : null;
-    const themeContext=socialTemplateContext(store,cachedThemeRouting?.themeId?{...editorial,visual_style:cachedThemeRouting.themeId}:editorial,channelMode,contentType);
-    const themeState=resolveSocialCardStoryboardThemeState({editorial,themeDefinition:themeContext.themeDefinition,channelMode,contentType});
-    return json(response,200,{candidate,editorial,facts,score,contentType,channelMode,eventAnalysis,gate,themeState,themeRouting:cachedThemeRouting,layoutReport,reflowState,contentPlanAdjustments,factIndex,layoutDecisions:describeCardLayouts(cardPlan,{layoutStyle:editorial.layout_style,compositionMode:editorial.composition_mode,channelMode})});
+    const themeContext=socialTemplateContext(store,editorial,channelMode,contentType);
+    const structureState=resolveSocialCardStoryboardThemeState({editorial,themeDefinition:themeContext.themeDefinition,channelMode,contentType});
+    return json(response,200,{candidate,editorial,facts,score,contentType,channelMode,eventAnalysis,gate,structureState,layoutReport,reflowState,contentPlanAdjustments,factIndex,layoutDecisions:describeCardLayouts(cardPlan,{layoutStyle:editorial.layout_style,compositionMode:editorial.composition_mode,channelMode})});
   }
   if(cardPageLayoutMatch&&request.method==='PUT'){
     const candidate=store.getCandidate(Number(cardPageLayoutMatch[1]));if(!candidate)return json(response,404,{error:'候选不存在'});
@@ -250,19 +246,14 @@ export async function handleSocialCardRoutes(context) {
     const input=await body(request);
     if(input.layout_style&&!SOCIAL_CARD_LAYOUTS.includes(input.layout_style))return json(response,400,{error:'不支持的图文版式'});
     if(input.composition_mode&&!SOCIAL_CARD_COMPOSITION_MODES.includes(input.composition_mode))return json(response,400,{error:'不支持的构图模式'});
-    let editorial=store.saveCardEditorial(candidate.id,input); const facts=store.getRepositoryFactSheet(candidate.id);
+    const { visual_style: _legacyVisualStyle, ...editorialInput }=input;
+    let editorial=store.saveCardEditorial(candidate.id,editorialInput); const facts=store.getRepositoryFactSheet(candidate.id);
     const contentType=socialContentType(candidate),eventAnalysis=eventBackedContentType(contentType)?resolveEventAnalysisFor(candidate):null;
     let cardPlan=[];try{cardPlan=JSON.parse(editorial.card_plan_json||'[]');}catch{}
     const channelMode=socialChannelMode(candidate);
     const themeContext=socialTemplateContext(store,editorial,channelMode,contentType);
-    let themeState=resolveSocialCardStoryboardThemeState({editorial,themeDefinition:themeContext.themeDefinition,channelMode,contentType});
-    // 同一模板家族换主题只改变 Token；没有模板快照的历史故事板必须先重新生成故事板。
-    if (input.visual_style && themeState.status === 'render-only') {
-      editorial=store.saveCardEditorial(candidate.id,{...editorial,storyboard_theme_snapshot_json:JSON.stringify(createSocialCardStoryboardThemeSnapshot({themeDefinition:themeContext.themeDefinition,channelMode,contentType}))});
-      themeState=resolveSocialCardStoryboardThemeState({editorial,themeDefinition:themeContext.themeDefinition,channelMode,contentType});
-      invalidateSocialCardArtifacts({writeUtf8,workspaceDir:socialCardFiles(store.getBatch(candidate.batch_id),candidate).dir,reason:'theme-changed'});
-    }
-    return json(response,200,{editorial,contentType,gate:socialCardGate(candidate,contentType,facts,editorial,eventAnalysis),themeState,cardPlan,layoutDecisions:describeCardLayouts(cardPlan,{layoutStyle:editorial.layout_style,compositionMode:editorial.composition_mode,channelMode})});
+    let structureState=resolveSocialCardStoryboardThemeState({editorial,themeDefinition:themeContext.themeDefinition,channelMode,contentType});
+    return json(response,200,{editorial,contentType,gate:socialCardGate(candidate,contentType,facts,editorial,eventAnalysis),structureState,cardPlan,layoutDecisions:describeCardLayouts(cardPlan,{layoutStyle:editorial.layout_style,compositionMode:editorial.composition_mode,channelMode})});
   }
   // 渠道切换：只换 output_mode 的渠道前缀（wechat-* ↔ xiaohongshu-*），类型部分不动，轨道与卡片决策同步
   const cardChannelMatch = pathname.match(/^\/api\/candidates\/(\d+)\/card-channel$/);
@@ -283,8 +274,8 @@ export async function handleSocialCardRoutes(context) {
     }
     const updated=store.getCandidate(candidate.id);
     const editorial=store.getCardEditorial(candidate.id);const cardPlan=JSON.parse(editorial.card_plan_json||'[]');
-    const contentType=socialContentType(candidate);const themeContext=socialTemplateContext(store,editorial,channel,contentType);const themeState=resolveSocialCardStoryboardThemeState({editorial,themeDefinition:themeContext.themeDefinition,channelMode:channel,contentType});
-    return json(response,200,{outputMode:nextMode,channelMode:channel,hasPlan:Boolean(cardPlan.length),candidate:updated,themeState,layoutDecisions:describeCardLayouts(cardPlan,{layoutStyle:editorial.layout_style,compositionMode:editorial.composition_mode,channelMode:channel})});
+    const contentType=socialContentType(candidate);const themeContext=socialTemplateContext(store,editorial,channel,contentType);const structureState=resolveSocialCardStoryboardThemeState({editorial,themeDefinition:themeContext.themeDefinition,channelMode:channel,contentType});
+    return json(response,200,{outputMode:nextMode,channelMode:channel,hasPlan:Boolean(cardPlan.length),candidate:updated,structureState,layoutDecisions:describeCardLayouts(cardPlan,{layoutStyle:editorial.layout_style,compositionMode:editorial.composition_mode,channelMode:channel})});
   }
   const cardEditorialAiMatch = pathname.match(/^\/api\/candidates\/(\d+)\/ai\/card-editorial$/);
   if (cardEditorialAiMatch && request.method === 'POST') {
@@ -329,13 +320,7 @@ export async function handleSocialCardRoutes(context) {
       const eventAnalysisSkill=contentType==='event'?loadSkillBundle({workspaceRoot:root,skillName:'event-research-analyzer'}):null;
       if(eventAnalysisSkill?.fallback)throw new Error('事件深度分析技能缺失');
       const channelMode=socialChannelMode(candidate);
-      const themeRouting=current.visual_style==='auto'
-        ? await resolveAutoTheme({
-          gateway:harnessGateway, provider:input.provider, store, batchId:candidate.batch_id, candidateId:candidate.id, target:'social',
-          context:buildSocialThemeRoutingContext({candidate,contentType,channelMode,facts}),
-        })
-        : null;
-      const templateContext=socialTemplateContext(store,themeRouting?.themeId?{...current,visual_style:themeRouting.themeId}:current,channelMode,contentType);
+      const templateContext=socialTemplateContext(store,current,channelMode,contentType);
       const storyboardSystem=buildSocialCardStoryboardSystemPrompt({
         workspaceRoot:root,resourceRoot,skillId:storyboardSelection.selectedSkill,
         skillPrompt:socialSkill.prompt,contentType,channelMode,templateCapabilities:templateContext.capabilities,
@@ -391,9 +376,9 @@ export async function handleSocialCardRoutes(context) {
         invalidateSocialCardArtifacts({writeUtf8,workspaceDir:workspace.dir,reason:'storyboard-regenerated'});
       } catch {}
       const gate=socialCardGate(candidate,contentType,facts,editorial,eventAnalysis);
-      const themeState=resolveSocialCardStoryboardThemeState({editorial,themeDefinition:templateContext.themeDefinition,channelMode,contentType});
+      const structureState=resolveSocialCardStoryboardThemeState({editorial,themeDefinition:templateContext.themeDefinition,channelMode,contentType});
         harness.finish('completed');
-        return json(response,200,{editorial,gate,themeState,cardPlan,contentType,eventAnalysis,pageBudget,layoutDecisions:describeCardLayouts(cardPlan,{layoutStyle:editorial.layout_style,compositionMode:editorial.composition_mode,channelMode}),
+        return json(response,200,{editorial,gate,structureState,cardPlan,contentType,eventAnalysis,pageBudget,layoutDecisions:describeCardLayouts(cardPlan,{layoutStyle:editorial.layout_style,compositionMode:editorial.composition_mode,channelMode}),
         template:templateCompatibility,
         reasoning:typeof result.reasoning==='string'&&result.reasoning?result.reasoning:''});
       } catch(error) { harness?.finish('failed',error.message); return json(response,502,{error:`AI 图文决策失败：${error.message}`}); }
@@ -433,16 +418,7 @@ export async function handleSocialCardRoutes(context) {
   if (socialGenerateMatch && request.method === 'POST') {
     const candidate=store.getCandidate(Number(socialGenerateMatch[1]));
     if(!candidate)return json(response,404,{error:'候选不存在'});
-    const editorial=store.getCardEditorial(candidate.id),contentType=socialContentType(candidate),channelMode=socialChannelMode(candidate),themeContext=socialTemplateContext(store,editorial,channelMode,contentType);
-    const themeState=resolveSocialCardStoryboardThemeState({editorial,themeDefinition:themeContext.themeDefinition,channelMode,contentType});
-    if(themeState.status==='needs-storyboard')return json(response,409,{error:themeState.reason||'当前主题的模板能力与故事板不一致，请先重新生成故事板',themeState});
-    const input=await body(request);
-    const purpose=`social-cards-${socialContentType(candidate)}`;
-    const previousSnapshot=input.useLatestSkill===true?null:store.findLatestGenerationSnapshot({
-      batchId:candidate.batch_id,candidateId:candidate.id,purposes:[purpose],
-    });
-    return json(response,202,aiJobs.start({batchId:candidate.batch_id,candidateId:candidate.id,
-      provider:previousSnapshot?null:input.provider,type:'social-card',snapshotId:previousSnapshot?.id||null}));
+    return json(response,410,{error:'程序化图文生成已停用，请使用 AI 视觉生成'});
   }
   return false;
 }

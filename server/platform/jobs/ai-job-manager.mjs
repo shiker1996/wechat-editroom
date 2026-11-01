@@ -18,16 +18,17 @@ export class AiJobManager {
     return this.batchLevelTypes.has(job.type) ? `batch:${job.batchId}` : `candidate:${job.candidateId ?? 'none'}`;
   }
 
-  start({ batchId, type, provider, force = false, candidateId = null, documentKind = null, theme = undefined, mode = 'standard', focus = null, focuses = [], snapshotId = null, skillSelection = null, stageSelections = null, styleBrief = '', failureId = null, resumeFrom = '', imageDeliveryMode = null }) {
+  start({ batchId, type, provider, force = false, candidateId = null, documentKind = null, mode = 'standard', focus = null, focuses = [], snapshotId = null, skillSelection = null, stageSelections = null, styleBrief = '', failureId = null, resumeFrom = '', imageDeliveryMode = null }) {
     if (!this.store.getBatch(batchId)) throw new Error('批次不存在');
     if (!this.handlers.has(type)) throw new Error('未知 AI 任务');
     const pending = [...this.jobs.values()].find((job) => job.batchId === batchId && job.type === type
       && job.candidateId === candidateId && job.failureId === failureId && (job.status === 'running' || job.status === 'queued'));
     if (pending) return pending;
     this.gateway.resolve(provider);
+    const resolvedMode = type === 'cover-image' ? 'ai-visual' : mode;
     const job = { id:crypto.randomUUID(),batchId,type,candidateId,failureId,provider:provider||this.gateway.config.defaultProvider,requestedProvider:provider||null,snapshotId,skillSelection,stageSelections,
-      theme,mode,status:'queued',progress:'排队等待执行',logs:[],createdAt:new Date().toISOString(),
-      runOptions:{ force, candidateId, documentKind, ...(failureId != null ? { failureId } : {}), ...(resumeFrom ? { resumeFrom } : {}), ...(mode !== 'standard' ? { mode } : {}), focus, focuses, ...(String(styleBrief||'').trim()?{styleBrief:String(styleBrief).trim()}:{}), ...(imageDeliveryMode ? { imageDeliveryMode } : {}) } };
+      mode:resolvedMode,status:'queued',progress:'排队等待执行',logs:[],createdAt:new Date().toISOString(),
+      runOptions:{ force, candidateId, documentKind, ...(failureId != null ? { failureId } : {}), ...(resumeFrom ? { resumeFrom } : {}), ...(resolvedMode !== 'standard' ? { mode:resolvedMode } : {}), focus, focuses, ...(String(styleBrief||'').trim()?{styleBrief:String(styleBrief).trim()}:{}), ...(imageDeliveryMode ? { imageDeliveryMode } : {}) } };
     this.jobs.set(job.id,job); this.store.createAiRun({id:job.id,batchId,type,provider:job.provider});
     this.store.updateAiRun(job.id,{status:'queued',progress:'排队等待执行'});
     if(type==='daily'&&Array.isArray(focuses)&&focuses.length)this.store.updateAiRun(job.id,{result_json:JSON.stringify({focuses})});

@@ -11,7 +11,6 @@ export {
   normalizeCardComposition,
   renderStoryboardHtml,
   runAudit,
-  runSocialCardPipeline,
 } from './application/social-card-pipeline.mjs';
 export { SOCIAL_CARD_BEAUTIFY_DELIVERY_GATE, SOCIAL_CARD_BEAUTIFY_HTML, SOCIAL_CARD_BEAUTIFY_OUTPUT, SOCIAL_CARD_BEAUTIFY_REPORT, runSocialCardBeautify, validateAiVisualScreenshotSet } from './application/social-card-beautify.mjs';
 export { buildSocialCardCopyInput, buildSocialCardCopySkillPrompt, buildSocialCardCopySystemPrompt, generateSocialCardCopy, validateSocialCardCopy } from './application/social-card-copy.mjs';

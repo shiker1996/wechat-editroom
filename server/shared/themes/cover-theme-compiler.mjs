@@ -1,22 +1,11 @@
 // 公众号封面图主题编译器：主题 token → 900×383 封面 HTML。
 // 渲染出口复用 skills/html-pages-to-images（puppeteer 截图），与 article-image-generator 同一模式。
 
-import { getBuiltinThemeRegistry } from './theme-registry.mjs';
 import { colorContrast } from './theme-validator.mjs';
 import { COVER_WIDTH, COVER_HEIGHT } from './cover-components.mjs';
 import { escapeHtml } from '../rendering/html-utils.mjs';
 import { mixHex } from './color-utils.mjs';
 import { fontStack as sharedFontStack } from './font-utils.mjs';
-
-export const DEFAULT_COVER_THEME='cover-navy-gold';
-
-export function coverThemeDefinition(themeId,{fallback=true}={}){
-  const registry=getBuiltinThemeRegistry();
-  const theme=registry.get(themeId);
-  if(theme?.targets.includes('cover'))return theme;
-  if(fallback)return registry.require(DEFAULT_COVER_THEME);
-  return null;
-}
 
 // 字族值用于 inline style 属性，引号统一为单引号，避免截断 style 属性
 const fontStack=(role)=>sharedFontStack(role,{singleQuotes:true});
@@ -123,7 +112,7 @@ function motifHtml({title,themeId,position,color,secondary,preferred}){
 
 // 构建封面 HTML。spec 须先经 validateCoverSpec 校验（或 fallbackCoverSpec 产出）。
 export function buildCoverHtml({theme,spec,coverSemantics=null}){
-  const definition=typeof theme==='string'?coverThemeDefinition(theme):theme;
+  const definition=theme;
   const colors=resolveColors(definition);
   const t=definition.tokens.typography,s=definition.tokens.spacing||{},sh=definition.tokens.shape||{};
   // 新版封面 token；旧封面主题（文章字段集）缺失时回退到原硬编码值

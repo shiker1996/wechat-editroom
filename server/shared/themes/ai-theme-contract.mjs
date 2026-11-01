@@ -14,7 +14,7 @@ export const AI_THEME_ERROR_CODES=Object.freeze({
   GENERATION_CANCELLED:'AI_THEME_GENERATION_CANCELLED',
 });
 
-const TARGETS=new Set(['article','social','cover']);
+const TARGETS=new Set(['social']);
 const REQUEST_FIELDS=new Set(['target','prompt','preferences']);
 const PREFERENCE_FIELDS=new Set(['scene','tone','brightness','accentColor','readingPriority']);
 const TONES=new Set(['restrained','editorial','playful','bold','warm','futuristic']);
@@ -45,7 +45,7 @@ export function validateAiThemeRequest(input){
   const issues=[];
   if(!object(input))throw new AiThemeContractError(AI_THEME_ERROR_CODES.INPUT_INVALID,'AI 主题创建请求无效',[issue('request','TYPE','必须是对象')]);
   issues.push(...unknownFields(input,REQUEST_FIELDS));
-  if(!TARGETS.has(input.target))issues.push(issue('target','ENUM','必须为 article、social 或 cover'));
+  if(!TARGETS.has(input.target))issues.push(issue('target','ENUM','主题中心目前仅支持 social 图文主题'));
   safeText(input.prompt,20,500,'prompt',issues);
   const preferences=input.preferences??{};
   if(!object(preferences))issues.push(issue('preferences','TYPE','必须是对象'));
@@ -63,7 +63,7 @@ export function validateAiThemeRequest(input){
 
 export function validateAiThemeCandidate(candidate,{target}={}){
   const issues=[];
-  if(!TARGETS.has(target))throw new AiThemeContractError(AI_THEME_ERROR_CODES.TARGET_MISMATCH,'AI 主题目标无效',[issue('target','ENUM','必须为 article、social 或 cover')]);
+  if(!TARGETS.has(target))throw new AiThemeContractError(AI_THEME_ERROR_CODES.TARGET_MISMATCH,'AI 主题目标无效',[issue('target','ENUM','主题中心目前仅支持 social 图文主题')]);
   if(!object(candidate))throw new AiThemeContractError(AI_THEME_ERROR_CODES.OUTPUT_INVALID,'AI 主题候选无效',[issue('candidate','TYPE','必须是对象')]);
   const forbidden=Object.keys(candidate).filter((key)=>SYSTEM_FIELDS.has(key));
   if(forbidden.length)throw new AiThemeContractError(AI_THEME_ERROR_CODES.SYSTEM_FIELD_FORBIDDEN,'AI 不得设置主题系统字段',forbidden.map((field)=>issue(field,'SYSTEM_FIELD_FORBIDDEN','由系统生成，不接受模型设置')));

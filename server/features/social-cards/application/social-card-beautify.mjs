@@ -1,7 +1,6 @@
 import fs from 'node:fs';
-import { loadSocialAiDesignSpec } from '../../../shared/themes/social-ai-spec.mjs';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { candidateSocialCardDir } from '../../../platform/core/workspace-paths.mjs';
@@ -11,12 +10,11 @@ import { buildConversationToolCatalog } from '../../../platform/agent/tool-catal
 import { getToolRegistry } from '../../../platform/tools/index.mjs';
 import { applyCatalogSchemas, registerProjectResource, resolveResourceArguments, sanitizeCapabilityResult } from '../../../platform/agent/resource-adaptation.mjs';
 import { writeSocialCardAiVisualBaseline } from './social-card-ai-visual-baseline.mjs';
-import { compileSocialTheme, socialThemeDefinition } from '../../../shared/themes/social-theme-compiler.mjs';
-import { resolveWorkspaceTheme } from '../../../platform/application/themes/user-theme-service.mjs';
-import { createSocialCardStoryboardThemeSnapshot, getSocialCardTemplateCapabilities } from '../rendering/social-card-template-resolver.mjs';
 import { createSocialCardAiVisualStageRecorder, writeSocialCardAiVisualSkillManifest } from './social-card-ai-visual-pipeline.mjs';
-import { AI_VISUAL_DOCUMENT_WRITE, runSocialCardAiVisualGenerationAgent } from './social-card-ai-visual-agent.mjs';
+import { AI_VISUAL_DOCUMENT_AUDIT, AI_VISUAL_DOCUMENT_WRITE, runSocialCardAiVisualGenerationAgent } from './social-card-ai-visual-agent.mjs';
 import { formatSocialCardCopyArtifact, generateSocialCardCopy, validateSocialCardCopy } from './social-card-copy.mjs';
+import { generateSocialCardDesignScheme } from './social-card-design-scheme.mjs';
+import { auditSocialCardHtmlFit } from './social-card-visual-audit.mjs';
 import { contentTypeForSocialRoute, socialStoryboardClassForMaterialType } from '../domain/social-routing.mjs';
 
 const execFileAsync = promisify(execFile);
@@ -28,7 +26,7 @@ const AI_VISUAL_SKILL_NAME = 'social-card-ai-visual-generator';
 const AI_INTERNAL_FIELDS = new Set(['source_refs', 'source_urls', 'source_url', 'fact_ids', 'evidence_refs']);
 const SOCIAL_CARD_PROJECT_READ_CAPABILITY = 'cap_filesystem_project_read';
 const AI_VISUAL_BUNDLED_REFERENCE_FILES = Object.freeze(['layout-guide.md', 'xhs-visual-contract.md', 'visual-component-mapping.md']);
-const AI_VISUAL_INPUT_INSTRUCTION = '必须先一次读取 workspace.files 中列出的全部本次运行输入，再开始视觉策划和写入。workspace.files 只包含 card-plan.json、ai-visual-card-plan.json、原始事实 JSON、social-theme-design-spec.md、social-theme-snapshot.json 和 copy.txt；它们分别负责故事板事实、视觉语义索引、事实核对、主题配方、运行元数据和只读文案。layout-guide.md、xhs-visual-contract.md、visual-component-mapping.md 已随本技能作为内置参考注入，不属于 workspace.files，不要重复读取或把它们当成候选内容。所有输入只控制设计和事实边界，不能把路径、来源 ID、技术字段或规范说明展示为页面正文。';
+const AI_VISUAL_INPUT_INSTRUCTION = '必须先一次读取 workspace.files 中列出的全部本次运行输入，再开始视觉策划和写入。workspace.files 只包含 card-plan.json、ai-visual-card-plan.json、原始事实 JSON、本篇生成的 social-design-scheme.json 和 copy.txt；它们分别负责冻结故事板、视觉语义、事实核对、本次视觉方案和只读文案。layout-guide.md、xhs-visual-contract.md、visual-component-mapping.md 已随本技能作为内置参考注入，不属于 workspace.files。设计方案决定本次色彩、字阶、节奏和逐页视觉处理；固定页面骨架、容量、标题/正文边界和交付校验属于硬约束，必须遵守。生成中必须调用本地浏览器视觉审计工具检查整组页面，并按报告修正后复审。不得展示路径、来源 ID、技术字段或规范说明，不得新增事实或改变标题。';
 const AI_VISUAL_THEME_LAYOUT_FIELDS = Object.freeze([
   'bodyPx', 'h1Px', 'h2Px', 'captionPx', 'codePx', 'lineHeight', 'letterSpacingEm',
   'articlePaddingPx', 'sectionPx', 'paragraphPx', 'cardGapPx',
@@ -146,7 +144,7 @@ function factFileForContentType(contentType) {
 }
 
 function canonicalAiVisualWorkspaceFiles(factFile) {
-  return ['card-plan.json', 'ai-visual-card-plan.json', factFile, 'social-theme-snapshot.json', 'social-theme-design-spec.md', 'copy.txt'];
+  return ['card-plan.json', 'ai-visual-card-plan.json', factFile, 'social-design-scheme.json', 'copy.txt'];
 }
 
 function findActiveDocumentWriteSessionId(targetPath) {
@@ -181,33 +179,6 @@ function beautifyContentType(candidate, planEnvelope = null) {
   return contentTypeForSocialRoute(candidate);
 }
 
-function syncAiThemeSnapshot({ workdir, store, editorial, candidate }) {
-  const planEnvelope = readJsonFile(path.join(workdir, 'card-plan.json'), null);
-  const previousSnapshot = readJsonFile(path.join(workdir, 'social-theme-snapshot.json'), {});
-  const requestedThemeId = String(editorial?.visual_style || 'auto');
-  const themeId = requestedThemeId === 'auto' ? String(previousSnapshot.id || 'ice-blue') : requestedThemeId;
-  const contentType = beautifyContentType(candidate, planEnvelope);
-  const channelMode = normalizedChannelMode(planEnvelope?.channel_mode || editorial?.output_mode || 'wechat');
-  const themeDefinition = resolveWorkspaceTheme(store, themeId, 'social')
-    || socialThemeDefinition(themeId, { fallback: false });
-  if (!themeDefinition) throw new Error(`未知图文视觉主题：${themeId}`);
-  const capabilities = getSocialCardTemplateCapabilities({ themeDefinition, channelMode, contentType });
-  const storyboardSnapshot = createSocialCardStoryboardThemeSnapshot({ themeDefinition, channelMode, contentType });
-  const snapshot = {
-    ...storyboardSnapshot,
-    id: themeDefinition.id,
-    label: themeDefinition.label,
-    version: themeDefinition.version,
-    source: themeDefinition.source,
-    hash: themeDefinition.hash,
-    templateSource: capabilities.source,
-    templateFallback: capabilities.fallback,
-  };
-  const aiVisualSnapshot = buildAiVisualThemeSnapshot(snapshot);
-  writeFile(path.join(workdir, 'social-theme-snapshot.json'), JSON.stringify(aiVisualSnapshot, null, 2));
-  return aiVisualSnapshot;
-}
-
 function compactStoryboardPage(page, index) {
   const blocks = Array.isArray(page?.content_blocks) ? page.content_blocks : [];
   return {
@@ -228,32 +199,28 @@ function compactStoryboardPage(page, index) {
   };
 }
 
-function compactThemeContract(themeSnapshot, original, store) {
-  const themeId = String(themeSnapshot?.id || themeSnapshot?.themeId || bodyData(original, 'visual-style') || 'ice-blue');
-  const definition = resolveWorkspaceTheme(store, themeId, 'social') || socialThemeDefinition(themeId, { fallback: true });
-  const compiled = definition ? compileSocialTheme(definition) : null;
-  const capacity = themeSnapshot?.capacityProfile || {};
+function compactStructureContract(snapshot) {
+  const capacity = snapshot?.capacityProfile || {};
   const roles = capacity.roles && typeof capacity.roles === 'object'
     ? Object.fromEntries(Object.entries(capacity.roles).map(([role, value]) => [role, {
       role,
       template: value?.template || '',
       structural: value?.structural || null,
-      visual: value?.visual || null,
+      capacity: value?.visual ? {
+        bodyHeightPx: value.visual.bodyHeightPx,
+        maxTitleLines: value.visual.maxTitleLines,
+        maxTextChars: value.visual.maxTextChars,
+        maxListItemLines: value.visual.maxListItemLines,
+        minBodyUtilization: value.visual.minBodyUtilization,
+        maxBodyUtilization: value.visual.maxBodyUtilization,
+      } : null,
       split: value?.split || null,
     }]))
     : {};
   return {
-    id: themeId,
-    label: themeSnapshot?.label || definition?.label || themeId,
-    version: themeSnapshot?.version || definition?.version || '',
+    id: capacity.templatePack?.id || snapshot?.templatePack?.id || 'social-card-fixed-structure',
+    version: capacity.templatePack?.version || snapshot?.templatePack?.version || 1,
     canvas: capacity.canvas || { width: 375, height: 667 },
-    templatePack: themeSnapshot?.templatePack || capacity.templatePack || null,
-    colors: definition?.tokens?.colors || null,
-    typography: definition?.tokens?.typography || null,
-    spacing: definition?.tokens?.spacing || null,
-    shape: definition?.tokens?.shape || null,
-    recipes: compiled?.recipes || definition?.social?.recipes || null,
-    effects: definition?.social?.effects || null,
     roles,
   };
 }
@@ -267,17 +234,14 @@ export function buildBeautifyContext({ workdir, original, candidate, editorial, 
   const pages = Array.isArray(editorialPlan) && editorialPlan.length
     ? editorialPlan
     : Array.isArray(planEnvelope?.pages) ? planEnvelope.pages : [];
-  const themeSnapshot = readJsonFile(path.join(workdir, 'social-theme-snapshot.json'), {});
-  const effectiveThemeSnapshot = editorial?.visual_style && editorial.visual_style !== 'auto'
-    ? { ...themeSnapshot, id: String(editorial.visual_style) }
-    : themeSnapshot;
-  const rawChannelMode = planEnvelope?.channel_mode || themeSnapshot?.channelMode || bodyData(original, 'channel') || String(editorial?.output_mode || 'wechat');
+  const structureSnapshot = readJsonFile(path.join(workdir, 'social-theme-snapshot.json'), {});
+  const rawChannelMode = planEnvelope?.channel_mode || structureSnapshot?.channelMode || bodyData(original, 'channel') || String(editorial?.output_mode || 'wechat');
   const candidateContentType = candidate?.material_type === 'repository'
     ? 'repository'
     : candidate?.material_type === 'custom'
       ? 'custom'
       : 'event';
-  const contentType = String(planEnvelope?.pageBudget?.contentType || themeSnapshot?.contentType || candidateContentType);
+  const contentType = String(planEnvelope?.pageBudget?.contentType || structureSnapshot?.contentType || candidateContentType);
   const requiredPageCount = pages.length || htmlPageCount(original);
   return {
     topic: String(candidate?.hotspot_title || ''),
@@ -286,12 +250,11 @@ export function buildBeautifyContext({ workdir, original, candidate, editorial, 
     bodyClass: bodyClass(original),
     compositionMode: String(planEnvelope?.composition_mode || editorial?.composition_mode || 'template'),
     layoutStyle: String(planEnvelope?.layout_style || editorial?.layout_style || 'auto'),
-    sourceLabel: String(themeSnapshot?.sourceLabel || ''),
     disclosure: contentType === 'event' ? '据公开素材整理 · 未核实内容已标注' : '',
     requiredPageCount,
     storyboardPageCount: pages.length,
     storyboard: pages.map(compactStoryboardPage),
-    theme: compactThemeContract(effectiveThemeSnapshot, original, store),
+    structure: compactStructureContract(structureSnapshot),
     sourceUrls: collectSourceUrls(pages).length ? collectSourceUrls(pages) : sourceUrls(original),
     layoutContract: {
       pageWidth: 375,
@@ -324,11 +287,9 @@ export function buildAiRenderRequest(context = {}, {
 }
 
 function buildAiVisualGenerationBrief({ context, workspaceFiles, styleBrief = '' }) {
-  const theme = context?.theme || {};
   const fileList = (Array.isArray(workspaceFiles) ? workspaceFiles : []).join('、');
   const pageCount = Number(context?.requiredPageCount) || 0;
   const pagePolicy = aiVisualPageCountPolicy(pageCount);
-  const themeLabel = [theme.id, theme.label, theme.version].filter(Boolean).join(' · ') || '由 social-theme-design-spec.md 确定';
   const brief = String(styleBrief || '').trim().slice(0, 800);
   return `
 
@@ -337,10 +298,11 @@ function buildAiVisualGenerationBrief({ context, workspaceFiles, styleBrief = ''
 - 故事板页数基准：${pageCount}
 - 实际允许页数：${pagePolicy.minPageCount}–${pagePolicy.maxPageCount}（允许上下浮动最多 ${pagePolicy.pageCountTolerance} 页，仅用于确需拆分或合并内容的情况）
 - 冻结输入文件：${fileList}
-- 当前主题：${themeLabel}
-- 额外设计意图：${brief || '无，按主题规范和视觉技能自行决定。'}
+- 本次设计方案：social-design-scheme.json（每次生成重新制定，不能套用旧主题）
+- 页面结构与容量契约：${JSON.stringify(context?.structure || {})}
+- 额外设计意图：${brief || '无，按本次方案与参考排版规范执行。'}
 
-以上仅补充本次运行的动态参数；生成规则、布局规范、主题执行、分块写入协议和阶段边界以已加载的技能及当前阶段指令为准。
+以上仅补充本次运行的动态参数；页面结构、容量和分块写入协议仍须遵守系统门禁。
 `;
 }
 
@@ -458,6 +420,9 @@ async function runAiVisualScreenshotDeliveryOnly({
   context,
   stageRecorder,
   generationAgent,
+  designScheme,
+  resuming,
+  existingSessionId,
   lastModelResult,
   resolvedModel,
   provider,
@@ -541,6 +506,11 @@ async function runAiVisualScreenshotDeliveryOnly({
     screenshotCheck.status = 'passed';
   }
 
+  const visualAudit = enableScreenshots
+    ? await auditSocialCardHtmlFit({ htmlPath, width: 375, height: 667 })
+    : { valid: true, status: 'skipped', canvas: { width: 375, height: 667 }, pageCount: 0, checkedSelectors: [], issues: [] };
+  if (!visualAudit.valid) onProgress(`视觉适配审计未通过：${visualAudit.issues.map((issue) => issue.message).join('；')}`);
+
   const htmlCheck = {
     valid: fs.existsSync(htmlPath) && pagePolicy.minPageCount <= pageCount && pageCount <= pagePolicy.maxPageCount,
     pageCount,
@@ -557,21 +527,22 @@ async function runAiVisualScreenshotDeliveryOnly({
     inputArtifacts: [SOCIAL_CARD_BEAUTIFY_HTML, 'copy.txt', SOCIAL_CARD_BEAUTIFY_OUTPUT],
     outputArtifact: SOCIAL_CARD_BEAUTIFY_DELIVERY_GATE,
   });
-  const deliveryValid = htmlCheck.valid && copyCheck.valid && (!enableScreenshots || screenshotCheck.valid);
+  const deliveryValid = htmlCheck.valid && copyCheck.valid && (!enableScreenshots || (screenshotCheck.valid && visualAudit.valid));
   const deliveryGate = {
     schemaVersion: 1,
     status: enableDeliveryGate ? (deliveryValid ? 'passed' : 'blocked') : 'skipped',
     registered: false,
     checkedAt: new Date().toISOString(),
-    checks: { html: htmlCheck, copy: copyCheck, screenshots: screenshotCheck },
+    checks: { html: htmlCheck, copy: copyCheck, screenshots: screenshotCheck, visualAudit },
+    ...(visualAudit.valid ? {} : { reason: visualAudit.issues.map((issue) => issue.message).join('；') }),
     artifacts: { html: SOCIAL_CARD_BEAUTIFY_HTML, copy: 'copy.txt', screenshots: SOCIAL_CARD_BEAUTIFY_OUTPUT },
   };
   writeFile(deliveryGatePath, JSON.stringify(deliveryGate, null, 2));
 
   const report = {
-    schemaVersion: 5,
+    schemaVersion: 6,
     status: enableDeliveryGate ? (deliveryValid ? 'passed' : 'delivery-blocked') : enableScreenshots ? 'screenshots-passed' : 'generation-only',
-    source: 'storyboard-theme-ai-visual',
+    source: 'storyboard-per-run-ai-visual',
     renderMode: 'full-html-agent',
     generatedAt: new Date().toISOString(),
     originalHtml: null,
@@ -580,7 +551,7 @@ async function runAiVisualScreenshotDeliveryOnly({
     beautifiedHtml: SOCIAL_CARD_BEAUTIFY_HTML,
     pageCount,
     storyboardPageCount: context.storyboardPageCount,
-    theme: { id: context.theme.id, label: context.theme.label, version: context.theme.version, templatePack: context.theme.templatePack },
+    designScheme: { id: designScheme.id, file: 'social-design-scheme.json', audit: designScheme.audit },
     styleBrief: String(styleBrief || '').slice(0, 800),
     changedByModel: true,
     modelSteps: generationAgent?.modelSteps || 0,
@@ -589,16 +560,25 @@ async function runAiVisualScreenshotDeliveryOnly({
       generation: { agentRunId: generationAgent?.agentRunId || null, modelSteps: generationAgent?.modelSteps || 0, toolCalls: generationAgent?.toolCalls || 0, pageCount: generationAgent?.pageCount || 0 },
     },
     screenshots: { status: screenshotCheck.status || 'skipped', expectedPageCount: pageCount, storyboardPageCount: context.requiredPageCount, pageCountTolerance: pagePolicy.pageCountTolerance, pageCount: imagePaths.length, attempts: screenshotAttempts, issues: screenshotCheck.issues || [] },
-    deliveryGate: { status: enableDeliveryGate ? (deliveryValid ? 'passed' : 'blocked') : 'skipped', registered: false, path: path.basename(deliveryGatePath) },
+    visualAudit,
+    deliveryGate: {
+      status: enableDeliveryGate ? (deliveryValid ? 'passed' : 'blocked') : 'skipped',
+      registered: false,
+      path: path.basename(deliveryGatePath),
+      ...(!visualAudit.valid ? { reason: visualAudit.issues.map((issue) => issue.message).join('；') } : {}),
+    },
     model: { provider: lastModelResult?.provider || provider || '', model: lastModelResult?.model || resolvedModel, callId: lastModelResult?.callId || null },
     skillManifest: path.basename(skillManifest.path),
     stageExecutions: path.basename(stageRecorder.path),
   };
   writeFile(path.join(workdir, SOCIAL_CARD_BEAUTIFY_REPORT), JSON.stringify(report, null, 2));
   if (enableDeliveryGate && !deliveryValid) {
-    fs.rmSync(outputDir, { recursive: true, force: true });
-    deliveryStage.finish({ status: 'blocked', gate: 'blocked', detail: '截图/HTML/copy 交付文件检查未通过，未登记正式交付', metadata: { registered: false } });
-    throw new Error(`AI 美化交付门禁未通过：${[...htmlCheck.issues, ...copyCheck.issues, ...(screenshotCheck.issues || [])].join('；')}`);
+    // Keep valid screenshots when the layout audit blocks delivery so authors
+    // can inspect the exact clipped page and decide how to reflow it.
+    const keepDiagnosticScreenshots = enableScreenshots && screenshotCheck.valid && !visualAudit.valid;
+    if (!keepDiagnosticScreenshots) fs.rmSync(outputDir, { recursive: true, force: true });
+    deliveryStage.finish({ status: 'blocked', gate: 'blocked', detail: '截图、视觉适配、HTML 或文案交付检查未通过，未登记正式交付', metadata: { registered: false } });
+    throw new Error(`AI 美化交付门禁未通过：${[...htmlCheck.issues, ...copyCheck.issues, ...(screenshotCheck.issues || []), ...(!visualAudit.valid ? visualAudit.issues.map((issue) => issue.message) : [])].join('；')}`);
   }
   if (!enableDeliveryGate) {
     deliveryStage.finish({ status: 'skipped', gate: 'skipped', detail: '交付门禁开关关闭，保留截图产物' });
@@ -649,6 +629,29 @@ function aiVisualDocumentWriteCatalogItem(registry) {
   };
 }
 
+function aiVisualDocumentAuditCatalogItem() {
+  return {
+    capability: AI_VISUAL_DOCUMENT_AUDIT,
+    name: '浏览器逐页视觉适配审计',
+    description: '在 375×667 本地 Chromium 中渲染当前 AI 图文 HTML，检查每页正文区域的纵横向溢出；返回页码、容器和超出像素。完成整份 HTML 草稿后、finish 前调用；修改 HTML 后必须重新审计。',
+    riskLevel: 'read-only',
+    sideEffect: 'none',
+    idempotent: false,
+    replayPolicy: 'never',
+    timeoutMs: 120_000,
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['auditAttempt'],
+      properties: {
+        auditAttempt: { type: 'integer', minimum: 1, description: '本次审计序号，从 1 开始；重写后递增，保证每次都重新执行浏览器检查。' },
+      },
+    },
+    outputSchema: { type: 'object' },
+    implementations: [{ plugin: 'application', version: '1.0.0', riskLevel: 'read-only' }],
+  };
+}
+
 export async function runSocialCardBeautify({ gateway, store, batchId, candidateId, provider, workspaceRoot, rootRunId = null, workflowRunId = null, onProgress = () => {}, onEvent = () => {}, styleBrief = '', resumeFrom = '', enableAiVisualScreenshots = ENABLE_AI_VISUAL_SCREENSHOTS, enableAiVisualDeliveryGate = ENABLE_AI_VISUAL_DELIVERY_GATE }) {
   const aiVisualScreenshotsEnabled = enableAiVisualScreenshots === true;
   const aiVisualDeliveryGateEnabled = enableAiVisualDeliveryGate === true;
@@ -659,40 +662,19 @@ export async function runSocialCardBeautify({ gateway, store, batchId, candidate
   const originalPath = path.join(workdir, 'my-design.html');
   const originalHtml = fs.existsSync(originalPath) ? fs.readFileSync(originalPath, 'utf8') : '';
   const editorial = store.getCardEditorial?.(candidateId) || {};
-  syncAiThemeSnapshot({ workdir, store, editorial, candidate });
   const context = buildBeautifyContext({ workdir, original: originalHtml, candidate, editorial, store });
   if (!context.storyboardPageCount) throw new Error('请先生成故事板，再使用 AI 视觉生成');
 
-  const baseline = writeSocialCardAiVisualBaseline({
-    workdir,
-    candidateId,
-    batchId,
-    contentType: context.contentType,
-    channelMode: context.channelMode,
-    themeId: context.theme?.id,
-    requiredPageCount: context.requiredPageCount,
-    storyboardPageCount: context.storyboardPageCount,
-  });
-  store.upsertArtifact?.({
-    batchId,
-    candidateId,
-    track: 'social_cards',
-    kind: 'AI 视觉基线',
-    name: 'ai-visual-baseline.json',
-    path: baseline.path,
-    size: fs.statSync(baseline.path).size,
-    modifiedAt: fs.statSync(baseline.path).mtime.toISOString(),
-  });
   const stageRecorder = createSocialCardAiVisualStageRecorder({ workdir, batchId, candidateId });
   const factFile = factFileForContentType(context.contentType);
-  const workspaceFilesBeforeCopy = canonicalAiVisualWorkspaceFiles(factFile).filter((file) => file !== 'copy.txt');
+  const workspaceFilesBeforeCopy = ['card-plan.json', 'ai-visual-card-plan.json', factFile];
   const inputsStage = stageRecorder.start('inputs', {
     skill: 'fixed-program',
     inputArtifacts: workspaceFilesBeforeCopy,
-    outputArtifact: 'ai-visual-card-plan.json',
+    outputArtifact: 'social-design-scheme.json',
   });
 
-  onProgress('准备数据库故事板、原始事实和主题设计规范…');
+  onProgress('准备数据库故事板、原始事实和参考排版规范…');
   let editorialPages = [];
   try { editorialPages = JSON.parse(editorial.card_plan_json || '[]'); } catch {}
   if (!Array.isArray(editorialPages) || !editorialPages.length) throw new Error('数据库故事板为空，请先重新生成故事板');
@@ -711,21 +693,11 @@ export async function runSocialCardBeautify({ gateway, store, batchId, candidate
   const aiVisualPlanPath = path.join(workdir, 'ai-visual-card-plan.json');
   const aiVisualPlan = buildAiVisualCardPlan(sourcePlan);
   writeFile(aiVisualPlanPath, JSON.stringify(aiVisualPlan, null, 2));
-  const themeSpec = loadSocialAiDesignSpec({ workspaceRoot, theme: resolveWorkspaceTheme(store, context.theme.id, 'social') || context.theme });
-  const themeSpecCandidatePath = path.join(workdir, 'social-theme-design-spec.md');
-  writeFile(themeSpecCandidatePath, themeSpec.text);
   const htmlPath = path.join(workdir, SOCIAL_CARD_BEAUTIFY_HTML);
   const outputDir = path.join(workdir, SOCIAL_CARD_BEAUTIFY_OUTPUT);
   // 重试是新一轮生成，需要清理旧产物；恢复必须保留文档写入会话和已有
   // HTML，才能从 checkpoint 的下一步继续追加。
   const resuming = Boolean(String(resumeFrom || '').trim());
-  if (!resuming) {
-    fs.rmSync(outputDir, { recursive: true, force: true });
-    for (const staleReport of [path.join(workdir, SOCIAL_CARD_BEAUTIFY_REPORT)]) {
-      fs.rmSync(staleReport, { force: true });
-    }
-    writeFile(htmlPath, aiHtmlScaffold(context));
-  }
 
   const resources = new Map();
   registerProjectResource(resources, workdir);
@@ -762,10 +734,51 @@ export async function runSocialCardBeautify({ gateway, store, batchId, candidate
   const providerMaxOutputTokens = Number(skillRuntime.providerConfig?.maxOutputTokens || skillRuntime.providerConfig?.provider?.maxOutputTokens) || 7000;
   const resolvedModel = skillRuntime.providerConfig?.model || skillRuntime.providerConfig?.provider?.model || '';
   const skillManifest = writeSocialCardAiVisualSkillManifest({ workdir, runtime: skillRuntime, bundles: skillRuntime.bundles, catalog });
+  const referenceText = visualSkillBundle.files
+    .filter((file) => AI_VISUAL_BUNDLED_REFERENCE_FILES.includes(path.basename(String(file))))
+    .map((file) => `## ${path.basename(file)}\n\n${fs.readFileSync(file, 'utf8')}`)
+    .join('\n\n');
+  let designScheme;
+  const schemeJsonPath = path.join(workdir, 'social-design-scheme.json');
+  const schemeMarkdownPath = path.join(workdir, 'social-design-scheme.md');
+  if (resuming) {
+    const previousScheme = readJsonFile(schemeJsonPath, null);
+    if (!previousScheme?.audit?.valid || previousScheme.title !== (candidate.hotspot_title || context.topic)
+      || previousScheme.channelMode !== context.channelMode || previousScheme.input?.pageCount !== editorialPages.length) {
+      throw new Error('AI 视觉恢复找不到与当前故事板匹配的设计方案，请重新生成图文');
+    }
+    designScheme = { ...previousScheme, markdown: fs.existsSync(schemeMarkdownPath) ? fs.readFileSync(schemeMarkdownPath, 'utf8') : '' };
+  } else {
+    fs.rmSync(schemeJsonPath, { force: true });
+    fs.rmSync(schemeMarkdownPath, { force: true });
+    designScheme = await generateSocialCardDesignScheme({
+      gateway, store, provider, batchId, candidateId, workdir,
+      title: candidate.hotspot_title || context.topic,
+      channelMode: context.channelMode,
+      contentType: context.contentType,
+      pages: editorialPages,
+      references: referenceText,
+      log: onProgress,
+    });
+  }
+  const baseline = writeSocialCardAiVisualBaseline({
+    workdir, candidateId, batchId,
+    contentType: context.contentType,
+    channelMode: context.channelMode,
+    designSchemeId: designScheme.id,
+    requiredPageCount: context.requiredPageCount,
+    storyboardPageCount: context.storyboardPageCount,
+  });
+  store.upsertArtifact?.({
+    batchId, candidateId, track: 'social_cards', kind: 'AI 视觉基线',
+    name: 'ai-visual-baseline.json', path: baseline.path,
+    size: fs.statSync(baseline.path).size,
+    modifiedAt: fs.statSync(baseline.path).mtime.toISOString(),
+  });
   inputsStage.finish({
-    outputArtifact: aiVisualPlanPath,
-    detail: `已生成 AI 视觉精简故事板，并冻结 ${skillRuntime.snapshotId || '当前运行'} 的技能、模型和工具快照`,
-    metadata: { snapshotId: skillRuntime.snapshotId, provider, model: resolvedModel, skillManifest: skillManifest.path },
+    outputArtifact: 'social-design-scheme.json',
+    detail: `已生成本篇视觉方案，并冻结 ${skillRuntime.snapshotId || '当前运行'} 的技能、模型和工具快照`,
+    metadata: { snapshotId: skillRuntime.snapshotId, provider, model: resolvedModel, skillManifest: skillManifest.path, contentPlan: aiVisualPlanPath },
   });
   const copyStage = stageRecorder.start('copy', {
     skill: 'xiaohongshu-article-generator',
@@ -811,6 +824,13 @@ export async function runSocialCardBeautify({ gateway, store, batchId, candidate
     copyStage.fail(error);
     throw error;
   }
+  if (!resuming) {
+    fs.rmSync(outputDir, { recursive: true, force: true });
+    for (const staleReport of [path.join(workdir, SOCIAL_CARD_BEAUTIFY_REPORT), path.join(workdir, SOCIAL_CARD_BEAUTIFY_DELIVERY_GATE)]) {
+      fs.rmSync(staleReport, { force: true });
+    }
+    writeFile(htmlPath, aiHtmlScaffold(context));
+  }
   const workspaceFiles = canonicalAiVisualWorkspaceFiles(factFile);
   // 文案生成完成后再构造 render_request，确保模型首条消息与实际读取清单完全一致。
   const renderRequest = buildAiRenderRequest(context, { workspaceResourceId: 'project:current', workspaceFiles });
@@ -828,15 +848,37 @@ export async function runSocialCardBeautify({ gateway, store, batchId, candidate
       // 插件只接收 path、sessionId 以及 operation/content/revision 等写入字段。
       return { ...documentArgs, path: htmlPath, sessionId: documentWriteSessionId };
     }
+    if (request.capability === AI_VISUAL_DOCUMENT_AUDIT) return args;
     return resolveResourceArguments(args, request, { resources, workspaceRoot });
   };
-  const generationCatalog = [...baseCatalog.filter((item) => item.capability === SOCIAL_CARD_PROJECT_READ_CAPABILITY), aiVisualDocumentWriteCatalogItem(registry)];
+  const generationCatalog = [
+    ...baseCatalog.filter((item) => item.capability === SOCIAL_CARD_PROJECT_READ_CAPABILITY),
+    aiVisualDocumentWriteCatalogItem(registry),
+    aiVisualDocumentAuditCatalogItem(),
+  ];
+  let latestVisualAudit = null;
+  const currentHtmlDigest = () => fs.existsSync(htmlPath)
+    ? createHash('sha256').update(fs.readFileSync(htmlPath)).digest('hex')
+    : '';
+  const getCurrentVisualAudit = () => {
+    if (!latestVisualAudit) return null;
+    const currentDigest = currentHtmlDigest();
+    if (!currentDigest || latestVisualAudit.documentDigest !== currentDigest) {
+      return { ...latestVisualAudit, valid: false, status: 'stale', stale: true, issues: [{ code: 'STALE_AUDIT', message: 'HTML 在上次审计后已修改，必须重新审计' }] };
+    }
+    return latestVisualAudit;
+  };
+  const executeVisualAudit = async ({ auditAttempt } = {}) => {
+    const report = await auditSocialCardHtmlFit({ htmlPath, width: 375, height: 667 });
+    latestVisualAudit = { ...report, auditAttempt, documentDigest: currentHtmlDigest() };
+    return { status: 'ok', data: { ...report, auditAttempt }, provenance: { provider: 'local-browser' } };
+  };
   const generationSystem = `${buildAiVisualSkillPrompt({ workspaceRoot, requiredPageCount: context.requiredPageCount, styleBrief, skillBundle: skillRuntime.bundles.find((bundle) => bundle.skillName === AI_VISUAL_SKILL_NAME) || visualSkillBundle })}${buildAiVisualGenerationBrief({ context, workspaceFiles, styleBrief })}\n\n当前可用工具目录：${JSON.stringify(generationCatalog)}`;
   const generationStage = stageRecorder.start('generation', {
     skill: AI_VISUAL_SKILL_NAME,
     inputArtifacts: workspaceFiles,
     outputArtifact: SOCIAL_CARD_BEAUTIFY_HTML,
-    metadata: { agentEntryPoint: 'social-card-ai-visual-generation', auditToolsVisible: false },
+    metadata: { agentEntryPoint: 'social-card-ai-visual-generation', auditToolsVisible: true },
   });
   let generationAgent;
   const existingSessionId = resuming ? findActiveDocumentWriteSessionId(htmlPath) : '';
@@ -862,7 +904,14 @@ export async function runSocialCardBeautify({ gateway, store, batchId, candidate
       resumeFrom: resuming ? String(resumeFrom) : '',
       resolveArguments: resolveAiArguments,
       sanitizeToolResult: (toolResult, request) => sanitizeCapabilityResult(toolResult, request),
-      toolContext: { batchId, candidateId, rootRunId, workflowRunId, stageId: 'social-card-ai-visual-generation', skillId: AI_VISUAL_SKILL_NAME, provider: providerId, workspaceRoot, allowedRoots: [workdir], allowedCapabilities: [SOCIAL_CARD_PROJECT_READ_CAPABILITY, AI_VISUAL_DOCUMENT_WRITE] },
+      toolContext: {
+        batchId, candidateId, rootRunId, workflowRunId, stageId: 'social-card-ai-visual-generation', skillId: AI_VISUAL_SKILL_NAME,
+        provider: providerId, workspaceRoot, allowedRoots: [workdir],
+        allowedCapabilities: [SOCIAL_CARD_PROJECT_READ_CAPABILITY, AI_VISUAL_DOCUMENT_WRITE, AI_VISUAL_DOCUMENT_AUDIT],
+        toolHandlers: { [AI_VISUAL_DOCUMENT_AUDIT]: executeVisualAudit },
+      },
+      auditCapability: AI_VISUAL_DOCUMENT_AUDIT,
+      getVisualAuditResult: getCurrentVisualAudit,
       maxOutputTokens: providerMaxOutputTokens,
       onProgress,
       onEvent,
@@ -885,6 +934,7 @@ export async function runSocialCardBeautify({ gateway, store, batchId, candidate
           toolCalls: generationAgent?.toolCalls || 0,
           pageCount: generatedPageCount,
           documentFinished: generationAgent?.documentFinished === true,
+          visualAudit: generationAgent?.visualAudit || null,
         },
       });
       throw error;
@@ -899,6 +949,7 @@ export async function runSocialCardBeautify({ gateway, store, batchId, candidate
         toolCalls: generationAgent.toolCalls || 0,
         pageCount: generatedPageCount,
         documentFinished: generationAgent.documentFinished === true,
+        visualAudit: generationAgent.visualAudit || null,
       },
     });
   } catch (error) {
@@ -915,6 +966,9 @@ export async function runSocialCardBeautify({ gateway, store, batchId, candidate
     context,
     stageRecorder,
     generationAgent,
+    designScheme,
+    resuming,
+    existingSessionId,
     lastModelResult: generationAgent.lastModelResult || null,
     resolvedModel,
     provider,

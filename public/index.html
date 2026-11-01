@@ -75,7 +75,6 @@
     <div class="rail-utility-group" aria-label="扩展与定制">
       <div class="rail-utility-label"><span>EXTEND</span><b>扩展与定制</b></div>
       <button class="nav-utility" data-view="skills"><span class="nav-icon" data-icon="技" aria-hidden="true"></span><span><b>技能与工具</b><small>能力 · 插件 · 连接</small></span></button>
-      <button class="nav-utility" data-view="themes"><span class="nav-icon" data-icon="主" aria-hidden="true"></span><span><b>主题中心</b><small>选择 · 预览 · 管理</small></span></button>
       <button class="nav-utility" data-view="system"><span class="nav-icon" data-icon="配" aria-hidden="true"></span><span><b>运行与配置</b><small>模型 · 采集 · 系统</small></span></button>
     </div>
     <div class="rail-foot">
@@ -490,7 +489,7 @@
                     <div class="stage-skill-settings-head">
                       <span>STORYBOARD ROUTE</span>
                       <b>选择故事板规划方式</b>
-                      <small>本次选择只影响重新规划故事板，不改变视觉主题和逐页手工编辑。</small>
+                      <small>本次选择只影响重新规划故事板，不改变逐页手工编辑。</small>
                     </div>
                     <div id="social-stage-skills" class="stage-skill-list" aria-busy="true"></div>
                     <div class="creation-skill-actions">
@@ -526,19 +525,12 @@
                       <option value="minimal">极简留白</option>
                     </select>
                   </label>
-                  <label class="social-theme-picker">
-                    <span>视觉主题</span>
-                    <select id="social-visual-style" class="visually-hidden"><option value="auto">自动匹配</option></select>
-                    <button type="button" class="theme-picker-trigger" id="social-theme-trigger" data-theme-picker="social"><span>视觉主题</span><b>正在加载…</b></button>
-                    <div id="social-theme-preview" class="theme-catalog-preview" hidden></div>
-                    <small id="social-theme-meta" class="theme-catalog-meta" aria-live="polite">正在读取主题目录</small>
-                  </label>
                 </div>
-                <div id="social-storyboard-theme-status" class="storyboard-theme-status" role="status" aria-live="polite" hidden></div>
+                <div id="social-storyboard-structure-status" class="storyboard-theme-status" role="status" aria-live="polite" hidden></div>
               </div>
               <div id="card-plan-preview" class="card-plan-preview"></div>
             </section>
-            <section class="card-gate-panel social-production-bar"><div class="social-stage-number">03</div><div class="production-gate-heading"><div><span class="kicker">GENERATION READY</span><h4 id="card-ready-title">请先生成故事板</h4><p>确认故事板后可独立生成程序化图文或 AI 图文。<span class="muted action-hint">两条链路均调用模型（计费），图片渲染在本地执行。</span></p></div></div><div class="editorial-actions"><button class="primary-button" type="button" id="generate-social-card" disabled>程序化生成</button><button class="outline-button" type="button" id="ai-beautify-social-card" disabled>AI 视觉生成</button></div></section>
+            <section class="card-gate-panel social-production-bar"><div class="social-stage-number">03</div><div class="production-gate-heading"><div><span class="kicker">GENERATION READY</span><h4 id="card-ready-title">请先生成故事板</h4><p>确认故事板后，AI 会按本篇设计方案生成整组图文并校验交付。</p></div></div><div class="editorial-actions"><button class="primary-button" type="button" id="ai-beautify-social-card" disabled>生成 AI 图文</button><button type="button" id="generate-social-card" hidden disabled aria-hidden="true" tabindex="-1"></button></div></section>
             <section class="social-delivery" id="social-delivery" hidden>
               <div class="social-delivery-head">
                 <div>
@@ -553,6 +545,7 @@
                 <span class="social-delivery-status-label">图文处理状态</span>
                 <div class="social-delivery-status-copy">
                   <p id="social-delivery-meta"></p>
+                  <a id="social-design-scheme-link" class="text-button" target="_blank" rel="noreferrer" hidden>查看本篇设计方案</a>
                   <p id="social-beautify-status" class="social-beautify-status" role="status" aria-live="polite" hidden></p>
                 </div>
               </div>
@@ -562,10 +555,9 @@
               </section>
               <div class="social-delivery-grid">
                 <div class="social-gallery">
-                  <div id="social-delivery-versions" class="social-delivery-versions" hidden></div>
                   <div class="social-gallery-stage">
                     <div class="social-gallery-tools" aria-label="打开图文 HTML">
-                      <a class="outline-button" id="social-open-current-html" target="_blank" rel="noreferrer" hidden>打开程序版 HTML</a>
+                      <a class="outline-button" id="social-open-current-html" target="_blank" rel="noreferrer" hidden>打开历史图文 HTML</a>
                     </div>
                     <button type="button" id="social-gallery-prev" aria-label="上一张">←</button>
                     <img id="social-gallery-image" alt="图文卡片预览">
@@ -741,11 +733,6 @@
       <div class="typeset-toolbar">
         <select id="typeset-candidate" aria-label="待排版文章"></select>
         <select id="typeset-provider" aria-label="排版设计模型"></select>
-        <select id="typeset-theme" class="visually-hidden" aria-label="排版主题">
-          <option value="auto">自动（按文章类型）</option>
-        </select>
-        <button type="button" class="theme-picker-trigger" id="typeset-theme-trigger" data-theme-picker="article"><span>排版主题</span><b>自动匹配</b></button>
-        <div id="typeset-theme-preview" class="theme-catalog-preview" hidden></div><small id="typeset-theme-meta" class="theme-catalog-meta" aria-live="polite">正在读取主题目录</small>
         <button class="outline-button" id="run-local-typeset">生成 / 更新排版 HTML</button>
         <small class="muted action-hint">默认按 CDN 配置自动选择排版模式；未配置 CDN 时仅本地生成并输出图片占位符，图片上传 CDN 属于外部写入。</small>
         <button class="primary-button" id="copy-typeset-html" disabled>复制公众号富文本</button>
@@ -769,19 +756,13 @@
     </section>
 
     <section class="view" id="view-cover">
-      <div class="section-intro"><div><span class="kicker">COVER IMAGE</span></div><p>以文章标题为主体生成 900×383 公众号封面。默认使用 AI 视觉生成 HTML/CSS 并直接截图，也可切换为标准封面。</p></div>
+      <div class="section-intro"><div><span class="kicker">COVER IMAGE</span></div><p>每次先按文章内容生成并校验设计方案，再由 AI 生成 900×383 封面 HTML/CSS 并截图。</p></div>
       <div class="typeset-toolbar cover-toolbar">
         <select id="cover-candidate" aria-label="封面文章"></select>
-        <select id="cover-theme" class="visually-hidden" aria-label="封面主题"></select>
-        <button type="button" class="theme-picker-trigger" id="cover-theme-trigger" data-theme-picker="cover"><span>封面主题</span><b>自动匹配</b></button>
         <select id="cover-provider" aria-label="封面设计模型"></select>
-        <select id="cover-mode" aria-label="封面生成模式">
-          <option value="ai-visual" selected>AI 视觉封面</option>
-          <option value="standard">标准封面</option>
-        </select>
         <button class="primary-button" id="generate-cover">生成封面图</button>
-        <small id="cover-status" class="muted">选择文章与主题后生成封面；重复生成会覆盖旧图。</small>
-        <small id="cover-mode-help" class="muted">AI 视觉封面：AI 生成 HTML/CSS 后直接截图，不调用文生图；生成或截图失败时任务直接失败。</small>
+        <small id="cover-status" class="muted">选择文章后生成封面；每次会按本篇内容重新制定并校验设计方案。</small>
+        <small id="cover-generation-help" class="muted">AI 按本篇设计方案生成 HTML/CSS 并直接截图；生成或校验失败时任务会明确报错。</small>
         <small id="cover-ai-status" class="cover-ai-status" aria-live="polite" hidden></small>
       </div>
       <div class="cover-layout">
@@ -1050,130 +1031,6 @@
 
     </section>
 
-    <section class="view theme-center-view" id="view-themes">
-      <div class="section-intro"><div><span class="kicker">THEME LIBRARY</span></div><p>先从视觉卡片中找到方向，再复制为自己的主题。内置主题保持稳定，我的主题按版本发布。</p></div>
-      <div class="theme-library-launch"><button type="button" data-theme-browser="article"><span>ARTICLE THEMES</span><b>浏览文章排版</b><small>6 套主题 · 支持自动匹配</small></button><button type="button" data-theme-browser="social"><span>SOCIAL THEMES</span><b>浏览图文视觉</b><small>14 套主题 · 版式与配色独立</small></button><button type="button" data-theme-browser="cover"><span>COVER THEMES</span><b>浏览封面主题</b><small>10 套主题 · AI 按调性自动匹配</small></button></div>
-      <section class="theme-manager-panel">
-        <div class="theme-manager-head"><div><span class="kicker">THEME STUDIO</span><h3>我的主题</h3><p>用一句视觉描述生成完整主题，确认后再进入编辑与发布流程。</p></div><button type="button" class="primary-button ai-theme-launch" id="open-ai-theme-creator" aria-expanded="false" aria-controls="ai-theme-creator"><span>AI CREATE</span><b>AI 创建主题</b><small>从视觉意图生成安全草稿</small></button><details class="theme-existing-tools"><summary>从已有主题复制或导入</summary><div class="theme-clone-bar"><select id="theme-clone-source" aria-label="复制来源主题"></select><input id="theme-clone-id" placeholder="主题 ID，如 my-editorial"><input id="theme-clone-label" placeholder="主题名称"><button class="ink-button" id="clone-theme">复制并编辑</button><label class="theme-import-button">导入 JSON<input id="import-theme-file" type="file" accept="application/json,.json"></label></div></details></div>
-        <section class="ai-theme-creator" id="ai-theme-creator" hidden aria-labelledby="ai-theme-creator-title">
-          <header>
-            <div>
-              <span>AI THEME DIRECTION</span>
-              <h4 id="ai-theme-creator-title">描述你想要的视觉效果</h4>
-              <p>AI 只会组合现有安全样式与组件配方，不会生成任意网页代码。</p>
-            </div>
-            <button type="button" class="text-button" id="close-ai-theme-creator">关闭</button>
-          </header>
-          <div class="ai-theme-brief">
-            <fieldset>
-              <legend>主题类型</legend>
-              <label>
-                <input type="radio" name="ai-theme-target" value="article" checked><span>文章主题<small>长文、标题、引用与代码</small></span>
-              </label>
-              <label>
-                <input type="radio" name="ai-theme-target" value="social"><span>图文主题<small>封面、内容页与结尾页</small></span>
-              </label>
-              <label>
-                <input type="radio" name="ai-theme-target" value="cover"><span>封面主题<small>900×383 公众号封面配色</small></span>
-              </label>
-            </fieldset>
-            <label class="ai-theme-prompt">
-              <span>想要的效果 <small>20–500 字</small></span>
-              <textarea id="ai-theme-prompt" minlength="20" maxlength="500" rows="4" placeholder="例如：适合技术深度文章的深色终端主题，克制、清晰，代码区域突出但不要刺眼。"></textarea>
-              <small class="ai-theme-input-error" id="ai-theme-prompt-error" aria-live="polite"></small>
-            </label>
-            <details class="ai-theme-preferences">
-              <summary>补充偏好 <small>可选</small></summary>
-              <div>
-                <label>使用场景<input id="ai-theme-scene" maxlength="40" placeholder="例如：技术、职场、财经"></label>
-                <label>
-                  明暗倾向
-                  <select id="ai-theme-brightness">
-                    <option value="auto">自动</option>
-                    <option value="light">浅色</option>
-                    <option value="dark">深色</option>
-                  </select>
-                </label>
-                <label>
-                  阅读优先级
-                  <select id="ai-theme-reading">
-                    <option value="long-form">长文舒适</option>
-                    <option value="density">信息密度</option>
-                    <option value="impact">视觉冲击</option>
-                  </select>
-                </label>
-                <fieldset>
-                  <legend>视觉气质（最多 3 项）</legend>
-                  <label><input type="checkbox" name="ai-theme-tone" value="restrained">克制</label>
-                  <label><input type="checkbox" name="ai-theme-tone" value="editorial">编辑感</label>
-                  <label><input type="checkbox" name="ai-theme-tone" value="playful">活泼</label>
-                  <label><input type="checkbox" name="ai-theme-tone" value="bold">硬朗</label>
-                  <label><input type="checkbox" name="ai-theme-tone" value="warm">温暖</label>
-                  <label><input type="checkbox" name="ai-theme-tone" value="futuristic">未来感</label>
-                </fieldset>
-              </div>
-            </details>
-            <div class="ai-theme-generate-row">
-              <p id="ai-theme-generate-status" aria-live="polite">候选在确认前不会保存到主题列表。</p>
-              <button type="button" class="ink-button" id="generate-ai-theme">生成主题候选</button>
-            </div>
-          </div>
-          <div class="ai-theme-candidate" id="ai-theme-candidate" hidden>
-            <aside>
-              <span>DESIGN NOTES</span>
-              <h4 id="ai-theme-candidate-title">候选主题</h4>
-              <p id="ai-theme-candidate-description"></p>
-              <ol id="ai-theme-design-summary"></ol>
-              <div id="ai-theme-repairs"></div>
-              <label>草稿名称<input id="ai-theme-final-label" maxlength="30" required></label>
-              <label>草稿描述<input id="ai-theme-final-description" maxlength="160" required></label>
-              <small class="ai-theme-input-error" id="ai-theme-create-error" aria-live="polite"></small>
-              <div class="ai-theme-candidate-actions">
-                <button type="button" class="text-button" id="regenerate-ai-theme">重新生成</button>
-                <button type="button" class="outline-button" id="compile-ai-template-proposal" hidden>正式 renderer 预览</button>
-                <button type="button" class="primary-button" id="confirm-ai-template-proposal" hidden>确认并绑定当前主题</button>
-                <button type="button" class="primary-button" id="create-ai-theme-draft">创建为草稿</button>
-              </div>
-            </aside>
-            <div class="ai-theme-candidate-preview">
-              <span>PRODUCTION SPECIMEN</span>
-              <iframe id="ai-theme-candidate-frame" title="AI 主题正式编译样稿" sandbox=""></iframe>
-            </div>
-          </div>
-        </section>
-        <div class="theme-manager-layout">
-          <aside id="user-theme-list" class="user-theme-list">
-            <div class="empty-state">正在读取用户主题…</div>
-          </aside>
-          <form id="user-theme-form" class="user-theme-form" hidden onsubmit="return false">
-            <div class="theme-editor-head">
-              <div>
-                <h4 id="user-theme-editor-title">主题编辑器</h4>
-                <small id="user-theme-editor-meta"></small>
-                <small id="user-theme-usage"></small>
-              </div>
-              <button type="button" class="text-button" id="archive-user-theme">归档</button>
-            </div>
-            <div class="theme-editor-fields">
-              <label>名称<input name="label" maxlength="30" required></label>
-              <label class="wide">描述<input name="description" maxlength="160" required></label>
-            </div>
-            <div id="user-theme-colors" class="theme-color-grid"></div>
-            <div id="user-theme-live-preview" class="user-theme-live-preview"></div>
-            <div class="theme-version-row">
-              <select id="user-theme-versions" aria-label="历史版本"><option>暂无已发布版本</option></select>
-              <button type="button" class="ghost-button" id="restore-user-theme" disabled>恢复为草稿</button>
-            </div>
-            <div class="theme-editor-actions">
-              <button type="button" class="text-button" id="export-user-theme">导出 JSON</button>
-              <button type="button" class="outline-button" id="validate-user-theme">保存并校验</button>
-              <button type="button" class="primary-button" id="publish-user-theme">发布新版本</button>
-            </div>
-          </form>
-        </div>
-      </section>
-    </section>
-
     <section class="view" id="view-sources">
       <div class="section-intro"><div><span class="kicker">SOURCE REGISTER · LIVE CONFIG</span></div><p>把 RSSHub 路由、X 账号和直连 RSS/Atom 放在同一张编辑台账里。变更会立即写入本地配置，下一次采集直接生效，无需手改 JSON。</p></div>
       <div class="source-register-summary" id="subscription-summary"></div>
@@ -1315,6 +1172,6 @@
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
   <script src="/vendor/markdown-it.min.js"></script>
-  <script type="module" src="/src/main.js?v=20261024-theme-persistence-28"></script>
+  <script type="module" src="/src/main.js?v=20261101-cover-ai-visual-only-1"></script>
 </body>
 </html>

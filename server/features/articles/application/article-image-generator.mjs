@@ -2,7 +2,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { escapeHtml } from '../../../shared/rendering/html-utils.mjs';
-import { articleThemeDefinition } from '../../../shared/themes/article-theme-compiler.mjs';
 import { fontStack } from '../../../shared/themes/font-utils.mjs';
 import { resolveSkillFile } from '../../../platform/llm/skill-runtime.mjs';
 
@@ -19,8 +18,8 @@ const RATIO_SIZE = {
 
 const DEFAULT_TOKENS = {
   colors: {
-    background: '#F5EFE3', surface: '#FFF9EF', text: '#30261F', muted: '#786F66',
-    accent: '#76533B', accentSecondary: '#C99A6B', line: '#D8CDBF', inverseText: '#FFFFFF',
+    background: '#FFFFFF', surface: '#FFFFFF', text: '#202522', muted: '#6C736E',
+    accent: '#C4473A', accentSecondary: '#C4473A', line: '#D8D3C9', inverseText: '#FFFFFF',
   },
   typography: { family: 'sans', headingFamily: 'serif', bodyPx: 16, captionPx: 13 },
   shape: { radiusPx: 10, borderWidthPx: 1, shadow: 'none' },
@@ -57,28 +56,26 @@ function normalizeTokens(input = {}) {
     typography: {
       family: ['sans', 'serif', 'song', 'kai', 'hei', 'mono'].includes(typography.family) ? typography.family : 'sans',
       headingFamily: ['sans', 'serif', 'song', 'kai', 'hei', 'mono'].includes(typography.headingFamily) ? typography.headingFamily : 'serif',
-      bodyPx: safePx(typography.bodyPx, DEFAULT_TOKENS.typography.bodyPx, 12, 24),
-      captionPx: safePx(typography.captionPx, DEFAULT_TOKENS.typography.captionPx, 9, 18),
+      bodyPx: safePx(typography.bodyPx ?? typography.body_px, DEFAULT_TOKENS.typography.bodyPx, 12, 24),
+      captionPx: safePx(typography.captionPx ?? typography.caption_px, DEFAULT_TOKENS.typography.captionPx, 9, 18),
     },
     shape: {
-      radiusPx: safePx(shape.radiusPx, DEFAULT_TOKENS.shape.radiusPx, 0, 24),
+      radiusPx: safePx(shape.radiusPx ?? input.image?.radius_px, DEFAULT_TOKENS.shape.radiusPx, 0, 24),
       borderWidthPx: safePx(shape.borderWidthPx, DEFAULT_TOKENS.shape.borderWidthPx, 0, 4),
       shadow: safeShadow(shape.shadow),
     },
   };
 }
 
-export function resolveArticleImageTokens(workdir, themeId = '') {
-  const definition = articleThemeDefinition(themeId || 'magazine-warm', { fallback: true });
-  const themeTokens = definition?.tokens || {};
-  // typeset 后优先复用最终 chart tokens；图片早于 typeset 生成时从所选主题兜底。
+export function resolveArticleImageTokens(workdir) {
+  // Structured images follow the same design tokens as the article and charts.
   const persisted = readJson(path.join(workdir, 'chart-design-tokens.json'))
     || readJson(path.join(workdir, 'magazine-design-tokens.json'))
     || {};
   return normalizeTokens({
-    colors: { ...(themeTokens.colors || {}), ...(persisted.colors || {}) },
-    typography: { ...(themeTokens.typography || {}), ...(persisted.typography || {}) },
-    shape: themeTokens.shape || {},
+    colors: persisted.colors || {},
+    typography: persisted.typography || {},
+    shape: persisted.shape || {},
   });
 }
 
@@ -177,9 +174,9 @@ export function buildGenerateImageHtml(generate, ratio = '16:9', inputTokens = {
   throw new Error(`未知的可生成图片类型：${generate?.kind || '未声明'}`);
 }
 
-export async function generateArticleImage({ workspaceRoot, workdir, slotId, generate, ratio, theme = '', tokens = null, renderHtmlPages = null }) {
+export async function generateArticleImage({ workspaceRoot, workdir, slotId, generate, ratio, tokens = null, renderHtmlPages = null }) {
   if (!generate?.items?.length) throw new Error('该占位没有可生成的结构化数据');
-  const visualTokens = tokens || resolveArticleImageTokens(workdir, theme);
+  const visualTokens = tokens || resolveArticleImageTokens(workdir);
   const { html, width, height } = buildGenerateImageHtml(generate, ratio, visualTokens);
   const safeName = String(slotId || 'image').replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-');
   const imageDir = path.join(workdir, 'images');

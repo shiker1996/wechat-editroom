@@ -3,9 +3,9 @@ import { parseModelJson } from '../../llm/model-json.mjs';
 import { getBuiltinThemeRegistry } from '../../../shared/themes/theme-registry.mjs';
 import { userThemeFromRow } from './user-theme-service.mjs';
 
-export const THEME_ROUTING_TARGETS = Object.freeze(['article', 'social', 'cover']);
+export const THEME_ROUTING_TARGETS = Object.freeze(['social']);
 const TOP_K = 3;
-const DEFAULT_THEME_IDS = Object.freeze({ article: 'magazine-warm', social: 'ice-blue', cover: 'cover-navy-gold' });
+const DEFAULT_THEME_IDS = Object.freeze({ social: 'ice-blue' });
 
 function clean(value, max = 240) {
   return String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max);

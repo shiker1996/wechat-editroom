@@ -1,10 +1,8 @@
 import { colorContrast, ThemeValidationError, validateThemeDefinition } from '../../../shared/themes/theme-validator.mjs';
 import { compileThemePreview, SOCIAL_THEME_SPECIMEN } from './theme-preview.mjs';
-import { compileArticleTheme } from '../../../shared/themes/article-theme-compiler.mjs';
 import { compileSocialTheme } from '../../../shared/themes/social-theme-compiler.mjs';
-import { articleComponentDefaults, resolveArticleComponents, resolveSocialComponents, socialComponentDefaults } from '../../../shared/themes/component-catalog.mjs';
+import { resolveSocialComponents, socialComponentDefaults } from '../../../shared/themes/component-catalog.mjs';
 import { enrichThemeIssues } from '../../../shared/themes/theme-issue-suggestions.mjs';
-import { COVER_TOKEN_USAGE } from '../../../shared/themes/cover-theme-compiler.mjs';
 import { mixHex } from '../../../shared/themes/color-utils.mjs';
 import { resolveSocialCardTemplateContext } from '../../../features/social-cards/rendering/social-card-template-resolver.mjs';
 
@@ -47,21 +45,17 @@ export function auditThemeForPublish(input,{target=input?.targets?.[0]||''}={}){
     ];
     for(const [component,key,background,minimum,node] of componentChecks){const selected=components[component][key];if(selected===defaults[component][key]&&Object.entries(components[component]).every(([name,value])=>value===defaults[component][name]))continue;if(colorContrast(role(selected),background)<minimum)issues.push(issue(`social.components.${component}.${key}`,'LOW_COMPONENT_CONTRAST',`${node} 文字与实际表面对比度必须至少为 ${minimum}:1`,node,{foreground:role(selected),background,minimum}));}
   }
-  if(target==='article'&&definition.article?.components){const components=resolveArticleComponents(definition),defaults=articleComponentDefaults(definition.article.recipes),role=(name)=>colors[name],surface=(selected,fallback=colors.surface)=>selected==='inherit'||selected==='transparent'?fallback:colors[selected],checks=[['title','colorRole',colors.background,4.5,'h1'],['lead','colorRole',colors.background,4.5,'lead'],['quote','textColorRole',surface(components.quote.surfaceRole),4.5,'blockquote'],['list','textColorRole',colors.background,4.5,'list'],['table','headerTextColorRole',surface(components.table.headerSurfaceRole,colors.surface),4.5,'table'],['code','textColorRole',surface(components.code.surfaceRole,colors.codeBackground),4.5,'code'],['imageCaption','colorRole',colors.background,3,'caption']];for(const [component,key,background,minimum,node] of checks){if(components[component][key]===defaults[component][key]&&Object.entries(components[component]).every(([name,value])=>value===defaults[component][name]))continue;if(colorContrast(role(components[component][key]),background)<minimum)issues.push(issue(`article.components.${component}.${key}`,'LOW_COMPONENT_CONTRAST',`${node} 文字与实际表面对比度必须至少为 ${minimum}:1`,node,{foreground:role(components[component][key]),background,minimum}));}}
   let compiled,html='';
   if(target==='cover'){
     try{html=compileThemePreview({target,definition}).html;}catch(error){issues.push(issue('theme','COMPILE_FAILED',error.message,'fixed cover specimen'));}
-    for(const field of unconsumedThemeConfigFields(definition,target,COVER_TOKEN_USAGE))issues.push(issue(field,'UNCONSUMED','字段未被正式编译器消费','usageMap'));
   }else{
-    try{compiled=target==='article'?compileArticleTheme(definition):compileSocialTheme(definition);html=compileThemePreview({target,definition}).html;}catch(error){issues.push(issue('theme','COMPILE_FAILED',error.message,'fixed specimen'));}
+    try{compiled=compileSocialTheme(definition);html=compileThemePreview({target,definition}).html;}catch(error){issues.push(issue('theme','COMPILE_FAILED',error.message,'fixed specimen'));}
   }
   if(compiled)for(const field of unconsumedThemeConfigFields(definition,target,compiled.usageMap))issues.push(issue(field,'UNCONSUMED','字段未被正式编译器消费','usageMap'));
   if(html){
     const productionHtml=html.replace(/<style data-theme-preview-shell>[\s\S]*?<\/style>/i,'');
     if(/<script\b|\son[a-z]+\s*=|<iframe\b|javascript:/i.test(productionHtml))issues.push(issue('theme','UNSAFE_HTML','固定样稿包含脚本、事件属性或不安全嵌入','fixed specimen'));
     if(target==='cover'&&!/width:900px;height:383px/.test(productionHtml))issues.push(issue('cover','LAYOUT_STRUCTURE','封面样稿必须保持 900×383 固定画布','cover canvas'));
-    if(target==='article'&&(/<style\b/i.test(productionHtml)||/<div\b/i.test(productionHtml)))issues.push(issue('article','ILLEGAL_ARTICLE_HTML','公众号样稿包含 style 或 div','article root'));
-    if(target==='article'&&!/<h1\b[\s\S]*<h2\b[\s\S]*<section\b[\s\S]*<table\b[\s\S]*<pre\b[\s\S]*<img\b/.test(productionHtml))issues.push(issue('article','INCOMPLETE_SPECIMEN','文章样稿关键节点不完整','article root'));
     if(target==='social'){
       const pages=(html.match(/<section class="page /g)||[]).length,stacks=(html.match(/class="page-content-stack"/g)||[]).length;
       const expectedPages=SOCIAL_THEME_SPECIMEN.pages.length;

@@ -6,16 +6,16 @@ import { colorContrast } from './color-utils.mjs';
 import { getSocialCardTemplatePack } from '../../features/social-cards/rendering/social-card-template-registry.mjs';
 export { colorContrast } from './color-utils.mjs';
 
-const TOP_FIELDS=new Set(['schemaVersion','id','label','version','description','targets','status','source','basedOn','tags','tokens','article','social','cover']);
+const TOP_FIELDS=new Set(['schemaVersion','id','label','version','description','targets','status','source','basedOn','tags','tokens','social','cover']);
 // 可选 token：page（仅图文背景）、codePx（代码块字号，缺省回退 captionPx）——存在时校验，缺失不报错
 const OPTIONAL_TOKEN_KEYS=new Set(['page','codePx']);
 const TOKEN_FIELDS={colors:new Set(['background','surface','page','text','muted','accent','accentSecondary','line','inverseText','codeBackground']),typography:new Set(['family','headingFamily','bodyPx','h1Px','h2Px','captionPx','codePx','lineHeight','letterSpacingEm']),spacing:new Set(['articlePaddingPx','sectionPx','paragraphPx','cardGapPx']),shape:new Set(['radiusPx','borderWidthPx','shadow'])};
 // 封面主题的 token 面向 900×383 固定画布构图：画布底色、标题/眉题/副标题/信息行字阶、内容区留白与 badge 圆角
 const COVER_TOKEN_FIELDS={colors:new Set(['page','text','muted','accent','accentSecondary','inverseText','codeBackground']),typography:new Set(['family','headingFamily','titlePx','titleLineHeight','eyebrowPx','subtitlePx','metaPx']),spacing:new Set(['paddingXPx','paddingYPx','gapPx','metaBottomPx']),shape:new Set(['badgeRadiusPx'])};
-const TARGETS=new Set(['article','social','cover']), STATUSES=new Set(['draft','published','disabled','archived']), SOURCES=new Set(['builtin','user']);
+const TARGETS=new Set(['social','cover']), STATUSES=new Set(['draft','published','disabled','archived']), SOURCES=new Set(['builtin','user']);
 const FONTS=new Set(['sans','serif','song','kai','hei','mono']), SHADOWS=new Set(['none','soft','hard','glow']);
 const HEX=/^#[0-9a-f]{6}$/i, ID=/^[a-z0-9]+(?:-[a-z0-9]+)*$/, VERSION=/^\d+\.\d+\.\d+$/;
-const COMPATIBLE_OPTIONAL_RECIPES=Object.freeze({article:new Set(['rhythm']),social:new Set(['coverTitle','skeleton','coverSupport'])});
+const COMPATIBLE_OPTIONAL_RECIPES=Object.freeze({social:new Set(['coverTitle','skeleton','coverSupport'])});
 const TEMPLATE_MATCH_SOURCES=new Set(['program-recommended','user-selected','inherited','compatibility']);
 const TEMPLATE_MATCH_CONFIDENCE=new Set(['high','medium','low']);
 const TEMPLATE_MATCH_REASON_CODES=new Set(['CLEAR_DIRECTION','NO_DIRECTION_SIGNAL','WEAK_DIRECTION_SIGNAL','AMBIGUOUS_DIRECTION_SIGNAL']);
@@ -70,21 +70,15 @@ export function validateThemeDefinition(input,{filePath='',expectedTarget=null,e
       if(highFields.length>SOCIAL_DENSITY_MAX_HIGH_VALUES)for(const field of highFields)issues.push({field,code:'SOCIAL_DENSITY_BUDGET',message:`字号、行高与留白不能同时偏大；有 ${highFields.length} 项超过舒适值，最多允许 ${SOCIAL_DENSITY_MAX_HIGH_VALUES} 项`});
     }
   }
-  for(const target of ['article','social']){
+  for(const target of ['social']){
     const config=input[target];
     if(input.targets?.includes(target)&&(!config||typeof config!=='object'||Array.isArray(config)))issues.push({field:target,code:'REQUIRED',message:`${target} 目标需要对应配置`});
     if(!config)continue;
-    unknown(config,new Set(target==='article'?['recipes','behavior','components']:['recipes','effects','components','templatePack','templateMatch']),target,issues);
+    unknown(config,new Set(['recipes','effects','components','templatePack','templateMatch']),target,issues);
     if(!config.recipes||typeof config.recipes!=='object'||Array.isArray(config.recipes))issues.push({field:`${target}.recipes`,code:'TYPE',message:'必须是对象'});
     else {
       const catalog=THEME_RECIPE_CATALOG[target]; unknown(config.recipes,new Set(Object.keys(catalog)),`${target}.recipes`,issues);
       for(const [key,allowed] of Object.entries(catalog))if(config.recipes[key]===undefined){if(!COMPATIBLE_OPTIONAL_RECIPES[target]?.has(key))issues.push({field:`${target}.recipes.${key}`,code:'REQUIRED',message:'不能为空'});}else if(!allowed.includes(config.recipes[key]))issues.push({field:`${target}.recipes.${key}`,code:'ENUM',message:'配方不受支持'});
-    }
-    if(target==='article'&&!config.behavior)issues.push({field:'article.behavior',code:'REQUIRED',message:'不能为空'});
-    if(target==='article'&&config.behavior){
-      unknown(config.behavior,new Set(['justify','highlightStrong','numberSections']),'article.behavior',issues);
-      if(typeof config.behavior.justify!=='boolean'||typeof config.behavior.numberSections!=='boolean')issues.push({field:'article.behavior',code:'TYPE',message:'justify 和 numberSections 必须为布尔值'});
-      if(!['accent','ink'].includes(config.behavior.highlightStrong))issues.push({field:'article.behavior.highlightStrong',code:'ENUM',message:'重点色策略不受支持'});
     }
     if(target==='social'&&!config.effects)issues.push({field:'social.effects',code:'REQUIRED',message:'不能为空'});
     if(target==='social'&&config.effects){

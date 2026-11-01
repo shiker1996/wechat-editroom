@@ -13,14 +13,11 @@ import { createStoreExecutionLogger } from '../../../platform/tools/execution-lo
 // capability-call: cap_diagram_mermaid_render, cap_diagram_echarts_render
 import { bindGenerationSnapshot, prepareSkillRun } from '../../../platform/skills/pipeline-runtime.mjs';
 import { parseModelJson } from '../../../platform/llm/model-json.mjs';
-import { articleThemeCompatibilityView, articleThemeDefinition, compileArticleTheme } from '../../../shared/themes/article-theme-compiler.mjs';
-import { resolveWorkspaceTheme } from '../../../platform/application/themes/user-theme-service.mjs';
-import { defaultTypesetTheme, enforceWechatFlowLayout, extractHtmlModelOutput, htmlPreservesStructure } from '../../../shared/rendering/typeset-output.mjs';
+import { enforceWechatFlowLayout, extractHtmlModelOutput, htmlPreservesStructure } from '../../../shared/rendering/typeset-output.mjs';
 import { markdownToHtml, normalizeDesignTokens } from '../../../shared/rendering/markdown-renderer.mjs';
-import { resolveAutoTheme } from '../../../platform/application/themes/auto-theme-router.mjs';
 import { getAccountContext } from '../../../platform/application/account-context-service.mjs';
 
-export { defaultTypesetTheme, enforceWechatFlowLayout, extractHtmlModelOutput, htmlPreservesStructure } from '../../../shared/rendering/typeset-output.mjs';
+export { enforceWechatFlowLayout, extractHtmlModelOutput, htmlPreservesStructure } from '../../../shared/rendering/typeset-output.mjs';
 export { markdownToHtml } from '../../../shared/rendering/markdown-renderer.mjs';
 
 const execFileAsync = promisify(execFile);
@@ -80,11 +77,6 @@ function writeExecutionFiles(workdir, bundles, stages) {
   writeFile(path.join(workdir, 'typeset-stage-executions.json'), JSON.stringify(stages, null, 2));
 }
 
-// 兼容旧调用方的只读视图；生产主题来源已经切换为 themes/article/*.json。
-export const TYPESET_THEMES = articleThemeCompatibilityView();
-
-
-
 async function runScript(script, args, cwd) {
   try {
     return await execFileAsync(process.execPath, [script, ...args], { cwd, windowsHide: true, timeout: 120000, maxBuffer: 2_000_000 });
@@ -93,35 +85,16 @@ async function runScript(script, args, cwd) {
   }
 }
 
-export async function runTypesetPipeline({ gateway, store, batchId, candidateId, documentKind = null, provider, workspaceRoot, skillsWorkspaceRoot = workspaceRoot, snapshotId=null, draftMode = 'llm', theme = 'auto', imageDeliveryMode = 'cdn', autoUploadGeneratedImages = true, rootRunId = null, workflowRunId = null, stageId = 'typeset', onProgress = () => {}, generateArticleImageFn = generateArticleImage, uploadImageToCdnFn = uploadImageToCdn }) {
+export async function runTypesetPipeline({ gateway, store, batchId, candidateId, documentKind = null, provider, workspaceRoot, skillsWorkspaceRoot = workspaceRoot, snapshotId=null, draftMode = 'llm', imageDeliveryMode = 'cdn', autoUploadGeneratedImages = true, rootRunId = null, workflowRunId = null, stageId = 'typeset', onProgress = () => {}, generateArticleImageFn = generateArticleImage, uploadImageToCdnFn = uploadImageToCdn }) {
   const candidate = candidateId==null?null:store.getCandidate(candidateId);
   const daily=documentKind==='daily-final';
   if ((!daily&&(!candidate||candidate.batch_id!==batchId))||(daily&&candidate)) throw new Error('待排版文稿不存在或不属于当前批次');
-  let themeRouting = null;
-  // auto 先由 AI 给出候选排序，再按近期使用情况受控轮换；AI 不可用时回退原有类型映射。
-  if (theme === 'auto' || !theme) {
-    themeRouting = await resolveAutoTheme({
-      gateway, provider, store, batchId, candidateId, target: 'article',
-      context: daily ? { title: '批次早报', category: '批次早报', contentType: 'daily' } : {
-        title: candidate?.hotspot_title, category: candidate?.category, angle: candidate?.angle,
-        thesis: candidate?.thesis, contentType: candidate?.content_route || 'article', composite: Boolean(candidate?.composite),
-      },
-      log: onProgress,
-    });
-    theme = themeRouting?.themeId || defaultTypesetTheme(daily ? { daily: true } : candidate);
-  }
-  const themeDefinition=resolveWorkspaceTheme(store,theme,'article')||articleThemeDefinition(theme,{fallback:false});
-  if (!themeDefinition) throw new Error(`未知排版主题：${theme}（可选：auto、${Object.keys(TYPESET_THEMES).join('、')}）`);
-  const compiledTheme=compileArticleTheme(themeDefinition);
-  store.recordThemeUsage?.({themeId:themeDefinition.id,version:themeDefinition.version,target:'article',source:themeDefinition.source,batchId,candidateId});
   const batch = store.getBatch(batchId);
   const workdir = daily?path.join(batchArticlesDir(workspaceRoot,batch),'daily'):candidateArticleDir(workspaceRoot, batch, candidate);
   const finalPath = daily?path.join(workdir,'03-FINAL.md'):path.join(workdir, '09-FINAL.md');
   if (!fs.existsSync(finalPath)) throw new Error(`缺少 ${path.basename(finalPath)}，请先保存终稿`);
   const finalDocument=store.getDocument?.(batchId,candidateId,daily?'daily-final':'final');
   if(finalDocument?.status==='needs_review')throw new Error('终稿已生成但仍有待编辑问题，请先在文章编辑器修改并保存后再排版');
-  const themeSnapshotPath=path.join(workdir,'article-theme-snapshot.json');
-  writeFile(themeSnapshotPath,JSON.stringify({schemaVersion:1,id:themeDefinition.id,label:themeDefinition.label,version:themeDefinition.version,source:themeDefinition.source,hash:themeDefinition.hash,autoRouting:themeRouting},null,2));
   const skills = loadTypesetSkills(skillsWorkspaceRoot);
   const typesetRuntime=await prepareSkillRun({gateway,store,batchId,candidateId,purpose:'typeset',bundles:Object.values(skills),provider,snapshotId});
   gateway=bindGenerationSnapshot(gateway,typesetRuntime.snapshotId);
@@ -156,16 +129,12 @@ export async function runTypesetPipeline({ gateway, store, batchId, candidateId,
   const htmlTokens = normalizeDesignTokens(design.tokens);
   writeFile(tokensPath, JSON.stringify(htmlTokens, null, 2));
   const chartTokensPath = path.join(workdir, 'chart-design-tokens.json');
-  // 文章主题的完整颜色契约用于正文、结构化卡片和图表；设计模型只补充排版节奏，
-  // 不应让它的简化颜色结果把 surface/line/accentSecondary 覆盖成另一套视觉语言。
-  const themeColors = themeDefinition.tokens.colors;
-  const chartThemeColors=themeDefinition.tokens.colors;
-  const articleRenderTokens={...compiledTheme.tokens,...htmlTokens,colors:{...(htmlTokens.colors||{}),...themeColors},theme,themeDefinition};
-  writeFile(chartTokensPath, JSON.stringify({ ...htmlTokens, colors:{ ...(htmlTokens.colors || {}), ...chartThemeColors }, theme, themeVersion:themeDefinition.version, themeHash:themeDefinition.hash }, null, 2));
+  // The article design is the sole visual source for HTML, charts, and generated structured images.
+  const articleRenderTokens=htmlTokens;
+  writeFile(chartTokensPath, JSON.stringify(htmlTokens, null, 2));
   record('design', 'magazine-design-advisor', `${schemePath};${tokensPath}`);
   addArtifact(store, batchId, '杂志设计方案', path.basename(schemePath), schemePath, { rootRunId, workflowRunId, stageId: 'design' });
   addArtifact(store, batchId, '杂志设计 Tokens', path.basename(tokensPath), tokensPath, { rootRunId, workflowRunId, stageId: 'design' });
-  addArtifact(store, batchId, '文章主题快照', path.basename(themeSnapshotPath), themeSnapshotPath, { rootRunId, workflowRunId, stageId: 'design' });
 
   const rendered = fs.readFileSync(renderedPath, 'utf8');
   onProgress('排版 3/6：按总契约处理图片和显式视觉模块');
@@ -209,16 +178,16 @@ export async function runTypesetPipeline({ gateway, store, batchId, candidateId,
     addArtifact(store, batchId, `${label} 转图文章`, path.basename(chartPath), chartPath, { rootRunId, workflowRunId, stageId: 'images' });
     chartNotes.push(`${label} ${chartReport.converted} 张${effectiveImageDeliveryMode === 'local' ? '（仅本地占位）' : pendingUploads.length ? '（已重新上传 CDN）' : '（内容未变，复用 CDN）'}`);
   }
-  // 统计卡/时间线与 Mermaid/ECharts 走同一条排版期生成链：每次排版都按当前主题
+  // 统计卡/时间线与 Mermaid/ECharts 走同一条排版期生成链：每次排版都按当前设计 tokens
   // 重新截图，随后自动上传 CDN，工作台不再要求逐张点击“生成图片”。
   const structuredImages = parseImagePlaceholders(fs.readFileSync(chartReadyPath, 'utf8')).filter((item) => item.generate);
   for (const item of structuredImages) {
     const label = item.generate.kind === 'timeline' ? '时间线' : '统计卡';
     try {
-      onProgress(`排版 3/6：${label}「${item.content}」按当前主题生成`);
+      onProgress(`排版 3/6：${label}「${item.content}」按文章设计方案生成`);
       const generated = await generateArticleImageFn({
         workspaceRoot, workdir, slotId:item.id, generate:item.generate, ratio:item.ratio,
-        theme, tokens:articleRenderTokens,
+        tokens:articleRenderTokens,
       });
       registerGeneratedSlotImage(workdir, item.id, generated.localPath);
       if (effectiveImageDeliveryMode === 'cdn' && autoUploadGeneratedImages) {
@@ -226,7 +195,7 @@ export async function runTypesetPipeline({ gateway, store, batchId, candidateId,
         await uploadIfConfigured(workdir, item.id, { authorizedExternalWrite:true, allowedCapabilities:typesetRuntime.allowedCapabilities,
         store,batchId,candidateId,generationSnapshotId:typesetRuntime.snapshotId,skillId:'wechat-article-typeset',rootRunId,workflowRunId,stageId });
       }
-      chartNotes.push(`${label} 1 张（按 ${theme} 主题生成${effectiveImageDeliveryMode === 'local' ? '，仅本地占位' : autoUploadGeneratedImages ? '并已上传 CDN' : ''}）`);
+      chartNotes.push(`${label} 1 张（按文章设计方案生成${effectiveImageDeliveryMode === 'local' ? '，仅本地占位' : autoUploadGeneratedImages ? '并已上传 CDN' : ''}）`);
     } catch (error) {
       record('images', 'wechat-article-typeset', '', 'blocked', `${label} 生成失败：${error.message}`);
       throw new Error(`${label} 图片生成失败，已停止排版以避免使用旧图：${error.message}`);
@@ -272,11 +241,11 @@ export async function runTypesetPipeline({ gateway, store, batchId, candidateId,
     writeFile(draftHtml, enforceWechatFlowLayout(useModelHtml ? htmlContent : markdownToHtml(imageResult.content, articleRenderTokens)));
     draftDetail = useModelHtml ? 'AI 排版初稿通过结构保真门禁' : 'AI 排版初稿未通过结构保真门禁，使用确定性转换器';
   } else {
-    // 眉题取账号名（没有账号配置时省略）；主题 tokens 作底色，LLM tokens 叠加覆盖
+    // 眉题取账号名（没有账号配置时省略）；视觉参数完全来自本篇设计 Tokens。
     let kicker = '';
     kicker = String(getAccountContext({ workspaceRoot }).name || '').trim();
     writeFile(draftHtml, markdownToHtml(imageResult.content, { ...articleRenderTokens, kicker }));
-    draftDetail = `确定性渲染：主题 ${theme}@${themeDefinition.version}（${themeDefinition.hash}），按 JSON 主题和 design tokens 输出内联样式，未调用模型`;
+    draftDetail = '确定性渲染：按文章设计 Tokens 输出内联样式，未调用模型';
   }
   if (!htmlPreservesStructure(imageResult.content, fs.readFileSync(draftHtml, 'utf8'))) throw new Error('HTML 初稿未完整保留标题、章节、链接或图片');
   record('draft', 'wechat-md-to-draft', draftHtml, 'completed', draftDetail);
@@ -305,5 +274,5 @@ export async function runTypesetPipeline({ gateway, store, batchId, candidateId,
   if (stages.length !== TYPESET_STAGE_CONTRACT.length) throw new Error('排版契约未完整执行');
   onProgress('排版完成：article.ai.html 已生成并通过门禁');
   store.updateBatch(batchId, { stage: 'typeset', status: 'completed' });
-  return { workdir, finalHtml, gate: gateResult, theme:{id:themeDefinition.id,version:themeDefinition.version,hash:themeDefinition.hash}, themeRouting, themeSnapshot:themeSnapshotPath, skillManifest:path.join(workdir, 'typeset-skill-manifest.json'), stageExecutions:path.join(workdir, 'typeset-stage-executions.json') };
+  return { workdir, finalHtml, gate: gateResult, skillManifest:path.join(workdir, 'typeset-skill-manifest.json'), stageExecutions:path.join(workdir, 'typeset-stage-executions.json') };
 }

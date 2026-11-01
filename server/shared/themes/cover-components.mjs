@@ -351,7 +351,7 @@ export function sanitizeCoverThemeSpec(input){
 }
 
 // 按主题构图产出文章封面规格：标题确定性断行，副标题取文章摘要，信息行取品牌行。
-export function coverSpecFromTheme(themeSpec,{title,subtitle='',brand='',theme=null,coverSemantics=null}={}){
+export function coverSpecFromTheme(themeSpec,{title,subtitle='',brand='',theme=null,coverSemantics=null,fillDecorations=true}={}){
   const validation=validateCoverThemeSpec(themeSpec);
   if(!validation.ok)return null;
   const components=[];
@@ -381,7 +381,7 @@ export function coverSpecFromTheme(themeSpec,{title,subtitle='',brand='',theme=n
   }
   // 让未配置或只有一处装饰的内置/存量主题也具备基本的视觉层次；显式配置优先，不重复同一装饰。
   const existingDecorations=components.filter((component)=>component.type==='decoration');
-  if(existingDecorations.length<2){
+  if(fillDecorations&&existingDecorations.length<2){
     const blockPosition=components.find((component)=>component.type==='color-block')?.position||'';
     const defaults=coverDecorationDefaults(validation.spec.layout,blockPosition,theme);
     for(const candidate of defaults){
@@ -393,6 +393,7 @@ export function coverSpecFromTheme(themeSpec,{title,subtitle='',brand='',theme=n
       existingDecorations.push(candidate);
     }
   }
-  const spec={components};
-  return validateCoverSpec(spec).ok?spec:null;
+  const spec={...(validation.spec.layout?{layout:validation.spec.layout}:{}),components};
+  const checked=validateCoverSpec(spec);
+  return checked.ok?{...checked.spec,...(validation.spec.layout?{layout:validation.spec.layout}:{})}:null;
 }

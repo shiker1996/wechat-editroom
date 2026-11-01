@@ -1,42 +1,8 @@
-import { markdownToHtml } from '../../../features/articles/index.mjs';
 import { renderStoryboardHtml } from '../../../features/social-cards/index.mjs';
-import { compileArticleTheme } from '../../../shared/themes/article-theme-compiler.mjs';
 import { compileSocialTheme } from '../../../shared/themes/social-theme-compiler.mjs';
-import { buildCoverHtml } from '../../../shared/themes/cover-theme-compiler.mjs';
-import { coverSpecFromTheme } from '../../../shared/themes/cover-components.mjs';
 import { validateThemeDefinition } from '../../../shared/themes/theme-validator.mjs';
 import { getSocialCardTemplateCapabilities, resolveSocialCardTemplateContext } from '../../../features/social-cards/rendering/social-card-template-resolver.mjs';
 import { DESKTOP_PREVIEW_COLORS as PREVIEW } from '../../../shared/desktop-preview-palette.mjs';
-
-export const ARTICLE_THEME_SPECIMEN=`# 主题样稿：把复杂内容讲清楚
-
-这是一段用于检查正文、行高与 **重点信息** 的固定导语。
-
-## 核心判断
-
-普通正文包含 [链接](https://example.com) 和 \`inline code\`。
-
-> 好的主题服务于内容层级，而不是抢走注意力。
-
-- **重点：** 第一条固定要点
-- 第二条固定要点
-
-| 指标 | 当前值 | 变化 |
-| --- | --- | --- |
-| 速度 | 2.4x | +18% |
-| 成本 | ¥0.08 | -12% |
-
-\`\`\`js
-const theme = 'production-preview';
-\`\`\`
-
-![固定样稿图片说明](https://example.com/theme-specimen.png)
-
----
-
-## 下一步
-
-收束段落用于检查章节间距和分隔样式。`;
 
 export const SOCIAL_THEME_SPECIMEN={
   topic:'主题样稿：把复杂内容讲清楚',repository:'example/production-preview',contentType:'repository',sourceLabel:'固定主题样稿',channelMode:'xiaohongshu',layoutStyle:'auto',compositionMode:'template',
@@ -66,57 +32,35 @@ export const SOCIAL_THEME_SPECIMEN={
 };
 SOCIAL_THEME_SPECIMEN.pages[0].lead='用一页讲清关键判断，再决定是否深入细节。';
 
-// 封面固定样稿：覆盖全部组件种类（画布+色块+标签+标题高亮+副标题+信息行+装饰）
-export const COVER_THEME_SPECIMEN={components:[
-  {type:'canvas',colorRole:'page'},
-  {type:'color-block',position:'left-third',shape:'rect',colorRole:'accent'},
-  {type:'eyebrow',form:'badge',text:'主题样稿'},
-  {type:'title',lines:['把复杂内容','讲得清楚'],highlights:['清楚'],align:'left'},
-  {type:'subtitle',text:'固定封面样稿，用于检查配色与字阶',withBar:true},
-  {type:'meta',text:'example · 2026.08'},
-  {type:'decoration',kind:'dots',position:'bottom-right'},
-]};
-
 const selectors={
-  article:{colors:'article',typography:'article',spacing:'article',shape:'blockquote,pre,table',surface:'blockquote,li,td',accentSecondary:'small,li::marker',line:'blockquote,pre,table,th,td,hr',inverseText:'h1,blockquote,th',codeBackground:'code,pre'},
   social:{colors:'.page',typography:'.page',spacing:'.page-inner,.page-content-stack',shape:'.page,.content-block,.code-block',surface:'.page',accentSecondary:'.eyebrow,.stat-row',line:'.page,.content-block,li',inverseText:'.page-ending,.page-ending *',codeBackground:'.code-block pre'},
-  cover:{colors:'.cover',typography:'.cover-title',spacing:'.cover-main',shape:'.eyebrow-badge',page:'.cover',text:'.cover-title',muted:'.cover-subtitle',accent:'.cover-block,.cover-deco',accentSecondary:'.cover-eyebrow',inverseText:'.eyebrow-badge',codeBackground:'.cover-block',titlePx:'.cover-title',titleLineHeight:'.cover-title',eyebrowPx:'.cover-eyebrow',subtitlePx:'.cover-subtitle',metaPx:'.cover-meta',metaBottomPx:'.cover-meta',badgeRadiusPx:'.eyebrow-badge'},
 };
-const recipeSelectors={article:{frame:'article',rhythm:'article',kicker:'small',h1:'h1',h2:'h2',lead:'article>p:first-of-type',quote:'section',divider:'hr',list:'ul,ol',table:'table',image:'img'},social:{surface:'.page-content-stack',frame:'.page',decoration:'.page:after',eyebrow:'.eyebrow',coverTitle:'.page-cover h1',skeleton:'.page',coverSupport:'.page-cover .cover-support',ending:'.page-ending',list:'.page li',code:'.code-block pre'}};
-const componentSelectors={article:{title:'h1',lead:'article>p:first-of-type',quote:'blockquote,section',list:'ul,ol',table:'table',code:'code,pre',imageCaption:'img+small'},social:{coverTitle:'.page-cover h1',eyebrow:'.eyebrow',lead:'.page-cover .lead',statValue:'.stat b',statLabel:'.stat span',step:'.step',compareTable:'.compare-block table',list:'.page li',note:'.note-block',contentTitle:'.page:not(.page-cover):not(.page-ending) h1',endingTitle:'.page-ending h1'}};
+const recipeSelectors={social:{surface:'.page-content-stack',frame:'.page',decoration:'.page:after',eyebrow:'.eyebrow',coverTitle:'.page-cover h1',skeleton:'.page',coverSupport:'.page-cover .cover-support',ending:'.page-ending',list:'.page li',code:'.code-block pre'}};
+const componentSelectors={social:{coverTitle:'.page-cover h1',eyebrow:'.eyebrow',lead:'.page-cover .lead',statValue:'.stat b',statLabel:'.stat span',step:'.step',compareTable:'.compare-block table',list:'.page li',note:'.note-block',contentTitle:'.page:not(.page-cover):not(.page-ending) h1',endingTitle:'.page-ending h1'}};
 
 function highlightSelector(target,field=''){
   if(!field)return '';
   const parts=field.split('.'),leaf=parts.at(-1),group=parts[1];
   if(parts.includes('recipes'))return recipeSelectors[target]?.[leaf]||'';
   if(parts.includes('components'))return componentSelectors[target]?.[parts[2]]||'';
-  if(parts.includes('effects')||parts.includes('behavior'))return target==='social'?'.page':selectors.article.typography;
+  if(parts.includes('effects'))return '.page';
   return selectors[target]?.[leaf]||selectors[target]?.[group]||'';
 }
 
 function previewStyle(target,field){
   const selector=highlightSelector(target,field);
   const highlight=selector?`${selector}{outline:3px solid #E43D30!important;outline-offset:3px!important}`:'';
-  return `<style data-theme-preview-shell>html{background:${PREVIEW.paperDeep}}body{margin:0;padding:24px;box-sizing:border-box}${target==='article'?'body>article{max-width:720px;margin:auto;box-shadow:0 10px 30px rgba(48,52,59,.12)}':''}${highlight}</style>`;
+  return `<style data-theme-preview-shell>html{background:${PREVIEW.paperDeep}}body{margin:0;padding:24px;box-sizing:border-box}${highlight}</style>`;
 }
 
 export function compileThemePreview({target,definition,highlightField=''}){
-  if(!['article','social','cover'].includes(target))throw new Error('target 必须是 article、social 或 cover');
+  if(target!=='social')throw new Error('主题中心目前仅支持 social 图文主题');
   const clean=structuredClone(definition||{});delete clean.hash;delete clean.file;
   validateThemeDefinition(clean,{expectedTarget:target,expectedSource:clean.source||'user'});
-  if(target==='cover'){
-    // 主题带内置构图时按构图预览（样稿文案填充），否则用固定样稿构图
-    const themed=clean.cover?.spec?coverSpecFromTheme(clean.cover.spec,{title:'把复杂内容讲得清楚',subtitle:'固定封面样稿，用于检查配色与字阶',brand:'example · 2026.08',theme:clean}):null;
-    const {html:coverHtml}=buildCoverHtml({theme:clean,spec:themed||COVER_THEME_SPECIMEN});
-    const style=previewStyle(target,highlightField);
-    return {schemaVersion:1,target,html:coverHtml.replace('</head>',`${style}</head>`),usageMap:{},highlightField,theme:{id:clean.id,label:clean.label,version:clean.version}};
-  }
-  const compiled=target==='article'?compileArticleTheme(clean):compileSocialTheme(clean);
-  const productionHtml=target==='article'
-    ?markdownToHtml(ARTICLE_THEME_SPECIMEN,{themeDefinition:clean,kicker:'PRODUCTION SPECIMEN'})
-    :renderStoryboardHtml({...SOCIAL_THEME_SPECIMEN,visualStyle:clean.id,themeDefinition:clean});
+  const compiled=compileSocialTheme(clean);
+  const productionHtml=renderStoryboardHtml({...SOCIAL_THEME_SPECIMEN,visualStyle:clean.id,themeDefinition:clean});
   const style=previewStyle(target,highlightField);
-  // 文章和图文生产渲染器都已经返回完整 HTML 文档，不能再把它嵌套到另一层 body 中。
+  // 图文生产渲染器已经返回完整 HTML 文档，不能再嵌套另一层 body。
   const html=productionHtml.replace('</head>',`${style}</head>`);
   const templateContext=target==='social'?resolveSocialCardTemplateContext({themeDefinition:clean,channelMode:clean.channelMode||'xiaohongshu'}):null;
   return {schemaVersion:1,target,html,usageMap:compiled.usageMap,highlightField,theme:{id:compiled.id,label:compiled.label,version:compiled.version,hash:compiled.hash},template:templateContext?{...getSocialCardTemplateCapabilities({themeDefinition:clean,channelMode:'xiaohongshu'}),pack:templateContext.pack.id,version:templateContext.pack.version,label:templateContext.pack.label,source:templateContext.source,compatibility:templateContext.pack.id==='standard-v1'||templateContext.fallback,roleTemplates:{...templateContext.pack.roleTemplates},matching:clean.social?.templateMatch||null}:null};

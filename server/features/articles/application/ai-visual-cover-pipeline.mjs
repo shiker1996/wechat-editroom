@@ -82,14 +82,13 @@ export function createAiVisualCoverStageRecorder({ workdir, batchId = null, cand
   return { path: executionsPath, start, get stages() { return stages.map((stage) => ({ ...stage, inputArtifacts: [...stage.inputArtifacts], metadata: { ...stage.metadata } })); } };
 }
 
-export function writeAiVisualCoverGenerationReport({ workdir, mode = 'ai-visual', status = 'passed', theme = {}, routing = null, agent = null, inputs = [], artifacts = {} } = {}) {
+export function writeAiVisualCoverGenerationReport({ workdir, mode = 'ai-visual', status = 'passed', designScheme = null, agent = null, inputs = [], artifacts = {} } = {}) {
   const report = {
     schemaVersion: 1,
     mode,
     status,
     generatedAt: new Date().toISOString(),
-    theme: { id: theme.id || '', label: theme.label || '', version: theme.version || '', hash: theme.hash || '' },
-    routing,
+    designScheme: designScheme ? { id: designScheme.id || '', audit: designScheme.audit || null } : null,
     inputs: [...inputs],
     artifacts: { ...artifacts },
     agent: agent ? { type: agent.type || '', agentRunId: agent.agentRunId || null, modelSteps: agent.modelSteps || 0, toolCalls: agent.toolCalls || 0, pageCount: agent.pageCount || 0, documentFinished: agent.documentFinished === true } : null,

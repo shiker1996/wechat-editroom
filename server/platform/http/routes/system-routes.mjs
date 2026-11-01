@@ -428,7 +428,6 @@ export async function handleSystemRoutes(context) {
           type,
           force: Boolean(options.force),
           documentKind: options.documentKind ?? null,
-          theme: previous?.theme,
           mode: previous?.mode || options.mode || 'standard',
           focus: options.focus ?? null,
           focuses: Array.isArray(options.focuses) ? options.focuses : [],

@@ -1023,10 +1023,9 @@ async function runTypeset(imageDeliveryMode = "auto") {
   const candidateId = Number(candidateValue);
   if (!candidateId&&!daily) return toast("请先选择一篇终稿");
   const provider = document.getElementById("typeset-provider")?.value || state.models?.defaultProvider;
-  const theme = document.getElementById("typeset-theme")?.value || "auto";
   try {
     const result = await request(`/api/batches/${encodeURIComponent(state.activeBatchId)}/ai/typeset`, {
-      method: "POST", body: JSON.stringify({ provider, candidateId:daily?null:candidateId, documentKind:daily?"daily-final":null, theme, imageDeliveryMode }),
+      method: "POST", body: JSON.stringify({ provider, candidateId:daily?null:candidateId, documentKind:daily?"daily-final":null, imageDeliveryMode }),
     });
     toast("排版任务已启动");
     // 排版任务数分钟：打开进度弹窗，避免页面上无任何可见反馈

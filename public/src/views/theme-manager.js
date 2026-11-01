@@ -2,15 +2,15 @@ import { request } from '../core/http.js';
 import { escapeHtml, toast, confirmAction } from '../core/ui.js';
 import { hydrateThemePickers, invalidateThemeCatalog, loadThemeCatalog } from '../core/theme-catalog.js';
 import {
-  colorFields, coverColorLabels, coverTokenGroups, labels, optionLabels, socialColorLabels,
+  colorFields, labels, optionLabels, socialColorLabels,
   socialTokenLimits, targetLabel, tokenGroups,
 } from './theme-manager-fields.js';
 
 let active=null,bound=false,previewTimer=0,previewRequest=0,editorBaseline=null,aiCandidate=null,aiGenerationController=null,templateProposalMode=false,proposalCandidate=null;
 async function sources(){
-  const [article,social,cover]=await Promise.all([loadThemeCatalog('article'),loadThemeCatalog('social'),loadThemeCatalog('cover')]);
+  const social=await loadThemeCatalog('social');
   const select=document.getElementById('theme-clone-source');
-  select.innerHTML=[...article.items,...social.items,...cover.items].filter((item)=>item.source==='builtin').map((item)=>`<option value="${item.id}">${escapeHtml(item.label)} · ${targetLabel(item.target)}</option>`).join('');
+  select.innerHTML=social.items.filter((item)=>item.source==='builtin').map((item)=>`<option value="${item.id}">${escapeHtml(item.label)} · ${targetLabel(item.target)}</option>`).join('');
 }
 function themeRow(item){
   const status=item.status==='published'?'已发布':item.status==='archived'?'已归档':'草稿';
@@ -42,7 +42,6 @@ function templateEditor(){
   return `<section class="theme-template-config" aria-label="图文模板包"><div><b>图文模板包</b><small>决定页面角色的构图语言；不改变故事板事实与页面顺序</small></div><label><span class="visually-hidden">模板包</span><select data-theme-field="social.templatePack.id" aria-label="图文模板包">${options}</select><input type="hidden" data-theme-field="social.templatePack.version" value="${selected.version}"></label><p>${escapeHtml(descriptions[selected.id]||selected.label)} 专用模板审计失败时不会静默切换到其他模板。</p><p class="theme-template-match" data-template-match-status><b>匹配来源：${escapeHtml(sourceLabel)}</b>${matching?.reason?` · ${escapeHtml(matching.reason)}`:' · 当前主题尚未记录程序匹配理由'}${reasonLabel?` · 原因：${reasonLabel}`:''}</p><p class="theme-template-confidence ${lowConfidence?'low':''}"><b>匹配置信度：${confidence}</b>${matching?.score!==undefined?` · ${matching.score} 分${matching.runnerUpScore!==undefined?`，分差 ${matching.margin}`:''}`:''}</p>${suggestion}<div class="theme-template-roles">${roles}</div></section>`;
 }
 function recipeEditor(){
-  if(active.target==='cover')return '';
   const target=active.target,config=active.draft[target],catalog=active.editorCatalog?.recipes||{},recipeFields=Object.entries(catalog).map(([key,meta])=>{
     const current=config.recipes[key]??(target==='social'&&key==='coverTitle'?'classic':undefined);
     return `<label class="theme-recipe-field"><span><b>${meta.label}</b><small>${key==='coverTitle'?'只影响封面标题 · ':''}样稿：${meta.specimenRole}</small></span><select data-theme-field="${target}.recipes.${key}">${meta.options.map((option)=>`<option value="${option.value}" ${current===option.value?'selected':''}>${option.label}</option>`).join('')}</select></label>`;
@@ -71,8 +70,8 @@ function compatibilityReport(report,{legacy=false}={}){
 }
 function editorContent(){return compatibilityReport(active.compatibility,{legacy:active.editorMode==='read-only'})+(active.editorMode==='read-only'?'':tokenEditor());}
 function tokenEditor(){
-  const colors=active.draft.tokens.colors,socialNeonSurface=active.target==='social'&&active.draft.social?.recipes?.surface==='neon',visibleColors=colorFields.filter((key)=>colors[key]&&(active.target!=='social'||key!=='background'||socialNeonSurface)),colorLabels=active.target==='cover'?coverColorLabels:active.target==='social'?{...labels,...socialColorLabels,...(socialNeonSurface?{background:'页面底色（neon 表面配方）'}:{})}:labels,colorHtml=visibleColors.map((key)=>`<label class="theme-color-field"><span>${colorLabels[key]}</span><input type="color" name="color-${key}" value="${colors[key]}" data-theme-field="tokens.colors.${key}"><code>${colors[key]}</code></label>`).join('');
-  const activeTokenGroups=active.target==='cover'?coverTokenGroups:tokenGroups,groups=Object.entries(activeTokenGroups).map(([group,meta])=>`<details class="theme-token-section"><summary><span><b>${meta.label}</b><small>${meta.hint}</small></span><i>展开设置</i></summary><div class="theme-token-grid">${meta.fields.map((field)=>fieldControl(group,field)).join('')}</div><button type="button" class="text-button theme-reset-group" data-reset-token-group="${group}">恢复当前主题的${meta.label}</button></details>`).join('');
+  const colors=active.draft.tokens.colors,socialNeonSurface=active.target==='social'&&active.draft.social?.recipes?.surface==='neon',visibleColors=colorFields.filter((key)=>colors[key]&&(key!=='background'||socialNeonSurface)),colorLabels={...labels,...socialColorLabels,...(socialNeonSurface?{background:'页面底色（neon 表面配方）'}:{})},colorHtml=visibleColors.map((key)=>`<label class="theme-color-field"><span>${colorLabels[key]}</span><input type="color" name="color-${key}" value="${colors[key]}" data-theme-field="tokens.colors.${key}"><code>${colors[key]}</code></label>`).join('');
+  const groups=Object.entries(tokenGroups).map(([group,meta])=>`<details class="theme-token-section"><summary><span><b>${meta.label}</b><small>${meta.hint}</small></span><i>展开设置</i></summary><div class="theme-token-grid">${meta.fields.map((field)=>fieldControl(group,field)).join('')}</div><button type="button" class="text-button theme-reset-group" data-reset-token-group="${group}">恢复当前主题的${meta.label}</button></details>`).join('');
   return `<details class="theme-token-section" open><summary><span><b>颜色系统</b><small>控制背景、内容层级、强调色和代码对比</small></span><i>展开设置</i></summary><div class="theme-color-grid">${colorHtml}</div><button type="button" class="text-button theme-reset-group" data-reset-token-group="colors">恢复当前主题的颜色</button></details>${groups}${recipeEditor()}${componentEditor()}`;
 }
 function renderEditor(data){
@@ -386,6 +385,7 @@ function closeAiThemeCreator(){
   document.getElementById('open-ai-theme-creator').focus();
 }
 export default async function loadThemeManager(){
+  if(document.querySelector('.theme-manager-panel')?.hidden)return;
   await Promise.all([sources(),list()]);
   if(bound)return;
   bound=true;

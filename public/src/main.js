@@ -4,7 +4,6 @@ import { request } from "./core/http.js";
 import { toast, bindTablistKeyboardNavigation, bindDismissableDetails } from "./core/ui.js";
 import { bindBatchDrawer } from "./views/batch-drawer.js";
 import loadOverview from "./views/dashboard.js";
-import { hydrateThemePickers } from "./core/theme-catalog.js";
 import { bindQuickMaterialCapture } from "./core/quick-material.js";
 import { bindFirstRunWizard, openFirstRunWizard, shouldOpenFirstRunWizard } from "./core/first-run.js";
 
@@ -14,7 +13,6 @@ const viewModules = {
   editor: "./views/editor.js", preview: "./views/preview.js", cover: "./views/cover.js", publication: "./views/publication.js",
   hotspots: "./views/hotspots.js", artifacts: "./views/artifacts.js",
   system: "./views/system.js", account: "./views/account.js", skills: "./views/skills.js", sources: "./views/subscriptions.js",
-  themes: "./views/theme-manager.js",
   logs: "./views/logs.js?v=20261024-run-trace-dialog-fix-1",
   calendar: "./views/calendar.js",
   "material-inbox": "./views/material-inbox.js", "wechat-review-prep": "./views/wechat-review-prep.js", "wechat-review": "./views/wechat-review.js", "content-feedback": "./views/content-feedback.js",
@@ -52,7 +50,6 @@ const viewStyles = {
   "wechat-review": ["topics", "editor"],
   "content-feedback": ["editor"],
   account: ["system"],
-  themes: ["social", "editor", "system"],
   hotspots: ["topics"],
   logs: ["topics"],
   system: ["system", "topics"],
@@ -111,7 +108,7 @@ const titles = {
   dashboard: "工作台总览", batches: "批次管理", overview: "热点全景",
   topics: "文章选题池", daily: "批次早报", tutorial: "自主写作", "social-topics": "图文选题池", "social-editor": "工具图文", "social-custom": "自定义图文", "social-event": "事件图文", editorial: "热点事件创作", editor: "文章编辑器",
   preview: "公众号排版", cover: "文章封面图", publication: "发布中心", hotspots: "热点档案", artifacts: "产物中心",
-  system: "运行与配置中心", account: "账号画像", themes: "主题中心", skills: "技能与工具", sources: "采集源",
+  system: "运行与配置中心", account: "账号画像", skills: "技能与工具", sources: "采集源",
   logs: "任务日志", calendar: "内容日历", "material-inbox": "素材入箱", "wechat-review-prep": "复盘数据台", "wechat-review": "公众号复盘", "content-feedback": "内容反哺",
 };
 
@@ -183,7 +180,6 @@ async function go(route) {
 
 async function init() {
   window.go = go;
-  await hydrateThemePickers();
   try {
     const res = await request("/api/models");
     window.__models = res;
@@ -429,6 +425,9 @@ function bindGlobal() {
     if (view === "models" || view in titles) {
       navigatingFromHistory = true;
       go(route).finally(() => { navigatingFromHistory = false; });
+    } else if (view === "themes") {
+      navigatingFromHistory = true;
+      go("dashboard").finally(() => { navigatingFromHistory = false; });
     }
   });
   window.addEventListener("keydown", (event) => {
