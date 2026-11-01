@@ -2,6 +2,8 @@
 
 本目录保存外部 Agent Skills 和 WorkBuddy Connector 元信息。CLI 与 MCP 服务由项目 Node 运行时直接启动，不需要额外 npm MCP 依赖。
 
+Codex 和 WorkBuddy 的完整安装与使用流程见[Agent 使用指南](../docs/agent-usage-guide.md)。
+
 ## 首次使用
 
 Codex 可以先安装仓库外的引导插件，再从任意工作目录初始化项目：
@@ -14,8 +16,8 @@ codex plugin marketplace add shiker1996/wechat-editroom --ref codex/agent-mcp-in
 
 如果项目已经克隆，则直接：
 
-1. 在项目根目录执行 `npm run setup`，完成依赖和基础配置；RSSHub 等可选来源由用户决定是否安装。
-2. 启动工作台：`npm start`。
+1. 在项目根目录执行平台初始化入口：Windows 用 `setup-workbench.cmd`，macOS/Linux 用 `./setup-workbench.sh`。它会按项目现有规则选择或引导安装 Node，并完成依赖和基础配置；RSSHub 等可选来源由用户决定是否安装。
+2. 启动工作台：Windows 用 `start-workbench.cmd`，macOS/Linux 用 `./start-workbench.sh`。
 3. 安装当前 Agent 配置：
 
    ```powershell
