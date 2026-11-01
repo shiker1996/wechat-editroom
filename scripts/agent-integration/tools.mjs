@@ -2,19 +2,32 @@ const id = (name, description, required = true) => ({ type: 'integer', ...(requi
 const string = (description, extra = {}) => ({ type: 'string', description, ...extra });
 const sensitiveField = /^(?:api[_-]?key|token|secret|password|authorization|cookie|credential|credentials)$/i;
 
-function redactSensitive(value) {
-  if (Array.isArray(value)) return value.map(redactSensitive);
+function redactSensitive(value, key = '') {
+  if (Array.isArray(value)) return value.map((item) => redactSensitive(item));
+  if (typeof value === 'string' && /(?:url|uri)$/i.test(key)) {
+    try {
+      const parsed = new URL(value);
+      parsed.username = '';
+      parsed.password = '';
+      for (const name of [...parsed.searchParams.keys()]) if (sensitiveField.test(name)) parsed.searchParams.delete(name);
+      return parsed.toString();
+    } catch { return value; }
+  }
   if (!value || typeof value !== 'object') return value;
   return Object.fromEntries(Object.entries(value).map(([key, item]) => [
     key,
-    sensitiveField.test(key) && typeof item !== 'boolean' ? { configured: item !== '' && item != null } : redactSensitive(item),
+    sensitiveField.test(key) && typeof item !== 'boolean' ? { configured: item !== '' && item != null } : redactSensitive(item, key),
   ]));
 }
 
 function safeSource(source) {
   if (!source || typeof source !== 'object') return source;
-  const { source_key: _sourceKey, ...safe } = source;
-  return redactSensitive(safe);
+  const { source_key: _sourceKey, config_json: configJson, config, ...safe } = source;
+  let sourceConfig = config;
+  if (!sourceConfig && typeof configJson === 'string') {
+    try { sourceConfig = JSON.parse(configJson); } catch { sourceConfig = undefined; }
+  }
+  return redactSensitive({ ...safe, ...(sourceConfig ? { config: sourceConfig } : {}) });
 }
 
 export const JIANZI_TOOLS = [
@@ -79,15 +92,25 @@ export async function executeJianziTool(client, name, input = {}) {
     }
     case 'jianzi_collectors_list': {
       const data = await client.get('/api/collector-plugins');
-      return { ...data, items: (data.items || []).map(redactSensitive) };
+      return { items: (data.items || []).map((item) => redactSensitive({
+        id: item.id,
+        name: item.name,
+        enabled: item.enabled,
+        available: item.available,
+        executionStatus: item.executionStatus,
+        sourceCount: item.sourceCount,
+        sourceTypes: item.collector?.sourceTypes || [],
+        sourceConfigSchema: item.collector?.sourceConfigSchema || item.inputSchema || null,
+        configurationState: item.configurationState || null,
+      })) };
     }
     case 'jianzi_collection_capabilities': return client.get('/api/collection-capabilities');
     case 'jianzi_collector_configuration_catalog': {
       const data = await client.get('/api/system/configuration/catalog');
       return { items: (data.items || []).filter((item) => item.type === 'collector').map(redactSensitive) };
     }
-    case 'jianzi_collector_configuration_get': return redactSensitive(await client.get(`/api/system/collector-plugins/${encodeURIComponent(String(input.collectorId || ''))}/configuration`));
-    case 'jianzi_collector_configuration_save': return redactSensitive(await client.put(`/api/system/collector-plugins/${encodeURIComponent(String(input.collectorId || ''))}/configuration`, input.configuration || {}));
+    case 'jianzi_collector_configuration_get': return redactSensitive(await client.get(`/api/system/configuration/collector/${encodeURIComponent(String(input.collectorId || ''))}`));
+    case 'jianzi_collector_configuration_save': return redactSensitive(await client.put(`/api/system/configuration/collector/${encodeURIComponent(String(input.collectorId || ''))}`, input.configuration || {}));
     case 'jianzi_collector_configuration_test': return redactSensitive(await client.post(`/api/system/configuration/collector/${encodeURIComponent(String(input.collectorId || ''))}/test`, {}));
     case 'jianzi_collection_sources_list': {
       const data = await client.get('/api/collection-sources');
