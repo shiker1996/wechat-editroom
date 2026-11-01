@@ -93,7 +93,7 @@ async function runScript(script, args, cwd) {
   }
 }
 
-export async function runTypesetPipeline({ gateway, store, batchId, candidateId, documentKind = null, provider, workspaceRoot, skillsWorkspaceRoot = workspaceRoot, snapshotId=null, draftMode = 'deterministic', theme = 'auto', imageDeliveryMode = 'cdn', autoUploadGeneratedImages = true, rootRunId = null, workflowRunId = null, stageId = 'typeset', onProgress = () => {}, generateArticleImageFn = generateArticleImage, uploadImageToCdnFn = uploadImageToCdn }) {
+export async function runTypesetPipeline({ gateway, store, batchId, candidateId, documentKind = null, provider, workspaceRoot, skillsWorkspaceRoot = workspaceRoot, snapshotId=null, draftMode = 'llm', theme = 'auto', imageDeliveryMode = 'cdn', autoUploadGeneratedImages = true, rootRunId = null, workflowRunId = null, stageId = 'typeset', onProgress = () => {}, generateArticleImageFn = generateArticleImage, uploadImageToCdnFn = uploadImageToCdn }) {
   const candidate = candidateId==null?null:store.getCandidate(candidateId);
   const daily=documentKind==='daily-final';
   if ((!daily&&(!candidate||candidate.batch_id!==batchId))||(daily&&candidate)) throw new Error('待排版文稿不存在或不属于当前批次');
@@ -255,8 +255,7 @@ export async function runTypesetPipeline({ gateway, store, batchId, candidateId,
   onProgress('排版 4/6：按总契约执行 wechat-md-to-draft');
   const draftHtml = path.join(workdir, 'article.ai.draft.html');
   let draftDetail;
-  // 默认确定性渲染：HTML 拼装是机械工作，直接按 tokens 输出内联样式，
-  // 不调用模型，也就不存在结构保真回退。draftMode 'llm' 保留旧路径用于实验对比。
+  // 默认让模型根据文章结构与设计方案编排样式；确定性渲染保留为可显式选择的稳定回退模式。
   if (draftMode === 'llm') {
     const htmlGenSystem = `${skills['wechat-article-typeset'].prompt}\n\n## 当前阶段子技能\n${skills['wechat-md-to-draft'].prompt}\n\n${resolvePrompt('articles.typeset-html-contract').text}`;
     const { provider: providerConfig2 } = gateway.resolve(provider);
@@ -271,7 +270,7 @@ export async function runTypesetPipeline({ gateway, store, batchId, candidateId,
     // If AI output lacks basic HTML structure, fallback to deterministic converter
     const useModelHtml = /<\/?h[1-3]/i.test(htmlContent) && htmlPreservesStructure(imageResult.content, htmlContent);
     writeFile(draftHtml, enforceWechatFlowLayout(useModelHtml ? htmlContent : markdownToHtml(imageResult.content, articleRenderTokens)));
-    draftDetail = useModelHtml ? '模型初稿通过结构保真门禁' : '模型初稿不合格，使用确定性转换器';
+    draftDetail = useModelHtml ? 'AI 排版初稿通过结构保真门禁' : 'AI 排版初稿未通过结构保真门禁，使用确定性转换器';
   } else {
     // 眉题取账号名（没有账号配置时省略）；主题 tokens 作底色，LLM tokens 叠加覆盖
     let kicker = '';
