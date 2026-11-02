@@ -160,6 +160,30 @@ test('外部 Agent Runtime 保留编辑室的 user/assistant 历史消息和顺�
   }
 });
 
+test('外部 Pipeline Runtime 对文章阶段明确要求只输出完整 Markdown 成品', async () => {
+  let runtimeRequest;
+  const runtimeAdapter = {
+    id: 'codex-app-server',
+    async getCapabilities() { return { run: true, streaming: true, cancel: true }; },
+    async *run(request) {
+      runtimeRequest = request;
+      yield { type: 'run.completed', output: '# 标题\n\n正文' };
+    },
+  };
+  setAgentRuntimeRegistry({ resolve: (id) => id === 'codex' ? runtimeAdapter : null }, { getDefaultRuntime: () => 'codex' });
+  try {
+    await runSkill({ skillId: 'article-drafting-pipeline', entryPoint: 'pipeline',
+      definition: { id: 'article-drafting-pipeline', kind: 'stage-skill', runtimePolicy: { mode: 'external-agent' } },
+      executeStage: async () => ({ content: '本地回退不应被调用' }),
+      runtimeRequest: { purpose: 'article-drafting-pipeline', messages: [{ role: 'user', content: '写一篇完整文章' }] } });
+    assert.match(runtimeRequest.instruction, /只输出请求的最终产物/);
+    assert.match(runtimeRequest.instruction, /独占一行的一级标题/);
+    assert.match(runtimeRequest.instruction, /不要把说明文字放在标题前/);
+  } finally {
+    setAgentRuntimeRegistry(null);
+  }
+});
+
 test('Pipeline stage 失败 checkpoint 可从原阶段 Run 重试并建立父子关联', async () => {
   const runs = [], checkpoints = new Map();
   const store = {

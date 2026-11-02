@@ -306,9 +306,13 @@ export async function runSkill(request = {}) {
         if (missingRuntimeCapabilities.length) fail('RUNTIME_CAPABILITY_MISSING', `所选 Agent Runtime 缺少能力：${missingRuntimeCapabilities.join('、')}`);
         const stageRequest = execution.runtimeRequest || {};
         const messages = Array.isArray(stageRequest.messages) ? stageRequest.messages : [];
+        const purpose = String(stageRequest.purpose || traceContext.stageId || '');
+        const markdownArticle = /article-(?:drafting-pipeline|review-repair|length-adjustment|full-edit|humanize)/u.test(purpose);
         const instruction = [
           messages.map((item) => `[${String(item?.role || 'user').toUpperCase()}]\n${String(item?.content || '')}`).join('\n\n'),
           stageRequest.jsonMode ? '输出必须是单个合法 JSON 对象，不要添加 Markdown 代码围栏或解释文字。' : '',
+          !stageRequest.jsonMode ? '只输出请求的最终产物，不要输出过程说明、前言、完成状态或其他元话语。' : '',
+          markdownArticle ? '输出完整 Markdown 文章，必须以独占一行的一级标题（# 标题）开头，按请求达到目标篇幅；不要把说明文字放在标题前，也不要在段落或链接中途结束。' : '',
         ].filter(Boolean).join('\n\n');
         let output = '';
         for await (const event of execution.runtimeAdapter.run({
