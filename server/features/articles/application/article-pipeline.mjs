@@ -41,6 +41,11 @@ export {
 function writeFile(filePath,content) { fs.mkdirSync(path.dirname(filePath),{recursive:true}); const temp=`${filePath}.tmp`; fs.writeFileSync(temp,String(content).trimEnd()+'\n','utf8'); fs.renameSync(temp,filePath); return fs.statSync(filePath); }
 function cleanMarkdown(value) { return String(value||'').trim().replace(/^```(?:markdown)?\s*/i,'').replace(/\s*```$/,''); }
 function visibleChars(markdown) { return articleLengthStatus(markdown,{min:0,max:Number.MAX_SAFE_INTEGER}).count; }
+export function preserveLengthValidRevision(previous, revised, range) {
+  const previousLength = articleLengthStatus(previous, range);
+  const revisedLength = articleLengthStatus(revised, range);
+  return previousLength.valid && !revisedLength.valid ? previous : revised;
+}
 function issueMessage(issue) { return typeof issue === 'string' ? issue : String(issue?.message || ''); }
 function issueType(issue) { return typeof issue === 'string' ? '' : String(issue?.type || '').trim().toLowerCase(); }
 
@@ -697,7 +702,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   recordStage('length-adjustment', writerSkillBundle, ['06-reviewed.md'], ['07-length-adjusted.md', '07-length-adjustment.json'], lengthStageStatus);
 
   onProgress('Step 5 全篇编辑');
-  const fullEdited = requireArticle(await textCall(gateway, { ...modelInput, purpose: 'article-humanize' },
+  const fullEditedCandidate = requireArticle(await textCall(gateway, { ...modelInput, purpose: 'article-humanize' },
     ARTICLE_PROMPTS.fullEdit, JSON.stringify({
       reader_context: readerContext,
       locked_brief: writingBrief,
@@ -705,6 +710,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
       review_evidence: reviewDecision.evidence_checks || [],
       article: final,
     }), maxTextTokens));
+  const fullEdited = preserveLengthValidRevision(final, fullEditedCandidate, articleLengthRange);
   const fullEditChanges = articleChangedPassages(final, fullEdited);
   final = fullEdited;
   if (fullEditChanges.before.length || fullEditChanges.after.length) {
@@ -720,8 +726,9 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   recordStage('full-edit', stageSkills['humanizer-zh'], ['07-length-adjusted.md'], '05-full-edited.md', 'passed');
 
   onProgress('Step 6 AI 表达精修');
-  const humanized = requireArticle(await textCall(gateway, { ...modelInput, purpose: 'article-humanize' },
+  const humanizedCandidate = requireArticle(await textCall(gateway, { ...modelInput, purpose: 'article-humanize' },
     ARTICLE_PROMPTS.humanize, JSON.stringify({ reader_context: readerContext, article: final }), maxTextTokens));
+  const humanized = preserveLengthValidRevision(final, humanizedCandidate, articleLengthRange);
   const humanizeChanges = articleChangedPassages(final, humanized);
   final = humanized;
   if (humanizeChanges.before.length || humanizeChanges.after.length) {
