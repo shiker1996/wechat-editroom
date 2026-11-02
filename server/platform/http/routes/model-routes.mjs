@@ -3,13 +3,14 @@ import { getAgentRuntimeSettings, setAgentRuntimeSettings } from '../../integrat
 
 export async function handleModelRoutes(context) {
   const { request, response, pathname, root, config, store, models, body, json, codexOAuth, agentRuntimeRegistry } = context;
+  const availableRuntimes = ['local-harness', ...(agentRuntimeRegistry?.list?.() || [])];
 
   if (pathname === '/api/agent-runtimes/codex/status' && request.method === 'GET') {
-    json(response, 200, { ...await codexOAuth.status(), ...getAgentRuntimeSettings(root) });
+    json(response, 200, { ...await codexOAuth.status(), ...getAgentRuntimeSettings(root), availableRuntimes });
     return true;
   }
   if (pathname === '/api/agent-runtimes/default' && request.method === 'GET') {
-    json(response, 200, getAgentRuntimeSettings(root));
+    json(response, 200, { ...getAgentRuntimeSettings(root), availableRuntimes });
     return true;
   }
   if (pathname === '/api/agent-runtimes/default' && request.method === 'PUT') {

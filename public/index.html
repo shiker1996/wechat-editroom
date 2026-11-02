@@ -996,15 +996,10 @@
     </section>
 
     <section class="view" id="view-system">
-      <div class="section-intro system-intro"><div><span class="kicker">LOCAL CONFIGURATION</span></div><p>统一管理模型、采集器、技能、工具和本机参数。采集源的连通性测试已收回“采集源”页面，敏感值只在服务端保存。</p></div>
+      <div class="section-intro system-intro"><div><span class="kicker">RUNTIME & LOCAL CONFIGURATION</span></div><p>选择 Agent 执行环境，并管理见字本地 Runtime 使用的模型、采集器、技能、工具和本机参数。采集源的连通性测试已收回“采集源”页面，敏感值只在服务端保存。</p></div>
       <div class="system-workspace">
         <section class="runtime-config-panel configuration-console">
-          <div class="runtime-config-head configuration-console-head"><div><span class="kicker">LOCAL CONFIGURATION REGISTRY</span><h3>本机能力配置</h3><p>统一管理模型、工具、采集器与工作台参数。密钥仅显示状态，不在页面回读。</p></div><div class="configuration-readiness" id="configuration-readiness"><strong>—</strong><span>正在扫描能力状态</span></div></div>
-          <section class="account-context-config" id="codex-runtime-config">
-            <div class="account-context-config-head"><div><span class="kicker">CODEX RUNTIME</span><h3>Codex 账号</h3><p>使用 ChatGPT 账号授权见字运行内部 Agent；不需要填写模型 API Key。</p></div><div class="account-context-config-badge" id="codex-runtime-status"><i></i><span>正在检查</span></div></div>
-            <div class="configuration-form-actions"><small id="codex-runtime-account">授权令牌保存在本机配置目录。</small><div><label>默认 Agent Runtime <select id="agent-runtime-default"><option value="local-harness">见字本地 Runtime</option><option value="codex">Codex Runtime</option></select></label><button type="button" class="outline-button" id="codex-runtime-connect">连接 ChatGPT</button><button type="button" class="ghost-button" id="codex-runtime-disconnect" hidden>断开连接</button></div></div>
-            <p>Codex Runtime 可用于账号画像、编辑会、独立写作、自定义图文策划、批次打标/事件卡/研判，以及文章成稿、审稿、公众号排版、AI 封面和图文生成。提示词、流程顺序、工具授权与结果校验仍由见字管理；尚未接入外部 Runtime 的任务仍需配置工作台模型。Codex 暂不支持恢复历史 Agent Run。</p>
-          </section>
+          <div class="runtime-config-head configuration-console-head"><div><span class="kicker">LOCAL CONFIGURATION REGISTRY</span><h3>本机能力配置</h3><p>配置目录包含 Agent Runtime、本地模型及其他本机能力。不同 Runtime 的授权方式分别配置；密钥仅显示状态，不在页面回读。</p></div><div class="configuration-readiness" id="configuration-readiness"><strong>—</strong><span>正在扫描目录能力配置项</span></div></div>
           <div class="runtime-path-strip" id="runtime-paths"><span>正在读取路径配置…</span></div>
           <div class="config-panel legacy-config-panel" id="config-panel-rsshub" role="tabpanel" hidden>
             <div class="config-panel-heading"><div><span class="kicker">RSSHUB/.ENV</span><h4>RSSHub 环境</h4></div><p>已有值不会回显，修改后重启 RSSHub 生效。</p></div>
@@ -1012,8 +1007,8 @@
           </div>
           <div class="configuration-legend configuration-inline-legend"><span><i class="ready"></i>已就绪</span><span><i class="attention"></i>需要配置</span><span><i class="secret"></i>凭据隔离</span></div>
           <div class="config-panel active" id="config-panel-extensions">
-            <div class="config-panel-heading"><div><span class="kicker">CONFIGURATION CATALOG</span><h4>统一配置资源</h4></div><p>供应商连接只配置一次；同一供应商下的多个模型只维护各自的模型参数。其他能力继续使用统一保存与测试流程。</p><div class="configuration-catalog-actions"><button type="button" class="outline-button" id="add-model-connection">＋ 添加供应商</button><button type="button" class="outline-button" id="add-model-provider">＋ 添加模型</button></div></div>
-            <div class="configuration-catalog-tools"><label class="configuration-search"><span>⌕</span><input id="system-extension-search" type="search" placeholder="搜索能力名称或 ID"></label><select id="system-extension-type"><option value="">全部能力</option><option value="model-connection">供应商</option><option value="model-provider">模型</option><option value="skill">技能</option><option value="tool">工具</option><option value="collector">采集器</option><option value="system">系统</option></select></div>
+            <div class="config-panel-heading"><div><span class="kicker">CONFIGURATION CATALOG</span><h4>配置目录</h4></div><p>按需维护 Agent Runtime、模型、采集器、技能、工具和系统参数。不同执行环境的授权与模型配置分别管理。</p></div>
+            <div class="configuration-catalog-tools"><label class="configuration-search"><span>⌕</span><input id="system-extension-search" type="search" placeholder="搜索能力名称或 ID"></label><select id="system-extension-type"><option value="">全部能力</option><option value="agent-runtime">Agent Runtime</option><option value="model-connection">供应商</option><option value="model-provider">模型</option><option value="skill">技能</option><option value="tool">工具</option><option value="collector">采集器</option><option value="system">系统</option></select></div>
             <div class="extension-settings-layout"><aside class="configuration-index"><div class="configuration-index-head"><span>能力索引</span><small id="configuration-filter-count">—</small></div><div id="system-extension-list" class="extension-settings-list"><div class="kv-empty">正在读取配置资源…</div></div></aside><section id="system-extension-editor" class="extension-settings-editor"><div class="configuration-empty"><b>选择一项能力</b><span>查看配置字段、凭据状态与运行诊断。</span></div></section></div>
           </div>
         </section>

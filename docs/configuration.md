@@ -57,6 +57,19 @@
 
 模型、工具、技能和采集器根据 Manifest Schema 自动出现在配置中心。普通字段保存到统一配置表，秘密字段写入隔离凭据 Profile；页面与 API 只返回配置状态。项目根 .env、系统业务密钥环境变量和 .env.example 均不再作为配置入口。
 
+### AI 执行环境与本地模型的关系
+
+Runtime 和模型配置不是四个必须串联的模型层，而是两种执行路径：
+
+- **Codex Runtime**：通过 ChatGPT 账号授权执行已接入外部 Runtime 的 Agent 任务。Codex 使用的模型由授权账号和 Codex Runtime 提供，不读取见字的阶段模型路由。
+- **见字本地 Runtime**：使用本节管理的供应商连接和模型。供应商连接保存 API 地址、协议和凭据；模型条目保存模型 ID、能力参数，并可设为默认模型。
+
+本地模型配置顺序为：**供应商连接 → 模型条目（设一个默认模型）→ 可选的阶段模型路由**。阶段路由只覆盖 Fast、Balanced、Quality 档位；没有单独路由时继承默认模型，因此不属于启动本地 Runtime 的必填项。
+
+默认 Runtime 只影响声明支持外部 Runtime 的 Agent。尚未接入外部 Runtime 的任务仍走见字本地 Runtime，所以即使已授权 Codex，完整使用所有现有功能时仍可能需要保留一个本地模型。
+
+推荐配置顺序：先选择默认 Runtime；选择 Codex 时完成 ChatGPT 授权；然后为本地 Runtime 配置供应商连接和一个默认模型；只有需要不同任务使用不同模型时，再配置阶段路由。配置中心的“配置路由”说明会明确显示该设置只影响见字本地 Runtime。
+
 ## 2. `config.local.json`：运行参数
 
 复制 `config.example.json` 为 `config.local.json` 后修改，未写的键用默认值。结构（括注默认值）：

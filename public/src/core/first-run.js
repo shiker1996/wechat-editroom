@@ -2,7 +2,7 @@ import { request } from "./http.js";
 import { escapeHtml } from "./ui.js";
 
 const STORAGE_KEY = "jianzhi.first-run-wizard.v1";
-const STEP_LABELS = ["连接模型", "配置采集", "生产路径", "开始交付"];
+const STEP_LABELS = ["AI 执行方式", "配置采集", "生产路径", "开始交付"];
 let step = 0;
 let snapshot = null;
 
@@ -62,19 +62,24 @@ function routeTo(route) {
 }
 
 async function readSnapshot() {
-  const [models, sourceData, capabilities, rsshub, batches] = await Promise.all([
+  const [models, sourceData, capabilities, rsshub, batches, codexRuntime] = await Promise.all([
     request("/api/models").catch(() => ({})),
     request("/api/collection-sources").catch(() => ({ items: [] })),
     request("/api/collection-capabilities").catch(() => ({ items: [] })),
     request("/api/system/runtime/rsshub/status").catch(() => ({ ready: false, installed: false, dependenciesInstalled: false, reason: "状态暂时无法读取" })),
     request("/api/batches?limit=20").catch(() => []),
+    request("/api/agent-runtimes/codex/status").catch(() => ({ configured: false, defaultRuntime: "local-harness" })),
   ]);
   const providers = Array.isArray(models.providers) ? models.providers : [];
+  const localModel = providers.find((item) => item.enabled !== false && item.configured === true);
+  const runtimeDefault = codexRuntime.defaultRuntime || "local-harness";
+  const modelReady = runtimeDefault === "codex" ? Boolean(codexRuntime.configured) : Boolean(localModel);
   const sourceItems = Array.isArray(sourceData.items) ? sourceData.items : [];
   const groups = Array.isArray(capabilities.items) ? capabilities.items : [];
   return {
-    modelReady: providers.some((item) => item.enabled !== false && item.configured === true),
-    modelLabel: providers.find((item) => item.enabled !== false && item.configured === true)?.label || "尚未配置可用模型",
+    modelReady,
+    modelLabel: runtimeDefault === "codex" ? (codexRuntime.configured ? "Codex Runtime · ChatGPT 账号已授权" : "Codex Runtime 尚未授权") : (localModel?.label || "尚未配置可用本地模型"),
+    runtimeDefault,
     sourceReady: groups.some((item) => item.ready === true),
     sourceItems,
     groups,
@@ -127,7 +132,7 @@ function renderBody() {
     }).join("")
     : `<div class="first-run-empty">还没有读取到采集能力状态，可以稍后在“采集源”页面配置。</div>`;
   const page = [
-    `<div class="first-run-eyebrow">01 / RUNTIME FOUNDATION</div><h3>先让见字具备生成能力</h3><p class="first-run-lead">文章和图文都需要一个可用的模型连接。采集源是获取新素材的入口，也可以先使用已有批次继续体验。</p><div class="first-run-status-card"><div><b>模型连接</b><small>${escapeHtml(snapshot.modelLabel)}</small></div>${modelStatus}</div><div class="first-run-callout"><b>建议先完成这一项</b><span>打开运行与配置中心，填入 API Key 并测试连接。返回后向导会自动刷新状态。</span></div><button type="button" class="primary-button first-run-action" data-first-run-route="system/configuration/model-connection/deepseek">去配置模型 →</button>`,
+    `<div class="first-run-eyebrow">01 / AI EXECUTION</div><h3>选择 AI 执行环境</h3><p class="first-run-lead">见字支持授权 Codex Runtime，或配置见字本地 Runtime。本地路径先配置供应商和默认模型；阶段路由可选。</p><div class="first-run-status-card"><div><b>当前执行环境</b><small>${escapeHtml(snapshot.modelLabel)}</small></div>${modelStatus}</div><div class="first-run-callout"><b>两种配置入口</b><span>Codex 使用 ChatGPT 账号授权；本地 Runtime 需要配置并测试供应商与模型。未接入 Codex 的任务仍可能使用本地 Runtime。</span></div><button type="button" class="primary-button first-run-action" data-first-run-route="system">配置 AI 执行环境 →</button>`,
     `<div class="first-run-eyebrow">02 / SOURCE READINESS</div><h3>选择你要使用的素材入口</h3><p class="first-run-lead">批次会自动采集所有已启用的来源，不再额外勾选。未配置的 Reddit、RSSHub、GitHub 不会进入批次，也不会产生待处理失败。</p><div class="first-run-status-card"><div><b>采集能力</b><small>${snapshot.sourceReady ? "可以建立批次并开始采集" : "至少配置一个采集源后再开始"}</small></div>${sourceStatus}</div><div class="first-run-source-list">${sourceRows}</div><div class="first-run-action-row"><button type="button" class="primary-button" data-first-run-route="sources">配置采集源 →</button><button type="button" class="outline-button" data-first-run-route="dashboard">建立今日批次</button></div>`,
     `<div class="first-run-eyebrow">03 / TWO DELIVERABLES</div><h3>一篇文章，一组图文</h3><p class="first-run-lead">见字把两个产出路径分开，避免用户在一个复杂页面里找按钮。先有候选题，再进入对应工作区完成生成、排版和发布准备。</p><div class="first-run-delivery-grid"><article><span class="first-run-delivery-mark article-mark">文</span><div><b>公众号文章</b><p>热点全景 → 文章选题 → 编辑器 → 排版 → 发布登记</p><button type="button" class="text-button" data-first-run-route="topics">开始文章路径 →</button></div></article><article><span class="first-run-delivery-mark social-mark">图</span><div><b>社交图文</b><p>图文选题 → 故事板 → 图片产物 → 下载发布</p><button type="button" class="text-button" data-first-run-route="social-topics">开始图文路径 →</button></div></article></div><div class="first-run-note">应用内的“发布”会生成可交付的文章 HTML、图片和发布记录；微信公众号后台发布仍由你确认。</div>`,
     `<div class="first-run-eyebrow">04 / READY TO SHIP</div><h3>现在就做一次完整交付</h3><p class="first-run-lead">配置完成后，按下面任一入口开始。向导不会锁住工作台，你也可以从“帮助 → 首次使用说明”再次打开。</p><div class="first-run-checklist"><div>${snapshot.modelReady ? "✓" : "○"}<span>模型连接${snapshot.modelReady ? "已就绪" : "待配置"}</span></div><div>${snapshot.sourceReady ? "✓" : "○"}<span>采集入口${snapshot.sourceReady ? "已就绪" : "可稍后配置"}</span></div><div>${snapshot.hasBatch ? "✓" : "○"}<span>${snapshot.hasBatch ? "已有批次，可继续生产" : "还没有批次，先建立今日批次"}</span></div></div><div class="first-run-launch-grid"><button type="button" class="primary-button" data-first-run-route="topics">进入文章生产</button><button type="button" class="outline-button" data-first-run-route="social-topics">进入图文生产</button><button type="button" class="ghost-button" data-first-run-route="editor">直接打开文章编辑器</button><button type="button" class="ghost-button" data-first-run-route="social-editor">直接打开图文编辑器</button></div>`,

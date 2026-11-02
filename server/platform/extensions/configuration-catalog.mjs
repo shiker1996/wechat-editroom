@@ -34,7 +34,7 @@ function systemResources(config){
   ]));
   return [
     {id:'workbench',name:'工作台系统参数',type:'system',kind:'system',manifest:{id:'workbench',name:'工作台系统参数',configuration:object({port:integer('监听端口',1,65535,{default:4317}),python:string('Python 可执行文件'),maxConcurrent:integer('AI 后台任务并发',1,20,{default:2}),minVisibleChars:integer('文章最少可见字符',100,20000,{default:1300}),maxVisibleChars:integer('文章最多可见字符',100,30000,{default:2000}),discussionResearchTopK:integer('讨论研判 Top-K',5,15,{default:15,enum:[5,8,10,15],enumNames:['Top 5','Top 8','Top 10','Top 15']})})}},
-    {id:'llm-stage-routing',name:'阶段模型路由',type:'system',kind:'system',manifest:{id:'llm-stage-routing',name:'阶段模型路由',description:'只需为 Fast、Balanced、Quality 三档选择模型；各流程节点会按内置质量档位自动路由。Deterministic 表示程序化执行，不调用模型。',configuration:object(routingProperties)}},
+    {id:'llm-stage-routing',name:'阶段模型路由',type:'system',kind:'system',manifest:{id:'llm-stage-routing',name:'阶段模型路由',description:'仅对见字本地 Runtime 生效：为 Fast、Balanced、Quality 三档选择模型；未设置时继承默认模型。选择 Codex Runtime 时，此路由不控制 Codex 使用的模型。Deterministic 表示程序化执行，不调用模型。',configuration:object(routingProperties)}},
   ];
 }
 
