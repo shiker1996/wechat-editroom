@@ -60,6 +60,23 @@ test('打标保存时以规范化 who|what 生成 eventKey 并保留四要素', 
   assert.equal(updated[1].tags.eventParts.when,'');
 });
 
+test('外部 Runtime 打标结果没有 Gateway 元数据时仍完成并保存统计', async () => {
+  const hotspots=[{id:1,title:'Runtime 打标',source:'rsshub',url:'https://example.com/1',raw_json:'{}'}];
+  const updated=[];
+  const store={
+    getBatch(){return {hotspots};},
+    updateHotspotTags(id,tags){updated.push({id,tags});},
+  };
+  const gateway={
+    config:{defaultProvider:'deepseek',providers:{deepseek:{maxOutputTokens:8192,taggingChunkSize:1}}},
+    async complete(){return {content:JSON.stringify({items:[{id:1,eventKey:'主体|动作',preScores:{conflict:10}}]}),provider:'codex-app-server',model:'codex-app-server',runtimeId:'codex-app-server'};},
+  };
+  const result=await tagBatch({gateway,store,batchId:'b-runtime',provider:'deepseek'});
+  assert.equal(result.updated,1);
+  assert.equal(updated.length,1);
+  assert.deepEqual(result.calls,[{model:'codex-app-server',compressed:false,inputTokens:null,outputTokens:null}]);
+});
+
 test('打标输入注入 RSS 摘要并截断，无摘要时不携带该字段', () => {
   const withSummary = buildTaggingInput({ id:1, source:'rsshub', title:'t', url:'https://example.com/1', raw_json: JSON.stringify({ summary: '  摘要 内容  ' }) });
   assert.equal(withSummary.summary, '摘要 内容');

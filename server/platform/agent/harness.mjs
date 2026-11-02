@@ -223,8 +223,10 @@ export async function runSkill(request = {}) {
       }
       try {
         let finalOutput = null;
-        const instruction = (execution.messages || []).filter((item) => ['system', 'developer'].includes(item.role)).map((item) => String(item.content || '')).join('\n\n');
-        const userInput = (execution.messages || []).filter((item) => item.role === 'user').map((item) => String(item.content || '')).join('\n\n');
+        const messages = execution.messages || [];
+        const instruction = messages.filter((item) => ['system', 'developer'].includes(item.role)).map((item) => String(item.content || '')).join('\n\n');
+        const userInput = messages.filter((item) => !['system', 'developer'].includes(item.role))
+          .map((item) => `[${String(item.role || 'user').toUpperCase()}]\n${String(item.content || '')}`).join('\n\n');
         for await (const event of execution.runtimeAdapter.run({ runId: agentRunId, runtimeProfileId: execution.runtimeProfileId || 'codex-chatgpt-plan',
           workflowRunId: trace.workflowRunId, stageId: trace.stageId, instruction, input: userInput || request.input || '', outputSchema: definition.outputSchema || null,
           tools: catalog.map((tool) => ({ name: tool.capability, description: tool.description || tool.name || tool.capability, inputSchema: tool.inputSchema || { type: 'object' } })),

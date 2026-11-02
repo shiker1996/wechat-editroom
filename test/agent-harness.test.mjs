@@ -125,6 +125,40 @@ test('opt-in 批次 Pipeline stage 使用外部 Runtime，保留原始提示并�
   }
 });
 
+test('外部 Agent Runtime 保留编辑室的 user/assistant 历史消息和顺序', async () => {
+  let runtimeRequest;
+  const runtimeAdapter = {
+    id: 'codex-app-server',
+    async getCapabilities() { return { run: true, streaming: true, cancel: true }; },
+    async *run(request) {
+      runtimeRequest = request;
+      yield { type: 'run.completed', output: '收到，我会沿着刚才的讨论继续。' };
+    },
+  };
+  setAgentRuntimeRegistry({ resolve: (id) => id === 'codex' ? runtimeAdapter : null }, { getDefaultRuntime: () => 'codex' });
+  try {
+    const messages = [
+      { role: 'system', content: '遵循编辑室系统规则' },
+      { role: 'user', content: '候选事实与编辑底稿' },
+      { role: 'user', content: '先讨论读者影响' },
+      { role: 'assistant', content: '我们刚才确认读者影响是就业选择。' },
+      { role: 'user', content: '再把这个判断写进底稿' },
+    ];
+    const result = await runSkill({ skillId: 'editorial-room-chat', entryPoint: 'editorial', messages,
+      definition: { id: 'editorial-room-chat', kind: 'agent-skill', runtimePolicy: { mode: 'external-agent' } } });
+    assert.equal(result.assistantReply, '收到，我会沿着刚才的讨论继续。');
+    assert.equal(runtimeRequest.instruction, '遵循编辑室系统规则');
+    assert.equal(runtimeRequest.input, [
+      '[USER]\n候选事实与编辑底稿',
+      '[USER]\n先讨论读者影响',
+      '[ASSISTANT]\n我们刚才确认读者影响是就业选择。',
+      '[USER]\n再把这个判断写进底稿',
+    ].join('\n\n'));
+  } finally {
+    setAgentRuntimeRegistry(null);
+  }
+});
+
 test('Pipeline stage 失败 checkpoint 可从原阶段 Run 重试并建立父子关联', async () => {
   const runs = [], checkpoints = new Map();
   const store = {

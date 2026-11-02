@@ -159,7 +159,7 @@ export async function tagBatch({ gateway, store, batchId, provider, limit, hotsp
     try { parsed = parseModelJson(result, { store, label: '热点语义打标' }); }
     catch (error) {
       const reason = result.finishReason === 'length' ? '模型达到输出上限，JSON 被截断' : `模型返回的 JSON 无效：${error.message}`;
-      store.updateModelCall(result.callId, { status:'invalid_output', error:reason });
+      if (result.callId != null) store.updateModelCall(result.callId, { status:'invalid_output', error:reason });
       // 非思考模式下模型可能退化（回显输入/截断），开启 thinking 重试一次再进入拆分逻辑
       if (!thinking) {
         onProgress(`${reason}；开启 thinking 重试`);
@@ -207,7 +207,7 @@ export async function tagBatch({ gateway, store, batchId, provider, limit, hotsp
     const missing=chunk.filter((item)=>!returnedIds.has(item.id));
     if(missing.length) {
       const reason=`模型只返回 ${chunk.length-missing.length}/${chunk.length} 条有效标注`;
-      store.updateModelCall(result.callId,{status:'invalid_output',error:reason});
+      if (result.callId != null) store.updateModelCall(result.callId,{status:'invalid_output',error:reason});
       // 整组 0 条有效标注通常是模型回显输入（items 里没有 preScores/eventKey），开启 thinking 重试一次
       if (!thinking && returnedIds.size === 0) {
         onProgress(`${reason}；疑似模型回显输入，开启 thinking 重试`);
@@ -219,9 +219,9 @@ export async function tagBatch({ gateway, store, batchId, provider, limit, hotsp
         recordFailures(missing, reason, { errorCode: 'missing_valid_tag', modelCallId: result.callId, thinking, depth });
         onProgress(`${reason}；已跳过 ${missing.length} 条（批次结束后可用“继续打标”补打）`); }
     }
-    calls.push({ model: result.model, compressed: result.context.compressed,
-      inputTokens: result.usage.prompt_tokens ?? result.context.afterTokens,
-      outputTokens: result.usage.completion_tokens ?? null });
+    calls.push({ model: result.model, compressed: Boolean(result.context?.compressed),
+      inputTokens: result.usage?.prompt_tokens ?? result.context?.afterTokens ?? null,
+      outputTokens: result.usage?.completion_tokens ?? null });
   }
   // 持续补位的工作池：某批完成后立即领取下一批，避免被同一波次中的慢请求阻塞。
   let nextChunkIndex = 0;
