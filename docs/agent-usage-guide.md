@@ -1,17 +1,17 @@
-# 使用 Codex / WorkBuddy 安装和操作见字工作台
+# 使用 Codex / WorkBuddy / MCP Agent 安装和操作见字工作台
 
 > 类别：使用指南  
 > 状态：已实施  
-> 适用于：Codex CLI/桌面端与 WorkBuddy；Windows 示例使用 PowerShell
+> 适用于：Codex、WorkBuddy、DeepSeek Harness、Kimi 等可运行本机 MCP `stdio` 服务的 Agent 客户端；Windows 示例使用 PowerShell
 
-本文介绍怎样让 Codex 或 WorkBuddy 连接见字工作台，配置账号画像和采集源，并通过自然语言完成采集、研判、文章、排版、封面和图文流程。
+本文介绍怎样让 Codex、WorkBuddy 或其他兼容 MCP 的 Agent 客户端连接见字工作台，配置账号画像和采集源，并通过自然语言完成采集、研判、文章、排版、封面和图文流程。
 
 ## 1. 先理解三个组成部分
 
 | 组成 | 用途 |
 |---|---|
 | Codex 项目引导插件 | 在项目尚未安装时，指导 Codex 选择目录、克隆代码、运行安装向导，并初始化账号画像和采集源。它是 Codex 专用入口。 |
-| 项目级 MCP 与 Skills | 安装在见字项目内。Codex 和 WorkBuddy 共用业务工具与流程规则，但各自使用不同的客户端配置。 |
+| 项目级 MCP 与 Skills | 安装在见字项目内。各客户端共用业务工具与流程规则；Codex、WorkBuddy 有安装预设，其他支持本机 MCP 的客户端可手动连接。 |
 | 见字工作台内部模型 | 可选。只有用户明确选择工作台内部 AI 路径时才需要；默认外部 Agent 用当前会话完成研判、成稿、排版、封面和图文生成。 |
 
 外部 Agent 的模型负责理解要求、分析内容并生成文章和视觉产物；见字通过 MCP 保存结果并执行确定性门禁、规范化、浏览器审计、截图和归档。因此默认外部 Agent 流程不要求配置见字内部模型。账号画像、采集源配置和批次数据仍由工作台保存和管理。
@@ -108,6 +108,30 @@ npm run jianzi -- doctor --json
 完成连接后，账号、采集源和日常内容生产的操作方式与本指南后续章节相同。可以直接向 WorkBuddy 提出例如：
 
 > 先检查见字工作台是否连接。如果账号画像未配置，采访我并在确认后保存；然后列出采集器和当前采集源，说明每种来源的前置条件。先不要启动采集。
+
+### 3.3 DeepSeek Harness、Kimi 和其他 MCP 客户端
+
+只要客户端能在本机启动 MCP `stdio` 服务，就可以连接同一个工作台 MCP；无需申请平台 Runtime OAuth，也无需在见字中配置该 Agent 平台的模型。CLI 的 `install --agent` 目前为 Codex 与 WorkBuddy 生成项目级客户端配置；其他客户端在 MCP 设置中手动添加服务，并从 `agent-integrations/skills/` 安装其支持的项目 Skills。
+
+通用配置示例（各客户端的字段名和设置界面可能不同）：
+
+```json
+{
+  "mcpServers": {
+    "jianzi_workbench": {
+      "command": "<项目 Node.js 可执行文件或 node>",
+      "args": ["<见字项目绝对路径>/scripts/agent-integration/mcp-server.mjs"],
+      "env": {
+        "JIANZI_WORKBENCH_URL": "http://127.0.0.1:4317"
+      }
+    }
+  }
+}
+```
+
+先启动见字工作台，再刷新客户端 MCP 连接，并调用 `jianzi_doctor`。若工作台使用非默认端口，将 `JIANZI_WORKBENCH_URL` 改为实际的本机地址。MCP 子进程必须运行在能访问项目目录和工作台 loopback 地址的同一台电脑上；纯云端、不能启动本机进程的 Agent 会话无法直接连接。
+
+不同客户端安装 Skills 的方式由客户端决定。将 `agent-integrations/skills/` 下需要的技能目录添加到客户端的项目级 Skill 搜索路径，并在对话中要求 Agent 先读 `jianzi-workbench-setup`，再按本指南执行。完成接入后，Agent 可用当前会话模型生成结果；见字 MCP 负责读取项目资料、保存提交结果并运行工作台门禁。
 
 ## 4. 配置账号画像
 
