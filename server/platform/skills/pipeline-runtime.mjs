@@ -46,9 +46,9 @@ export async function runPipelineStage({ gateway, store, batchId = null, candida
   let stageDefinition = definition;
   if (!stageDefinition && workspaceRoot && PIPELINE_SKILLS_BY_PURPOSE[purpose]) {
     const resolved = resolveSkillRuntime({ workspaceRoot, skillId: resolvedSkillId, kind: 'stage-skill' });
-    stageDefinition = { ...resolved.definition, entryPoints: [entryPoint] };
+    stageDefinition = { ...resolved.definition, entryPoints: [entryPoint], runtimePolicy: resolved.definition.runtimePolicy || { mode: 'external-agent' } };
   }
-  stageDefinition ||= { id: resolvedSkillId, kind: 'stage-skill', entryPoints: [entryPoint] };
+  stageDefinition ||= { id: resolvedSkillId, kind: 'stage-skill', entryPoints: [entryPoint], runtimePolicy: { mode: 'external-agent' } };
   return runSkill({
     skillId: resolvedSkillId, entryPoint, input,
     definition: stageDefinition,

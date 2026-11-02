@@ -227,7 +227,7 @@ export async function runTypesetPipeline({ gateway, store, batchId, candidateId,
   // 默认让模型根据文章结构与设计方案编排样式；确定性渲染保留为可显式选择的稳定回退模式。
   if (draftMode === 'llm') {
     const htmlGenSystem = `${skills['wechat-article-typeset'].prompt}\n\n## 当前阶段子技能\n${skills['wechat-md-to-draft'].prompt}\n\n${resolvePrompt('articles.typeset-html-contract').text}`;
-    const { provider: providerConfig2 } = gateway.resolve(provider);
+    const providerConfig2 = typesetRuntime.providerConfig;
     const htmlGenResult = await gateway.complete({ provider, purpose: 'typeset-html', batchId, candidateId,
       maxOutputTokens: Math.min(8000, providerConfig2.maxOutputTokens), messages: [
         { role: 'system', content: htmlGenSystem, protected: true },

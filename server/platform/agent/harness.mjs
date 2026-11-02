@@ -306,7 +306,10 @@ export async function runSkill(request = {}) {
         if (missingRuntimeCapabilities.length) fail('RUNTIME_CAPABILITY_MISSING', `所选 Agent Runtime 缺少能力：${missingRuntimeCapabilities.join('、')}`);
         const stageRequest = execution.runtimeRequest || {};
         const messages = Array.isArray(stageRequest.messages) ? stageRequest.messages : [];
-        const instruction = messages.map((item) => `[${String(item?.role || 'user').toUpperCase()}]\n${String(item?.content || '')}`).join('\n\n');
+        const instruction = [
+          messages.map((item) => `[${String(item?.role || 'user').toUpperCase()}]\n${String(item?.content || '')}`).join('\n\n'),
+          stageRequest.jsonMode ? '输出必须是单个合法 JSON 对象，不要添加 Markdown 代码围栏或解释文字。' : '',
+        ].filter(Boolean).join('\n\n');
         let output = '';
         for await (const event of execution.runtimeAdapter.run({
           runId: stageRunId,

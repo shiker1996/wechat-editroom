@@ -116,6 +116,7 @@ test('opt-in 批次 Pipeline stage 使用外部 Runtime，保留原始提示并�
     assert.equal(gatewayCalls.length, 0);
     assert.equal(calls.length, 1);
     assert.match(calls[0].instruction, /严格按工作台提示词打标/);
+    assert.match(calls[0].instruction, /单个合法 JSON 对象/);
     assert.match(calls[0].instruction, /待打标事件/);
     assert.deepEqual(calls[0].input, { eventId: 'evt-1' });
     assert.equal(runs[0].provider, 'codex-app-server');

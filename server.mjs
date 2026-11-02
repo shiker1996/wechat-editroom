@@ -17,7 +17,7 @@ import { ensureStarted } from './plugins/rsshub/collector.mjs';
 import { ModelGateway } from './server/platform/llm/gateway.mjs';
 import { draftArticle } from './server/features/research/llm/tasks.mjs';
 import { AiJobManager } from './server/platform/jobs/ai-job-manager.mjs';
-import { BATCH_LEVEL_AI_JOB_TYPES, createAiJobHandlers } from './server/features/batches/index.mjs';
+import { BATCH_LEVEL_AI_JOB_TYPES, EXTERNAL_RUNTIME_AI_JOB_TYPES, createAiJobHandlers } from './server/features/batches/index.mjs';
 import { createCandidateSelectionService, recordResearchFailure } from './server/features/research/index.mjs';
 import { fetchCandidateSource } from './server/platform/integrations/source-fetcher.mjs';
 import { getImageWorkspace, saveImageMetadata, saveLocalImage, uploadImageToCdn,
@@ -157,12 +157,11 @@ const codexRuntime = createCodexAppServerRuntime({ getAccessToken: () => codexOA
 const agentRuntimeRegistry = new AgentRuntimeRegistry();
 agentRuntimeRegistry.register(codexRuntime, 'codex');
 setAgentRuntimeRegistry(agentRuntimeRegistry, { getDefaultRuntime: () => getAgentRuntimeSettings(runtimePaths.configRoot).defaultRuntime });
-const externalBatchRuntimeTypes = new Set(['tag', 'retag', 'event-cards', 'research', 'auto']);
 const aiJobs = new AiJobManager(store, models, config, {
   batchLevelTypes: BATCH_LEVEL_AI_JOB_TYPES,
   getDefaultRuntime: () => getAgentRuntimeSettings(runtimePaths.configRoot).defaultRuntime,
   isExternalRuntimeJob: ({ type, batch }) => getAgentRuntimeSettings(runtimePaths.configRoot).defaultRuntime !== 'local-harness'
-    && externalBatchRuntimeTypes.has(type) && !(type === 'auto' && batch?.batch_type === 'breaking'),
+    && EXTERNAL_RUNTIME_AI_JOB_TYPES.has(type) && !(type === 'auto' && batch?.batch_type === 'breaking'),
   handlers: createAiJobHandlers({ store, gateway: models, config, log: (job, message) => aiJobs.log(job, message), onThinking: (job, delta) => aiJobs.recordThinking(job, delta) }),
   onFailure: ({ job, error }) => {
     if (job.type === 'research' || (job.type === 'auto' && job.phase === 'research')) recordResearchFailure({ store, job, error });
