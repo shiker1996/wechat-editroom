@@ -86,10 +86,10 @@ async function dispatch(positional, options) {
   }
   if (group === 'install') return print(installAgentIntegration({ agent: String(options.agent || 'both') }), Boolean(options.json));
   if (group === 'workbench-setup') {
-    const args = options.yes ? ['--yes'] : [];
+    const args = options.yes ? ['-Rest', '--yes'] : [];
     const result = process.platform === 'win32'
       ? spawnSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(root, 'scripts', 'runtime', 'setup-workbench.ps1'), ...args], { cwd: root, stdio: 'inherit', windowsHide: true })
-      : spawnSync('bash', [path.join(root, 'setup-workbench.sh'), ...args], { cwd: root, stdio: 'inherit' });
+      : spawnSync('bash', [path.join(root, 'setup-workbench.sh'), ...(options.yes ? ['--yes'] : [])], { cwd: root, stdio: 'inherit' });
     process.exitCode = result.status ?? 1;
     return;
   }
