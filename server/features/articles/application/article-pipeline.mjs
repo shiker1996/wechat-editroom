@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ARTICLE_PROMPTS, ARTICLE_PROMPT_VERSION, ARTICLE_LENGTH_ADJUSTMENT_THRESHOLD, planArticleLengthAdjustment, draftSystemPrompt, articleReaderContext, articlePromptManifest, articleChangedPassages } from './article-prompts.mjs';
-import { buildArticleBriefView, articleFactAuthorityView } from './article-pipeline-contract.mjs';
+import { buildArticleBriefView, articleFactAuthorityView, normalizeArticleStageMarkdown } from './article-pipeline-contract.mjs';
 import { illustrateArticle } from './article-illustration.mjs';
 import { getAccountContext } from '../../../platform/application/account-context-service.mjs';
 import { normalizeDistributionLane } from '../../../shared/domain/distribution-strategy.mjs';
@@ -29,7 +29,7 @@ import {
   readArticleSourceInput, sourceCacheIssue, buildResearchCoveragePrompt,
 } from './article-pipeline-contract.mjs';
 export {
-  ARTICLE_LENGTH_RANGE, articleLengthStatus, articleStageOutputIssue, authorizedWritingBrief,
+  ARTICLE_LENGTH_RANGE, articleLengthStatus, articleStageOutputIssue, normalizeArticleStageMarkdown, authorizedWritingBrief,
   buildDraftUserPrompt, buildDraftOutlineView, buildArticlePlanningView, replaceArticleTitle, compositeSourceText, normalizePlanningResult, selectWriterSkill,
   readArticleSourceInput, sourceCacheIssue, unverifiedFactBaseIssue, buildResearchCoveragePrompt,
 } from './article-pipeline-contract.mjs';
@@ -550,7 +550,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   const modelInput = { provider, batchId, candidateId };
   const maxTextTokens = Math.min(6500, providerConfig.maxOutputTokens || 6500);
   const requireArticle = (result) => {
-    const article = cleanMarkdown(result.content);
+    const article = normalizeArticleStageMarkdown(result.content);
     const issue = articleStageOutputIssue(article, { requireArticle: true });
     if (issue) throw new Error(issue);
     return article;

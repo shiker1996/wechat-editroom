@@ -3,7 +3,7 @@ import { ARTICLE_PROMPTS, articlePromptManifest, articleChangedPassages } from '
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { articleLengthStatus, articleStageOutputIssue, articleGateBlockingIssues, articleGateNeedsEditorialReview, preserveLengthValidRevision, authorizedWritingBrief, buildDraftUserPrompt, buildDraftOutlineView, replaceArticleTitle, buildArticleStageSystem, buildReviewRepairPrompt, buildPublicationComplianceRepairPrompt, compositeSourceText, normalizePlanningResult, selectWriterSkill, ARTICLE_LENGTH_RANGE, ARTICLE_STAGE_CONTRACT, ARTICLE_QUALITY_GATE_TOOL, ARTICLE_REVIEW_GATE_TOOL, aiQualityGate, aiReviewGate, sourceCacheIssue, unverifiedFactBaseIssue } from '../server/features/articles/application/article-pipeline.mjs';
+import { articleLengthStatus, articleStageOutputIssue, normalizeArticleStageMarkdown, articleGateBlockingIssues, articleGateNeedsEditorialReview, preserveLengthValidRevision, authorizedWritingBrief, buildDraftUserPrompt, buildDraftOutlineView, replaceArticleTitle, buildArticleStageSystem, buildReviewRepairPrompt, buildPublicationComplianceRepairPrompt, compositeSourceText, normalizePlanningResult, selectWriterSkill, ARTICLE_LENGTH_RANGE, ARTICLE_STAGE_CONTRACT, ARTICLE_QUALITY_GATE_TOOL, ARTICLE_REVIEW_GATE_TOOL, aiQualityGate, aiReviewGate, sourceCacheIssue, unverifiedFactBaseIssue } from '../server/features/articles/application/article-pipeline.mjs';
 import { inspectPlanningMetaLeakage } from '../server/features/articles/domain/article-quality.mjs';
 import { inspectArticleQuality, inspectTrafficStructure } from '../server/features/articles/domain/article-quality.mjs';
 import { loadArticleSkillBundle, loadSkillBundle } from '../server/platform/llm/skill-runtime.mjs';
@@ -22,6 +22,9 @@ test('文章阶段输出门禁识别工具操作说明和非完整文章',()=>{
   assert.match(articleStageOutputIssue('我先读取相关契约文件，确认环境后开始处理 humanize 阶段。',{requireArticle:true}),/工具操作说明/);
   assert.match(articleStageOutputIssue('这里只是一段说明。',{requireArticle:true}),/一级标题/);
   assert.equal(articleStageOutputIssue('# 完整标题\n\n这是文章正文。',{requireArticle:true}),null);
+  const preambled='我会先核对发布信息，再按简报边界写成完整文章。# 文章标题\n\n这是文章正文。';
+  assert.equal(normalizeArticleStageMarkdown(preambled),'# 文章标题\n\n这是文章正文。');
+  assert.equal(articleStageOutputIssue(preambled,{requireArticle:true}),null);
 });
 
 test('内容问题进入编辑器待修订，模型输出契约问题仍阻断',()=>{

@@ -3,6 +3,16 @@ import path from 'node:path';
 import { markdownVisibleChars } from '../../../shared/domain/markdown-visible-chars.mjs';
 
 function cleanMarkdown(value) { return String(value||'').trim().replace(/^```(?:markdown)?\s*/i,'').replace(/\s*```$/,''); }
+export function normalizeArticleStageMarkdown(value) {
+  const text = cleanMarkdown(value);
+  const firstLineEnd = text.search(/\r?\n/u);
+  const firstLine = firstLineEnd < 0 ? text : text.slice(0, firstLineEnd);
+  const titleIndex = firstLine.search(/#\s+\S/u);
+  // Some runtimes prepend a short status sentence and attach the requested
+  // H1 to it on the same line. The article contract requires the H1 first.
+  if (titleIndex > 0 && firstLine.slice(0, titleIndex).trim()) return text.slice(titleIndex).trim();
+  return text;
+}
 function asArray(value,{emptyWords=false}={}) {
   if(Array.isArray(value))return value.filter((item)=>item!=null&&String(item).trim()!=='');
   if(value==null)return [];
@@ -17,7 +27,7 @@ function asArray(value,{emptyWords=false}={}) {
 function normalizeUrl(value) { return String(value||'').trim().replace(/\/+$/,'').toLowerCase(); }
 
 export function articleStageOutputIssue(value,{requireArticle=false}={}) {
-  const text=cleanMarkdown(value);
+  const text=normalizeArticleStageMarkdown(value);
   if(!text)return '模型返回空内容';
   if(/(?:我(?:先|需要|将|来)|让我)(?:读取|查看|检查|了解|确认|调用|使用|打开).{0,40}(?:文件|目录|环境|工具|技能|契约|工作区)/i.test(text))return '模型返回了工具操作说明，而不是文章内容';
   if(requireArticle&&!/^#\s+\S+/m.test(text))return '模型未返回包含一级标题的完整 Markdown 文章';
