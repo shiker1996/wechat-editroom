@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="见字：从热点到文章交付的本地 AI 公众号编辑工作台。查看真实界面、下载桌面版并开始使用。">
+    <meta name="description" content="见字：从热点到文章交付的本地 AI 公众号编辑工作台。可通过 WorkBuddy 等外部 Agent 调用本地 MCP 与内容工作流。">
     <meta name="theme-color" content="#101b2d">
     <title>见字｜从热点开始写一篇文章</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -22,6 +22,7 @@
         <a href="#how">怎么工作</a>
         <a href="#screenshots">真实界面</a>
         <a href="#desktop">桌面版</a>
+        <a href="#agents">Agent 接入</a>
         <a href="#tutorial">快速上手</a>
       </nav>
       <a class="top-cta" href="https://github.com/shiker1996/wechat-newsroom-workbench" target="_blank" rel="noreferrer">查看 GitHub <span>↗</span></a>
@@ -92,6 +93,26 @@
           </div>
           <div class="carousel-thumbs" role="tablist" aria-label="选择截图页面"></div>
         </div>
+      </section>
+
+      <section class="agent-section section-wrap" id="agents">
+        <div class="section-intro reveal">
+          <div><p class="eyebrow">03 / EXTERNAL AGENTS</p><h2>把见字工作流，<br><span>带进你的 Agent。</span></h2></div>
+          <p class="agent-intro-copy">WorkBuddy 可以通过项目 MCP 调用本机见字工作台。由 Agent 当前会话完成研判与内容生成，见字负责保存、校验、渲染和归档。</p>
+        </div>
+        <div class="agent-grid">
+          <article class="agent-card agent-card-primary reveal">
+            <div class="agent-card-top"><span>01 / INSTALL</span><b>WORKBUDDY</b></div>
+            <div class="agent-card-content"><p class="agent-kicker">安装接入能力</p><h3>先让 WorkBuddy<br>连接见字项目。</h3><p>按安装指引配置项目 MCP 与 Skills，让 WorkBuddy 能在本机工作区发现见字工具和内容流程。</p><a class="button button-download" href="https://www.workbuddy.link/p/NeECCcaj8oUnFcCaNHX3lx?shareId=36a305b2-2fc1-4203-81a1-9b30b1cdeea9&amp;ext2=browser_icon" target="_blank" rel="noreferrer">打开安装指引 <span>↗</span></a></div>
+            <span class="agent-card-mark" aria-hidden="true">接</span>
+          </article>
+          <article class="agent-card agent-card-guide reveal reveal-delay-1">
+            <div class="agent-card-top"><span>02 / USE</span><b>MCP + SKILLS</b></div>
+            <div class="agent-card-content"><p class="agent-kicker">使用见字能力</p><h3>从批次与选题，<br>走到可发布产物。</h3><p>让 WorkBuddy 调用见字 MCP 完成采集、研判、文章、排版、封面和图文流程，并返回工作台产物入口。</p><a class="button button-dark" href="https://www.workbuddy.link/p/x5XwcFyTfTbaGOSdYLvpmH?shareId=f7dd4e08-9412-4de0-bf4f-e7afba9c2706&amp;ext2=browser_icon" target="_blank" rel="noreferrer">打开使用指南 <span>↗</span></a></div>
+            <span class="agent-card-mark" aria-hidden="true">用</span>
+          </article>
+        </div>
+        <p class="agent-local-note"><span class="live-dot"></span> WorkBuddy 和见字工作台需要在同一台电脑上访问项目目录与本机 MCP；安装后切换到项目工作区并刷新 MCP。</p>
       </section>
 
       <section class="section-wrap tutorial" id="tutorial">
