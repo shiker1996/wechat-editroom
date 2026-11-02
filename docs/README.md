@@ -43,6 +43,7 @@
 | [capability-onboarding-configurability-plan.md](./design/capability-onboarding-configurability-plan.md) | 能力接入配置化与开发规范化：五种情形分级、能力生命周期状态机、Agent 登记驱动（阶段 1–4 已实施；页面添加入口 2026-08-15 已下线） |
 | [capability-expansion-guide.md](./design/capability-expansion-guide.md) | 能力拓展单一视图：消费者×能力类型成本矩阵、生命周期状态机、三类消费者 SOP 与遗留方向（2026-08-15 汇总，拓展先读） |
 | [agent-adapter-configurability-design.md](./design/agent-adapter-configurability-design.md) | Agent 能力适配层配置化设计：resourceKind 档案表 + Agent 双 map 声明，资源类能力接入免改代码（2026-08-15，阶段 1–4 已实施） |
+| [agent-runtime-adapter-design.md](./design/agent-runtime-adapter-design.md) | Codex / WorkBuddy 等平台 Agent Runtime 统一协议与 Adapter 方案（待评审；不改写 ModelGateway） |
 | [conversation-agent-form-unification-design.md](./design/conversation-agent-form-unification-design.md) | 对话 Agent 表单统一设计（`server/features/articles/domain/editorial-readiness.mjs` 的设计依据） |
 | [star-growth-roadmap.md](./design/star-growth-roadmap.md) | Star 增长路线图：发布临门一脚、首个公开 Release、可见性渠道与留存运营（待评审） |
 | [ai-visual-cover-design.md](./design/ai-visual-cover-design.md) | 公众号文章 AI 视觉封面：HTML/CSS 生成、主题 SPEC、标准回退和 900×383 交付（已实施） |

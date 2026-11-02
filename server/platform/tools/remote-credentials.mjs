@@ -66,6 +66,25 @@ export function setCredentialFields(root,pluginId,profile,fields){
   return credentialFieldsStatus(root,profile,Object.keys(configuredFields));
 }
 
+export function clearCredentialFields(root,profile,fields=[]){
+  if(!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(profile))throw new Error('凭据 Profile 无效');
+  const current=fs.existsSync(envPath(root))?parseEnv(fs.readFileSync(envPath(root),'utf8')):{};
+  const metadata=readMetadata(root);const item=metadata.profiles[profile];
+  for(const field of fields){
+    if(!/^[A-Za-z][A-Za-z0-9_-]*$/.test(field))throw new Error(`凭据字段无效：${field}`);
+    delete current[keyFor(profile,field)];
+    if(item?.fields)delete item.fields[field];
+  }
+  writeEnv(root,current);
+  if(item){
+    item.configured=Object.values(item.fields||{}).some(Boolean);
+    if(!item.configured)delete metadata.profiles[profile];
+    else metadata.profiles[profile]=item;
+    writeMetadata(root,metadata);
+  }
+  return {profile,configured:Boolean(metadata.profiles[profile]?.configured)};
+}
+
 export function getCredentialFields(root,profile,fields=[]){
   const values=fs.existsSync(envPath(root))?parseEnv(fs.readFileSync(envPath(root),'utf8')):{};
   return Object.fromEntries(fields.flatMap((field)=>{

@@ -143,7 +143,7 @@ export async function runAccountContextAgentTurn({ gateway, store, registry, pro
   let lastResult = null;
   const run = await runSkill({
     gateway, entryPoint: 'account-context', registry, catalog, messages, store,
-    definition: { id: ACCOUNT_CONTEXT_AGENT_SKILL, kind: 'agent-skill', entryPoints: ['account-context'], requiredCapabilities: allowedCapabilities, budget: { maxModelSteps: 4, maxToolCalls: 3, maxParallelToolCalls: 1, timeoutMs: 60000, maxToolResultChars: 3000, maxTotalToolResultChars: 6000 } },
+    definition: { id: ACCOUNT_CONTEXT_AGENT_SKILL, kind: 'agent-skill', entryPoints: ['account-context'], runtimePolicy: { mode: 'external-agent', requiredCapabilities: ['hostToolCallbacks'] }, requiredCapabilities: allowedCapabilities, budget: { maxModelSteps: 4, maxToolCalls: 3, maxParallelToolCalls: 1, timeoutMs: 60000, maxToolResultChars: 3000, maxTotalToolResultChars: 6000 } },
     signal,
     toolContext: {
       skillId: ACCOUNT_CONTEXT_AGENT_SKILL,

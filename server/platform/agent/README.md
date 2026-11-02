@@ -124,3 +124,9 @@ Workflow/Agent Run Trace 转为质量指标、脱敏回放 fixture 和两次运�
 分块、finish，再返回 final。它只负责协议编排和画布/输出路径等运行参数，不绑定具体业务
 主题或页面尺寸；社交卡和文章封面应通过 feature 层 adapter 注入各自的 skill、输入文件、
 画布和输出文件名。
+
+## Agent Runtime adapters（实施中）
+
+`runtimes/codex-app-server.mjs` 提供 Codex app-server 的 JSON-RPC 子进程驱动，映射初始化、thread/turn 启动、文本增量、动态工具回调、完成/失败和取消事件。`integrations/codex-oauth.mjs` 提供项目自己的 Sign in with ChatGPT OAuth 授权、令牌刷新与断开服务；访问令牌通过注入的 `getAccessToken` 提供，adapter 不读取 Codex CLI 私有认证文件。
+
+系统设置页可连接/断开 ChatGPT 账号并选择默认 Runtime。Skill 通过 `runtimePolicy: { mode: 'external-agent', requiredCapabilities: [...] }` 声明通用执行能力；Harness 从 Runtime Registry 选择平台并校验能力，Skill 定义不绑定 Codex/WorkBuddy 名称。Skill 授权的工具通过 adapter 的宿主工具回调进入现有 Tool Broker，继续执行能力白名单、Schema、路径、权限、确认策略和调用审计，不回退调用内部模型。账号画像助手是首个声明支持外部 Agent 的业务切片。相关整体设计与剩余限制见 `docs/design/agent-runtime-adapter-design.md`。

@@ -18,12 +18,12 @@ export function readAgentSnapshot({ store, snapshotId, skillId, entryPoint, tool
 }
 
 export function prepareAgentRun({ runtime, skillId, entryPoint, definition, catalog, budget, toolContext, gateBindings, historical = null, snapshotId = null }) {
-  if (!runtime.gateway) return { gateway: null, snapshotId, snapshot: historical };
+  if (!runtime.gateway && !runtime.runtimeAdapter) return { gateway: null, snapshotId, snapshot: historical };
   let snapshot = historical;
   if (!snapshot) {
-    const provider = toolContext.provider || runtime.gateway.config?.defaultProvider;
-    const model = runtime.gateway.config?.providers?.[provider]?.model || '';
-    const stageModels = runtime.gateway.stageModelConfig?.() || {};
+    const provider = runtime.runtimeAdapter?.id || toolContext.provider || runtime.gateway?.config?.defaultProvider || '';
+    const model = runtime.runtimeAdapter ? 'agent-runtime' : runtime.gateway?.config?.providers?.[provider]?.model || '';
+    const stageModels = runtime.gateway?.stageModelConfig?.() || {};
     // Freeze exactly the assembled prompt/history used by the adapter, not a
     // second reconstruction of its domain prompt. Never persist Gateway config.
     const bundle = { ...runtime.resolvedSkillBundle, skillName: skillId, definition, hash: undefined, config: runtime.resolvedSkillBundle?.config || runtime.skillConfig || null,
@@ -31,7 +31,7 @@ export function prepareAgentRun({ runtime, skillId, entryPoint, definition, cata
     snapshot = createGenerationSnapshot({ skillBundles: [bundle],
       tools: catalog.flatMap((tool) => (tool.implementations || []).map((implementation) => ({ capability: tool.capability, ...implementation }))),
       provider, model, purpose: entryPoint, stageModels,
-      stageModelsResolved: resolveStageModelsSnapshot({ stageModels, providers: runtime.gateway.config?.providers || {} }),
+      stageModelsResolved: resolveStageModelsSnapshot({ stageModels, providers: runtime.gateway?.config?.providers || {} }),
     });
     snapshot.harness = structuredClone({ schemaVersion: 1, skillId, entryPoint, messages: runtime.messages || [], catalog, budget, gateBindings });
     snapshot.resolutionPolicy.strictHistoricalBinding = true;

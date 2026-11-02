@@ -36,6 +36,9 @@ function bindSystem() {
   document.getElementById("add-rsshub-env")?.addEventListener("click", () => addRsshubKvRow());
   document.getElementById("add-model-connection")?.addEventListener("click", () => addModelConnection().catch((error) => toast(error.message, "error")));
   document.getElementById("add-model-provider")?.addEventListener("click", () => addModelProvider().catch((error) => toast(error.message, "error")));
+  document.getElementById("codex-runtime-connect")?.addEventListener("click", () => connectCodexRuntime().catch((error) => toast(error.message, "error")));
+  document.getElementById("codex-runtime-disconnect")?.addEventListener("click", () => disconnectCodexRuntime().catch((error) => toast(error.message, "error")));
+  document.getElementById("agent-runtime-default")?.addEventListener("change", (event) => saveDefaultAgentRuntime(event.currentTarget.value).catch((error) => { toast(error.message, "error"); loadCodexRuntimeStatus(); }));
   document.querySelector(".config-tabbar")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-config-tab]");
     if (button) selectConfigTab(button.dataset.configTab);
@@ -174,6 +177,10 @@ renderSystemExtensionEditor=function(item){
 };
 function readSystemExtensionForm(form){return Object.fromEntries([...form.querySelectorAll("[data-system-extension-field]")].map((field)=>{let value=field.type==='checkbox'?field.checked:field.value;const type=field.dataset.valueType;if(type==='array')value=String(value).split(/\r?\n/).map((item)=>item.trim()).filter(Boolean);if((type==='integer'||type==='number')&&value!=='')value=Number(value);return [field.dataset.systemExtensionField,value];}));}
 async function loadExtensionConfigurations(){const result=await request("/api/system/configuration/catalog");extensionConfigurations=result.items||[];const ready=extensionConfigurations.filter((item)=>item.state.configured).length,attention=extensionConfigurations.length-ready;const summary=document.getElementById("configuration-readiness");if(summary)summary.innerHTML=`<strong>${ready}/${extensionConfigurations.length}</strong><span>${attention?`${attention} 项需要处理`:'全部能力已就绪'}</span>`;const match=location.hash.match(/^#system\/configuration\/([^/]+)\/(.+)$/);if(match)selectedExtension=`${decodeURIComponent(match[1])}:${decodeURIComponent(match[2])}`;else if(!selectedExtension)try{selectedExtension=sessionStorage.getItem("system-extension-selection")||"";}catch{}const current=extensionConfigurations.find((item)=>`${item.type}:${item.id}`===selectedExtension);if(!current)selectedExtension=extensionConfigurations[0]?`${extensionConfigurations[0].type}:${extensionConfigurations[0].id}`:null;renderConfigurationList();renderSystemExtensionEditor(extensionConfigurations.find((item)=>`${item.type}:${item.id}`===selectedExtension));}
+async function loadCodexRuntimeStatus(){const badge=document.getElementById('codex-runtime-status');if(!badge)return;try{const status=await request('/api/agent-runtimes/codex/status');badge.classList.toggle('ready',status.configured);badge.querySelector('span').textContent=status.configured?'已连接':'未连接';const account=document.getElementById('codex-runtime-account');if(account)account.textContent=status.configured?`ChatGPT 账号：${status.email||'已授权'} · 到期时间 ${new Date(status.expiresAt).toLocaleString()}`:'授权令牌保存在本机配置目录。';document.getElementById('codex-runtime-connect').textContent=status.configured?'重新连接':'连接 ChatGPT';document.getElementById('codex-runtime-disconnect').hidden=!status.configured;document.getElementById('agent-runtime-default').value=status.defaultRuntime||'local-harness';}catch(error){badge.querySelector('span').textContent='状态读取失败';}}
+async function connectCodexRuntime(){const result=await request('/api/agent-runtimes/codex/oauth/start',{method:'POST',body:'{}'});location.assign(result.authorizationUrl);}
+async function saveDefaultAgentRuntime(defaultRuntime){const result=await request('/api/agent-runtimes/default',{method:'PUT',body:JSON.stringify({defaultRuntime})});toast(result.defaultRuntime==='codex'?'Codex 已设为默认 Agent Runtime':'已切回见字本地 Runtime');await loadCodexRuntimeStatus();}
+async function disconnectCodexRuntime(){if(!await confirmAction('断开 Codex 后，见字将不能再使用该 ChatGPT 授权运行 Agent。是否继续？',{confirmText:'断开连接'}))return;await request('/api/agent-runtimes/codex/oauth/disconnect',{method:'POST',body:'{}'});toast('Codex 账号已断开');await loadCodexRuntimeStatus();}
 async function saveSystemExtension(item,form){const state=await request(extensionRoute(item),{method:"PUT",body:JSON.stringify(readSystemExtensionForm(form))});item.state=state;toast("扩展配置已保存");if(item.type==='model-provider'||item.type==='model-connection')await Promise.all([loadModelSettings(),loadExtensionConfigurations()]);else await loadExtensionConfigurations();renderConfigurationList();renderSystemExtensionEditor(extensionConfigurations.find((entry)=>`${entry.type}:${entry.id}`===`${item.type}:${item.id}`));}
 async function testSystemExtension(item){
   if(item.type==='model-provider'){
@@ -338,6 +345,6 @@ function collectRsshubFields() {
 
 export default async function loadSystemView() {
   bindSystem();
-  await Promise.all([loadRuntimeSettings(), loadModelSettings(), loadExtensionConfigurations()]);
+  await Promise.all([loadRuntimeSettings(), loadModelSettings(), loadExtensionConfigurations(), loadCodexRuntimeStatus()]);
   renderConfigurationList();
 }

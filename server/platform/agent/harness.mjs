@@ -1,10 +1,15 @@
 import { runConversationAgent } from './conversation-agent.mjs';
-import { AgentContractError } from './tool-protocol.mjs';
+import { AgentContractError, toolError } from './tool-protocol.mjs';
+import { executeConversationTool } from './tool-executor.mjs';
+import { capabilityForToolName } from './tool-catalog.mjs';
+import { compactToolResult, toolCallFingerprint } from './context.mjs';
+import { AGENT_RUNTIME_CAPABILITIES } from './runtime-registry.mjs';
 import { resolveSkillRuntime } from '../skills/resolver.mjs';
 export { SKILL_RUN_KINDS } from '../skills/runtime-definition.mjs';
 import { SKILL_RUN_KINDS } from '../skills/runtime-definition.mjs';
 import { resolveSkillGates } from '../skills/gates.mjs';
 import { readAgentSnapshot, prepareAgentRun, bindAgentGateway } from './run-preparation.mjs';
+import { agentEvent } from './events.mjs';
 
 
 /**
@@ -37,6 +42,15 @@ import { readAgentSnapshot, prepareAgentRun, bindAgentGateway } from './run-prep
  */
 
 function fail(code, message) { throw new AgentContractError(code, message); }
+
+let runtimeRegistry = null;
+let defaultRuntimeResolver = null;
+export function setAgentRuntimeRegistry(registry, { getDefaultRuntime = null } = {}) {
+  if (registry != null && typeof registry.resolve !== 'function') throw new TypeError('Agent Runtime Registry 必须提供 resolve');
+  if (getDefaultRuntime != null && typeof getDefaultRuntime !== 'function') throw new TypeError('默认 Runtime resolver 必须是函数');
+  runtimeRegistry = registry;
+  defaultRuntimeResolver = getDefaultRuntime;
+}
 
 function validateStringList(value, field) {
   if (value != null && (!Array.isArray(value) || value.some((item) => typeof item !== 'string' || !item))) {
@@ -109,11 +123,22 @@ export async function runSkill(request = {}) {
   definition = structuredClone(definition);
   if (definition.id !== skillId || !SKILL_RUN_KINDS.includes(definition.kind)) fail('INVALID_SKILL_RUN', '技能 ID 或运行类型不合法');
   validateStringList(definition.entryPoints, 'definition.entryPoints');
+  if (definition.runtimePolicy != null && (!definition.runtimePolicy || typeof definition.runtimePolicy !== 'object' || Array.isArray(definition.runtimePolicy)
+      || definition.runtimePolicy.mode !== 'external-agent')) fail('INVALID_SKILL_RUN', 'definition.runtimePolicy 无效');
+  validateStringList(definition.runtimePolicy?.requiredCapabilities, 'definition.runtimePolicy.requiredCapabilities');
+  if ((definition.runtimePolicy?.requiredCapabilities || []).some((capability) => !AGENT_RUNTIME_CAPABILITIES.includes(capability))) fail('INVALID_SKILL_RUN', 'definition.runtimePolicy.requiredCapabilities 包含未知能力');
   validateStringList(definition.requiredCapabilities, 'definition.requiredCapabilities');
   validateStringList(request.policy?.allowedCapabilities, 'policy.allowedCapabilities');
   validateStringList(request.confirmedCapabilities, 'confirmedCapabilities');
   validateStringList(runtime.toolContext?.allowedCapabilities, 'toolContext.allowedCapabilities');
   validateStringList(frozenRuntime.toolContext?.allowedCapabilities, 'snapshot.allowedCapabilities');
+  if (!runtime.runtimeAdapter && definition.runtimePolicy?.mode === 'external-agent' && runtimeRegistry) {
+    const selectedRuntime = request.runtimeId || runtime.runtimeId || await defaultRuntimeResolver?.() || 'local-harness';
+    if (selectedRuntime !== 'local-harness') {
+      runtime.runtimeAdapter = runtimeRegistry.resolve(selectedRuntime);
+      if (!runtime.runtimeAdapter) fail('RUNTIME_NOT_REGISTERED', `Agent Runtime 未注册：${selectedRuntime}`);
+    }
+  }
   if (definition.entryPoints?.length && !definition.entryPoints.includes(entryPoint)) fail('SKILL_ENTRY_NOT_ALLOWED', `技能 ${skillId} 不支持入口 ${entryPoint}`);
   const execution = { ...runtime, ...frozenRuntime };
   // Historical snapshots restore the original prompt. A resumed interactive
@@ -133,10 +158,108 @@ export async function runSkill(request = {}) {
   const gateContext = { input: request.input, definition, context: { ...execution, catalog, toolContext } };
   await gates.run('input', gateContext);
   if (definition.kind === 'agent-skill') {
-    if (typeof execution.modelStep !== 'function') fail('INVALID_SKILL_RUN', 'agent-skill 必须提供 modelStep');
     const prepared = prepareAgentRun({ runtime: execution, skillId, entryPoint, definition, catalog, budget, toolContext,
       gateBindings: gates.bindings, historical: historicalSnapshot, snapshotId: request.snapshotId });
     if (prepared.snapshotId != null) toolContext.generationSnapshotId = prepared.snapshotId;
+    if (execution.runtimeAdapter) {
+      const capabilities = await execution.runtimeAdapter.getCapabilities(execution.runtimeProfile || {});
+      const requiredRuntimeCapabilities = new Set(['run', 'streaming', 'cancel', ...(definition.runtimePolicy?.requiredCapabilities || []), ...(catalog.length ? ['hostToolCallbacks'] : [])]);
+      const missingRuntimeCapabilities = [...requiredRuntimeCapabilities].filter((capability) => capabilities[capability] !== true);
+      if (missingRuntimeCapabilities.length) fail('RUNTIME_CAPABILITY_MISSING', `所选 Agent Runtime 缺少能力：${missingRuntimeCapabilities.join('、')}`);
+      if (request.resumeFrom != null && !capabilities.resume) fail('RESUME_NOT_AVAILABLE', '当前 Runtime 暂不支持恢复历史运行，请开始新的 Agent 轮次');
+      const agentRunId = `runtime-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
+      const trace = { rootRunId: toolContext.rootRunId || agentRunId, workflowRunId: toolContext.workflowRunId || toolContext.rootRunId || agentRunId, stageId: toolContext.stageId || entryPoint };
+      const runtimeLimits = { maxToolCalls: Math.min(24, Math.max(1, Number(budget.maxToolCalls) || 10)),
+        maxParallelToolCalls: Math.min(4, Math.max(1, Number(budget.maxParallelToolCalls) || 3)),
+        maxToolResultChars: Math.min(80000, Math.max(256, Number(budget.maxToolResultChars) || 12000)),
+        maxTotalToolResultChars: Math.min(320000, Math.max(256, Number(budget.maxTotalToolResultChars) || 64000)) };
+      let toolCalls = 0, activeToolCalls = 0, totalToolResultChars = 0;
+      const emitToolEvent = (type, payload = {}) => {
+        const event = agentEvent(type, { agentRunId, ...payload });
+        const internal = { ...event, type: type === 'assistant.delta' ? 'model.text' : type, schemaVersion: 1 };
+        execution.store?.appendAgentRunEvent?.(agentRunId, internal);
+        execution.onInternalEvent?.(internal);
+        execution.onEvent?.(event);
+      };
+      const executeTool = async ({ callId, tool, arguments: args }) => {
+        const capability = capabilityForToolName(tool, catalog);
+        const safeCallId = String(callId || `call-${toolCalls + 1}`).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 48);
+        const request = { requestId: `tr_codex_${safeCallId}`, capability: capability || 'cap_codex_unmapped_tool',
+          arguments: args && typeof args === 'object' && !Array.isArray(args) ? args : {}, reason: 'Codex Runtime 工具调用' };
+        let result;
+        execution.store?.startAgentToolCall?.({ agentRunId, request, ...trace });
+        emitToolEvent('tool.requested', { requestId: request.requestId, capability: request.capability, reason: request.reason });
+        if (!capability) result = toolError(request, 'CAPABILITY_NOT_VISIBLE', `当前运行未授权工具：${String(tool || '').slice(0, 120)}`, false);
+        else if (toolCalls >= runtimeLimits.maxToolCalls) result = toolError(request, 'AGENT_BUDGET_EXCEEDED', '已达到工具调用预算', false);
+        else if (activeToolCalls >= runtimeLimits.maxParallelToolCalls) result = toolError(request, 'AGENT_BUDGET_EXCEEDED', '已达到并行工具调用上限', false);
+        else {
+          toolCalls += 1;
+          activeToolCalls += 1;
+          try {
+            result = await executeConversationTool(request, { registry: execution.registry, catalog,
+              context: { ...toolContext, ...trace, store: execution.store, signal: runtime.signal, agentRunId,
+                agentToolCallId: `${agentRunId}:${String(callId || request.requestId)}`, idempotencyKey: toolCallFingerprint(request),
+                timeoutMs: Math.max(1, Number(budget.timeoutMs) || 180000) },
+              resolveArguments: execution.resolveArguments, cacheLookup: execution.cacheLookup,
+              onEvent: (type, payload) => emitToolEvent(type, { requestId: request.requestId, capability, ...payload }) });
+            result = await execution.sanitizeToolResult?.(result, request, { agentRunId }) ?? result;
+            result = compactToolResult(result, Math.min(runtimeLimits.maxToolResultChars, Math.max(256, runtimeLimits.maxTotalToolResultChars - totalToolResultChars)));
+            totalToolResultChars += JSON.stringify(result).length;
+          } catch (error) {
+            result = toolError(request, error.code || 'TOOL_EXECUTION_FAILED', error.message || '工具执行失败', Boolean(error.retryable));
+          } finally { activeToolCalls -= 1; }
+        }
+        execution.store?.finishAgentToolCall?.({ agentRunId, request, result });
+        emitToolEvent(result?.status === 'ok' ? 'tool.completed' : 'tool.failed', { requestId: request.requestId,
+          capability: request.capability, status: result?.status || 'error', error: result?.error });
+        return result;
+      };
+      const persist = typeof execution.store?.startAgentRun === 'function';
+      if (persist) {
+        execution.store.startAgentRun({ id: agentRunId, entryPoint, skillId, batchId: toolContext.batchId, candidateId: toolContext.candidateId,
+          provider: execution.runtimeAdapter.id, allowedCapabilities: catalog.map((tool) => tool.capability), generationSnapshotId: prepared.snapshotId, ...trace });
+        execution.store.appendAgentRunEvent?.(agentRunId, { type: 'run.started', entryPoint, skillId, runtimeId: execution.runtimeAdapter.id });
+        execution.onRunCreated?.(agentRunId);
+      }
+      try {
+        let finalOutput = null;
+        const instruction = (execution.messages || []).filter((item) => ['system', 'developer'].includes(item.role)).map((item) => String(item.content || '')).join('\n\n');
+        const userInput = (execution.messages || []).filter((item) => item.role === 'user').map((item) => String(item.content || '')).join('\n\n');
+        for await (const event of execution.runtimeAdapter.run({ runId: agentRunId, runtimeProfileId: execution.runtimeProfileId || 'codex-chatgpt-plan',
+          workflowRunId: trace.workflowRunId, stageId: trace.stageId, instruction, input: userInput || request.input || '', outputSchema: definition.outputSchema || null,
+          tools: catalog.map((tool) => ({ name: tool.capability, description: tool.description || tool.name || tool.capability, inputSchema: tool.inputSchema || { type: 'object' } })),
+          executeTool, signal: runtime.signal })) {
+          if (event.type === 'message.delta') {
+            const normalized = { type: 'model.text', agentRunId, text: event.text };
+            execution.store?.appendAgentRunEvent?.(agentRunId, normalized); execution.onInternalEvent?.(normalized);
+            execution.onEvent?.(agentEvent('assistant.delta', { agentRunId, delta: event.text }));
+          } else if (event.type === 'tool.requested' || event.type === 'tool.completed') {
+            const normalized = { ...event, agentRunId, schemaVersion: 1 };
+            execution.store?.appendAgentRunEvent?.(agentRunId, normalized);
+            execution.onInternalEvent?.(normalized);
+            execution.onEvent?.(agentEvent(event.type, { ...event, agentRunId }));
+          } else if (event.type === 'run.completed') finalOutput = String(event.output || '');
+          else if (event.type === 'run.cancelled') throw Object.assign(new Error('Codex Runtime 运行已取消'), { code: 'AGENT_ABORTED', name: 'AbortError' });
+          else if (event.type === 'run.failed') throw Object.assign(new Error(event.message), { code: event.code || 'RUNTIME_FAILED' });
+        }
+        if (finalOutput == null) fail('RUNTIME_EMPTY_RESULT', 'Codex Runtime 未返回完成结果');
+        const result = { agentRunId, type: 'final', assistantReply: finalOutput, output: { text: finalOutput }, modelSteps: 1, toolCalls };
+        await gates.run('output', { ...gateContext, result }); await execution.validateFinal?.(result);
+        if (persist) {
+          execution.store.appendAgentRunEvent?.(agentRunId, { type: 'run.completed', runtimeId: execution.runtimeAdapter.id });
+          execution.store.finishAgentRun(agentRunId, { status: 'completed', modelSteps: 1, toolCalls });
+        }
+        execution.onEvent?.(agentEvent('done', result));
+        return result;
+      } catch (error) {
+        if (persist) {
+          execution.store.appendAgentRunEvent?.(agentRunId, { type: error.code === 'AGENT_ABORTED' ? 'run.cancelled' : 'run.failed', error: error.message, runtimeId: execution.runtimeAdapter.id });
+          execution.store.finishAgentRun(agentRunId, { status: error.code === 'AGENT_ABORTED' ? 'cancelled' : 'failed', modelSteps: 1, toolCalls, error: error.message });
+        }
+        throw error;
+      } finally { releaseResume(); }
+    }
+    if (typeof execution.modelStep !== 'function') fail('INVALID_SKILL_RUN', 'agent-skill 必须提供 modelStep');
     try { return await runConversationAgent({ ...execution, entryPoint, catalog, budget, toolContext,
       checkpointing: execution.checkpointing ?? (prepared.snapshotId != null),
       modelStep: (turn) => execution.modelStep({ ...turn, state: runtime.restoredState, gateway: bindAgentGateway(prepared, catalog, turn.signal, { agentRunId: turn.agentRunId, agentStep: turn.step, workflowRunId: turn.workflowRunId || toolContext.workflowRunId, rootRunId: turn.rootRunId || toolContext.rootRunId, stageId: turn.stageId || toolContext.stageId }), generationSnapshotId: prepared.snapshotId }),

@@ -46,6 +46,11 @@ import { getToolRegistry, setToolConfigurationResolver } from './server/platform
 import { ExtensionConfigurationService } from './server/platform/extensions/configuration-service.mjs';
 import { modelConnectionManifest, modelProviderModelManifest } from './server/platform/extensions/model-provider-configuration.mjs';
 import { syncModelProvidersToDatabase } from './server/platform/integrations/model-provider-settings.mjs';
+import { createCodexOAuthService } from './server/platform/integrations/codex-oauth.mjs';
+import { createCodexAppServerRuntime } from './server/platform/agent/runtimes/codex-app-server.mjs';
+import { setAgentRuntimeRegistry } from './server/platform/agent/harness.mjs';
+import { AgentRuntimeRegistry } from './server/platform/agent/runtime-registry.mjs';
+import { getAgentRuntimeSettings } from './server/platform/integrations/agent-runtime-settings.mjs';
 import { seedDemoData } from './server/platform/demo/seed.mjs';
 import { seedInitialCollectionSources } from './server/features/collection/index.mjs';
 import { createLocalSecurity } from './server/platform/http/local-security.mjs';
@@ -147,6 +152,11 @@ const models = new ModelGateway(config, store,(id,provider)=>{
   const connectionState=extensionConfigurationService.resolve({extensionType:'model-connection',extensionId:connectionId,manifest:modelConnectionManifest(connectionId,connection)});
   return {...modelState,configured:modelState.configured&&connectionState.configured,values:{...connectionState.values,...modelState.values,apiKey:connectionState.values?.apiKey}};
 });
+const codexOAuth = createCodexOAuthService({ root: runtimePaths.configRoot });
+const codexRuntime = createCodexAppServerRuntime({ getAccessToken: () => codexOAuth.getAccessToken() });
+const agentRuntimeRegistry = new AgentRuntimeRegistry();
+agentRuntimeRegistry.register(codexRuntime, 'codex');
+setAgentRuntimeRegistry(agentRuntimeRegistry, { getDefaultRuntime: () => getAgentRuntimeSettings(runtimePaths.configRoot).defaultRuntime });
 const aiJobs = new AiJobManager(store, models, config, {
   batchLevelTypes: BATCH_LEVEL_AI_JOB_TYPES,
   handlers: createAiJobHandlers({ store, gateway: models, config, log: (job, message) => aiJobs.log(job, message), onThinking: (job, delta) => aiJobs.recordThinking(job, delta) }),
@@ -455,7 +465,7 @@ async function api(request, response, url) {
   if (request.method === 'GET' && pathname === '/api/overview') {
     return json(response, 200, store.overview());
   }
-  if (await handleModelRoutes({ request, response, pathname, root, config, store, models, body, json })) return;
+  if (await handleModelRoutes({ request, response, pathname, root, config, store, models, body, json, codexOAuth, agentRuntimeRegistry })) return;
   if (await handleMaterialRoutes({ request, response, pathname, searchParams, store, json, body, root })) return;
   if (await handleContentFeedbackRoutes({ request, response, pathname, searchParams, store, artifactRoots, json, body, root, models })) return;
   if (await handleContentRoutes({ request, response, pathname, searchParams, store, artifactRoots, mime, json, body, root, models })) return;
@@ -497,7 +507,7 @@ const server = http.createServer(async (request, response) => {
     if (boundaryError) return json(response, boundaryError.status, boundaryError);
     request.localSecurity = localSecurity;
     const url = new URL(request.url, `http://${request.headers.host ?? '127.0.0.1'}`);
-    if (url.pathname.startsWith('/api/')) {
+    if (url.pathname.startsWith('/api/') || url.pathname === '/auth/callback') {
       const handled = await api(request, response, url);
       if (handled === false) json(response, 404, { error: '接口不存在' });
       return;
