@@ -1003,7 +1003,7 @@
           <section class="account-context-config" id="codex-runtime-config">
             <div class="account-context-config-head"><div><span class="kicker">CODEX RUNTIME</span><h3>Codex 账号</h3><p>使用 ChatGPT 账号授权见字运行内部 Agent；不需要填写模型 API Key。</p></div><div class="account-context-config-badge" id="codex-runtime-status"><i></i><span>正在检查</span></div></div>
             <div class="configuration-form-actions"><small id="codex-runtime-account">授权令牌保存在本机配置目录。</small><div><label>默认 Agent Runtime <select id="agent-runtime-default"><option value="local-harness">见字本地 Runtime</option><option value="codex">Codex Runtime</option></select></label><button type="button" class="outline-button" id="codex-runtime-connect">连接 ChatGPT</button><button type="button" class="ghost-button" id="codex-runtime-disconnect" hidden>断开连接</button></div></div>
-            <p>Codex Runtime 可用于账号画像、编辑会、独立写作、自定义图文策划及 AI 封面/图文视觉生成；工具调用仍由见字 Tool Broker 执行。Codex 暂不支持恢复历史 Agent Run；批次流水线阶段仍使用本机模型配置。</p>
+            <p>Codex Runtime 可用于账号画像、编辑会、独立写作、自定义图文策划、AI 封面/图文视觉生成，以及批次打标、事件卡和研判；批次提示词、流程顺序与结果校验仍由见字管理。文章成稿和公众号排版等阶段仍需配置工作台模型。Codex 暂不支持恢复历史 Agent Run。</p>
           </section>
           <div class="runtime-path-strip" id="runtime-paths"><span>正在读取路径配置…</span></div>
           <div class="config-panel legacy-config-panel" id="config-panel-rsshub" role="tabpanel" hidden>

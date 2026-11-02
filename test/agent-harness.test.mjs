@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
-import { runSkill } from '../server/platform/agent/harness.mjs';
+import { runSkill, setAgentRuntimeRegistry } from '../server/platform/agent/harness.mjs';
 import { runConversationAgent } from '../server/platform/agent/conversation-agent.mjs';
 import { AGENT_EVENT_PROTOCOL, agentEvent } from '../server/platform/agent/events.mjs';
 import { runPipelineStage } from '../server/platform/skills/pipeline-runtime.mjs';
@@ -85,6 +85,44 @@ test('Pipeline stage 通过 Harness 建立可追踪 Run 并关联模型调用', 
   assert.equal(runs[0].workflowRunId, 'workflow-1');
   assert.equal(calls[0].agentRunId, runs[0].id);
   assert.equal(calls[0].stageId, 'drafting');
+});
+
+test('opt-in 批次 Pipeline stage 使用外部 Runtime，保留原始提示并跳过内部模型调用', async () => {
+  const calls = [], runs = [], events = [];
+  const runtimeAdapter = {
+    id: 'codex-app-server',
+    async getCapabilities() { return { run: true, streaming: true, cancel: true }; },
+    async *run(request) {
+      calls.push(request);
+      yield { type: 'message.delta', text: '{"tags":[]}' };
+      yield { type: 'run.completed', output: '{"tags":[]}' };
+    },
+  };
+  setAgentRuntimeRegistry({ resolve: (id) => id === 'codex' ? runtimeAdapter : null }, { getDefaultRuntime: () => 'codex' });
+  try {
+    const gatewayCalls = [];
+    const result = await runPipelineStage({
+      store: {
+        startAgentRun: (run) => { runs.push(run); },
+        appendAgentRunEvent: (_id, event) => events.push(event),
+        saveAgentStep: () => {}, finishAgentRun: () => {},
+      },
+      gateway: { complete: async (input) => { gatewayCalls.push(input); return { content: 'internal model' }; } },
+      workspaceRoot: process.cwd(), provider: 'deepseek', purpose: 'hotspot-tagging',
+      messages: [{ role: 'system', content: '严格按工作台提示词打标' }, { role: 'user', content: '待打标事件' }],
+      input: { eventId: 'evt-1' }, jsonMode: true,
+    });
+    assert.deepEqual(result, { content: '{"tags":[]}', provider: 'codex-app-server', model: 'codex-app-server', runtimeId: 'codex-app-server' });
+    assert.equal(gatewayCalls.length, 0);
+    assert.equal(calls.length, 1);
+    assert.match(calls[0].instruction, /严格按工作台提示词打标/);
+    assert.match(calls[0].instruction, /待打标事件/);
+    assert.deepEqual(calls[0].input, { eventId: 'evt-1' });
+    assert.equal(runs[0].provider, 'codex-app-server');
+    assert.ok(events.some((event) => event.type === 'run.started' && event.runtimeId === 'codex-app-server'));
+  } finally {
+    setAgentRuntimeRegistry(null);
+  }
 });
 
 test('Pipeline stage 失败 checkpoint 可从原阶段 Run 重试并建立父子关联', async () => {

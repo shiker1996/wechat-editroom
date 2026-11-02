@@ -283,9 +283,10 @@ export async function runSkill(request = {}) {
     };
     if (persist) {
       runtime.store.startAgentRun({ id: stageRunId, entryPoint, skillId, batchId: toolContext.batchId, candidateId: toolContext.candidateId,
-        provider: toolContext.provider || execution.provider, allowedCapabilities: catalog.map((tool) => tool.capability),
+        provider: execution.runtimeAdapter?.id || toolContext.provider || execution.provider, allowedCapabilities: catalog.map((tool) => tool.capability),
         generationSnapshotId: request.snapshotId || toolContext.generationSnapshotId, ...traceContext });
-      runtime.store.appendAgentRunEvent?.(stageRunId, { type: 'run.started', entryPoint, skillId, stageId: traceContext.stageId });
+      runtime.store.appendAgentRunEvent?.(stageRunId, { type: 'run.started', entryPoint, skillId, stageId: traceContext.stageId,
+        ...(execution.runtimeAdapter?.id ? { runtimeId: execution.runtimeAdapter.id } : {}) });
       runtime.store.saveAgentStep?.({ agentRunId: stageRunId, step: 0, phase: 'stage_started', summary: { entryPoint, skillId } });
       runtime.store.saveAgentCheckpoint?.(stageRunId, {
         schemaVersion: 1, phase: 'stage_started', step: 0, nextStep: 0, resumable: false,
@@ -295,9 +296,44 @@ export async function runSkill(request = {}) {
       runtime.onRunCreated?.(stageRunId);
     }
     try {
-      const result = await runtime.executeStage({ skillId, entryPoint, input: request.input, definition,
-        context: { ...execution, catalog, toolContext: { ...toolContext, ...traceContext, agentRunId: stageRunId } },
-        budget, snapshotId: request.snapshotId, agentRunId: stageRunId, signal: runtime.signal });
+      let result;
+      if (execution.runtimeAdapter) {
+        const capabilities = await execution.runtimeAdapter.getCapabilities(execution.runtimeProfile || {});
+        const requiredRuntimeCapabilities = new Set(['run', 'streaming', 'cancel', ...(definition.runtimePolicy?.requiredCapabilities || [])]);
+        const missingRuntimeCapabilities = [...requiredRuntimeCapabilities].filter((capability) => capabilities[capability] !== true);
+        if (missingRuntimeCapabilities.length) fail('RUNTIME_CAPABILITY_MISSING', `所选 Agent Runtime 缺少能力：${missingRuntimeCapabilities.join('、')}`);
+        const stageRequest = execution.runtimeRequest || {};
+        const messages = Array.isArray(stageRequest.messages) ? stageRequest.messages : [];
+        const instruction = messages.map((item) => `[${String(item?.role || 'user').toUpperCase()}]\n${String(item?.content || '')}`).join('\n\n');
+        let output = '';
+        for await (const event of execution.runtimeAdapter.run({
+          runId: stageRunId,
+          runtimeProfileId: execution.runtimeProfileId || 'codex-chatgpt-plan',
+          workflowRunId: traceContext.workflowRunId,
+          stageId: traceContext.stageId,
+          instruction,
+          input: stageRequest.input ?? request.input ?? '',
+          outputSchema: stageRequest.outputSchema || null,
+          tools: [],
+          signal: runtime.signal,
+        })) {
+          if (event.type === 'message.delta') {
+            output += String(event.text || '');
+            const internal = { type: 'model.text', agentRunId: stageRunId, text: String(event.text || '') };
+            runtime.store?.appendAgentRunEvent?.(stageRunId, internal);
+            runtime.onInternalEvent?.(internal);
+            runtime.onEvent?.(agentEvent('assistant.delta', { agentRunId: stageRunId, delta: String(event.text || '') }));
+          } else if (event.type === 'run.completed') output = String(event.output || output);
+          else if (event.type === 'run.cancelled') throw Object.assign(new Error('Agent Runtime 阶段已取消'), { code: 'AGENT_ABORTED', name: 'AbortError' });
+          else if (event.type === 'run.failed') throw Object.assign(new Error(event.message || 'Agent Runtime 阶段失败'), { code: event.code || 'RUNTIME_FAILED' });
+        }
+        if (!output.trim()) fail('RUNTIME_EMPTY_RESULT', 'Agent Runtime 阶段未返回有效内容');
+        result = { content: output, provider: execution.runtimeAdapter.id, model: execution.runtimeAdapter.id, runtimeId: execution.runtimeAdapter.id };
+      } else {
+        result = await runtime.executeStage({ skillId, entryPoint, input: request.input, definition,
+          context: { ...execution, catalog, toolContext: { ...toolContext, ...traceContext, agentRunId: stageRunId } },
+          budget, snapshotId: request.snapshotId, agentRunId: stageRunId, signal: runtime.signal });
+      }
       await gates.run('output', { ...gateContext, result });
       if (persist) {
         runtime.store.saveAgentStep?.({ agentRunId: stageRunId, step: 0, phase: 'stage_completed', summary: { outputType: typeof result } });

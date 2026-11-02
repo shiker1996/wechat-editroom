@@ -1,5 +1,27 @@
 # API 接口文档
 
+## Agent Runtime
+
+### GET /api/agent-runtimes/codex/status
+
+读取 Codex OAuth 连接状态与当前默认 Agent Runtime。
+
+### GET /api/agent-runtimes/default
+
+读取当前工作区选择的默认 Agent Runtime。
+
+### PUT /api/agent-runtimes/default
+
+设置默认 Agent Runtime，请求体为 `{ "defaultRuntime": "local-harness|codex" }`。启用 Codex 前必须先完成 ChatGPT OAuth 授权。
+
+### POST /api/agent-runtimes/codex/oauth/start
+
+发起 Codex OAuth 授权并返回授权 URL；浏览器回调由本机工作台处理。
+
+### POST /api/agent-runtimes/codex/oauth/disconnect
+
+断开当前工作区保存的 Codex OAuth 凭据，并将默认 Runtime 切回本地 Harness。
+
 ## 本地安全会话
 
 - `GET /api/security/session`：建立当前进程内的本地会话并返回随机 CSRF token。

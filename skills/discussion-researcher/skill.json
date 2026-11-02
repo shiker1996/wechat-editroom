@@ -18,6 +18,7 @@
     "url": ""
   },
   "runtimeKind": "stage-skill",
+  "runtimePolicy": { "mode": "external-agent", "requiredCapabilities": [] },
   "budget": {
     "maxModelSteps": 1,
     "maxToolCalls": 1,

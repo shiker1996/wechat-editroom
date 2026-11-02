@@ -13,7 +13,8 @@ export function createAiJobHandlers({ store, gateway, config, log, onThinking = 
   const progress = (job) => (message) => log(job, message);
   const jobGateway = (job) => {
     const scoped = bindPipelineHarnessGateway(gateway, { store, batchId: job.batchId, candidateId: job.candidateId,
-      rootRunId: `job:${job.id}`, workflowRunId: `job:${job.id}`, entryPoint: `batch-job:${job.type}` });
+      rootRunId: `job:${job.id}`, workflowRunId: `job:${job.id}`, entryPoint: `batch-job:${job.type}`,
+      workspaceRoot: config.workspaceRoot });
     const assertNotCancelled = () => {
       if (!job.cancelRequested && !job.abortController?.signal.aborted) return;
       const reason = job.cancelReason || job.abortController?.signal.reason?.message || '任务已取消';

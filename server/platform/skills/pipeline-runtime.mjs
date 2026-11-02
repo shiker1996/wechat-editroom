@@ -4,7 +4,18 @@ import { normalizeSkillDefinition } from './runtime-definition.mjs';
 import { getToolRegistry } from '../tools/index.mjs';
 import { readActiveSkillConfig } from './configuration.mjs';
 import { resolveStageModelsSnapshot } from '../llm/stage-model-routing.mjs';
+import { resolveSkillRuntime } from './resolver.mjs';
 import { runSkill } from '../agent/harness.mjs';
+
+const PIPELINE_SKILLS_BY_PURPOSE = Object.freeze({
+  'hotspot-tagging': 'hotspot-tagging',
+  'event-card': 'event-card-generator',
+  'event-research-analysis': 'event-research-analyzer',
+  'discussion-research': 'discussion-researcher',
+  'project-reader-value': 'project-reader-value',
+  'hotspot-brainstorm-explore': 'hotspot-brainstorm',
+  'hotspot-synthesis-provisional': 'hotspot-synthesis',
+});
 
 export function bindGenerationSnapshot(gateway, generationSnapshotId) {
   if (!generationSnapshotId) return gateway;
@@ -28,11 +39,18 @@ export function bindGenerationSnapshot(gateway, generationSnapshotId) {
 export async function runPipelineStage({ gateway, store, batchId = null, candidateId = null, provider = null,
   purpose, skillId = purpose, entryPoint = 'pipeline', stageId = purpose, input = null, messages = [],
   maxOutputTokens, jsonMode = false, thinking = undefined, temperature = undefined, rootRunId = null, workflowRunId = null, parentRunId = null,
-  generationSnapshotId = null, signal = null, definition = null, onRunCreated = null, resumeFrom = null, resumeLeaseMs = null }) {
+  generationSnapshotId = null, signal = null, definition = null, onRunCreated = null, resumeFrom = null, resumeLeaseMs = null,
+  workspaceRoot = null, outputSchema = null }) {
   if (!purpose || typeof gateway?.complete !== 'function') throw new Error('Pipeline stage 缺少 purpose 或 LLM Gateway');
-  const stageDefinition = definition || { id: String(skillId), kind: 'stage-skill', entryPoints: [entryPoint] };
+  const resolvedSkillId = String(skillId === purpose ? PIPELINE_SKILLS_BY_PURPOSE[purpose] || skillId : skillId);
+  let stageDefinition = definition;
+  if (!stageDefinition && workspaceRoot && PIPELINE_SKILLS_BY_PURPOSE[purpose]) {
+    const resolved = resolveSkillRuntime({ workspaceRoot, skillId: resolvedSkillId, kind: 'stage-skill' });
+    stageDefinition = { ...resolved.definition, entryPoints: [entryPoint] };
+  }
+  stageDefinition ||= { id: resolvedSkillId, kind: 'stage-skill', entryPoints: [entryPoint] };
   return runSkill({
-    skillId: String(skillId), entryPoint, input,
+    skillId: resolvedSkillId, entryPoint, input,
     definition: stageDefinition,
     signal,
     ...(resumeFrom ? { resumeFrom: String(resumeFrom), ...(resumeLeaseMs ? { resumeLeaseMs } : {}) } : {}),
@@ -43,6 +61,7 @@ export async function runPipelineStage({ gateway, store, batchId = null, candida
       signal,
       provider,
       gateway,
+      runtimeRequest: { messages, input, outputSchema, jsonMode, purpose, maxOutputTokens },
       toolContext: { batchId, candidateId, provider, generationSnapshotId, rootRunId, workflowRunId, stageId, parentRunId },
       executeStage: async ({ agentRunId, signal: stageSignal, context }) => gateway.complete({
         provider, purpose, batchId, candidateId, jsonMode, thinking, temperature, maxOutputTokens, messages,
@@ -68,7 +87,8 @@ export function bindPipelineHarnessGateway(gateway, options = {}) {
         return runPipelineStage({ ...options, ...modelInput, purpose, messages, gateway: target,
           signal: modelInput.signal || options.signal || null,
           skillId: modelInput.skillId || purpose, entryPoint: modelInput.entryPoint || options.entryPoint || 'pipeline',
-          stageId: modelInput.stageId || purpose, generationSnapshotId: options.generationSnapshotId || modelInput.generationSnapshotId });
+        stageId: modelInput.stageId || purpose, generationSnapshotId: options.generationSnapshotId || modelInput.generationSnapshotId,
+        workspaceRoot: options.workspaceRoot || modelInput.workspaceRoot || null });
       };
       const value = Reflect.get(target, property, receiver);
       return typeof value === 'function' ? value.bind(target) : value;

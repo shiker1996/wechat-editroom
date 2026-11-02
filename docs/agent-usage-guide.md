@@ -57,7 +57,7 @@ npm run jianzi -- auth codex login
 
 CLI 会打开系统浏览器，由你在 OpenAI 登录页完成授权；成功后凭据加密保存在本机项目配置中，令牌不会输出给调用 CLI 的 Agent，并自动将 Codex 设为默认 Runtime。之后可以用 `npm run jianzi -- auth codex status --json` 查看连接状态，或用 `npm run jianzi -- auth codex logout` 断开（断开时默认 Runtime 会切回本地 Harness）。
 
-Codex Runtime 当前支持账号画像、编辑会、独立写作、自定义图文策划及 AI 封面/图文视觉生成。批次研判、文章成稿、公众号排版等工作流流水线仍使用工作台配置的模型服务商；要跑完整内容流水线，需要打开“运行与配置”配置并测试模型服务商。
+Codex Runtime 当前支持账号画像、编辑会、独立写作、自定义图文策划、AI 封面/图文视觉生成，以及批次语义打标、事件卡和研判。批次仍使用项目现有提示词与确定性校验，只有模型回合由 Codex 执行。文章成稿、公众号排版等阶段仍使用工作台配置的模型服务商；运行这些阶段前，需要在“运行与配置”配置并测试模型服务商。
 
 在项目根目录安装 Codex 的项目级 MCP 配置和 Skills：
 
