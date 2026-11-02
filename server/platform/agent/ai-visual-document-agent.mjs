@@ -231,8 +231,8 @@ export async function runAiVisualDocumentAgent({
     store,
     ...(resumeFrom ? { resumeFrom: String(resumeFrom) } : {}),
     budget: {
-      // 视觉文档按分块写入：读取、begin、多个 append 和 finish 都各占一个
-      // Agent step；当前 6–8 页范围使用原有预算即可。
+      // 视觉文档按分块写入：读取、begin、多个 append、审计及必要的修复都各占 Agent step；
+      // 视觉文档单独允许到 40 步，其他 Agent 仍受通用 24 步熔断上限约束。
       maxModelSteps: Number(budget.maxModelSteps) || Math.max(auditCapability ? 28 : 18, maxPages + (auditCapability ? 18 : 12)),
       maxToolCalls: Number(budget.maxToolCalls) || Math.max(auditCapability ? 28 : 18, maxPages + (auditCapability ? 18 : 12)),
       maxParallelToolCalls: 1,

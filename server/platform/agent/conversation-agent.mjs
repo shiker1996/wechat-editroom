@@ -8,7 +8,15 @@ import { capabilityForToolName } from './tool-catalog.mjs';
 import { CONVERSATION_FINISH_CAPABILITY } from './conversation-finish-tool.mjs';
 import { registerAgentRun, unregisterAgentRun } from './run-control.mjs';
 
-function budgets(input={}){const out={};for(const [key,value] of Object.entries(CONVERSATION_AGENT_BUDGET_DEFAULTS))out[key]=Math.min(CONVERSATION_AGENT_BUDGET_LIMITS[key],Math.max(1,Number(input[key])||value));return Object.freeze(out);}
+function budgets(input={},entryPoint=''){
+  const visualDocumentAgent=String(entryPoint).includes('ai-visual');
+  const limits=visualDocumentAgent
+    ? {...CONVERSATION_AGENT_BUDGET_LIMITS,maxModelSteps:40,maxToolCalls:40}
+    : CONVERSATION_AGENT_BUDGET_LIMITS;
+  const out={};
+  for(const [key,value] of Object.entries(CONVERSATION_AGENT_BUDGET_DEFAULTS))out[key]=Math.min(limits[key],Math.max(1,Number(input[key])||value));
+  return Object.freeze(out);
+}
 function runId(){return `agent-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,9)}`;}
 function withTimeout(promise,timeoutMs){return new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new AgentContractError('AGENT_BUDGET_EXCEEDED',`Agent 已超过总耗时预算（${timeoutMs}ms）`)),timeoutMs);Promise.resolve(promise).then((value)=>{clearTimeout(timer);resolve(value);},(error)=>{clearTimeout(timer);reject(error);});});}
 function completedEvent(result){const data=result?.data||{},url=data.final_url||data.url||result?.provenance?.finalUrl||result?.provenance?.requestedUrl,title=data.title||'',chars=String(data.content||data.excerpt||data.text||'').length;return {summary:chars?`已读取 ${chars} 字`:title?'资料读取完成':'工具执行完成',sources:url?[{title,url}]:[]};}
@@ -36,7 +44,7 @@ function nativeHistory(modelTurn,results,callByRequestId){
 
 export async function runConversationAgent({entryPoint,modelStep,messages=[],registry,catalog,toolContext={},resolveArguments,sanitizeToolResult=(result)=>result,cacheLookup=null,onEvent=()=>{},onInternalEvent=()=>{},validateFinal=async()=>{},checkpointing=false,resumeState=null,store=null,budget={},signal=null,onRunCreated=null}={}){
   if(typeof modelStep!=='function')throw new TypeError('modelStep 必须是函数');
-  const limits=budgets(resumeState?.limits || budget),id=runId(),started=Date.now(),resumeStart=Number(resumeState?.nextStep)||0;
+  const limits=budgets(resumeState?.limits || budget,entryPoint),id=runId(),started=Date.now(),resumeStart=Number(resumeState?.nextStep)||0;
   const history=[...(resumeState?.history || []),...messages];
   const seen=new Map(resumeState?.seen || []);
   // A resumed run keeps the persisted conversation and duplicate-call

@@ -32,6 +32,21 @@ export async function auditSocialCardHtmlFit({ htmlPath, width = 375, height = 6
     result.pageCount = measurements.length;
     for (const item of measurements) {
       const pageReport = { page: item.page, valid: true, containers: [] };
+      const pageStyle = item.pageStyle || {};
+      const styleProblems = [];
+      if (Math.abs(Number(pageStyle.width) - result.canvas.width) > tolerancePx) styleProblems.push(`画布宽度应为 ${result.canvas.width}px，实测 ${Math.round(Number(pageStyle.width) || 0)}px`);
+      if (Math.abs(Number(pageStyle.height) - result.canvas.height) > tolerancePx) styleProblems.push(`画布高度应为 ${result.canvas.height}px，实测 ${Math.round(Number(pageStyle.height) || 0)}px`);
+      if (pageStyle.overflow !== 'hidden') styleProblems.push(`画布 overflow 应为 hidden，实测 ${pageStyle.overflow || '未设置'}`);
+      if (pageStyle.innerDisplay !== 'flex') styleProblems.push(`页面内部布局应为 flex，实测 ${pageStyle.innerDisplay || '缺少 .page-inner'}`);
+      pageReport.pageStyle = pageStyle;
+      if (styleProblems.length) {
+        pageReport.valid = false;
+        result.issues.push({
+          code: 'PAGE_STYLE_DEGRADED',
+          page: item.page,
+          message: `第 ${item.page} 页样式或画布布局缺失：${styleProblems.join('；')}`,
+        });
+      }
       for (const container of item.containers) {
         if (!container.visible) continue;
         const overflowX = Math.max(0, container.scrollWidth - container.clientWidth);
