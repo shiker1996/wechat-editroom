@@ -154,6 +154,7 @@ Runtime Run 应复用现有 `agent_runs`、`agent_run_events`、`agent_steps` �
 当前设置分为两条执行路径，不应把 Runtime、供应商、模型和阶段路由展示成四个连续必填项：
 
 - **Codex Runtime**：用户选择 Codex 并完成 ChatGPT OAuth 授权。Codex 模型由授权账号提供；见字的本地供应商、模型和阶段路由不会控制 Codex。
+- **WorkBuddy Runtime**：用户先录入经开放平台审核的第三方应用 Client ID/Secret，再完成 OAuth 授权；云端任务通过 ACP 运行。Client Secret 与令牌由项目凭据层加密保存。当前 WorkBuddy ACP 未接入见字 Tool Broker 回调，必须依赖宿主工具的 Agent 会在 Harness 能力校验阶段被拒绝。
 - **见字本地 Runtime**：先配置供应商连接，再添加模型并选择一个默认模型。阶段模型路由是可选覆盖；未设置时任务继承默认模型。
 - Runtime 默认选择只影响声明支持外部 Runtime 的 Agent。未接入外部 Runtime 的任务仍走见字本地 Runtime，所以完整使用项目时可能仍需配置本地模型。
 
@@ -165,7 +166,7 @@ OAuth 凭据存储需使用系统凭据库或项目现有加密凭据机制；Wi
 
 ### Phase 0：Runtime 能力核验
 
-1. Codex `app-server` 已用用户授权账号完成最小任务与动态工具回调验证；WorkBuddy Open API/ACP 尚未验证。
+1. Codex `app-server` 已用用户授权账号完成最小任务与动态工具回调验证；WorkBuddy Open API/ACP 的公开 OAuth/ACP 流程已核实并实现适配器，仍需真实 WorkBuddy 应用授权与云端会话联调。
 2. 验证传入项目阶段指令/输入、接收增量文本与最终结构化产物、取消任务、刷新授权。
 3. Codex 宿主动态工具调用已通过隔离 echo、真实只读项目工具及账号画像助手内存表单验证；仍需从工作台 UI 验证持久化边界和运行审计。
 4. 输出 capability 对照矩阵。无法满足的能力明确为不支持，不在适配器中模拟成功。
@@ -204,7 +205,7 @@ OAuth 凭据存储需使用系统凭据库或项目现有加密凭据机制；Wi
 ## 10. 风险与待决策
 
 1. **Codex app-server 是 Agent Runtime，不是无状态模型 endpoint。**它可能拥有自己的系统指令、工具回路和会话状态。Phase 0 必须确认能否可靠承载见字每个 Skill 的角色指令，而不覆盖项目 prompt 或绕开 Tool Broker。
-2. **WorkBuddy API 开放范围依产品版本/应用审核而定。**目前公开材料描述 Agent 对话/云端任务与 ACP，不等价于每个用户都能直接复用 WorkBuddy 客户端登录态；要核实开发者应用、scope、审核和本地/云端任务条件。
+2. **WorkBuddy API 开放范围依产品版本/应用审核而定。**使用 WorkBuddy Runtime 需要 WorkBuddy 开放平台开发者应用和相应 Scope 审核；它不复用 WorkBuddy 客户端登录态。当前 adapter 只声明 ACP 文本流、取消和普通运行能力，不声明宿主工具回调、恢复或结构化输出。
 3. **统一的是我们的调用协议，不是平台行为完全等价。**同一任务在不同 Runtime 的工具、上下文窗口、内容策略、额度、恢复能力可能不同，应通过 capability 和运行快照呈现。
 4. **工作台现有 ModelGateway 的预算/审计不能原样套用。**平台可能不返回完整 token/成本；统一记录平台 run 状态和可得 usage，避免虚构费用。
 5. **并发、超时与取消**需要适配器将现有 AbortSignal 语义映射到平台任务取消；若某平台不支持硬取消，需要向用户展示“取消请求已发送/无法确认停止”，不能声称已停止。

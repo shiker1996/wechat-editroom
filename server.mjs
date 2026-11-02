@@ -48,6 +48,8 @@ import { modelConnectionManifest, modelProviderModelManifest } from './server/pl
 import { syncModelProvidersToDatabase } from './server/platform/integrations/model-provider-settings.mjs';
 import { createCodexOAuthService } from './server/platform/integrations/codex-oauth.mjs';
 import { createCodexAppServerRuntime } from './server/platform/agent/runtimes/codex-app-server.mjs';
+import { createWorkBuddyOAuthService } from './server/platform/integrations/workbuddy-oauth.mjs';
+import { createWorkBuddyAcpRuntime } from './server/platform/agent/runtimes/workbuddy-acp.mjs';
 import { setAgentRuntimeRegistry } from './server/platform/agent/harness.mjs';
 import { AgentRuntimeRegistry } from './server/platform/agent/runtime-registry.mjs';
 import { getAgentRuntimeSettings } from './server/platform/integrations/agent-runtime-settings.mjs';
@@ -153,9 +155,12 @@ const models = new ModelGateway(config, store,(id,provider)=>{
   return {...modelState,configured:modelState.configured&&connectionState.configured,values:{...connectionState.values,...modelState.values,apiKey:connectionState.values?.apiKey}};
 });
 const codexOAuth = createCodexOAuthService({ root: runtimePaths.configRoot });
+const workbuddyOAuth = createWorkBuddyOAuthService({ root: runtimePaths.configRoot });
 const codexRuntime = createCodexAppServerRuntime({ getAccessToken: () => codexOAuth.getAccessToken() });
+const workbuddyRuntime = createWorkBuddyAcpRuntime({ getAccessToken: () => workbuddyOAuth.getAccessToken() });
 const agentRuntimeRegistry = new AgentRuntimeRegistry();
 agentRuntimeRegistry.register(codexRuntime, 'codex');
+agentRuntimeRegistry.register(workbuddyRuntime, 'workbuddy');
 setAgentRuntimeRegistry(agentRuntimeRegistry, { getDefaultRuntime: () => getAgentRuntimeSettings(runtimePaths.configRoot).defaultRuntime });
 const aiJobs = new AiJobManager(store, models, config, {
   batchLevelTypes: BATCH_LEVEL_AI_JOB_TYPES,
@@ -468,7 +473,7 @@ async function api(request, response, url) {
   if (request.method === 'GET' && pathname === '/api/overview') {
     return json(response, 200, store.overview());
   }
-  if (await handleModelRoutes({ request, response, pathname, root, config, store, models, body, json, codexOAuth, agentRuntimeRegistry })) return;
+  if (await handleModelRoutes({ request, response, pathname, root, config, store, models, body, json, codexOAuth, workbuddyOAuth, agentRuntimeRegistry })) return;
   if (await handleMaterialRoutes({ request, response, pathname, searchParams, store, json, body, root })) return;
   if (await handleContentFeedbackRoutes({ request, response, pathname, searchParams, store, artifactRoots, json, body, root, models })) return;
   if (await handleContentRoutes({ request, response, pathname, searchParams, store, artifactRoots, mime, json, body, root, models })) return;
