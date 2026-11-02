@@ -64,6 +64,11 @@ function asDefinition(raw, id) {
 function issuesFor(raw, id, title, summary, brand) {
   const issues = [];
   const normalizedRaw = structuredClone(raw);
+  const designScheme = normalizedRaw?.designScheme;
+  if (designScheme?.spec == null && designScheme?.tokens?.spec && typeof designScheme.tokens.spec === 'object') {
+    designScheme.spec = designScheme.tokens.spec;
+    delete designScheme.tokens.spec;
+  }
   const components = normalizedRaw?.designScheme?.spec?.components;
   const normalizations = [];
   if (Array.isArray(components)) {

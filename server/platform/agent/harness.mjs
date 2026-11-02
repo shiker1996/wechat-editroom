@@ -186,9 +186,12 @@ export async function runSkill(request = {}) {
         const safeCallId = String(callId || `call-${toolCalls + 1}`).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 48);
         const request = { requestId: `tr_codex_${safeCallId}`, capability: capability || 'cap_codex_unmapped_tool',
           arguments: args && typeof args === 'object' && !Array.isArray(args) ? args : {}, reason: 'Codex Runtime 工具调用' };
+        const operation = ['begin', 'append', 'finish', 'abort'].includes(String(request.arguments.operation || ''))
+          ? String(request.arguments.operation)
+          : '';
         let result;
         execution.store?.startAgentToolCall?.({ agentRunId, request, ...trace });
-        emitToolEvent('tool.requested', { requestId: request.requestId, capability: request.capability, reason: request.reason });
+        emitToolEvent('tool.requested', { requestId: request.requestId, capability: request.capability, reason: request.reason, ...(operation ? { operation } : {}) });
         if (!capability) result = toolError(request, 'CAPABILITY_NOT_VISIBLE', `当前运行未授权工具：${String(tool || '').slice(0, 120)}`, false);
         else if (toolCalls >= runtimeLimits.maxToolCalls) result = toolError(request, 'AGENT_BUDGET_EXCEEDED', '已达到工具调用预算', false);
         else if (activeToolCalls >= runtimeLimits.maxParallelToolCalls) result = toolError(request, 'AGENT_BUDGET_EXCEEDED', '已达到并行工具调用上限', false);
@@ -211,7 +214,7 @@ export async function runSkill(request = {}) {
         }
         execution.store?.finishAgentToolCall?.({ agentRunId, request, result });
         emitToolEvent(result?.status === 'ok' ? 'tool.completed' : 'tool.failed', { requestId: request.requestId,
-          capability: request.capability, status: result?.status || 'error', error: result?.error });
+          capability: request.capability, status: result?.status || 'error', error: result?.error, ...(operation ? { operation } : {}) });
         return result;
       };
       const persist = typeof execution.store?.startAgentRun === 'function';

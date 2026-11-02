@@ -8,7 +8,7 @@ import { bindPipelineHarnessGateway } from '../../../platform/skills/pipeline-ru
 
 export const AI_JOB_TYPES = Object.freeze(['tag', 'retag', 'event-cards', 'research', 'pipeline-failure-retry', 'breaking-analysis', 'article', 'article-review', 'daily', 'tutorial', 'typeset', 'social-card-beautify', 'cover-image', 'auto']);
 export const BATCH_LEVEL_AI_JOB_TYPES = new Set(['tag', 'retag', 'event-cards', 'research', 'pipeline-failure-retry', 'breaking-analysis', 'auto', 'daily']);
-export const EXTERNAL_RUNTIME_AI_JOB_TYPES = new Set(['tag', 'retag', 'event-cards', 'research', 'article', 'article-review', 'typeset', 'auto']);
+export const EXTERNAL_RUNTIME_AI_JOB_TYPES = new Set(['tag', 'retag', 'event-cards', 'research', 'article', 'article-review', 'typeset', 'social-card-beautify', 'cover-image', 'auto']);
 
 export function createAiJobHandlers({ store, gateway, config, log, onThinking = () => {} }) {
   const progress = (job) => (message) => log(job, message);

@@ -248,9 +248,10 @@ export async function runAiVisualDocumentAgent({
         markSourceRead();
       }
       if (event?.type === 'tool.completed' && event?.capability === documentWriteCapability) {
-        if (pendingOperation === 'begin') documentStarted = true;
-        if (pendingOperation === 'abort') { documentStarted = false; documentFinished = false; }
-        if (pendingOperation === 'finish') documentFinished = true;
+        const completedOperation = pendingOperation || String(event.operation || '');
+        if (completedOperation === 'begin') documentStarted = true;
+        if (completedOperation === 'abort') { documentStarted = false; documentFinished = false; }
+        if (completedOperation === 'finish') documentFinished = true;
         onProgress(`AI 视觉 Agent 已原样追加 ${documentLabel} HTML/CSS 分块…`);
         pendingOperation = null;
       }
