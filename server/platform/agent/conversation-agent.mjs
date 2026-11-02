@@ -47,6 +47,7 @@ export async function runConversationAgent({entryPoint,modelStep,messages=[],reg
   const limits=budgets(resumeState?.limits || budget,entryPoint),id=runId(),started=Date.now(),resumeStart=Number(resumeState?.nextStep)||0;
   const history=[...(resumeState?.history || []),...messages];
   const seen=new Map(resumeState?.seen || []);
+  const documentWriteGenerations=new Map();
   // A resumed run keeps the persisted conversation and duplicate-call
   // fingerprints, but receives a fresh per-run tool/result budget. Otherwise
   // a checkpoint created exactly at maxToolCalls can never execute the next
@@ -123,13 +124,21 @@ export async function runConversationAgent({entryPoint,modelStep,messages=[],reg
         const group=envelope.requests.slice(offset,offset+limits.maxParallelToolCalls);
         const groupResults=await Promise.all(group.map(async(request)=>{
           emit('tool.requested',{requestId:request.requestId,capability:request.capability,reason:request.reason});
-          const fingerprint=toolCallFingerprint(request),count=seen.get(fingerprint)||0;seen.set(fingerprint,count+1);
+          const requestArguments=request.arguments||{};
+          const documentWriteScope=request.capability==='cap_filesystem_project_document_write'&&requestArguments.sessionId
+            ?JSON.stringify([requestArguments.resourceId||'',requestArguments.path||'',requestArguments.sessionId]):'';
+          const generation=documentWriteScope?(documentWriteGenerations.get(documentWriteScope)||0):0;
+          // A document writer may legitimately begin again after aborting a failed
+          // document. Scope duplicate protection by that session generation so
+          // the restart is not mistaken for an accidental repeated begin.
+          const fingerprint=`${toolCallFingerprint(request)}${documentWriteScope?`:document-write-generation:${generation}`:''}`,count=seen.get(fingerprint)||0;seen.set(fingerprint,count+1);
           const confirmedRetry=Array.isArray(runContext.confirmedCapabilities)&&runContext.confirmedCapabilities.includes(request.capability);
           store?.startAgentToolCall?.({agentRunId:id,request,...traceContext});let result;
           if(count>=limits.maxDuplicateCalls&&!confirmedRetry)result=toolError(request,'AGENT_BUDGET_EXCEEDED','相同工具与参数在本轮中不得重复调用',false);
           else if(!(catalog||[]).some((item)=>item.capability===request.capability))result=toolError(request,'CAPABILITY_NOT_VISIBLE',`当前对话未授权能力：${request.capability}`,false);
           else if(toolCalls>=limits.maxToolCalls)result=toolError(request,'AGENT_BUDGET_EXCEEDED','已达到工具调用预算',false);
-          else {toolCalls+=1;result=await executeConversationTool(request,{registry,catalog,context:{...runContext,store,signal:runSignal,agentRunId:id,agentToolCallId:`${id}:${request.requestId}`,idempotencyKey:toolCallFingerprint(request),timeoutMs:Math.max(1,limits.timeoutMs-(Date.now()-started))},resolveArguments,cacheLookup,onEvent:(type,payload)=>emit(type,payload)});result=await sanitizeToolResult(result,request,{agentRunId:id});}
+          else {toolCalls+=1;result=await executeConversationTool(request,{registry,catalog,context:{...runContext,store,signal:runSignal,agentRunId:id,agentToolCallId:`${id}:${request.requestId}`,idempotencyKey:fingerprint,timeoutMs:Math.max(1,limits.timeoutMs-(Date.now()-started))},resolveArguments,cacheLookup,onEvent:(type,payload)=>emit(type,payload)});result=await sanitizeToolResult(result,request,{agentRunId:id});}
+          if(documentWriteScope&&requestArguments.operation==='abort'&&result.status==='ok')documentWriteGenerations.set(documentWriteScope,generation+1);
           result=compactToolResult(result,Math.min(limits.maxToolResultChars,Math.max(256,limits.maxTotalToolResultChars-totalResultChars)));totalResultChars+=JSON.stringify(result).length;store?.finishAgentToolCall?.({agentRunId:id,request,result});
           emit(result.status==='ok'?'tool.completed':'tool.failed',{requestId:request.requestId,capability:request.capability,status:result.status,error:result.error,...(result.status==='ok'?completedEvent(result):{})});return result;
         }));
