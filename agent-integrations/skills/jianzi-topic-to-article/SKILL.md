@@ -12,7 +12,7 @@ description: 使用见字工作台完成热点采集、选题研判、文章简�
 3. 研判有两种路径：
    - 外部 Agent 路径：读取 `jianzi_batch_ranking` 和候选来源，结合账号画像独立研判；只把用户选中的热点通过 `jianzi_candidate_add` 加入候选。
    - 工作台 AI 路径：用户选择内部 AI 自动研判时调用 `jianzi_batch_auto_research`，等待任务完成，并读取排名与候选。
-4. 读取 `jianzi_candidate_get` 获取来源、事实和现有编辑决策；读取 `jianzi_account_profile` 了解受众与账号定位。
+4. 对已加入候选池的选题，先调用 `jianzi_candidate_source_fetch` 抓取并保存关联原文，再读取 `jianzi_candidate_get` 获取来源、事实和现有编辑决策；读取 `jianzi_account_profile` 了解受众与账号定位。原文抓取失败时先报告原因，不要直接进入成稿。
 5. 先输出选题理由、事实与未知项、切入角度和风险。保存编辑决策时调用 `jianzi_candidate_editorial_update`。锁题 `jianzi_candidate_lock` 会触发门禁；若未就绪，按错误补齐事实或研判，不绕过门禁。
 6. 用户要求工作台内部 AI 成稿时调用 `jianzi_article_generate` 并等待任务。生成完成后用 `jianzi_article_documents` 查验产物；再按请求调用排版和封面流程。
 
