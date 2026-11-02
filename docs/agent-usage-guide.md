@@ -23,7 +23,7 @@
 在终端添加项目提供的 Codex 插件市场：
 
 ```powershell
-codex plugin marketplace add shiker1996/wechat-editroom --ref codex/external-agent-tools --sparse agent-integrations/codex-marketplace
+codex plugin marketplace add shiker1996/wechat-editroom --ref master --sparse agent-integrations/codex-marketplace
 ```
 
 然后在 Codex 的 Plugins 目录中找到并安装 `jianzi-workbench-setup`。Codex 官方说明支持通过 `codex plugin marketplace add` 添加带 Git ref 和 sparse 路径的插件市场，插件本身通过 Plugins 目录安装。[Codex 插件市场说明](https://developers.openai.com/plugins/build/plugins)
@@ -66,7 +66,7 @@ npm run jianzi -- doctor --json
 
 例如可以这样提出请求：
 
-> 请从 `https://github.com/shiker1996/wechat-editroom.git` 的 `codex/external-agent-tools` 分支克隆见字工作台到本机 `E:\Jianzi`，运行项目自带的 `setup-workbench.cmd`。安装选项逐项问我，RSSHub 暂时跳过。随后用 `start-workbench.cmd` 启动工作台，运行 `npm run jianzi -- install --agent workbuddy`，在 WorkBuddy 中启用项目 MCP 并刷新连接；调用 `jianzi_doctor` 确认工具可用，再带我设置账号画像和采集源。每个来源先测试，不要自动启动批次采集。默认使用 WorkBuddy 当前会话生成，不配置见字内部模型。
+> 请从 `https://github.com/shiker1996/wechat-editroom.git` 的 `master` 分支克隆见字工作台到本机 `E:\Jianzi`，运行项目自带的 `setup-workbench.cmd`。安装选项逐项问我，RSSHub 暂时跳过。随后用 `start-workbench.cmd` 启动工作台，运行 `npm run jianzi -- install --agent workbuddy`，在 WorkBuddy 中启用项目 MCP 并刷新连接；调用 `jianzi_doctor` 确认工具可用，再带我设置账号画像和采集源。每个来源先测试，不要自动启动批次采集。默认使用 WorkBuddy 当前会话生成，不配置见字内部模型。
 
 项目克隆完成后，WorkBuddy 还可以读取仓库中的 Skill 与连接器说明，继续完成下文配置。WorkBuddy 的 MCP 进程必须运行在能访问项目文件和本机工作台的同一台电脑上。
 
