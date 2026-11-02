@@ -51,8 +51,9 @@ export const JIANZI_TOOLS = [
   { name: 'jianzi_batch_auto_research', description: '调用见字内部模型完成批次打标、事件卡和研判自动流程；需要工作台已配置模型。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), provider: string('可选的工作台模型服务商 ID。') }, required: ['batchId'] }, readOnlyHint: false, openWorldHint: true },
   { name: 'jianzi_batch_ranking', description: '查看采集批次的热点排名与候选状态，供 Agent 自行研判选题。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。') }, required: ['batchId'] }, readOnlyHint: true },
   { name: 'jianzi_batch_candidates', description: '列出批次文章或图文候选。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), track: { type: 'string', enum: ['article', 'social_cards'] }, kind: string('文章候选过滤：all、hotspot 或 independent。') }, required: ['batchId'] }, readOnlyHint: true },
-  { name: 'jianzi_candidate_add', description: '把 Agent 已研判选择的热点加入文章池或图文池。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), hotspotIds: { type: 'array', items: { type: 'integer', minimum: 1 }, minItems: 1 }, tracks: { type: 'array', items: { type: 'string', enum: ['article', 'social_cards'] } } }, required: ['batchId', 'hotspotIds'] }, readOnlyHint: false },
+  { name: 'jianzi_candidate_add', description: '把 Agent 已研判选择的热点加入文章池或图文池。图文候选可指定事件、项目或自定义类型；不指定时按事件图文处理。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), hotspotIds: { type: 'array', items: { type: 'integer', minimum: 1 }, minItems: 1 }, tracks: { type: 'array', items: { type: 'string', enum: ['article', 'social_cards'] } }, socialMaterialType: { type: 'string', enum: ['event', 'repository', 'custom'], description: '图文类型。事件资讯选 event；软件项目介绍选 repository；其他自定义内容选 custom。' } }, required: ['batchId', 'hotspotIds'] }, readOnlyHint: false },
   { name: 'jianzi_candidate_get', description: '读取候选、来源事实、已有研判和编辑决策。', inputSchema: { type: 'object', properties: { candidateId: id('候选 ID。') }, required: ['candidateId'] }, readOnlyHint: true },
+  { name: 'jianzi_candidate_source_fetch', description: '抓取并保存候选关联热点的原文，供文章成稿或图文故事板使用；默认抓取全部关联热点，可指定 hotspotId 或 eventId。', inputSchema: { type: 'object', properties: { candidateId: id('候选 ID。'), hotspotId: id('只抓取该候选关联的热点 ID。', false), eventId: string('只抓取该候选关联的事件 ID。'), force: { type: 'boolean', description: '忽略已有缓存并重新抓取。' } }, required: ['candidateId'] }, readOnlyHint: false, openWorldHint: true },
   { name: 'jianzi_candidate_editorial_update', description: '保存 Agent 形成的文章编辑判断；建议先展示用户确认，再锁题。', inputSchema: { type: 'object', properties: { candidateId: id('候选 ID。'), editorial: { type: 'object', description: '编辑决策字段，如 editor_question、confirmed_facts、author_opinions、rejected_angles、open_questions、forbidden_claims、next_action。' } }, required: ['candidateId', 'editorial'] }, readOnlyHint: false },
   { name: 'jianzi_candidate_lock', description: '锁定已完成编辑判断的文章候选，工作台会执行编辑简报门禁。', inputSchema: { type: 'object', properties: { candidateId: id('候选 ID。') }, required: ['candidateId'] }, readOnlyHint: false },
   { name: 'jianzi_article_generate', description: '调用见字内部模型完成文章成稿、审稿和事实门禁；需要工作台已配置模型。', inputSchema: { type: 'object', properties: { candidateId: id('候选 ID。'), provider: string('可选的工作台模型服务商 ID。'), skillId: string('可选的写作 Skill ID。') }, required: ['candidateId'] }, readOnlyHint: false, openWorldHint: true },
@@ -125,8 +126,13 @@ export async function executeJianziTool(client, name, input = {}) {
     case 'jianzi_batch_auto_research': return client.post(`/api/batches/${batch}/ai/auto`, { provider: input.provider });
     case 'jianzi_batch_ranking': return client.get(`/api/batches/${batch}/ranking`);
     case 'jianzi_batch_candidates': return client.get(`/api/batches/${batch}/candidates?track=${encodeURIComponent(input.track || 'article')}&kind=${encodeURIComponent(input.kind || 'all')}`);
-    case 'jianzi_candidate_add': return client.post(`/api/batches/${batch}/candidates`, { hotspotIds: input.hotspotIds, tracks: input.tracks?.length ? input.tracks : ['article'] });
+    case 'jianzi_candidate_add': {
+      const tracks = input.tracks?.length ? input.tracks : ['article'];
+      const socialMaterialType = input.socialMaterialType || (tracks.includes('social_cards') ? 'event' : undefined);
+      return client.post(`/api/batches/${batch}/candidates`, { hotspotIds: input.hotspotIds, tracks, ...(socialMaterialType ? { socialMaterialType } : {}) });
+    }
     case 'jianzi_candidate_get': return client.get(`/api/candidates/${candidate}`);
+    case 'jianzi_candidate_source_fetch': return client.post(`/api/candidates/${candidate}/source`, { hotspotId: input.hotspotId, eventId: input.eventId, force: input.force === true });
     case 'jianzi_candidate_editorial_update': return client.put(`/api/candidates/${candidate}/editorial`, input.editorial);
     case 'jianzi_candidate_lock': return client.post(`/api/candidates/${candidate}/lock`, {});
     case 'jianzi_article_generate': return client.post(`/api/candidates/${candidate}/ai/article`, { provider: input.provider, skillId: input.skillId });
