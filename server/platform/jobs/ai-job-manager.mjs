@@ -2,7 +2,8 @@ import crypto from 'node:crypto';
 import { runWithThinkingSink } from '../llm/gateway.mjs';
 
 export class AiJobManager {
-  constructor(store, gateway, config, { handlers = new Map(), batchLevelTypes = new Set(), onFailure = null } = {}) {
+  constructor(store, gateway, config, { handlers = new Map(), batchLevelTypes = new Set(), onFailure = null,
+    getDefaultRuntime = () => 'local-harness', isExternalRuntimeJob = () => false } = {}) {
     this.store = store; this.gateway = gateway; this.config = config; this.jobs = new Map();
     this.pending = [];                 // 等待执行的任务 id（FIFO）
     this.running = new Map();          // 互斥键 -> 运行中任务 id
@@ -11,6 +12,8 @@ export class AiJobManager {
     this.handlers = handlers;
     this.batchLevelTypes = batchLevelTypes;
     this.onFailure = onFailure;
+    this.getDefaultRuntime = getDefaultRuntime;
+    this.isExternalRuntimeJob = isExternalRuntimeJob;
   }
 
   // 互斥键：批次级任务按批次互斥，候选级任务按候选互斥，二者互不阻塞。
@@ -24,9 +27,14 @@ export class AiJobManager {
     const pending = [...this.jobs.values()].find((job) => job.batchId === batchId && job.type === type
       && job.candidateId === candidateId && job.failureId === failureId && (job.status === 'running' || job.status === 'queued'));
     if (pending) return pending;
-    this.gateway.resolve(provider);
+    const batch = this.store.getBatch(batchId);
+    const modelConfigProvider = provider || this.gateway.config.defaultProvider;
+    const externalRuntimeRequested = this.isExternalRuntimeJob({ type, batch, provider: modelConfigProvider });
+    const runtimeId = externalRuntimeRequested ? this.getDefaultRuntime() : null;
+    const externalRuntime = Boolean(runtimeId && runtimeId !== 'local-harness');
+    if (!externalRuntime) this.gateway.resolve(provider);
     const resolvedMode = type === 'cover-image' ? 'ai-visual' : mode;
-    const job = { id:crypto.randomUUID(),batchId,type,candidateId,failureId,provider:provider||this.gateway.config.defaultProvider,requestedProvider:provider||null,snapshotId,skillSelection,stageSelections,
+    const job = { id:crypto.randomUUID(),batchId,type,candidateId,failureId,provider:runtimeId || modelConfigProvider,modelConfigProvider,requestedProvider:provider||null,snapshotId,skillSelection,stageSelections,
       mode:resolvedMode,status:'queued',progress:'排队等待执行',logs:[],createdAt:new Date().toISOString(),
       runOptions:{ force, candidateId, documentKind, ...(failureId != null ? { failureId } : {}), ...(resumeFrom ? { resumeFrom } : {}), ...(resolvedMode !== 'standard' ? { mode:resolvedMode } : {}), focus, focuses, ...(String(styleBrief||'').trim()?{styleBrief:String(styleBrief).trim()}:{}), ...(imageDeliveryMode ? { imageDeliveryMode } : {}) } };
     this.jobs.set(job.id,job); this.store.createAiRun({id:job.id,batchId,type,provider:job.provider});

@@ -157,8 +157,12 @@ const codexRuntime = createCodexAppServerRuntime({ getAccessToken: () => codexOA
 const agentRuntimeRegistry = new AgentRuntimeRegistry();
 agentRuntimeRegistry.register(codexRuntime, 'codex');
 setAgentRuntimeRegistry(agentRuntimeRegistry, { getDefaultRuntime: () => getAgentRuntimeSettings(runtimePaths.configRoot).defaultRuntime });
+const externalBatchRuntimeTypes = new Set(['tag', 'retag', 'event-cards', 'research', 'auto']);
 const aiJobs = new AiJobManager(store, models, config, {
   batchLevelTypes: BATCH_LEVEL_AI_JOB_TYPES,
+  getDefaultRuntime: () => getAgentRuntimeSettings(runtimePaths.configRoot).defaultRuntime,
+  isExternalRuntimeJob: ({ type, batch }) => getAgentRuntimeSettings(runtimePaths.configRoot).defaultRuntime !== 'local-harness'
+    && externalBatchRuntimeTypes.has(type) && !(type === 'auto' && batch?.batch_type === 'breaking'),
   handlers: createAiJobHandlers({ store, gateway: models, config, log: (job, message) => aiJobs.log(job, message), onThinking: (job, delta) => aiJobs.recordThinking(job, delta) }),
   onFailure: ({ job, error }) => {
     if (job.type === 'research' || (job.type === 'auto' && job.phase === 'research')) recordResearchFailure({ store, job, error });

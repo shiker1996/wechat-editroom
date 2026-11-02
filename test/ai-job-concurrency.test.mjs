@@ -106,6 +106,46 @@ test('启动任务时把 candidateId/documentKind/focus 等执行参数传给 ru
   } finally { teardown(ctx); }
 });
 
+test('外部 Runtime 批次任务跳过内部模型凭据预检并分别记录 Runtime 与模型配置 provider', () => {
+  const ctx = setup();
+  try {
+    const { batch } = makeCandidates(ctx.store, 1);
+    let resolveCalls = 0;
+    const gateway = { config: { defaultProvider: 'deepseek' }, resolve() { resolveCalls += 1; throw new Error('不应解析内部模型'); } };
+    const manager = new AiJobManager(ctx.store, gateway, { aiJobs: { maxConcurrent: 1 }, rsshub: { maxAgeHours: 168 } }, {
+      handlers: new Map([['auto', async () => ({})]]),
+      getDefaultRuntime: () => 'codex',
+      isExternalRuntimeJob: ({ type, batch: currentBatch }) => type === 'auto' && currentBatch.batch_type !== 'breaking',
+    });
+    manager.run = () => Promise.resolve();
+    const job = manager.start({ batchId: batch.id, type: 'auto' });
+    assert.equal(resolveCalls, 0);
+    assert.equal(job.provider, 'codex');
+    assert.equal(job.modelConfigProvider, 'deepseek');
+    assert.equal(ctx.store.getAiRun(job.id).provider, 'codex');
+  } finally { teardown(ctx); }
+});
+
+test('本地 Runtime 与 breaking auto 任务仍验证内部模型配置', () => {
+  const ctx = setup();
+  try {
+    const regular = ctx.store.createBatch({ date: '2026-08-04', title: '本地任务' });
+    const breaking = ctx.store.createBatch({ date: '2026-08-05', title: '突发任务', batchType: 'breaking' });
+    const defaultRuntime = 'local-harness';
+    let resolveCalls = 0;
+    const gateway = { config: { defaultProvider: 'deepseek' }, resolve() { resolveCalls += 1; } };
+    const manager = new AiJobManager(ctx.store, gateway, { aiJobs: { maxConcurrent: 1 }, rsshub: { maxAgeHours: 168 } }, {
+      handlers: new Map([['auto', async () => ({})]]),
+      getDefaultRuntime: () => defaultRuntime,
+      isExternalRuntimeJob: ({ type, batch: currentBatch }) => defaultRuntime !== 'local-harness' && type === 'auto' && currentBatch.batch_type !== 'breaking',
+    });
+    manager.run = () => Promise.resolve();
+    manager.start({ batchId: regular.id, type: 'auto' });
+    manager.start({ batchId: breaking.id, type: 'auto' });
+    assert.equal(resolveCalls, 2);
+  } finally { teardown(ctx); }
+});
+
 test('排版任务保留图片交付模式并传给 typeset handler', () => {
   const ctx = setup();
   try {
