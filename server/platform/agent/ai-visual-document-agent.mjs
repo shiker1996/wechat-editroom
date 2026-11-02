@@ -88,6 +88,7 @@ export async function runAiVisualDocumentAgent({
   batchId,
   candidateId,
   provider,
+  runtimeId = null,
   registry,
   catalog,
   agentSystem = '',
@@ -220,6 +221,7 @@ export async function runAiVisualDocumentAgent({
 
   onPhaseChange('generation');
   const agent = await runSkill({
+    runtimeId,
     gateway,
     gateHandlers: { 'visual-document-finished': { version: '1', phase: 'output', check: () => documentFinished } },
     entryPoint,

@@ -126,6 +126,24 @@ test('opt-in 批次 Pipeline stage 使用外部 Runtime，保留原始提示并�
   }
 });
 
+test('Pipeline Gateway 可固定外部 Runtime，供无本地模型的子步骤复用', async () => {
+  const { bindPipelineHarnessGateway } = await import('../server/platform/skills/pipeline-runtime.mjs');
+  const calls = [];
+  const runtimeAdapter = {
+    id: 'codex-app-server',
+    async getCapabilities() { return { run: true, streaming: true, cancel: true }; },
+    async *run(request) { calls.push(request); yield { type: 'run.completed', output: '{"designScheme":{}}' }; },
+  };
+  setAgentRuntimeRegistry({ resolve: (id) => id === 'codex' ? runtimeAdapter : null }, { getDefaultRuntime: () => 'local-harness' });
+  try {
+    const gateway = bindPipelineHarnessGateway({ complete: async () => { throw new Error('不得调用本地模型'); } }, { runtimeId: 'codex' });
+    const result = await gateway.complete({ purpose: 'social-card-design-scheme', jsonMode: true, messages: [{ role: 'user', content: '制定方案' }] });
+    assert.equal(result.runtimeId, 'codex-app-server');
+    assert.equal(calls.length, 1);
+    assert.match(calls[0].instruction, /制定方案/);
+  } finally { setAgentRuntimeRegistry(null); }
+});
+
 test('外部 Agent Runtime 保留编辑室的 user/assistant 历史消息和顺序', async () => {
   let runtimeRequest;
   const runtimeAdapter = {

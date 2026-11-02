@@ -14,7 +14,7 @@ export function createAiJobHandlers({ store, gateway, config, log, onThinking = 
   const progress = (job) => (message) => log(job, message);
   const modelProvider = (job) => job.modelConfigProvider || job.provider;
   const jobGateway = (job) => {
-    const scoped = bindPipelineHarnessGateway(gateway, { store, batchId: job.batchId, candidateId: job.candidateId,
+    const scoped = bindPipelineHarnessGateway(gateway, { store, batchId: job.batchId, candidateId: job.candidateId, runtimeId: job.runtimeId,
       rootRunId: `job:${job.id}`, workflowRunId: `job:${job.id}`, entryPoint: `batch-job:${job.type}`,
       workspaceRoot: config.workspaceRoot });
     const assertNotCancelled = () => {

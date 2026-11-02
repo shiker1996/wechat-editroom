@@ -39,7 +39,7 @@ export function bindGenerationSnapshot(gateway, generationSnapshotId) {
 export async function runPipelineStage({ gateway, store, batchId = null, candidateId = null, provider = null,
   purpose, skillId = purpose, entryPoint = 'pipeline', stageId = purpose, input = null, messages = [],
   maxOutputTokens, jsonMode = false, thinking = undefined, temperature = undefined, rootRunId = null, workflowRunId = null, parentRunId = null,
-  generationSnapshotId = null, signal = null, definition = null, onRunCreated = null, resumeFrom = null, resumeLeaseMs = null,
+  generationSnapshotId = null, runtimeId = null, signal = null, definition = null, onRunCreated = null, resumeFrom = null, resumeLeaseMs = null,
   workspaceRoot = null, outputSchema = null }) {
   if (!purpose || typeof gateway?.complete !== 'function') throw new Error('Pipeline stage 缺少 purpose 或 LLM Gateway');
   const resolvedSkillId = String(skillId === purpose ? PIPELINE_SKILLS_BY_PURPOSE[purpose] || skillId : skillId);
@@ -50,7 +50,7 @@ export async function runPipelineStage({ gateway, store, batchId = null, candida
   }
   stageDefinition ||= { id: resolvedSkillId, kind: 'stage-skill', entryPoints: [entryPoint], runtimePolicy: { mode: 'external-agent' } };
   return runSkill({
-    skillId: resolvedSkillId, entryPoint, input,
+    skillId: resolvedSkillId, entryPoint, input, runtimeId,
     definition: stageDefinition,
     signal,
     ...(resumeFrom ? { resumeFrom: String(resumeFrom), ...(resumeLeaseMs ? { resumeLeaseMs } : {}) } : {}),
@@ -81,10 +81,11 @@ export function bindPipelineHarnessGateway(gateway, options = {}) {
   if (!gateway) return gateway;
   return new Proxy(gateway, {
     get(target, property, receiver) {
+      if (property === 'agentRuntimeId') return options.runtimeId || null;
       if (property === 'complete') return (input = {}) => {
         const { messages = [], ...modelInput } = input || {};
         const purpose = modelInput.purpose || options.purpose || 'pipeline-stage';
-        return runPipelineStage({ ...options, ...modelInput, purpose, messages, gateway: target,
+        return runPipelineStage({ ...options, ...modelInput, runtimeId: options.runtimeId || modelInput.runtimeId || null, purpose, messages, gateway: target,
           signal: modelInput.signal || options.signal || null,
           skillId: modelInput.skillId || purpose, entryPoint: modelInput.entryPoint || options.entryPoint || 'pipeline',
         stageId: modelInput.stageId || purpose, generationSnapshotId: options.generationSnapshotId || modelInput.generationSnapshotId,
@@ -176,8 +177,13 @@ export async function prepareSkillRun({ gateway, store, batchId, candidateId = n
   const primary=bundles[0];
   const configuredProvider=primary?.config?.defaultModel;
   const configuredExists=configuredProvider&&gateway.config?.providers?.[configuredProvider];
-  const selectedProvider=historical?.snapshot.modelProvider || provider || (configuredExists ? configuredProvider : gateway.config?.defaultProvider);
-  const resolved=gateway.config?.providers?.[selectedProvider] || gateway.resolve?.(selectedProvider)?.provider;
+  const runtimeId = historical ? null : String(gateway.agentRuntimeId || '').trim() || null;
+  const selectedProvider=historical?.snapshot.modelProvider || runtimeId || provider || (configuredExists ? configuredProvider : gateway.config?.defaultProvider);
+  // External Runtimes own model execution; this lightweight descriptor only
+  // records the selected Runtime in the generation snapshot.
+  const resolved=runtimeId
+    ? gateway.config?.providers?.[selectedProvider] || { model: 'agent-runtime', maxOutputTokens: 7000 }
+    : gateway.config?.providers?.[selectedProvider] || gateway.resolve?.(selectedProvider)?.provider;
   if(!resolved)throw new Error('技能运行时无法解析模型配置');
   if(historical?.snapshot.model&&resolved.model!==historical.snapshot.model){
     throw new Error(`历史模型版本不可用：${selectedProvider}/${historical.snapshot.model}`);

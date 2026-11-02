@@ -892,6 +892,7 @@ export async function runSocialCardBeautify({ gateway, store, batchId, candidate
       batchId,
       candidateId,
       provider,
+      runtimeId: gateway.agentRuntimeId || null,
       registry,
       catalog: generationCatalog,
       agentSystem: generationSystem,

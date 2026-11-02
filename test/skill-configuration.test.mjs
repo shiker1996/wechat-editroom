@@ -8,7 +8,7 @@ import {
   dryRunSkillConfig, normalizeSkillConfig, readActiveSkillConfig, validateSkillConfig, writeActiveSkillConfig,
 } from '../server/platform/skills/configuration.mjs';
 import { loadSkillBundle } from '../server/platform/llm/skill-runtime.mjs';
-import { prepareSkillRun, resolveSkillToolPolicy } from '../server/platform/skills/pipeline-runtime.mjs';
+import { bindPipelineHarnessGateway, prepareSkillRun, resolveSkillToolPolicy } from '../server/platform/skills/pipeline-runtime.mjs';
 
 test('技能配置拒绝未知工具、非法字数和 Prompt/门禁冲突', () => {
   const config=normalizeSkillConfig({
@@ -98,6 +98,18 @@ test('统一创作运行时应用默认模型、工具白名单并冻结配置�
   assert.deepEqual(result.tools.map((item)=>item.capability),['cap_content_url_fetch']);
   assert.equal(saved[0].snapshot.skillConfig.version,3);
   assert.equal(saved[0].snapshot.model,'model-configured');
+});
+
+test('外部 Runtime 已选中时，无需配置本地模型也能准备技能快照', async () => {
+  const saved=[];
+  const gateway=bindPipelineHarnessGateway({config:{defaultProvider:'',providers:{}},resolve(){throw new Error('外部 Runtime 不应解析本地供应商');}},{runtimeId:'codex-app-server'});
+  const bundle={skillName:'social-card-ai-visual-generator',prompt:'AI视觉规则',hash:'visual',files:[],fallback:false,config:null};
+  const result=await prepareSkillRun({gateway,store:{saveGenerationSnapshot:(item)=>{saved.push(item);return{id:23};}},
+    batchId:'batch-1',candidateId:4,purpose:'social-card-ai-visual',bundles:[bundle]});
+  assert.equal(result.provider,'codex-app-server');
+  assert.equal(result.providerConfig.model,'agent-runtime');
+  assert.equal(saved[0].snapshot.modelProvider,'codex-app-server');
+  assert.equal(saved[0].snapshot.model,'agent-runtime');
 });
 
 test('配置门禁实际检查事实来源、体验和返工开关', async () => {

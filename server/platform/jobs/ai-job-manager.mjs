@@ -34,7 +34,7 @@ export class AiJobManager {
     const externalRuntime = Boolean(runtimeId && runtimeId !== 'local-harness');
     if (!externalRuntime) this.gateway.resolve(provider);
     const resolvedMode = type === 'cover-image' ? 'ai-visual' : mode;
-    const job = { id:crypto.randomUUID(),batchId,type,candidateId,failureId,provider:runtimeId || modelConfigProvider,modelConfigProvider,requestedProvider:provider||null,snapshotId,skillSelection,stageSelections,
+    const job = { id:crypto.randomUUID(),batchId,type,candidateId,failureId,provider:runtimeId || modelConfigProvider,runtimeId:externalRuntime?runtimeId:null,modelConfigProvider,requestedProvider:provider||null,snapshotId,skillSelection,stageSelections,
       mode:resolvedMode,status:'queued',progress:'排队等待执行',logs:[],createdAt:new Date().toISOString(),
       runOptions:{ force, candidateId, documentKind, ...(failureId != null ? { failureId } : {}), ...(resumeFrom ? { resumeFrom } : {}), ...(resolvedMode !== 'standard' ? { mode:resolvedMode } : {}), focus, focuses, ...(String(styleBrief||'').trim()?{styleBrief:String(styleBrief).trim()}:{}), ...(imageDeliveryMode ? { imageDeliveryMode } : {}) } };
     this.jobs.set(job.id,job); this.store.createAiRun({id:job.id,batchId,type,provider:job.provider});

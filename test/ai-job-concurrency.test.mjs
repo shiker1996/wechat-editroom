@@ -121,8 +121,27 @@ test('外部 Runtime 批次任务跳过内部模型凭据预检并分别记录 R
     const job = manager.start({ batchId: batch.id, type: 'auto' });
     assert.equal(resolveCalls, 0);
     assert.equal(job.provider, 'codex');
+    assert.equal(job.runtimeId, 'codex');
     assert.equal(job.modelConfigProvider, 'deepseek');
     assert.equal(ctx.store.getAiRun(job.id).provider, 'codex');
+  } finally { teardown(ctx); }
+});
+
+test('只有外部 Runtime 且没有默认模型时仍可启动外部任务', () => {
+  const ctx = setup();
+  try {
+    const { batch } = makeCandidates(ctx.store, 1);
+    const gateway = { config: { defaultProvider: '', providers: {} }, resolve() { throw new Error('不应解析内部模型'); } };
+    const manager = new AiJobManager(ctx.store, gateway, { aiJobs: { maxConcurrent: 1 }, rsshub: { maxAgeHours: 168 } }, {
+      handlers: new Map([['social-card-beautify', async () => ({})]]),
+      getDefaultRuntime: () => 'codex',
+      isExternalRuntimeJob: ({ type }) => type === 'social-card-beautify',
+    });
+    manager.run = () => Promise.resolve();
+    const job = manager.start({ batchId: batch.id, candidateId: ctx.store.listCandidates(batch.id, 'social_cards')[0].id, type: 'social-card-beautify' });
+    assert.equal(job.provider, 'codex');
+    assert.equal(job.runtimeId, 'codex');
+    assert.equal(job.modelConfigProvider, '');
   } finally { teardown(ctx); }
 });
 
