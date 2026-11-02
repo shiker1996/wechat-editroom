@@ -15,6 +15,8 @@ Use this workflow when the user asks Codex to install or initialize the workbenc
 4. Run `npm run jianzi -- doctor --json --server http://127.0.0.1:<port>`. Confirm that the service is reachable and report unavailable optional collectors.
 5. Run `npm run jianzi -- install --agent codex` in the new project. Continue the initial setup through the project's `jianzi` CLI while Codex has terminal access; the MCP connection becomes available after the new project is trusted and reloaded.
 
+Keep a fresh or test installation self-contained in its selected directory: use its own `config.local.json`, database, data folders, and optional RSSHub checkout. Do not point it at another project's RSSHub process or copy another project's local configuration unless the user explicitly asks to migrate that setup.
+
 ## Configure the account
 
 Interview the user for the public account name, short description, core readers, ongoing content pillars, editorial categories, and any writing boundaries. Reuse their existing `account-context.json` or ask before replacing an existing profile. Do not invent account facts. Prepare a draft and show it for confirmation, then save it with `jianzi_account_profile_update` or `npm run jianzi -- account update --file <json-file> --server http://127.0.0.1:<port>`.

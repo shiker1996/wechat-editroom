@@ -12,9 +12,9 @@
 |---|---|
 | Codex 项目引导插件 | 在项目尚未安装时，指导 Codex 选择目录、克隆代码、运行安装向导，并初始化账号画像和采集源。它是 Codex 专用入口。 |
 | 项目级 MCP 与 Skills | 安装在见字项目内。Codex 和 WorkBuddy 共用业务工具与流程规则，但各自使用不同的客户端配置。 |
-| 见字工作台内部模型 | 执行工作台中的 AI 研判、文章成稿、排版、封面和图文生成。 |
+| 见字工作台内部模型 | 可选。只有用户明确选择工作台内部 AI 路径时才需要；默认外部 Agent 用当前会话完成研判、成稿、排版、封面和图文生成。 |
 
-Codex 自己的模型负责理解你的要求、分析和组织工具调用。它不会自动变成见字工作台的内部模型：文章和视觉内容生成仍要求在工作台配置中心配置可用的模型服务商。账号画像、采集源配置、批次管理等工具由工作台保存和执行。
+外部 Agent 的模型负责理解要求、分析内容并生成文章和视觉产物；见字通过 MCP 保存结果并执行确定性门禁、规范化、浏览器审计、截图和归档。因此默认外部 Agent 流程不要求配置见字内部模型。账号画像、采集源配置和批次数据仍由工作台保存和管理。
 
 ## 2. Codex：从空目录安装
 
@@ -23,7 +23,7 @@ Codex 自己的模型负责理解你的要求、分析和组织工具调用。�
 在终端添加项目提供的 Codex 插件市场：
 
 ```powershell
-codex plugin marketplace add shiker1996/wechat-editroom --ref codex/agent-mcp-integration --sparse agent-integrations/codex-marketplace
+codex plugin marketplace add shiker1996/wechat-editroom --ref codex/external-agent-tools --sparse agent-integrations/codex-marketplace
 ```
 
 然后在 Codex 的 Plugins 目录中找到并安装 `jianzi-workbench-setup`。Codex 官方说明支持通过 `codex plugin marketplace add` 添加带 Git ref 和 sparse 路径的插件市场，插件本身通过 Plugins 目录安装。[Codex 插件市场说明](https://developers.openai.com/plugins/build/plugins)
@@ -47,9 +47,7 @@ macOS/Linux 使用 `./setup-workbench.sh` 和 `./start-workbench.sh`。入口会
 
 如果选择在全新项目中安装 RSSHub，首次向导先跳过 RSSHub；从 `server/platform/integrations/rsshub-installer.mjs` 读取固定 commit，在 `config.local.json` 指定的 RSSHub 目录获取并检出该 SHA，再次运行初始化入口安装 RSSHub 依赖。这样只影响新项目的 Agent 安装流程，不改动通用初始化逻辑，也不切换已有项目的 RSSHub 版本。为保留此交互步骤，不要给首次初始化入口传 `--yes`。
 
-### 2.3 配置工作台模型并连接 Codex
-
-首次启动后，打开工作台“运行与配置”页面，配置至少一个可用的模型服务商并执行连接测试。API Key 等凭据只保存在本机工作台配置中，不要粘贴进账号画像。
+### 2.3 安装 MCP 与 Skills 并连接 Codex
 
 在项目根目录安装 Codex 的项目级 MCP 配置和 Skills：
 
@@ -58,7 +56,9 @@ npm run jianzi -- install --agent codex
 npm run jianzi -- doctor --json
 ```
 
-然后在 Codex 中信任该项目目录，并重载或重启 MCP 连接。首次安装会创建项目级 `.codex/config.toml` 和 `.agents/skills/`。MCP 子进程与工作台都运行在本机，连接默认 loopback 地址。
+安装会创建项目级 `.codex/config.toml` 和 `.agents/skills/`。随后在 Codex 中信任该项目目录，并重载或重启 MCP 连接。确认 Codex 工具列表中出现 `jianzi_*` 工具，再调用 MCP 工具 `jianzi_doctor` 验证连通；CLI `doctor` 只验证工作台 API，不代替客户端 MCP 握手。MCP 子进程与工作台都运行在本机，连接默认 loopback 地址。
+
+默认外部 Agent 工作流不需要在“运行与配置”中添加模型服务商。只有明确要调用 `jianzi_*_generate` 或 `jianzi_batch_auto_research` 等见字内部 AI 工具时，才配置并测试工作台模型。
 
 ## 3. WorkBuddy：连接已有项目
 
@@ -66,7 +66,7 @@ npm run jianzi -- doctor --json
 
 例如可以这样提出请求：
 
-> 请从 `https://github.com/shiker1996/wechat-editroom.git` 克隆见字工作台到本机 `E:\Jianzi`，运行项目自带的 `setup-workbench.cmd`。安装选项逐项问我，RSSHub 暂时跳过。随后用 `start-workbench.cmd` 启动工作台，配置模型连接，运行 `npm run jianzi -- install --agent workbuddy`，并带我设置账号画像和采集源。每个来源先测试，不要自动启动批次采集。
+> 请从 `https://github.com/shiker1996/wechat-editroom.git` 的 `codex/external-agent-tools` 分支克隆见字工作台到本机 `E:\Jianzi`，运行项目自带的 `setup-workbench.cmd`。安装选项逐项问我，RSSHub 暂时跳过。随后用 `start-workbench.cmd` 启动工作台，运行 `npm run jianzi -- install --agent workbuddy`，在 WorkBuddy 中启用项目 MCP 并刷新连接；调用 `jianzi_doctor` 确认工具可用，再带我设置账号画像和采集源。每个来源先测试，不要自动启动批次采集。默认使用 WorkBuddy 当前会话生成，不配置见字内部模型。
 
 项目克隆完成后，WorkBuddy 还可以读取仓库中的 Skill 与连接器说明，继续完成下文配置。WorkBuddy 的 MCP 进程必须运行在能访问项目文件和本机工作台的同一台电脑上。
 
@@ -81,7 +81,7 @@ npm run jianzi -- doctor --json
 
 macOS/Linux 使用 `./setup-workbench.sh` 和 `./start-workbench.sh`。
 
-安装完成后，在工作台“运行与配置”中配置并测试模型服务商。文章、排版、封面和图文生成由工作台内部模型执行，与 WorkBuddy 的模型配置分开。
+默认外部 Agent 流程不要求配置工作台模型；文章、排版、封面和图文由 WorkBuddy 当前会话生成，见字负责校验、渲染和归档。只有用户选择见字内部 AI 路径时，才需要配置并测试工作台模型。
 
 ### 3.2 安装 WorkBuddy 配置
 
@@ -178,13 +178,13 @@ AI 自动研判可使用 `npm run jianzi -- batch auto --batch <批次ID>`。命
 
 > 从批次 `<批次ID>` 的候选中，结合账号画像比较选题。先向我说明事实依据、未知项和风险；我确认后再锁定候选、生成文章终稿，并继续生成 AI 排版和封面。
 
-生成文章、AI 排版和封面会调用见字工作台内部模型；需先在工作台配置中心设置可用模型。Codex 不应把“任务已提交”描述为“产物已生成”，应等待任务结束并核对文章文档或任务产物。
+默认由 Codex 当前会话完成文章、排版和封面，再通过外部 Agent MCP 提交工具保存；见字执行门禁并归档。只有用户明确要求见字内部 AI 时，才调用内部生成工具并确认模型已配置。排版、封面或图文提交成功后，从工具结果 `artifactEntries` 取出预览入口，在最终回复中附上可点击链接；异步任务则从 `jianzi_job_wait` 结果读取入口。
 
 ### 6.3 图文生成
 
-> 查看候选 `<候选ID>` 的图文事实基座和故事板。如果没有故事板，请先根据事实生成方案并让我确认；确认后锁定故事板，再生成 AI 视觉图文，等待布局审计完成并汇报 HTML/PNG 产物和审计结果。
+> 查看候选 `<候选ID>` 的图文事实基座和故事板。如果没有故事板，请先根据事实生成方案并让我确认；确认后锁定故事板，由你当前会话生成 AI 视觉图文并提交工作台审计。完成后汇报审计结果，并给我工作台事件图文入口链接。
 
-图文通常先形成并校验故事板，再调用 AI 视觉生成。生成任务完成后要检查任务状态和布局审计结果；生成中的 HTML 不代表 PNG 已交付或审计通过。
+默认由外部 Agent 当前会话生成图文 HTML 和配套文案，工作台负责门禁、视觉审计、PNG 截图和归档；提交成功后应从 `artifactEntries` 返回事件图文入口。只有用户明确选择见字内部 AI 时，才调用内部生成工具并配置相应模型。
 
 ## 7. 常用 CLI 命令
 
@@ -200,7 +200,7 @@ npm run jianzi -- article documents --batch <批次ID> --candidate <候选ID> --
 npm run jianzi -- job get --job <任务ID>
 ```
 
-如果工作台使用非默认端口，可添加 `--server http://127.0.0.1:<端口>`。AI 成稿、排版、封面与图文命令使用工作台配置的模型，不会读取 Codex 的模型凭据。
+如果工作台使用非默认端口，可添加 `--server http://127.0.0.1:<端口>`。外部 Agent 默认使用自身会话模型；只有见字内部 AI 命令读取工作台模型配置。排版、封面与图文命令成功后，CLI JSON 结果包含 `artifactEntries` 入口。
 
 ## 8. 常见问题
 
@@ -218,7 +218,7 @@ npm run jianzi -- job get --job <任务ID>
 
 ### 文章或图文生成失败
 
-检查工作台的模型服务商是否已启用并测试成功，再查看后台任务错误和产物状态。Codex 与工作台的模型配置彼此独立。
+先检查任务是否走外部 Agent 提交路径，或走了见字内部 `*_generate` 路径。前者不依赖工作台模型；后者需检查工作台模型服务商是否已启用并测试成功，再查看任务错误和产物状态。Codex/WorkBuddy 与见字内部模型配置彼此独立。
 
 ## 9. 权限与使用边界
 

@@ -16,8 +16,10 @@ description: 安装、诊断和配置见字工作台与 Codex/WorkBuddy 集成�
 5. WorkBuddy 使用项目级 `.mcp.json` 与 `.codebuddy/skills/`。若该 WorkBuddy 客户端不加载项目配置，引导用户在连接器设置中导入 `agent-integrations/workbuddy` 并检查本机 MCP 进程权限。
 6. 再次调用 `jianzi_doctor`。若连接失败，确认工作台正在运行、端口配置一致，然后重启 MCP 连接。
 
+新项目或隔离测试项目必须使用自己的 `config.local.json`、数据库、数据目录和可选 RSSHub checkout。不要把配置中的 RSSHub 地址改为另一个项目正在运行的服务，也不要复用其他项目的数据，除非用户明确要求迁移或共享。
+
 ## 模型配置
 
-读取 `jianzi_settings_summary` 并只说明哪些模型/服务商已配置，不输出密钥。采集后可由 Agent 自行看热点和作编辑判断；调用文章成稿、AI 排版、封面或图文生成工具时，实际生成由见字 ModelGateway 执行，若无内部模型配置应清楚告知用户。
+默认外部 Agent 工作流由当前 Agent 会话完成热点研判、文章写作、排版、封面和图文生成，再通过 MCP 提交给工作台校验、渲染和归档，不要求配置见字内部模型。只有用户明确选择 `jianzi_*_generate` 或 `jianzi_batch_auto_research` 等内部 AI 路径时，才读取 `jianzi_settings_summary` 检查模型配置；不得把缺少内部模型误报为外部 Agent 流程无法使用。
 
 不要编辑或输出 `.env`、`config.local.json` 中的密钥字段。不要通过批次删除、外部发布或修改第三方账号设置来完成初始化。
