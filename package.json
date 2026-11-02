@@ -14,7 +14,7 @@
         "desktop:win": "npm run desktop:dir && npm run desktop:win:from-dir",
         "desktop:win:from-dir": "electron-builder --win --prepackaged dist\\win-unpacked --publish never --config.npmRebuild=false",
         "setup": "node scripts/runtime/setup.mjs",
-        "jianzi": "node scripts/agent-integration/cli.mjs",
+        "jianzi": "node scripts/agent-integration/start-cli.mjs",
         "dev": "node scripts/runtime/start-server.mjs --watch --watch-path=server.mjs --watch-path=server",
         "test": "node --disable-warning=ExperimentalWarning --test test/**/*.test.mjs",
         "test:e2e": "node --disable-warning=ExperimentalWarning --test test/e2e/**/*.test.mjs",
