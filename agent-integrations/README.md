@@ -51,7 +51,7 @@ npm run jianzi -- sources add --plugin feed-collector --file source.json
 npm run jianzi -- sources test --id <采集源ID>
 ```
 
-文章生成、排版、封面和图文视觉工具会调用见字工作台已配置的内部模型。外部 Agent 的模型会话和模型凭据不会传入工作台；采集器凭据按用户确认通过工作台配置 API 保存，并在返回值中遮蔽。
+文章成稿、审稿、排版、封面和图文视觉等已接入的任务使用当前默认 Agent Runtime；未接入外部 Runtime 的任务仍使用见字工作台模型。外部 Agent 的模型会话和模型凭据不会传入工作台；采集器凭据按用户确认通过工作台配置 API 保存，并在返回值中遮蔽。
 
 ## MCP 工具
 

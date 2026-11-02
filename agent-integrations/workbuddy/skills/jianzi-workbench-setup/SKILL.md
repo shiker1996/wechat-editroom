@@ -18,6 +18,6 @@ description: 安装、诊断和配置见字工作台与 Codex/WorkBuddy 集成�
 
 ## 模型配置
 
-读取 `jianzi_settings_summary` 并只说明哪些模型/服务商已配置，不输出密钥。采集后可由 Agent 自行看热点和作编辑判断；调用文章成稿、AI 排版、封面或图文生成工具时，实际生成由见字 ModelGateway 执行，若无内部模型配置应清楚告知用户。
+读取 `jianzi_settings_summary` 并只说明哪些模型/服务商已配置，不输出密钥。已接入外部 Runtime 的文章成稿、AI 排版、封面和图文任务由当前默认 Agent Runtime 执行；未接入的任务仍需要工作台模型配置。外部 Agent 的模型会话与凭据不会传入工作台。
 
 不要编辑或输出 `.env`、`config.local.json` 中的密钥字段。不要通过批次删除、外部发布或修改第三方账号设置来完成初始化。

@@ -19,6 +19,6 @@ description: 使用见字工作台完成热点采集、选题研判、文章简�
 ## 工具和模型边界
 
 - Agent 可以自行做选题比较与编辑判断，不需要把 Codex/WorkBuddy 模型凭据写入见字。
-- `jianzi_batch_auto_research`、`jianzi_article_generate` 会调用工作台已配置的模型。
+- `jianzi_batch_auto_research`、`jianzi_article_generate` 按当前默认 Agent Runtime 执行；未接入外部 Runtime 时使用工作台已配置的模型。
 - 不虚构来源、事实或作者经历；无法核验的内容应保留为待核实问题。
 - 不自动发布到公众号。最终选择和发布由用户完成。

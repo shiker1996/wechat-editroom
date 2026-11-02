@@ -10,4 +10,4 @@ description: 在见字工作台中研判图文选题、制定故事板、生成 
 3. 可由 Agent 基于完整来源与事实计划故事板，再调用 `jianzi_card_editorial_update` 保存；或在用户选择见字内部 AI 时调用 `jianzi_card_storyboard_generate`。
 4. 检查页数、每页目标、证据对应关系、事实覆盖、开头和结尾。故事板方案需用户认可后调用 `jianzi_card_lock`。
 5. 调用 `jianzi_card_generate` 生成 AI 视觉 HTML/PNG，随后用 `jianzi_job_wait` 等待浏览器布局审计和截图完成。审计失败时读取任务错误，修复后重新生成。
-6. 图文生成由见字 ModelGateway 执行，需要工作台配置可用模型。不要将“任务已启动”描述为“PNG 已交付”，也不要把 AI HTML 当成已经通过视觉审计。
+6. 图文故事板和视觉生成使用当前默认 Agent Runtime；未启用外部 Runtime 时才使用见字工作台模型。不要将“任务已启动”描述为“PNG 已交付”，也不要把 AI HTML 当成已经通过视觉审计。
