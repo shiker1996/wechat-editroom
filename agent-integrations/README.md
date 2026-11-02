@@ -9,7 +9,7 @@ Codex 和 WorkBuddy 的完整安装与使用流程见[Agent 使用指南](../doc
 Codex 可以先安装仓库外的引导插件，再从任意工作目录初始化项目：
 
 ```powershell
-codex plugin marketplace add shiker1996/wechat-editroom --ref codex/agent-mcp-integration --sparse agent-integrations/codex-marketplace
+codex plugin marketplace add shiker1996/wechat-editroom --ref master --sparse .agents/plugins --sparse agent-integrations/codex-marketplace/plugin
 ```
 
 然后在 Codex 的 Plugins 目录中安装 `jianzi-workbench-setup`，并运行 `$jianzi-project-onboarding`。它会引导选择项目目录、克隆代码、运行项目 setup，并完成账号画像和采集源配置。Codex 插件由独立的 marketplace 包装，项目内的 CLI/MCP 仍由新项目提供。
