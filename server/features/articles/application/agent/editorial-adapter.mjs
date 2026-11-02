@@ -59,7 +59,7 @@ const ENVELOPE_INSTRUCTION = `你正在通过编辑室工具目录协助编辑�
 const CATALOG_SCHEMA_BINDINGS = Object.freeze(['cap_filesystem_project_read', 'cap_content_url_fetch', 'cap_content_passage_retrieve']);
 const publicCatalog = (catalog, root) => applyCatalogSchemas(catalog, CATALOG_SCHEMA_BINDINGS, root);
 function resourceSummary(events, resources) { return { events: events.map((event) => ({ resourceId: `event:${event.event_id}`, title: event.title, sources: [...resources.values()].filter((item) => item.eventId === String(event.event_id)).map(({ id, title, url }) => ({ resourceId: id, title, url })) })), supplied: [...resources.values()].filter((item) => item.id.startsWith('candidate-source:')).map(({ id, url }) => ({ resourceId: id, url })) }; }
-function resultMeta(result, provider) { return { callId: result.callId, usage: result.usage, model: result.model, provider }; }
+function resultMeta(result, provider) { return { callId: result?.callId, usage: result?.usage, model: result?.model, provider }; }
 
 export function editorialPreflightToolResult(result) {
   const warnings = (result?.gates || []).flatMap((item) => Array.isArray(item?.warnings) ? item.warnings : []).filter(Boolean).map(String);

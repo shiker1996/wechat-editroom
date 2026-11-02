@@ -7,6 +7,7 @@ import { Store } from '../server/platform/core/store.mjs';
 import { ToolRegistry } from '../server/platform/tools/registry.mjs';
 import { editorialPreflightToolResult, runEditorialAgentTurn, selectEditorialResearchPoints } from '../server/features/articles/application/agent/editorial-adapter.mjs';
 import { buildEditorialMessages } from '../server/features/articles/llm/editorial-room.mjs';
+import { setAgentRuntimeRegistry } from '../server/platform/agent/harness.mjs';
 
 function call(capability, input, id = capability) {
   return { id, name: capability, input };
@@ -144,6 +145,34 @@ test('编辑室通过原生工具读取资料、更新底稿，并用结束工�
   assert.match(result.editorial.research_basis, /反常主线/);
   assert.equal(store.getAgentRun(result.agentRunId).status, 'completed');
   assert.ok(eventsSeen.some((event) => event.type === 'tool.completed' && event.capability === 'cap_agent_conversation_finish'));
+});
+
+test('编辑室通过外部 Runtime 完成工具调用后可正常提交回复', async (t) => {
+  const { root, store, candidate } = fixture(t);
+  const runtimeAdapter = {
+    id: 'codex-app-server',
+    async getCapabilities() { return { run: true, streaming: true, cancel: true, hostToolCallbacks: true }; },
+    async *run(request) {
+      await request.executeTool({ callId: 'form', tool: 'cap_agent_form_update', arguments: { operations: [
+        { field: 'angle', op: 'replace', value: '从触屏与传统输入的分工切入' },
+        { field: 'thesis', op: 'replace', value: '触屏增加了输入方式，但是否改变专业工作流仍待验证' },
+      ] } });
+      await request.executeTool({ callId: 'finish', tool: 'cap_agent_conversation_finish', arguments: { assistantReply: '已记录文章角度与命题。' } });
+      yield { type: 'run.completed', output: '已记录文章角度与命题。' };
+    },
+  };
+  setAgentRuntimeRegistry({ resolve: (id) => id === 'codex' ? runtimeAdapter : null }, { getDefaultRuntime: () => 'codex' });
+  try {
+    const result = await runEditorialAgentTurn({ gateway: gateway([]), store, registry: registry(), candidateId: candidate.id,
+      events: [], workspaceRoot: root, answer: '我认为触屏只是新增输入方式，是否改变工作流还待验证。' });
+    assert.equal(result.reply, '已记录文章角度与命题。');
+    assert.equal(result.candidate.angle, '从触屏与传统输入的分工切入');
+    assert.equal(result.candidate.thesis, '触屏增加了输入方式，但是否改变专业工作流仍待验证');
+    assert.equal(result.model, undefined);
+    assert.equal(result.toolCalls, 2);
+  } finally {
+    setAgentRuntimeRegistry(null);
+  }
 });
 
 test('编辑室网页抓取成功后可用同一资源 ID 做段落检索', async (t) => {
