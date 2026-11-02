@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { tagBatch } from '../../../features/research/llm/tasks.mjs';
+import { deriveEventKey, normalizeEventParts, tagBatch } from '../../../features/research/llm/tasks.mjs';
 import { ensureBatchEventCards, loadStableBatchEvents } from '../../../features/research/index.mjs';
 import { resolveArticleStageSkills } from '../../skills/entry-routing.mjs';
 import { isFreshForBatch } from '../../../features/research/index.mjs';
@@ -9,6 +9,8 @@ import { isResearchEligibleHotspot } from '../../../features/research/index.mjs'
 import { respond, boundedLimit } from '../route-helpers.mjs';
 import { skipPipelineFailure, reopenPipelineFailure } from '../../../features/batches/index.mjs';
 import { createRequestHarnessGateway } from '../../skills/pipeline-runtime.mjs';
+import { resolveStableBatchEvents } from '../../../features/research/application/stable-event-service.mjs';
+import { tagsOf } from '../../../features/research/domain/hotspot-clustering.mjs';
 
 export async function handleTaskRoutes({ request, response, pathname, searchParams, store, body, json, aiJobs, jobs, models, root, config,
   batchWorkdir, batchMaxAgeHours }) {
@@ -33,6 +35,104 @@ export async function handleTaskRoutes({ request, response, pathname, searchPara
       :reopenPipelineFailure({failureId:Number(failureDecisionMatch[2]),batchId,store});
       return respond(json,response,200,{failure});}
     catch(error){return respond(json,response,422,{error:error.message});}
+  }
+  const externalTagsMatch = pathname.match(/^\/api\/batches\/([^/]+)\/external\/tags$/);
+  if (externalTagsMatch && request.method === 'POST') {
+    const batchId = decodeURIComponent(externalTagsMatch[1]);
+    const batch = store.getBatch(batchId);
+    if (!batch) return respond(json, response, 404, { error: '批次不存在' });
+    const input = await body(request);
+    if (!Array.isArray(input.items) || input.items.length < 1 || input.items.length > 200) return respond(json, response, 400, { error: 'items 必须包含 1–200 条打标结果' });
+    const hotspots = new Map(batch.hotspots.map((item) => [Number(item.id), item]));
+    const ids = new Set();
+    const scoreRanges = { conflict:20, audience:20, informationGain:15, emotion:15, timeliness:10, impact:10, sourceReliability:10 };
+    for (const item of input.items) {
+      const hotspot = hotspots.get(Number(item?.id));
+      if (!hotspot || ids.has(Number(item.id))) return respond(json, response, 422, { error: `热点 ID 无效或重复：${item?.id}` });
+      const scores = item.preScores;
+      const parts=normalizeEventParts(item.eventParts);
+      if (!parts || !item.category || !item.marketScope || !['低','中','高'].includes(item.riskLevel) || !item.relevanceReason || !Number.isFinite(Number(item.chinaRelevance)) || Number(item.chinaRelevance)<0 || Number(item.chinaRelevance)>12 || (item.score!=null&&(!Number.isFinite(Number(item.score))||Number(item.score)<0||Number(item.score)>100)) || !scores || Object.entries(scoreRanges).some(([key,max]) => !Number.isFinite(Number(scores[key])) || Number(scores[key]) < 0 || Number(scores[key]) > max)) {
+        return respond(json, response, 422, { error: `热点 ${item.id} 缺少分类、市场范围、风险、事件主体/动作、相关性或有效评分` });
+      }
+      ids.add(Number(item.id));
+    }
+    const updated = input.items.map((item) => {const eventParts=normalizeEventParts(item.eventParts);return store.updateHotspotTags(Number(item.id), { ...item,eventParts,eventKey:deriveEventKey({ ...item,eventParts }) });});
+    return respond(json, response, 200, { batchId, updated: updated.filter(Boolean).length, items: updated.map((item) => ({ id: item.id, title: item.title, tags: JSON.parse(item.raw_json || '{}').aiTags })) });
+  }
+  const externalEventsMatch = pathname.match(/^\/api\/batches\/([^/]+)\/external\/events$/);
+  if (externalEventsMatch && request.method === 'GET') {
+    const batchId = decodeURIComponent(externalEventsMatch[1]);
+    const batch = store.getBatch(batchId);
+    if (!batch) return respond(json,response,404,{error:'批次不存在'});
+    const hotspots = batch.hotspots.filter(isResearchEligibleHotspot).filter((item)=>isFreshForBatch(item,batch.batch_date,batchMaxAgeHours(batch))).filter((item)=>{const tags=tagsOf(item);return tags.eventKey&&tags.preScores;});
+    if (!hotspots.length) return respond(json,response,409,{error:'请先完成批次热点打标'});
+    const events = resolveStableBatchEvents({store,workspaceRoot:config.workspaceRoot,batch,hotspots});
+    for(const [kind,name] of [['稳定事件聚类','event-clusters.json'],['事件归并影子','event-resolution-shadow.json']]){const filePath=path.join(batchWorkdir(batch),'sources',name);if(fs.existsSync(filePath)){const stat=fs.statSync(filePath);store.upsertArtifact({batchId,kind,name,path:filePath,size:stat.size,modifiedAt:stat.mtime.toISOString()});}}
+    let cards=[];try{cards=JSON.parse(fs.readFileSync(path.join(batchWorkdir(batch),'sources','event-cards.json'),'utf8')).items||[];}catch{}
+    const cardById=new Map(cards.map((item)=>[String(item.event_id),item]));
+    return respond(json,response,200,{batchId,events:events.map((event)=>({event_id:event.event_id,representative_title:event.representative_title,report_count:event.report_count,source_count:event.source_count,hotspot_ids:event.hotspot_ids,keywords:event.keywords,articles:event.articles,card:cardById.get(String(event.event_id))||null}))});
+  }
+  const externalEventCardsMatch = pathname.match(/^\/api\/batches\/([^/]+)\/external\/event-cards$/);
+  if (externalEventCardsMatch && request.method === 'POST') {
+    const batchId = decodeURIComponent(externalEventCardsMatch[1]);
+    const batch = store.getBatch(batchId);
+    if (!batch) return respond(json,response,404,{error:'批次不存在'});
+    const input = await body(request);
+    if (!Array.isArray(input.items)||input.items.length<1||input.items.length>200) return respond(json,response,400,{error:'items 必须包含 1–200 张事件卡'});
+    const hotspots = batch.hotspots.filter(isResearchEligibleHotspot).filter((item)=>isFreshForBatch(item,batch.batch_date,batchMaxAgeHours(batch))).filter((item)=>{const tags=tagsOf(item);return tags.eventKey&&tags.preScores;});
+    const events = resolveStableBatchEvents({store,workspaceRoot:config.workspaceRoot,batch,hotspots});
+    if(input.items.length!==events.length)return respond(json,response,422,{error:`事件卡数量必须覆盖全部 ${events.length} 个稳定事件`});
+    const expected = new Map(events.map((event)=>[String(event.event_id),event]));
+    const ids = new Set();
+    for (const item of input.items) {
+      const id=String(item?.event_id||'');
+      if(!expected.has(id)||ids.has(id)||!String(item.conclusion||'').trim()) return respond(json,response,422,{error:`事件卡 ID 无效、重复或缺少结论：${id||'(empty)'}`});
+      ids.add(id);
+    }
+    const text=(value,max=160)=>String(value??'').replace(/\s+/g,' ').trim().slice(0,max);
+    const list=(value,max=5)=>Array.isArray(value)?value.map((item)=>text(item,120)).filter(Boolean).slice(0,max):[];
+    const items=input.items.map((raw)=>({event_id:String(raw.event_id),title:expected.get(String(raw.event_id)).representative_title,conclusion:text(raw.conclusion),background:text(raw.background,120),confirmed_facts:list(raw.confirmed_facts),source_increment:(Array.isArray(raw.source_increment)?raw.source_increment:[]).map((item)=>({source:text(item?.source,40),adds:text(item?.adds,120)})).filter((item)=>item.source||item.adds).slice(0,6),disagreements:list(raw.disagreements,4),timeline:(Array.isArray(raw.timeline)?raw.timeline:[]).map((item)=>({time:text(item?.time,30),fact:text(item?.fact,120)})).filter((item)=>item.fact).slice(0,5),unverified:list(raw.unverified,4),angles:list(raw.angles,3)}));
+    const eventCardsPath=path.join(batchWorkdir(batch),'sources','event-cards.json');
+    fs.mkdirSync(path.dirname(eventCardsPath),{recursive:true});
+    fs.writeFileSync(eventCardsPath,JSON.stringify({generated_at:new Date().toISOString(),total_events:items.length,failed:[],items},null,2),'utf8');
+    const stat=fs.statSync(eventCardsPath);
+    store.upsertArtifact({batchId,kind:'事件事实卡',name:'event-cards.json',path:eventCardsPath,size:stat.size,modifiedAt:stat.mtime.toISOString()});
+    return respond(json,response,200,{batchId,status:'saved',count:items.length,path:'sources/event-cards.json'});
+  }
+  const externalResearchMatch = pathname.match(/^\/api\/batches\/([^/]+)\/external\/research$/);
+  if (externalResearchMatch && request.method === 'GET') {
+    const batchId=decodeURIComponent(externalResearchMatch[1]);const batch=store.getBatch(batchId);
+    if(!batch)return respond(json,response,404,{error:'批次不存在'});
+    const reportPath=path.join(batchWorkdir(batch),'sources','external-research-report.json');
+    if(!fs.existsSync(reportPath))return respond(json,response,200,{batchId,exists:false,report:null});
+    try{return respond(json,response,200,{batchId,exists:true,report:JSON.parse(fs.readFileSync(reportPath,'utf8'))});}
+    catch{return respond(json,response,500,{error:'外部研判报告文件损坏'});}
+  }
+  if (externalResearchMatch && request.method === 'POST') {
+    const batchId=decodeURIComponent(externalResearchMatch[1]);
+    const batch=store.getBatch(batchId);
+    if(!batch)return respond(json,response,404,{error:'批次不存在'});
+    const input=await body(request);
+    if(!Array.isArray(input.items)||input.items.length<1||input.items.length>200)return respond(json,response,400,{error:'items 必须包含 1–200 条研判结果'});
+    const hotspots=batch.hotspots.filter(isResearchEligibleHotspot).filter((item)=>isFreshForBatch(item,batch.batch_date,batchMaxAgeHours(batch))).filter((item)=>{const tags=tagsOf(item);return tags.eventKey&&tags.preScores;});
+    const events=resolveStableBatchEvents({store,workspaceRoot:config.workspaceRoot,batch,hotspots});
+    let savedCards=[];try{savedCards=JSON.parse(fs.readFileSync(path.join(batchWorkdir(batch),'sources','event-cards.json'),'utf8')).items||[];}catch{}
+    const cardIds=new Set(savedCards.map((card)=>String(card.event_id)));
+    if(events.some((event)=>!cardIds.has(String(event.event_id))))return respond(json,response,409,{error:'事件事实卡尚未覆盖全部已打标稳定事件，请先提交事件卡'});
+    const byId=new Map(events.map((event)=>[String(event.event_id),event]));
+    const seen=new Set();
+    for(const item of input.items){
+      const eventId=String(item?.eventId||'');
+      if(!byId.has(eventId)||seen.has(eventId)||!String(item.thesis||'').trim()||!String(item.reason||'').trim())return respond(json,response,422,{error:`研判事件 ID 无效、重复，或命题/理由缺失：${eventId||'(empty)'}`});
+      const allowed=new Set(byId.get(eventId).hotspot_ids.map(Number));
+      if(!Array.isArray(item.hotspotIds)||item.hotspotIds.length<1||item.hotspotIds.some((id)=>!allowed.has(Number(id))))return respond(json,response,422,{error:`事件 ${eventId} 的 hotspotIds 不属于该事件`});
+      seen.add(eventId);
+    }
+    const report={schemaVersion:1,source:'external-agent',batchId,generatedAt:new Date().toISOString(),summary:String(input.summary||'').slice(0,4000),items:input.items.map((item)=>({eventId:String(item.eventId),eventTitle:byId.get(String(item.eventId)).representative_title,hotspotIds:[...new Set(item.hotspotIds.map(Number))],title:String(item.title||'').trim().slice(0,120),thesis:String(item.thesis).trim().slice(0,800),angle:String(item.angle||'').trim().slice(0,800),readerBenefit:String(item.readerBenefit||'').trim().slice(0,500),riskLevel:String(item.riskLevel||'').trim().slice(0,40),riskReason:String(item.riskReason||'').trim().slice(0,500),reason:String(item.reason).trim().slice(0,1200),recommendedTrack:['article','social_cards'].includes(item.recommendedTrack)?item.recommendedTrack:'article',score:Number.isFinite(Number(item.score))?Math.max(0,Math.min(100,Number(item.score))):null}))};
+    const reportPath=path.join(batchWorkdir(batch),'sources','external-research-report.json');
+    fs.mkdirSync(path.dirname(reportPath),{recursive:true});fs.writeFileSync(reportPath,JSON.stringify(report,null,2),'utf8');
+    const stat=fs.statSync(reportPath);store.upsertArtifact({batchId,kind:'外部 Agent 选题研判',name:'external-research-report.json',path:reportPath,size:stat.size,modifiedAt:stat.mtime.toISOString()});
+    return respond(json,response,200,{batchId,status:'saved',count:report.items.length,path:'sources/external-research-report.json'});
   }
   const tagMatch = pathname.match(/^\/api\/batches\/([^/]+)\/ai\/tag$/);
   if (tagMatch && request.method === 'POST') {

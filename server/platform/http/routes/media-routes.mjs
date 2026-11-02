@@ -1,9 +1,11 @@
 import { executeCapability } from '../../tools/capability-runtime.mjs';
 import { createStoreExecutionLogger } from '../../tools/execution-log.mjs';
-import { generateArticleImage, registerGeneratedSlotImage } from '../../../features/articles/index.mjs';
+import { generateArticleImage, registerGeneratedSlotImage, renderCover, validateGeneratedCoverHtml } from '../../../features/articles/index.mjs';
 import { pipeFile } from '../route-helpers.mjs';
 import { createRequestHarnessGateway } from '../../skills/pipeline-runtime.mjs';
 import { deriveWritingStance, visualPolicyForStance } from '../../../shared/domain/writing-stance.mjs';
+import { htmlPreservesStructure } from '../../../shared/rendering/typeset-output.mjs';
+import { loadSkillBundle, resolveSkillFile } from '../../llm/skill-runtime.mjs';
 
 // capability-call: cap_diagram_mermaid_render, cap_diagram_echarts_render
 
@@ -204,6 +206,52 @@ export async function handleMediaRoutes(context) {
     if (input.mode && input.mode !== 'ai-visual') return json(response, 400, { error:'标准封面已停用，封面仅支持 AI 视觉生成' });
     return json(response, 202, aiJobs.start({ batchId:batch.id, candidateId:candidate.id, provider:input.provider||null, type:'cover-image', mode:'ai-visual' }));
   }
+  const externalCoverMatch = pathname.match(/^\/api\/candidates\/(\d+)\/cover\/external$/);
+  if (externalCoverMatch && request.method === 'POST') {
+    const candidate = store.getCandidate(Number(externalCoverMatch[1]));
+    if (!candidate) return json(response, 404, { error:'候选不存在' });
+    const batch = store.getBatch(candidate.batch_id);
+    const document = store.getDocument(batch.id, candidate.id, 'final');
+    if (!document) return json(response, 409, { error:'缺少成稿终稿，请先完成成稿链' });
+    const input = await body(request);
+    const html = String(input.html || '');
+    if (!html || html.length > 2_000_000) return json(response, 400, { error:'html 必须为非空字符串且不超过 2 MB' });
+    if (input.designScheme && Buffer.byteLength(JSON.stringify(input.designScheme)) > 250_000) return json(response,400,{error:'designScheme 不得超过 250 KB'});
+    const issues = validateGeneratedCoverHtml(html, document.title || candidate.hotspot_title || '');
+    if (issues.length) return json(response, 422, { error:'封面 HTML 未通过门禁', issues });
+    const workdir = articleWorkdir(batch, candidate);
+    const imageDir = path.join(workdir, 'images');
+    const aiHtmlPath = path.join(imageDir, 'ai-cover.html');
+    const htmlPath = path.join(imageDir, 'cover.html');
+    const pendingHtmlPath = path.join(imageDir, '.external-ai-cover.pending.html');
+    fs.mkdirSync(imageDir, { recursive:true });
+    writeUtf8(pendingHtmlPath, html);
+    try {
+      const produced = await renderCover({ workspaceRoot:root, htmlPath:pendingHtmlPath, imageDir });
+      const coverPath = path.join(imageDir, 'cover.png');
+      fs.renameSync(pendingHtmlPath,aiHtmlPath);
+      fs.copyFileSync(aiHtmlPath,htmlPath);
+      fs.rmSync(coverPath, { force:true });
+      fs.renameSync(produced, coverPath);
+      fs.rmSync(path.join(imageDir,'ai-cover-output'),{recursive:true,force:true});
+      const stat = fs.statSync(coverPath);
+      if (!stat.size) throw new Error('封面截图为空');
+      if (input.designScheme && typeof input.designScheme === 'object') writeUtf8(path.join(imageDir,'external-cover-design-scheme.json'),JSON.stringify(input.designScheme,null,2));
+      const gatePath=path.join(imageDir,'cover-ai-delivery-gate.json');
+      const reportPath=path.join(imageDir,'cover-ai-generation.json');
+      writeUtf8(gatePath,JSON.stringify({schemaVersion:1,gate:{status:'passed'},registered:true,source:'external-agent',checkedAt:new Date().toISOString(),checks:{html:{valid:true,issues:[]},image:{valid:true,size:stat.size,width:900,height:383}},artifacts:{html:'ai-cover.html',image:'cover.png'}},null,2));
+      writeUtf8(reportPath,JSON.stringify({schemaVersion:1,status:'passed',mode:'ai-visual',source:'external-agent',generatedAt:new Date().toISOString(),title:document.title||candidate.hotspot_title||'',designScheme:input.designScheme||null,artifacts:{html:'ai-cover.html',image:'cover.png',deliveryGate:'cover-ai-delivery-gate.json'}},null,2));
+      const files=[['AI 视觉封面 HTML','ai-cover.html',aiHtmlPath],['封面图','cover.png',coverPath],['AI 视觉运行记录','cover-ai-delivery-gate.json',gatePath],['AI 视觉运行记录','cover-ai-generation.json',reportPath]];
+      if(input.designScheme&&typeof input.designScheme==='object')files.push(['封面设计方案','external-cover-design-scheme.json',path.join(imageDir,'external-cover-design-scheme.json')]);
+      for (const [kind, name, filePath] of files) {
+        const artifact = fs.statSync(filePath);
+        store.upsertArtifact({ batchId:batch.id,candidateId:candidate.id,track:'article',kind,name,path:filePath,size:artifact.size,modifiedAt:artifact.mtime.toISOString() });
+      }
+      return json(response, 200, { candidateId:candidate.id, status:'passed', width:900, height:383, html:'ai-cover.html', image:'cover.png', size:stat.size });
+    } catch (error) {
+      return json(response, 422, { error:`封面渲染失败：${error.message}` });
+    } finally { fs.rmSync(pendingHtmlPath,{force:true});fs.rmSync(path.join(imageDir,'ai-cover-output'),{recursive:true,force:true}); }
+  }
   const coverLocalMatch = pathname.match(/^\/api\/candidates\/(\d+)\/cover\/local$/);
   if (coverLocalMatch && request.method === 'GET') {
     const candidate = store.getCandidate(Number(coverLocalMatch[1]));
@@ -367,6 +415,50 @@ export async function handleMediaRoutes(context) {
     store.upsertArtifact({ batchId, kind: input.kind.endsWith('final') ? (daily?'早报终稿':'文章终稿') : (daily?'早报初稿':'文章初稿'), name: fileName, path: filePath, ...file });
     store.updateBatch(batchId, { stage: input.kind.endsWith('final') ? 'review' : 'drafting', status: 'running' });
     return json(response, 200, document);
+  }
+  const externalTypesetMatch = pathname.match(/^\/api\/batches\/([^/]+)\/external\/typeset$/);
+  if (externalTypesetMatch && request.method === 'POST') {
+    const batchId = decodeURIComponent(externalTypesetMatch[1]);
+    const batch = store.getBatch(batchId);
+    if (!batch) return json(response, 404, { error:'批次不存在' });
+    const input = await body(request);
+    const candidate = store.getCandidate(Number(input.candidateId));
+    if (!candidate || candidate.batch_id !== batchId) return json(response, 404, { error:'候选不存在或不属于该批次' });
+    const source = store.getDocument(batchId, candidate.id, 'final');
+    if (!source) return json(response, 409, { error:'缺少文章终稿；请先保存 Markdown 终稿' });
+    const html = String(input.html || '');
+    if (!html || html.length > 8_000_000) return json(response, 400, { error:'html 必须为非空字符串且不超过 8 MB' });
+    if (input.designScheme && Buffer.byteLength(JSON.stringify(input.designScheme)) > 250_000) return json(response,400,{error:'designScheme 不得超过 250 KB'});
+    if (/<script\b|<iframe\b|<object\b|<embed\b|\son[a-z]+\s*=|javascript:|<form\b|@import|<link\b/i.test(html)) return json(response, 422, { error:'HTML 含有脚本、嵌入、表单、事件处理器或外部样式资源' });
+    if (!htmlPreservesStructure(source.content, html)) return json(response, 422, { error:'HTML 未完整保留终稿中的标题、章节、链接或图片' });
+    const workdir = articleWorkdir(batch, candidate);
+    const draftPath = path.join(workdir, 'article.ai.draft.html');
+    const finalPath = path.join(workdir, 'article.ai.html');
+    writeUtf8(draftPath, html);
+    try {
+      const normalizer = loadSkillBundle({ workspaceRoot:root, skillName:'wechat-html-normalizer' });
+      const checker = loadSkillBundle({ workspaceRoot:root, skillName:'wechat-html-check-no-div' });
+      if (normalizer.fallback || checker.fallback) throw new Error('公众号 HTML 规范化或门禁技能不可用');
+      const normalizeScript = resolveSkillFile({ workspaceRoot:root, skillName:'wechat-html-normalizer', relativePath:'scripts/normalize-html.mjs' });
+      const checkScript = resolveSkillFile({ workspaceRoot:root, skillName:'wechat-html-check-no-div', relativePath:'scripts/check-html.mjs' });
+      await execFileAsync(process.execPath, [normalizeScript, draftPath, finalPath], { cwd:root, windowsHide:true, timeout:120_000, maxBuffer:2_000_000 });
+      const normalized = fs.readFileSync(finalPath, 'utf8');
+      if (!htmlPreservesStructure(source.content, normalized)) throw new Error('规范化后 HTML 未保留文章结构');
+      await execFileAsync(process.execPath, [checkScript, finalPath], { cwd:root, windowsHide:true, timeout:120_000, maxBuffer:2_000_000 });
+      const stat = fs.statSync(finalPath);
+      store.upsertArtifact({ batchId,candidateId:candidate.id,track:'article',kind:'AI 排版 HTML',name:'article.ai.html',path:finalPath,size:stat.size,modifiedAt:stat.mtime.toISOString() });
+      const result={ batchId,candidateId:candidate.id,status:'passed',html:'article.ai.html',size:stat.size };
+      if(input.designScheme&&typeof input.designScheme==='object'){
+        const schemePath=path.join(workdir,'external-typeset-design-scheme.json');
+        const schemeFile=writeUtf8(schemePath,JSON.stringify(input.designScheme,null,2));
+        store.upsertArtifact({batchId,candidateId:candidate.id,track:'article',kind:'文章排版设计方案',name:path.basename(schemePath),path:schemePath,...schemeFile});
+        result.designScheme=path.basename(schemePath);
+      }
+      return json(response, 200, result);
+    } catch (error) {
+      fs.rmSync(finalPath, { force:true });
+      return json(response, 422, { error:`排版 HTML 未通过规范化或门禁：${String(error.stderr || error.message).trim().slice(0, 1000)}` });
+    }
   }
   return false;
 }

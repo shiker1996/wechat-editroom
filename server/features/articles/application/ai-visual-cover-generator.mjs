@@ -132,7 +132,7 @@ function extractVisibleHtmlText(html) {
   return text.join('');
 }
 
-function validateGeneratedCoverHtml(html, title) {
+export function validateGeneratedCoverHtml(html, title) {
   const source = String(html || '');
   const issues = [];
   if (/<script\b|<iframe\b|<object\b|<embed\b|\son[a-z]+\s*=|javascript:|@import|<link\b/i.test(source)) issues.push('HTML 含有禁止的脚本、嵌入或外部资源');
@@ -180,7 +180,7 @@ function buildCoverGenerationSystem({ skillPrompt, input, catalog }) {
   return `${skillPrompt}\n\n## 本次封面运行参数\n\n- 冻结输入文件：${COVER_WORKSPACE_FILES.join('、')}\n- 目标画布：${AI_VISUAL_COVER_WIDTH}×${AI_VISUAL_COVER_HEIGHT}\n- 输出文件：${AI_VISUAL_COVER_HTML}\n- 文字层：由模型自行组织输入文字的层级和排版，不得新增输入之外的期号、编号或数字\n- 本次设计方案：已按文章内容生成，并通过数值、组件、布局和标题保真校验；视觉实现必须遵循其调色板、字号、间距、构图骨架和组件约束\n- 语义简报：用于理解文章主题和产生视觉隐喻，不渲染为正文\n- 内置视觉参考：cover-layout-guide.md、cover-visual-contract.md、cover-visual-component-mapping.md\n\n${COVER_INPUT_INSTRUCTION}\n\n设计方案已作为 workspace 文件提供；不要把方案规范本身渲染成正文。以下结构只用于说明动态约束，不替代冻结文件：\n${JSON.stringify({ canvas: input.canvas, designScheme: input.designScheme, output: input.output }, null, 2)}\n\n当前可用工具目录：${JSON.stringify(catalog)}`;
 }
 
-async function renderCover({ workspaceRoot, htmlPath, imageDir, execute: providedExecute = null }) {
+export async function renderCover({ workspaceRoot, htmlPath, imageDir, execute: providedExecute = null }) {
   const outputDir = path.join(imageDir, 'ai-cover-output');
   fs.rmSync(outputDir, { recursive: true, force: true });
   fs.mkdirSync(outputDir, { recursive: true });

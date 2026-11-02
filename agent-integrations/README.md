@@ -51,10 +51,12 @@ npm run jianzi -- sources add --plugin feed-collector --file source.json
 npm run jianzi -- sources test --id <采集源ID>
 ```
 
-文章生成、排版、封面和图文视觉工具会调用见字工作台已配置的内部模型。外部 Agent 的模型会话和模型凭据不会传入工作台；采集器凭据按用户确认通过工作台配置 API 保存，并在返回值中遮蔽。
+MCP 同时提供内部模型任务和外部 Agent 结果提交两条路径。默认 Skills 使用外部 Agent 当前会话完成打标、事件卡/研判、编辑决策、文章、排版、封面和图文生成，再通过受限 MCP 工具提交；工作台执行确定性校验、规范化、浏览器审计/截图与归档，不要求配置见字内部模型。`*_generate`、`*_auto_research` 等内部任务工具仍保留，只有用户明确选择时才使用。外部 Agent 的模型会话和凭据不会传入工作台；采集器凭据按用户确认通过工作台配置 API 保存，并在返回值中遮蔽。
+
+排版、封面和图文生成/提交成功后，MCP 与 CLI 结果会附带 `artifactEntries`，包含对应的工作台入口 URL（文章预览 `/#preview`、文章封面 `/#cover`、事件图文 `/#social-event`）。完成任务后，Agent 应从工具结果中取出对应 URL 并在最终回复中作为可点击链接提供；异步任务的 `jianzi_job_get` / `jianzi_job_wait` 也会根据任务类型返回入口。入口用于在工作台查看、复制或下载产物，不代表已发布到公众号。
 
 ## MCP 工具
 
-MCP 暴露 `jianzi_*` 具名工具，覆盖安装诊断、账号画像读写、采集器及采集源配置、批次/采集/研判、候选/编辑决策、文章/排版/封面、图文故事板/生成和后台任务轮询。所有动作通过 loopback HTTP API 执行，服务端继续负责状态与业务门禁；不提供任意 HTTP、数据库、shell、发布或删除工具。
+MCP 暴露 `jianzi_*` 具名工具，覆盖安装诊断、账号画像读写、采集器及采集源配置、批次/采集、热点标签、稳定事件、事件卡和研判报告提交、候选/编辑决策、文章文档、排版/封面/图文产物提交和后台任务轮询。图文 HTML 可在生成过程中调用浏览器审计工具反复检查；最终提交仍会复审、截图并归档。工具不提供任意 HTTP、数据库、shell、发布或删除能力。完整流程和具体工具顺序见 `skills/jianzi-topic-to-article`、`skills/jianzi-typeset-cover`、`skills/jianzi-social-cards`。
 
 本机工作台只接受 loopback 连接，MCP 子进程必须运行在同一台电脑。远程 WorkBuddy Agent 无法直接访问用户电脑上的 `127.0.0.1`。

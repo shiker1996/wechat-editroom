@@ -1,5 +1,5 @@
 import { bindGenerationSnapshot, createRequestHarnessGateway, prepareSkillRun, resolveSkillToolPolicy } from '../../skills/pipeline-runtime.mjs';
-import { buildSocialCardFactEnvelope, buildSocialCardStoryboardSystemPrompt, enrichEventAnalysis, eventGroupsForCandidate, socialStoryboardSkillForMaterialType, toLegacySocialCardPromptInput } from '../../../features/social-cards/index.mjs';
+import { SOCIAL_CARD_BEAUTIFY_HTML, SOCIAL_CARD_BEAUTIFY_OUTPUT, aiVisualPageCountPolicy, auditSocialCardHtmlFit, buildSocialCardFactEnvelope, buildSocialCardStoryboardSystemPrompt, enrichEventAnalysis, eventGroupsForCandidate, socialStoryboardSkillForMaterialType, toLegacySocialCardPromptInput, validateAiVisualScreenshotSet, validateSocialCardCopy } from '../../../features/social-cards/index.mjs';
 import { listSocialCardStageSkillSlots, resolveSocialCardStageSkills } from '../../skills/entry-routing.mjs';
 import { requestGitHubJson } from '../../plugin-sdk/github-client.mjs';
 import { pipeFile } from '../route-helpers.mjs';
@@ -11,6 +11,12 @@ import { buildSocialCardReflowPreview } from '../../../features/social-cards/ren
 import { normalizeSocialCardPageTitle } from '../../../features/social-cards/rendering/social-card-title.mjs';
 import { socialCardPageBudget, socialCardPageBudgetMessage } from '../../../features/social-cards/rendering/social-card-page-budget.mjs';
 import { parseModelJson } from '../../llm/model-json.mjs';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { resolveSkillFile } from '../../llm/skill-runtime.mjs';
+import { randomUUID } from 'node:crypto';
+
+const execFileAsync = promisify(execFile);
 
 const SOCIAL_CARD_ENTRY_POINTS=Object.freeze({
   repository:'social-tool',
@@ -73,6 +79,86 @@ export async function handleSocialCardRoutes(context) {
     const publishTitle=read('publish-title.txt').trim()||copyText.match(/^(?:公众号发布标题|小红书笔记标题)\s*[:：]\s*(.+)$/m)?.[1]?.trim()||'';
     const publishTitleLabel=socialChannelMode(candidate)==='xiaohongshu'?'小红书笔记标题':'公众号发布标题';
     return json(response,200,{candidateId:candidate.id,code:candidate.candidate_id,title:candidate.hotspot_title,ready:images.length>0||beautifiedImages.length>0,images,beautifiedImages,copy:copyText,publishTitle,publishTitleLabel,facts:read('fact-sheet.md'),cardPlan:parse('card-plan.json',{}),layout:parse('layout-report.json',{}),delivery:parse('delivery-report.json',{}),beautifyReport,beautifyStages,beautifyDeliveryGate,designScheme:designScheme?{id:designScheme.id,audit:designScheme.audit,visualDirection:designScheme.designScheme?.visualDirection||''}:null,designSchemeUrl,contentPlanAdjustments:parse('social-card-content-plan-adjustments.json',null),factIndex:parse('social-card-fact-index.json',null),templateMetrics:parse('social-template-metrics.json',null),templateStats:store.socialTemplateMetricsStats?.()||null,htmlUrl:fs.existsSync(path.join(workspace.dir,'my-design.html'))?`/api/candidates/${candidate.id}/social-cards/files/my-design.html`:'',beautifiedHtmlUrl:fs.existsSync(path.join(workspace.dir,'ai-beautified.html'))?`/api/candidates/${candidate.id}/social-cards/files/ai-beautified.html`:'',bundleUrl:images.length||beautifiedImages.length?`/api/candidates/${candidate.id}/social-cards/download`:''});
+  }
+  const externalSocialSubmitMatch = pathname.match(/^\/api\/candidates\/(\d+)\/social-cards\/external$/);
+  const externalSocialAuditMatch = pathname.match(/^\/api\/candidates\/(\d+)\/social-cards\/external\/audit$/);
+  if (externalSocialAuditMatch && request.method === 'POST') {
+    const candidate=store.getCandidate(Number(externalSocialAuditMatch[1]));
+    if(!candidate)return json(response,404,{error:'候选不存在'});
+    const editorial=store.getCardEditorial(candidate.id);
+    if(editorial.status!=='LOCKED')return json(response,409,{error:'请先通过 CARD GATE 锁定故事板'});
+    const input=await body(request);const html=String(input.html||'');
+    if(!html||html.length>10_000_000)return json(response,400,{error:'html 必须为非空字符串且不超过 10 MB'});
+    if(/<script\b|<iframe\b|<object\b|<embed\b|<form\b|\son[a-z]+\s*=|javascript:|@import|<link\b/i.test(html)||/(?:src|href)\s*=\s*["']https?:\/\//i.test(html))return json(response,422,{error:'图文 HTML 含脚本、事件处理器或外部资源'});
+    const pageCount=[...html.matchAll(/class=["']([^"']+)["']/gi)].filter((match)=>match[1].split(/\s+/).includes('page')).length;
+    const cardPlan=JSON.parse(editorial.card_plan_json||'[]');const policy=aiVisualPageCountPolicy(Array.isArray(cardPlan)?cardPlan.length:0);
+    if(!pageCount||pageCount<policy.minPageCount||pageCount>policy.maxPageCount)return json(response,422,{error:`页面数量不符合故事板范围，应为 ${policy.minPageCount}–${policy.maxPageCount} 页，实际 ${pageCount} 页`});
+    const batch=store.getBatch(candidate.batch_id);const workspace=socialCardFiles(batch,candidate);
+    const tempPath=path.join(workspace.dir,`.external-visual-audit-${randomUUID()}.html`);
+    fs.mkdirSync(workspace.dir,{recursive:true});writeUtf8(tempPath,html);
+    try {
+      const selectedPage=input.page==null?null:Number(input.page);
+      if(selectedPage!=null&&(!Number.isInteger(selectedPage)||selectedPage<1||selectedPage>pageCount))return json(response,400,{error:`page 必须是 1–${pageCount} 之间的整数`});
+      const report=await auditSocialCardHtmlFit({htmlPath:tempPath,width:375,height:667,page:selectedPage});
+      return json(response,report.valid?200:422,{candidateId:candidate.id,valid:report.valid,pageCount:report.pageCount,checkedPage:selectedPage,canvas:report.canvas,issues:report.issues,pages:report.pages});
+    } catch(error) { return json(response,422,{candidateId:candidate.id,valid:false,error:`图文浏览器审计失败：${error.message}`}); }
+    finally { fs.rmSync(tempPath,{force:true}); }
+  }
+  if (externalSocialSubmitMatch && request.method === 'POST') {
+    const candidate = store.getCandidate(Number(externalSocialSubmitMatch[1]));
+    if (!candidate) return json(response,404,{error:'候选不存在'});
+    const editorial = store.getCardEditorial(candidate.id);
+    if (editorial.status !== 'LOCKED') return json(response,409,{error:'请先通过 CARD GATE 锁定故事板'});
+    const input = await body(request);
+    const html = String(input.html || '');
+    const publishTitle = String(input.publishTitle || '').trim();
+    const copy = String(input.copy || '').trim();
+    if (!html || html.length > 10_000_000) return json(response,400,{error:'html 必须为非空字符串且不超过 10 MB'});
+    if (publishTitle.length > 120 || copy.length > 50_000) return json(response,400,{error:'publishTitle 最长 120 字，copy 最长 50 KB'});
+    if (input.designScheme && Buffer.byteLength(JSON.stringify(input.designScheme)) > 250_000) return json(response,400,{error:'designScheme 不得超过 250 KB'});
+    if (/<script\b|<iframe\b|<object\b|<embed\b|<form\b|\son[a-z]+\s*=|javascript:|@import|<link\b/i.test(html) || /(?:src|href)\s*=\s*["']https?:\/\//i.test(html)) return json(response,422,{error:'图文 HTML 含脚本、事件处理器或外部资源'});
+    const copyCheck = validateSocialCardCopy(copy);
+    if (!copyCheck.valid) return json(response,422,{error:'图文配套文案未通过门禁',issues:copyCheck.issues});
+    const pageCount = [...html.matchAll(/class=["']([^"']+)["']/gi)].filter((match)=>match[1].split(/\s+/).includes('page')).length;
+    const cardPlan = JSON.parse(editorial.card_plan_json || '[]');
+    const policy = aiVisualPageCountPolicy(Array.isArray(cardPlan) ? cardPlan.length : 0);
+    if (!pageCount || pageCount < policy.minPageCount || pageCount > policy.maxPageCount) return json(response,422,{error:`页面数量不符合故事板范围，应为 ${policy.minPageCount}–${policy.maxPageCount} 页，实际 ${pageCount} 页`});
+    const batch = store.getBatch(candidate.batch_id);
+    const workspace = socialCardFiles(batch,candidate);
+    const tempHtmlPath = path.join(workspace.dir, '.external-ai-beautified.pending.html');
+    fs.mkdirSync(workspace.dir,{recursive:true});
+    writeUtf8(tempHtmlPath,html);
+    try {
+      const visualAudit = await auditSocialCardHtmlFit({htmlPath:tempHtmlPath,width:375,height:667});
+      if (!visualAudit.valid) return json(response,422,{error:'图文浏览器布局审计未通过',issues:visualAudit.issues});
+      const screenshotSkill = resolveSkillFile({workspaceRoot:root,skillName:'html-pages-to-images',relativePath:'index.js'});
+      const outputDir = path.join(workspace.dir,SOCIAL_CARD_BEAUTIFY_OUTPUT);
+      const pendingOutputDir = path.join(workspace.dir,'.external-ai-beautified-output.pending');
+      fs.rmSync(pendingOutputDir,{recursive:true,force:true});
+      await execFileAsync(process.execPath,[screenshotSkill,'--htmlFile',tempHtmlPath,'--outputDir',pendingOutputDir,'--selector','.page','--pageWidth','375','--pageHeight','667','--deviceScaleFactor','3'],{cwd:root,windowsHide:true,timeout:120_000,maxBuffer:2_000_000});
+      const imagePaths = fs.readdirSync(pendingOutputDir).filter((name)=>name.toLowerCase().endsWith('.png')).sort().map((name)=>path.join(pendingOutputDir,name));
+      const screenshotCheck = validateAiVisualScreenshotSet(imagePaths,pageCount);
+      if (!screenshotCheck.valid) { fs.rmSync(pendingOutputDir,{recursive:true,force:true}); return json(response,422,{error:'图文截图校验未通过',issues:screenshotCheck.issues}); }
+      const htmlPath = path.join(workspace.dir,SOCIAL_CARD_BEAUTIFY_HTML);
+      fs.renameSync(tempHtmlPath,htmlPath);
+      fs.rmSync(outputDir,{recursive:true,force:true});
+      fs.renameSync(pendingOutputDir,outputDir);
+      writeUtf8(path.join(workspace.dir,'copy.txt'),`${publishTitle ? `公众号发布标题：${publishTitle}\n\n` : ''}${copy}`);
+      const reportPath = path.join(workspace.dir,'ai-beautify-report.json');
+      if(input.designScheme&&typeof input.designScheme==='object')writeUtf8(path.join(workspace.dir,'external-social-design-scheme.json'),JSON.stringify(input.designScheme,null,2));
+      const report = {schemaVersion:6,status:'passed',source:'external-agent',generatedAt:new Date().toISOString(),pageCount,storyboardPageCount:cardPlan.length,designScheme:input.designScheme||null,visualAudit,screenshots:{status:'passed',pageCount:imagePaths.length,issues:[]},copyCheck,deliveryGate:{status:'passed',registered:true}};
+      writeUtf8(reportPath,JSON.stringify(report,null,2));
+      const gatePath = path.join(workspace.dir,'ai-beautified-delivery-gate.json');
+      writeUtf8(gatePath,JSON.stringify({schemaVersion:1,status:'passed',registered:true,checkedAt:new Date().toISOString(),checks:{html:{valid:true,pageCount},copy:copyCheck,screenshots:screenshotCheck,visualAudit},artifacts:{html:SOCIAL_CARD_BEAUTIFY_HTML,copy:'copy.txt',screenshots:SOCIAL_CARD_BEAUTIFY_OUTPUT}},null,2));
+      const artifactEntries=[['AI 视觉 HTML',SOCIAL_CARD_BEAUTIFY_HTML,htmlPath],['图文配套文案','copy.txt',path.join(workspace.dir,'copy.txt')],['AI 视觉运行记录','ai-beautify-report.json',reportPath],['AI 视觉运行记录','ai-beautified-delivery-gate.json',gatePath],...fs.readdirSync(outputDir).filter((name)=>name.endsWith('.png')).map((name)=>['AI 视觉 PNG',`${SOCIAL_CARD_BEAUTIFY_OUTPUT}/${name}`,path.join(outputDir,name)])];
+      if(input.designScheme&&typeof input.designScheme==='object')artifactEntries.push(['图文设计方案','external-social-design-scheme.json',path.join(workspace.dir,'external-social-design-scheme.json')]);
+      for (const [kind,name,filePath] of artifactEntries) {
+        const stat=fs.statSync(filePath);store.upsertArtifact({batchId:batch.id,candidateId:candidate.id,track:'social_cards',kind,name,path:filePath,size:stat.size,modifiedAt:stat.mtime.toISOString()});
+      }
+      return json(response,200,{candidateId:candidate.id,status:'passed',pageCount,images:imagePaths.length,html:SOCIAL_CARD_BEAUTIFY_HTML,visualAudit});
+    } catch (error) {
+      return json(response,422,{error:`图文审计或截图失败：${String(error.stderr||error.message).trim().slice(0,1000)}`});
+    } finally { fs.rmSync(tempHtmlPath,{force:true}); }
   }
   const socialCardFileMatch=pathname.match(/^\/api\/candidates\/(\d+)\/social-cards\/files\/(.+)$/);
   if(socialCardFileMatch&&request.method==='GET'){
