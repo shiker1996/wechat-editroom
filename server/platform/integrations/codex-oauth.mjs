@@ -63,6 +63,18 @@ async function validateIdToken(token, { clientId, nonce, fetchImpl }) {
 
 function scopesFrom(value) { return new Set(String(value || '').split(/\s+/).filter(Boolean)); }
 
+async function oauthFailure(response, operation) {
+  let payload = null;
+  try { payload = await response.json(); } catch { /* OAuth errors may not be JSON. */ }
+  const error = payload?.error && typeof payload.error === 'object' ? payload.error : payload;
+  const code = typeof error?.code === 'string' ? error.code : typeof payload?.error === 'string' ? payload.error : '';
+  const message = [error?.message, payload?.error_description, payload?.detail, payload?.message]
+    .find((value) => typeof value === 'string' && value.trim());
+  const requestId = response.headers?.get?.('x-request-id') || response.headers?.get?.('request-id') || '';
+  const details = [code, message ? String(message).slice(0, 500) : '', requestId ? `request_id=${requestId}` : ''].filter(Boolean);
+  return new Error(`${operation}失败（HTTP ${response.status}${details.length ? `：${details.join('；')}` : ''}）`);
+}
+
 export function createCodexOAuthService({ root, fetchImpl = fetch, now = () => Date.now() } = {}) {
   if (!root) throw new TypeError('Codex OAuth 需要配置根目录');
   const pending = new Map();
@@ -120,7 +132,7 @@ export function createCodexOAuthService({ root, fetchImpl = fetch, now = () => D
       if (!code || !clientId || (returnedClientId && attempt.requestedClientId !== 'dynamic_agent_client' && returnedClientId !== attempt.requestedClientId)) throw new Error('Codex OAuth 回调缺少授权码或客户端 ID');
       const form = new URLSearchParams({ grant_type: 'authorization_code', code, client_id: clientId, code_verifier: attempt.verifier, redirect_uri: attempt.redirectUri, resource: RESOURCE });
       const response = await fetchImpl(TOKEN_URL, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: form });
-      if (!response.ok) throw new Error(`Codex OAuth 令牌交换失败（HTTP ${response.status}）`);
+      if (!response.ok) throw await oauthFailure(response, 'Codex OAuth 令牌交换');
       const tokens = await response.json();
       const claims = await validateIdToken(tokens.id_token, { clientId, nonce: attempt.nonce, fetchImpl });
       const granted = scopesFrom(tokens.scope || url.searchParams.get('scope'));
@@ -140,11 +152,7 @@ export function createCodexOAuthService({ root, fetchImpl = fetch, now = () => D
       const refreshToken = await revealLocalSecret(credentials.refreshToken);
       const form = new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken, client_id: credentials.clientId, resource: RESOURCE });
       const response = await fetchImpl(TOKEN_URL, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: form });
-      if (!response.ok) {
-        let errorCode = '';
-        try { errorCode = String((await response.json())?.error?.code || ''); } catch {}
-        throw Object.assign(new Error(`Codex OAuth 刷新失败（HTTP ${response.status}${errorCode ? `，${errorCode}` : ''}），请重新连接 ChatGPT 账号`), { code: 'CODEX_AUTH_REQUIRED' });
-      }
+      if (!response.ok) throw Object.assign(await oauthFailure(response, 'Codex OAuth 刷新'), { code: 'CODEX_AUTH_REQUIRED' });
       const tokens = await response.json();
       credentials = { ...credentials, accessToken: tokens.access_token || accessToken,
         refreshToken: tokens.refresh_token || refreshToken,
