@@ -41,19 +41,11 @@ function bindSystem() {
   document.getElementById("system-extension-editor")?.addEventListener("click", (event) => {
     if (event.target.closest("[data-agent-runtime-connect='codex']")) connectCodexRuntime().catch((error) => toast(error.message, "error"));
     if (event.target.closest("[data-agent-runtime-disconnect='codex']")) disconnectCodexRuntime().catch((error) => toast(error.message, "error"));
-    if (event.target.closest("[data-agent-runtime-connect='workbuddy']")) connectWorkBuddyRuntime().catch((error) => toast(error.message, "error"));
-    if (event.target.closest("[data-agent-runtime-disconnect='workbuddy']")) disconnectWorkBuddyRuntime().catch((error) => toast(error.message, "error"));
     const modelStep = event.target.closest("[data-agent-runtime-model-step]")?.dataset.agentRuntimeModelStep;
     const modelStepAction = event.target.closest("[data-agent-runtime-step-action]")?.dataset.agentRuntimeStepAction;
     if (modelStep || modelStepAction) showAgentRuntimeLocalStep(modelStep || modelStepAction);
     const modelId = event.target.closest("[data-open-local-runtime-model]")?.dataset.openLocalRuntimeModel;
     if (modelId) selectSystemExtension(`model-provider:${modelId}`);
-  });
-  document.getElementById("system-extension-editor")?.addEventListener("submit", (event) => {
-    if (event.target.matches("[data-workbuddy-app-form]")) {
-      event.preventDefault();
-      saveWorkBuddyApplication(event.target).catch((error) => toast(error.message, "error"));
-    }
   });
   document.getElementById("system-extension-editor")?.addEventListener("change", (event) => {
     const select = event.target.closest("[data-agent-runtime-default]");
@@ -194,13 +186,6 @@ function renderAgentRuntimeEditor(item){
   if(defaultRuntime==='local-harness'){
     return '<header class="configuration-editor-head"><div><span class="kicker">AGENT RUNTIME / LOCAL MODEL</span><h4>执行环境与平台授权</h4><p>默认 Runtime 决定下方显示对应的授权或模型配置。</p></div><span class="configuration-status-badge '+(ready?'ready':'attention')+'"><i></i>'+(ready?'可用':'需要配置')+'</span></header><div class="agent-runtime-editor"><label class="agent-runtime-default-field">默认 Agent Runtime<select data-agent-runtime-default>'+options+'</select><small>本地 Runtime 使用见字本地模型配置；Codex Runtime 使用 ChatGPT 账号授权。</small></label><section class="local-model-setup" aria-labelledby="local-model-setup-title"><header class="local-model-setup-head"><div><span class="kicker">LOCAL MODEL PATH</span><h3 id="local-model-setup-title">见字本地 Runtime 的模型配置</h3><p>仅影响见字本地 Runtime 执行的任务，Codex 账号的模型不会被这里的配置修改。</p></div><span class="local-model-path-badge">供应商 → 模型 → 可选路由</span></header><ol class="local-model-setup-steps"><li><b><i>01</i>连接供应商</b><small>配置 API 地址和凭据</small><button type="button" class="outline-button" data-agent-runtime-model-action="connection">添加供应商</button></li><li><b><i>02</i>添加默认模型</b><small>选择供应商、填写模型 ID，并设为默认</small><button type="button" class="outline-button" data-agent-runtime-model-action="provider">添加模型</button></li><li><b><i>03</i>按阶段覆盖（可选）</b><small>未配置时，各阶段继承默认模型</small><button type="button" class="outline-button" data-agent-runtime-model-action="routing">配置路由</button></li></ol></section><p class="agent-runtime-editor-note">默认模型用于本地 Runtime 的通用调用；阶段模型路由可选配置。</p></div>';
   }
-  if(defaultRuntime==='workbuddy'){
-    const wb=status.workbuddy||{};
-    const appConfigured=Boolean(wb.applicationConfigured);
-    const wbConnected=Boolean(wb.configured);
-    const wbLabel=status.error?'状态读取失败':wbConnected?'已连接':'未连接';
-    return `<header class="configuration-editor-head"><div><span class="kicker">AGENT RUNTIME / PLATFORM ACCOUNTS</span><h4>执行环境与平台授权</h4><p>选择默认执行环境，并在这里管理 WorkBuddy 平台授权。</p></div><span class="configuration-status-badge ${ready?'ready':'attention'}"><i></i>${ready?'可用':'需要授权'}</span></header><div class="agent-runtime-editor"><label class="agent-runtime-default-field">默认 Agent Runtime<select data-agent-runtime-default>${options}</select><small>此设置只选择 Agent 执行后端；见字本地 Runtime 的供应商、模型和阶段路由在本地模型配置中管理。</small></label><section class="agent-runtime-provider-entry"><header><div><span class="kicker">WORKBUDDY ACP ADAPTER</span><b>WorkBuddy Runtime</b></div><span class="configuration-status-badge ${wbConnected?'ready':'attention'}"><i></i>${wbLabel}</span></header><form data-workbuddy-app-form><label>开放平台 Client ID<input name="clientId" autocomplete="off" value="${escapeHtml(wb.applicationClientId||'')}" placeholder="填写 WorkBuddy 应用 Client ID" required></label><label>开放平台 Client Secret<input name="clientSecret" type="password" autocomplete="new-password" placeholder="${appConfigured?'已保存；留空保持不变':'填写 WorkBuddy 应用 Client Secret'}" ${appConfigured?'':'required'}></label><div class="agent-runtime-provider-actions"><button type="submit" class="outline-button">保存应用凭据</button><button type="button" class="outline-button" data-agent-runtime-connect="workbuddy" ${appConfigured?'':'disabled'}>${wbConnected?'重新授权':'连接 WorkBuddy'}</button>${wbConnected?'<button type="button" class="ghost-button" data-agent-runtime-disconnect="workbuddy">断开连接</button>':''}</div></form><div class="agent-runtime-provider-account"><small>OAuth 回调地址（需加入开放平台白名单）</small><span>${escapeHtml(wb.redirectUri||'')}</span></div>${wbConnected?`<div class="agent-runtime-provider-account"><small>WorkBuddy Open ID</small><span>${escapeHtml(wb.openId||'已授权')}</span></div>`:''}</section><p class="agent-runtime-editor-note">WorkBuddy 需要先在开放平台注册并审核第三方应用，再填写 Client ID/Secret 并授权云端任务权限。ACP 运行支持文本流与取消；当前未接入见字 Tool Broker 回调，依赖宿主工具的 Agent 会按能力校验提示缺少支持。</p></div>`;
-  }
   if(defaultRuntime!=='codex'){
     return '<header class="configuration-editor-head"><div><span class="kicker">AGENT RUNTIME / PLATFORM ACCOUNTS</span><h4>执行环境与平台授权</h4><p>默认 Runtime 决定下方显示对应的平台授权配置。</p></div><span class="configuration-status-badge '+(ready?'ready':'attention')+'"><i></i>'+(ready?'可用':'需要配置')+'</span></header><div class="agent-runtime-editor"><label class="agent-runtime-default-field">默认 Agent Runtime<select data-agent-runtime-default>'+options+'</select></label><section class="agent-runtime-provider-entry"><b>'+escapeHtml(labels[defaultRuntime]||defaultRuntime)+'</b><p>该 Runtime 已注册；对应的平台授权配置将在适配器接入后显示。</p></section></div>';
   }
@@ -276,8 +261,7 @@ async function saveInlineStageRouting(item,form,target){
 function readSystemExtensionForm(form){return Object.fromEntries([...form.querySelectorAll("[data-system-extension-field]")].map((field)=>{let value=field.type==='checkbox'?field.checked:field.value;const type=field.dataset.valueType;if(type==='array')value=String(value).split(/\r?\n/).map((item)=>item.trim()).filter(Boolean);if((type==='integer'||type==='number')&&value!=='')value=Number(value);return [field.dataset.systemExtensionField,value];}));}
 function agentRuntimeCatalogItem(){
   const defaultRuntime=codexRuntimeStatus?.defaultRuntime||'local-harness';
-  const configured=defaultRuntime==='local-harness'||(defaultRuntime==='workbuddy'?Boolean(codexRuntimeStatus?.workbuddy?.configured):Boolean(codexRuntimeStatus?.configured));
-  return {type:'agent-runtime',id:'agent-runtime-settings',name:'执行环境与平台授权',state:{configured,values:{defaultRuntime,connected:configured}}};
+  return {type:'agent-runtime',id:'agent-runtime-settings',name:'执行环境与平台授权',state:{configured:defaultRuntime==='local-harness'||Boolean(codexRuntimeStatus?.configured),values:{defaultRuntime,connected:Boolean(codexRuntimeStatus?.configured)}}};
 }
 function updateConfigurationReadiness(){
   const catalogItems=extensionConfigurations.filter((item)=>!(item.type==='system'&&item.id==='llm-stage-routing'));
@@ -315,9 +299,6 @@ async function loadCodexRuntimeStatus(){
   }
 }
 async function connectCodexRuntime(){const result=await request('/api/agent-runtimes/codex/oauth/start',{method:'POST',body:'{}'});location.assign(result.authorizationUrl);}
-async function saveWorkBuddyApplication(form){const result=await request('/api/agent-runtimes/workbuddy/application',{method:'PUT',body:JSON.stringify({clientId:form.elements.clientId.value,clientSecret:form.elements.clientSecret.value})});codexRuntimeStatus.workbuddy={...codexRuntimeStatus.workbuddy,...result};toast('WorkBuddy 应用凭据已安全保存');await loadCodexRuntimeStatus();}
-async function connectWorkBuddyRuntime(){const result=await request('/api/agent-runtimes/workbuddy/oauth/start',{method:'POST',body:'{}'});location.assign(result.authorizationUrl);}
-async function disconnectWorkBuddyRuntime(){if(!await confirmAction('断开 WorkBuddy 后，见字将不能再使用该授权运行 Agent。是否继续？',{confirmText:'断开连接'}))return;await request('/api/agent-runtimes/workbuddy/oauth/disconnect',{method:'POST',body:'{}'});toast('WorkBuddy 账号已断开');await loadCodexRuntimeStatus();}
 async function saveDefaultAgentRuntime(defaultRuntime){const result=await request('/api/agent-runtimes/default',{method:'PUT',body:JSON.stringify({defaultRuntime})});const labels={'local-harness':'见字本地 Runtime',codex:'Codex Runtime',workbuddy:'WorkBuddy Runtime'};toast(`${labels[result.defaultRuntime]||result.defaultRuntime} 已设为默认 Agent Runtime`);await loadCodexRuntimeStatus();}
 async function disconnectCodexRuntime(){if(!await confirmAction('断开 Codex 后，见字将不能再使用该 ChatGPT 授权运行 Agent。是否继续？',{confirmText:'断开连接'}))return;await request('/api/agent-runtimes/codex/oauth/disconnect',{method:'POST',body:'{}'});toast('Codex 账号已断开');await loadCodexRuntimeStatus();}
 async function saveSystemExtension(item,form){const state=await request(extensionRoute(item),{method:"PUT",body:JSON.stringify(readSystemExtensionForm(form))});item.state=state;toast("扩展配置已保存");if(item.type==='model-provider'||item.type==='model-connection')await Promise.all([loadModelSettings(),loadExtensionConfigurations()]);else await loadExtensionConfigurations();renderConfigurationList();renderSystemExtensionEditor(extensionConfigurations.find((entry)=>`${entry.type}:${entry.id}`===`${item.type}:${item.id}`));}

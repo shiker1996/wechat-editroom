@@ -89,7 +89,7 @@ npm run jianzi -- doctor --json
 
 macOS/Linux 使用 `./setup-workbench.sh` 和 `./start-workbench.sh`。
 
-安装完成后，在工作台“运行与配置”中选择默认 Agent Runtime。若选择见字本地 Runtime，再配置并测试工作台模型服务商；若选择 Codex Runtime，则通过 ChatGPT 账号授权执行已接入的任务；若选择 WorkBuddy Runtime，则还需配置经开放平台审核的第三方应用并完成 OAuth 授权。WorkBuddy 自身的模型配置不会自动传给见字工作台。
+安装完成后，在工作台“运行与配置”中选择默认 Agent Runtime。若选择见字本地 Runtime，再配置并测试工作台模型服务商；若选择 Codex Runtime，则通过 ChatGPT 账号授权执行已接入的任务。WorkBuddy 自身的模型配置不会自动传给见字工作台。
 
 ### 3.2 安装 WorkBuddy 配置
 
