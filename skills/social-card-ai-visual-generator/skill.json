@@ -23,6 +23,10 @@
     "social-card-ai-visual-generation"
   ],
   "runtimeKind": "agent-skill",
+  "runtimePolicy": {
+    "mode": "external-agent",
+    "requiredCapabilities": ["hostToolCallbacks"]
+  },
   "agentGates": [
     "assistant-reply",
     "visual-document-finished"

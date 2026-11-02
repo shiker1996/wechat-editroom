@@ -1,6 +1,6 @@
 # Agent Runtime 适配层设计方案
 
-> 类别：设计方案。状态：实施中。本文定义见字工作台如何使用用户已有的 Codex、WorkBuddy 等 Agent 平台账号运行内部 Agent。Codex OAuth、app-server 驱动、`runSkill` Runtime 选择及宿主 Tool Broker 动态工具回调已接入；Codex 最小任务、真实只读工具和账号画像助手的内存表单流程已验证。工作台持久化/UI 联调、其他业务 Skill 兼容和 WorkBuddy Adapter 尚未完成。
+> 类别：设计方案。状态：分阶段实施中。Codex OAuth、app-server 驱动、`runSkill` Runtime 选择、Tool Broker 回调和 `jianzi auth codex` 浏览器授权命令已接入。账号画像、编辑会、独立写作、自定义图文策划、AI 封面及社交图文视觉 Agent 已声明通用外部 Runtime 能力；工作台流水线 `stage-skill` 阶段仍由现有 ModelGateway 执行，Codex 暂不支持跨 Run 恢复。WorkBuddy Adapter 尚未实现。
 
 ## 1. 目标与问题边界
 
@@ -141,7 +141,9 @@ server/platform/integrations/
 
 Feature adapter 继续只调用 `runSkill`。Harness 内的 Runtime Selector 按 Skill/阶段配置选择 `local-harness`、Codex 或 WorkBuddy backend；各 backend 遵守同一 Runtime 协议，且事件回到同一个 Harness Run 生命周期。`ModelGateway` 不需要承载平台 OAuth 或 ACP 协议；已有本地模型路径由 `local-harness` 使用现有 Gateway，继续兼容。
 
-Runtime 按技能能力策略 opt-in：Skill definition 使用 `runtimePolicy: { mode: 'external-agent', requiredCapabilities: [...] }` 声明可由外部 Agent 完整执行及所需通用能力，不列出 Codex/WorkBuddy 等平台名。Harness 通过 Runtime Registry 选择用户当前配置的平台，校验其能力满足该策略后再启动。新增平台时注册对应 adapter 和授权流程，已兼容技能无需逐个平台修改。未声明外部执行、依赖自定义模型步骤状态机的 Agent 保持本地 Harness 执行。当前账号画像助手是首个通用外部 Runtime 垂直切片。
+Runtime 按技能能力策略 opt-in：Skill definition 使用 `runtimePolicy: { mode: 'external-agent', requiredCapabilities: [...] }` 声明可由外部 Agent 完整执行及所需通用能力，不列出 Codex/WorkBuddy 等平台名。Harness 通过 Runtime Registry 选择用户当前配置的平台，校验其能力满足该策略后再启动。已 opt-in 的交互 Agent 包含账号画像、编辑会、独立写作、自定义图文策划、AI 封面和社交图文视觉生成。新增平台时注册对应 adapter 和授权流程，已兼容技能无需逐个平台修改。批次研判、文章成稿与排版等 `stage-skill` 流水线阶段尚未接入外部 Runtime。
+
+Codex 目前不支持恢复见字保存的历史 Agent Run；需要恢复时 Harness 明确返回不支持，不静默切换本地模型。外部 Runtime 的首轮交互与工具调用仍使用同一份 Skill 指令、工具白名单、Tool Broker、输出门禁和 Run Trace。
 
 Runtime Run 应复用现有 `agent_runs`、`agent_run_events`、`agent_steps` 和 trace 关联字段（具体字段以当前 schema 为准），并扩展 metadata 记录 `runtimeId`、`runtimeProfileId`、平台任务/会话引用、能力快照和授权身份摘要。token 不进入 Run、Prompt、模型调用审计或日志。
 

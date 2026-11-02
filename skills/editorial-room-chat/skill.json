@@ -25,6 +25,10 @@
     "editorial"
   ],
   "runtimeKind": "agent-skill",
+  "runtimePolicy": {
+    "mode": "external-agent",
+    "requiredCapabilities": ["hostToolCallbacks"]
+  },
   "agentGates": [
     "assistant-reply"
   ],

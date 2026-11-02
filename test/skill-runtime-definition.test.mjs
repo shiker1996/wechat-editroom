@@ -21,6 +21,7 @@ test('Skill Resolver 保留领域角色，支持同一技能的 Agent 与阶段�
 test('Manifest 运行字段校验且不改变已有角色契约', () => {
   const bundle = loadSkillBundle({ workspaceRoot: process.cwd(), skillName: 'article-reviewer' });
   assert.equal(validateSkillManifest({ ...bundle.manifest, runtimeKind: 'unknown' }).some((issue) => issue.field === 'runtimeKind'), true);
+  assert.equal(validateSkillManifest({ ...bundle.manifest, runtimePolicy: { mode: 'codex', requiredCapabilities: [] } }).some((issue) => issue.field === 'runtimePolicy'), true);
   assert.equal(validateSkillManifest({ ...bundle.manifest, budget: { maxToolCalls: -1 } }).some((issue) => issue.field === 'budget'), true);
   assert.equal(validateSkillManifest({ ...bundle.manifest, gates: ['readiness', 'readiness'] }).some((issue) => issue.field === 'gates'), true);
 });

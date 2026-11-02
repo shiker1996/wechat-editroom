@@ -47,9 +47,17 @@ macOS/Linux 使用 `./setup-workbench.sh` 和 `./start-workbench.sh`。入口会
 
 如果选择在全新项目中安装 RSSHub，首次向导先跳过 RSSHub；从 `server/platform/integrations/rsshub-installer.mjs` 读取固定 commit，在 `config.local.json` 指定的 RSSHub 目录获取并检出该 SHA，再次运行初始化入口安装 RSSHub 依赖。这样只影响新项目的 Agent 安装流程，不改动通用初始化逻辑，也不切换已有项目的 RSSHub 版本。为保留此交互步骤，不要给首次初始化入口传 `--yes`。
 
-### 2.3 配置工作台模型并连接 Codex
+### 2.3 连接 Codex Runtime
 
-首次启动后，打开工作台“运行与配置”页面，配置至少一个可用的模型服务商并执行连接测试。API Key 等凭据只保存在本机工作台配置中，不要粘贴进账号画像。
+在项目根目录运行：
+
+```powershell
+npm run jianzi -- auth codex login
+```
+
+CLI 会打开系统浏览器，由你在 OpenAI 登录页完成授权；成功后凭据加密保存在本机项目配置中，令牌不会输出给调用 CLI 的 Agent，并自动将 Codex 设为默认 Runtime。之后可以用 `npm run jianzi -- auth codex status --json` 查看连接状态，或用 `npm run jianzi -- auth codex logout` 断开（断开时默认 Runtime 会切回本地 Harness）。
+
+Codex Runtime 当前支持账号画像、编辑会、独立写作、自定义图文策划及 AI 封面/图文视觉生成。批次研判、文章成稿、公众号排版等工作流流水线仍使用工作台配置的模型服务商；要跑完整内容流水线，需要打开“运行与配置”配置并测试模型服务商。
 
 在项目根目录安装 Codex 的项目级 MCP 配置和 Skills：
 
@@ -193,6 +201,7 @@ AI 自动研判可使用 `npm run jianzi -- batch auto --batch <批次ID>`。命
 ```powershell
 npm run jianzi -- --help
 npm run jianzi -- doctor --json
+npm run jianzi -- auth codex status --json
 npm run jianzi -- account profile
 npm run jianzi -- batch list --json
 npm run jianzi -- candidate get --candidate <候选ID>

@@ -6,6 +6,9 @@ import { fileURLToPath } from 'node:url';
 import { createJianziClient } from './client.mjs';
 import { executeJianziTool } from './tools.mjs';
 import { agentIntegrationRoot, installAgentIntegration } from './install.mjs';
+import { createCodexOAuthService } from '../../server/platform/integrations/codex-oauth.mjs';
+import { getAgentRuntimeSettings, setAgentRuntimeSettings } from '../../server/platform/integrations/agent-runtime-settings.mjs';
+import { loginCodexOAuth } from './codex-auth.mjs';
 
 const cliPath = fileURLToPath(import.meta.url);
 const root = agentIntegrationRoot();
@@ -52,13 +55,30 @@ function print(value, asJson = false) {
 }
 
 function help() {
-  process.stdout.write(`见字 Agent CLI（jianzi）\n\n用法：\n  node scripts/agent-integration/cli.mjs doctor [--json]\n  node scripts/agent-integration/cli.mjs install --agent codex|workbuddy|both\n  node scripts/agent-integration/cli.mjs workbench-setup [--yes]\n  node scripts/agent-integration/cli.mjs batch list|create|collect|auto|ranking|candidates ...\n  node scripts/agent-integration/cli.mjs candidate add|get|update|lock ...\n  node scripts/agent-integration/cli.mjs article generate|documents|typeset ...\n  node scripts/agent-integration/cli.mjs cover generate ...\n  node scripts/agent-integration/cli.mjs account profile|update --file <json>\n  node scripts/agent-integration/cli.mjs collectors list|config-list|config-get|config-set|config-test ...\n  node scripts/agent-integration/cli.mjs sources list|capabilities|add|update|test ...\n  node scripts/agent-integration/cli.mjs card editorial|storyboard|update|lock|generate ...\n  node scripts/agent-integration/cli.mjs job get|wait ...\n  node scripts/agent-integration/cli.mjs mcp\n\n写操作和长任务返回 JSON；异步任务使用 job get/wait 查询。AI 成稿、排版、封面和图文命令会调用工作台内部模型。\n`);
+  process.stdout.write(`见字 Agent CLI（jianzi）\n\n用法：\n  node scripts/agent-integration/cli.mjs doctor [--json]\n  node scripts/agent-integration/cli.mjs install --agent codex|workbuddy|both\n  node scripts/agent-integration/cli.mjs workbench-setup [--yes]\n  node scripts/agent-integration/cli.mjs auth codex login|status|logout [--json]\n  node scripts/agent-integration/cli.mjs batch list|create|collect|auto|ranking|candidates ...\n  node scripts/agent-integration/cli.mjs candidate add|get|update|lock ...\n  node scripts/agent-integration/cli.mjs article generate|documents|typeset ...\n  node scripts/agent-integration/cli.mjs cover generate ...\n  node scripts/agent-integration/cli.mjs account profile|update --file <json>\n  node scripts/agent-integration/cli.mjs collectors list|config-list|config-get|config-set|config-test ...\n  node scripts/agent-integration/cli.mjs sources list|capabilities|add|update|test ...\n  node scripts/agent-integration/cli.mjs card editorial|storyboard|update|lock|generate ...\n  node scripts/agent-integration/cli.mjs job get|wait ...\n  node scripts/agent-integration/cli.mjs mcp\n\n写操作和长任务返回 JSON；异步任务使用 job get/wait 查询。AI 成稿、排版、封面和图文命令会调用工作台内部模型。\n`);
 }
 
 async function dispatch(positional, options) {
   const [group, action] = positional;
   const client = createJianziClient({ baseUrl: options.server === true ? undefined : options.server });
   if (!group || group === 'help' || options.help) return help();
+  if (group === 'auth') {
+    const [provider, verb] = positional.slice(1);
+    if (provider !== 'codex' || !['login', 'status', 'logout'].includes(verb)) throw new Error('用法：jianzi auth codex login|status|logout');
+    const oauth = createCodexOAuthService({ root });
+    if (verb === 'status') {
+      const status = await oauth.status();
+      return print({ provider: status.provider, configured: status.configured, expiresAt: status.expiresAt, defaultRuntime: getAgentRuntimeSettings(root).defaultRuntime }, Boolean(options.json));
+    }
+    if (verb === 'login') {
+      const result = await loginCodexOAuth({ root, service: oauth, onWaiting: () => process.stderr.write('正在打开 ChatGPT 授权页面，请在浏览器中完成登录；完成后会自动返回终端。\n') });
+      if (result.configured) setAgentRuntimeSettings(root, { defaultRuntime: 'codex' });
+      return print({ ...result, defaultRuntime: getAgentRuntimeSettings(root).defaultRuntime }, Boolean(options.json));
+    }
+    oauth.disconnect();
+    if (getAgentRuntimeSettings(root).defaultRuntime === 'codex') setAgentRuntimeSettings(root, { defaultRuntime: 'local-harness' });
+    return print({ provider: 'codex', configured: false, defaultRuntime: getAgentRuntimeSettings(root).defaultRuntime }, Boolean(options.json));
+  }
   if (group === 'mcp') {
     const result = spawnSync(process.execPath, [path.join(root, 'scripts', 'agent-integration', 'mcp-server.mjs')], { cwd: root, stdio: 'inherit' });
     process.exitCode = result.status ?? 1;

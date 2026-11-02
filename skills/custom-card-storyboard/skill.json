@@ -33,6 +33,10 @@
     "custom-social"
   ],
   "runtimeKind": "stage-skill",
+  "runtimePolicy": {
+    "mode": "external-agent",
+    "requiredCapabilities": ["hostToolCallbacks"]
+  },
   "agentGates": [
     "assistant-reply"
   ],
