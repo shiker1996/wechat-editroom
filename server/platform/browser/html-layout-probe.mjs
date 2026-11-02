@@ -14,6 +14,22 @@ export async function probeHtmlLayout({ html, width = 375, height = 667, pageSel
       const pages = [...document.querySelectorAll(pageSelector)];
       return pages.map((pageElement, pageIndex) => ({
         page: pageIndex + 1,
+        pageStyle: (() => {
+          const style = getComputedStyle(pageElement);
+          const rect = pageElement.getBoundingClientRect();
+          const inner = pageElement.querySelector('.page-inner');
+          const innerStyle = inner ? getComputedStyle(inner) : null;
+          return {
+            width: rect.width,
+            height: rect.height,
+            backgroundColor: style.backgroundColor,
+            backgroundImage: style.backgroundImage,
+            display: style.display,
+            overflow: style.overflow,
+            innerDisplay: innerStyle?.display || null,
+            innerHeight: inner?.getBoundingClientRect().height ?? null,
+          };
+        })(),
         containers: selectors.flatMap((selector) => [...pageElement.querySelectorAll(selector)].map((element) => {
           const style = getComputedStyle(element);
           return {

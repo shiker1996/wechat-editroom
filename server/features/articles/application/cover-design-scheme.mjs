@@ -8,6 +8,7 @@ import { coverSpecFromTheme, validateCoverSpec, COVER_WIDTH, COVER_HEIGHT, COVER
 import { normalizeCoverSemantics } from './cover-semantics.mjs';
 
 const REFERENCE_NAMES = new Set(['cover-layout-guide.md', 'cover-visual-contract.md', 'cover-visual-component-mapping.md']);
+const COLOR_MOOD_PROMPT = '色彩气质决策：先根据文章主题、情绪、受众和叙事判断色彩气质，再独立判断明暗（明亮/深沉）与冷暖（暖/冷/中性），两者不能绑定推断。将判断落实到完整配色，并在 visualDirection 中简短说明明暗与冷暖选择。不要把科技、代码、数据或专业感自动等同于深色、冷色或霓虹；明亮暖色、浅色冷调、深色暖调、中性方案都可按内容选择。除非内容语义确实支持，避免连续项目重复使用深色底加冷色霓虹的套路。无论选择何种气质，都必须保证文字清晰可读并通过对比度校验。';
 
 function writeJson(filePath, value) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -151,7 +152,7 @@ export async function generateCoverDesignScheme({ gateway, store = null, provide
   log('正在生成本篇封面设计方案…');
   let initialResponse;
   const originalMessages = [
-    { role: 'system', protected: true, content: system },
+    { role: 'system', protected: true, content: `${system}\n\n${COLOR_MOOD_PROMPT}` },
     { role: 'user', protected: true, content: JSON.stringify(userPayload) },
   ];
   try {
