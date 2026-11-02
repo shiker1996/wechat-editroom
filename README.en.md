@@ -75,6 +75,19 @@ Normal users do not need to install Node.js separately. RSSHub, Chrome, and othe
 
 > The desktop installer currently targets Windows 10/11 x64. macOS and Linux can run the source workflow experimentally, but desktop installers are not published yet.
 
+## Use 见字 with Codex, WorkBuddy, and other agents
+
+见字 can run on its own or serve as a local content workbench for an external agent. Through [MCP and project Skills](./docs/agent-usage-guide.md), compatible local MCP clients such as Codex, WorkBuddy, DeepSeek Harness, and Kimi can read the account profile and sources, start collection, inspect research results, and submit formatted articles, covers, and social cards for storage and validation.
+
+The external agent uses its current session model for analysis and generation. 见字 stores the data, applies safety and structure checks, normalizes HTML, audits and screenshots visual pages, and archives the deliverables. This workflow does not require a separate 见字 model configuration. Codex and WorkBuddy have project-level install commands; DeepSeek Harness, Kimi, and other MCP clients can connect through the local `stdio` server and load the project Skills using their own client settings.
+
+1. Install and start 见字. Keep the workbench and agent client on the same computer.
+2. From the project root, run `npm run jianzi -- install --agent codex` or `--agent workbuddy`. For other MCP clients, add `scripts/agent-integration/mcp-server.mjs` as a local `stdio` server using the Node.js runtime for this project.
+3. Load the project Skills from `agent-integrations/skills/`, refresh the MCP connection, and call `jianzi_doctor` to verify connectivity.
+4. Follow the [agent setup and usage guide](./docs/agent-usage-guide.md) to configure the account profile and sources, then run the content workflow.
+
+To use built-in AI from the 见字 interface, configure a model under Runtime & Configuration. This is independent from external agent access.
+
 ## See it before installing
 
 Open the [online tutorial and read-only tour](https://wechat-newsroom-guide.vercel.app/) to see the dashboard, topic pools, article editor, and social-card workspace first.

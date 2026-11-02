@@ -116,6 +116,21 @@ test('Agent 阻止相同调用重复执行并在模型步骤、工具数和时�
   await assert.rejects(runConversationAgent({entryPoint:'editorial',registry:tools,catalog,budget:{timeoutMs:10},modelStep:()=>new Promise((resolve)=>setTimeout(()=>resolve({type:'final',assistantReply:'late',output:{}}),40))}),(error)=>error.code==='AGENT_BUDGET_EXCEEDED');
 });
 
+test('文档 Agent abort 后可以在同一写入会话重新 begin',async()=>{
+  const tools=new ToolRegistry(),operations=[];
+  tools.register({manifest:{id:'document-writer',name:'文档写入',version:'1.0.0',capabilities:['cap_filesystem_project_document_write'],riskLevel:'read-only',inputSchema:{type:'object',additionalProperties:false,properties:{operation:{type:'string'},resourceId:{type:'string'},path:{type:'string'},sessionId:{type:'string'}},required:['operation','resourceId','path','sessionId']},outputSchema:{type:'object'}},adapter:{async execute(input){operations.push(input.operation);return {status:'ok',data:{operation:input.operation},artifacts:[],warnings:[],provenance:{},metrics:{durationMs:0}};}}});
+  const catalog=buildConversationToolCatalog({registry:tools,entryCapabilities:['cap_filesystem_project_document_write']});
+  const request=(step,operation)=>({type:'tool_requests',assistant_note:'写入文档',requests:[{requestId:`tr_doc_${step}`,capability:'cap_filesystem_project_document_write',arguments:{operation,resourceId:'project:current',path:'ai-beautified.html',sessionId:'visual-session'},reason:operation}]});
+  const result=await runConversationAgent({entryPoint:'social-card-ai-visual-generation',registry:tools,catalog,budget:{maxModelSteps:5},modelStep:async({step})=>{
+    if(step===0)return request(step,'begin');
+    if(step===1)return request(step,'abort');
+    if(step===2)return request(step,'begin');
+    return {type:'final',assistantReply:'完成',output:{}};
+  }});
+  assert.equal(result.type,'final');
+  assert.deepEqual(operations,['begin','abort','begin']);
+});
+
 test('Agent 运行与工具调用持久化关联，且不保存原始参数值',async(t)=>{
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'agent-core-')),store=new Store(path.join(root,'test.db'));t.after(()=>{store.close();fs.rmSync(root,{recursive:true,force:true});});
   const tools=registry(),catalog=buildConversationToolCatalog({registry:tools,entryCapabilities:['cap_content_demo_read']});let calls=0;

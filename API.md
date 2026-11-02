@@ -606,6 +606,37 @@ AI 规划配图占位
 ### POST /api/candidates/:id/ai/social-card-beautify
 按当前故事板和主题契约独立启动 AI 图文生成，先由程序生成仅包含主题变量、字体、画布尺寸、页面数量和页面插槽的最小页面壳，再由 AI 为每页输出完整页面内部布局并产出独立的 `ai-beautified.html`、逐页 PNG 和布局审计报告；不会读取或覆盖原始图文。
 
+## 外部 Agent 结果提交
+
+外部 Agent 通过 MCP/CLI 完成模型生成后，可将结果提交到以下接口。工作台会校验输入并负责保存、确定性门禁、浏览器审计、截图和产物登记。所有写请求仍遵循本文件开头的本地会话与 CSRF 约定。
+
+### POST /api/batches/:id/external/tags
+提交本批次热点打标。`items` 为 1–200 项；每项需提供 `id`、分类、`marketScope`、`riskLevel`、`relevanceReason`、0–12 的 `chinaRelevance`、主体/动作 `eventParts`，以及各项处于定义范围内的 `preScores`。热点必须属于该批次。
+
+### GET /api/batches/:id/external/events
+读取已打标且符合批次新鲜度条件的稳定事件聚类、关联热点、报道和已有事件卡。必须先完成热点打标。
+
+### POST /api/batches/:id/external/event-cards
+提交事件事实卡。`items` 必须覆盖当前批次全部稳定事件且不可重复；每项用 `event_id` 指定事件并提供 `conclusion`，可附 `background`、`confirmed_facts`、`source_increment`、`disagreements`、`timeline`、`unverified` 和 `angles`。保存至 `sources/event-cards.json` 并登记为产物。
+
+### GET /api/batches/:id/external/research
+读取已保存的外部 Agent 研判报告；尚未提交时返回 `exists: false`。
+
+### POST /api/batches/:id/external/research
+提交外部 Agent 的事件研判与选题。`items` 为 1–200 项；每项须引用稳定 `eventId` 和属于该事件的一个或多个 `hotspotIds`，并提供 `thesis`、`reason`；可附标题、角度、读者收益、风险、推荐轨道和评分。提交前必须有覆盖全部已打标稳定事件的事件事实卡。报告保存至 `sources/external-research-report.json` 并登记为产物。
+
+### POST /api/batches/:id/external/typeset
+提交外部 Agent 生成的文章排版 HTML。请求需提供同批次的 `candidateId` 和 `html`，候选必须已有文章终稿。工作台会拒绝脚本、外部样式资源或结构缺失的 HTML，再运行公众号 HTML 规范化与门禁；成功后保存并登记 `article.ai.html`。可附 `designScheme` 作为方案记录。
+
+### POST /api/candidates/:id/cover/external
+提交外部 Agent 生成的封面 HTML。候选必须已有文章终稿；请求需提供 `html`，可附 `designScheme`。工作台验证封面 HTML 后渲染为 900×383 PNG，并登记 HTML、图片和交付报告。
+
+### POST /api/candidates/:id/social-cards/external/audit
+提交待审计的图文 HTML 进行浏览器布局审计。故事板须先锁定；请求提供 `html`，可用 `page` 只审计指定页。返回逐页问题和 `valid`，审计未通过时返回 HTTP 422。
+
+### POST /api/candidates/:id/social-cards/external
+提交外部 Agent 生成的最终图文。故事板须先锁定；请求提供 `html`、`copy`，可选 `publishTitle` 和 `designScheme`。工作台执行 HTML 安全、文案和页数校验，再做浏览器布局审计、截图和交付门禁；通过后登记 AI 视觉 HTML、文案、PNG 和报告。
+
 ### GET /api/candidates/:id/social-cards
 读取图文交付状态、图片清单、公众号发布标题（`publishTitle`）、文案、事实清单和报告。标题与文案在同一次文案生成调用中产出；`copy.txt` 以“公众号发布标题：”首行保存标题，独立文件为 `publish-title.txt`。
 

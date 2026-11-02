@@ -1,0 +1,22 @@
+{
+  "name": "见字内容工作台",
+  "name_zh": "见字内容工作台",
+  "name_en": "Jianzi Newsroom Workbench",
+  "description": "Local-first tools for topic research, article production, typesetting, covers, and social cards.",
+  "description_zh": "连接本机见字工作台，完成热点采集研判、公众号文章成稿排版、封面和图文生成。",
+  "description_en": "Connect to the local Jianzi workbench for topic research, article production, typesetting, covers, and social cards.",
+  "source": "jianzi-workbench",
+  "type": "mcp",
+  "version": "1.0.0",
+  "minWorkbuddyVersion": "5.0.0",
+  "examples_zh": [
+    "采集今天的科技热点并筛选适合账号的选题",
+    "把候选 2415 完成成稿、排版并生成封面",
+    "为这个图文候选生成故事板和视觉卡片"
+  ],
+  "examples_en": [
+    "Collect today's technology topics and select those suited to my account",
+    "Draft, typeset, and generate a cover for candidate 2415",
+    "Create a storyboard and visual cards for this candidate"
+  ]
+}

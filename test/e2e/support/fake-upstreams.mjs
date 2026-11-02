@@ -142,40 +142,40 @@ function synthesisJson(payload) {
   return { items: [{ candidateId, saturationPenalty: 0, duplicatePenalty: 0, readerStakeScore: 5, reason: '固定测试候选具备明确验证价值。' }] };
 }
 
-function aiVisualAgentJson(payload) {
-  const instruction = String(userContent(payload));
-  const assistantHistory = (payload.messages || []).filter((item) => item?.role === 'assistant').flatMap((item) => {
-    try {
-      const parsed = JSON.parse(String(item.content || ''));
-      return parsed.type === 'tool_requests' ? parsed.requests || [] : [];
-    } catch { return []; }
-  });
-  const wrotePages = assistantHistory.some((item) => item.capability === 'cap_filesystem_project_document_write' && item.arguments?.operation === 'append');
-  const audited = assistantHistory.some((item) => item.capability === 'cap_social_card_visual_audit');
-  const finished = assistantHistory.some((item) => item.capability === 'cap_filesystem_project_document_write' && item.arguments?.operation === 'finish');
+function aiVisualAgentJson(payload, state) {
   const requestId = `tr_fixture_${(payload.messages || []).length}`;
   const request = (capability, args, reason) => ({
     type: 'tool_requests',
     assistant_note: '执行固定 E2E 的 AI 视觉生成步骤',
     requests: [{ requestId, capability, arguments: args, reason }],
   });
-  if (finished || /文档 ai-beautified\.html 已完成 finish/.test(instruction)) {
-    return { type: 'final', assistantReply: '已完成 AI 视觉 HTML 生成' };
+  // Keep explicit fixture state: chat history may be compacted between tool
+  // turns, so inferring the recovery phase from assistant messages is brittle.
+  switch (state.phase) {
+    case 'start':
+      state.phase = 'written-invalid';
+      return fixtureVisualAppend(request);
+    case 'written-invalid':
+      state.phase = 'audited-invalid';
+      return request('cap_social_card_visual_audit', { auditAttempt: 1 }, '检查固定视觉页面的纵向容量');
+    case 'audited-invalid':
+      state.phase = 'aborted';
+      return request('cap_filesystem_project_document_write', { operation: 'abort' }, '中止未通过视觉审计的文档');
+    case 'aborted':
+      state.phase = 'rewritten';
+      return fixtureVisualAppend(request, { includePageInner: true });
+    case 'rewritten':
+      state.phase = 'audited-valid';
+      return request('cap_social_card_visual_audit', { auditAttempt: 2 }, '复审重写后的固定视觉页面');
+    case 'audited-valid':
+      state.phase = 'finished';
+      return request('cap_filesystem_project_document_write', { operation: 'finish' }, '完成通过复审的视觉 HTML 写入');
+    default:
+      return { type: 'final', assistantReply: '已完成 AI 视觉 HTML 生成' };
   }
-  if (audited || (/最近一次 .*审计已通过/.test(instruction) && wrotePages)) {
-    return request('cap_filesystem_project_document_write', { operation: 'finish' }, '完成固定视觉 HTML 写入');
-  }
-  if (wrotePages || /必须先调用 cap_social_card_visual_audit|重新调用 cap_social_card_visual_audit/.test(instruction)) {
-    return request('cap_social_card_visual_audit', { auditAttempt: 1 }, '检查固定视觉页面的纵向容量');
-  }
-  if (!wrotePages) {
-    // The fixture writes once, then audits and finishes the same document.
-    return fixtureVisualAppend(request);
-  }
-  return { type: 'final', assistantReply: '已完成 AI 视觉 HTML 生成' };
 }
 
-function fixtureVisualAppend(request) {
+function fixtureVisualAppend(request, { includePageInner = false } = {}) {
   const pages = [
     ['page-cover', 'E2E 主链路测试', '固定输入与可追踪输出'],
     ['page-content', '为什么需要', '每次改动都应确认采集、文章与图文产物保持连通。'],
@@ -183,14 +183,19 @@ function fixtureVisualAppend(request) {
     ['page-ending', '完成标准', '页面结构完整，事实边界清晰，交付可以复核。'],
   ];
   const html = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>
-*{box-sizing:border-box}html,body{margin:0;padding:0;background:#102018;color:#f4f0e5;font-family:Arial,"Microsoft YaHei",sans-serif}.page{position:relative;width:375px;height:667px;overflow:hidden;padding:28px;background:#102018;display:flex;flex-direction:column;gap:20px}.page-cover{background:linear-gradient(145deg,#102018,#1a2b23)}.page-body{height:520px;min-height:0;overflow:hidden}.page-content-stack{height:100%;overflow:hidden;display:flex;flex-direction:column;gap:18px}.eyebrow{color:#39c98a;font-size:12px;letter-spacing:.16em}.page h1{font-size:34px;line-height:1.2;margin:0}.page h2{font-size:25px;line-height:1.25;margin:0}.page p{font-size:14px;line-height:1.55;margin:0;color:#f4f0e5}.bottom-strip{margin-top:auto;border-top:1px solid #496052;padding-top:12px;color:#b0c0b5;font-size:12px}
-</style></head><body>${pages.map(([kind,title,body],index)=>`<section class="page ${kind}"><div class="eyebrow">${String(index+1).padStart(2,'0')} · E2E FIXTURE</div><div class="page-body"><div class="page-content-stack"><h${index===0?'1':'2'}>${title}</h${index===0?'1':'2'}><p>${body}</p></div></div><footer class="bottom-strip">固定测试 · ${index+1} / ${pages.length}</footer></section>`).join('')}</body></html>`;
+*{box-sizing:border-box}html,body{margin:0;padding:0;background:#102018;color:#f4f0e5;font-family:Arial,"Microsoft YaHei",sans-serif}.page{position:relative;width:375px;height:667px;overflow:hidden;padding:28px;background:#102018;display:flex;flex-direction:column;gap:20px}.page-cover{background:linear-gradient(145deg,#102018,#1a2b23)}.page-inner{display:flex;flex:1;min-height:0;flex-direction:column;gap:20px;overflow:hidden}.page-body{height:520px;min-height:0;overflow:hidden}.page-content-stack{height:100%;overflow:hidden;display:flex;flex-direction:column;gap:18px}.eyebrow{color:#39c98a;font-size:12px;letter-spacing:.16em}.page h1{font-size:34px;line-height:1.2;margin:0}.page h2{font-size:25px;line-height:1.25;margin:0}.page p{font-size:14px;line-height:1.55;margin:0;color:#f4f0e5}.bottom-strip{margin-top:auto;border-top:1px solid #496052;padding-top:12px;color:#b0c0b5;font-size:12px}
+</style></head><body>${pages.map(([kind,title,body],index)=>{
+    const eyebrow = `<div class="eyebrow">${String(index+1).padStart(2,'0')} · E2E FIXTURE</div>`;
+    const pageBody = `<div class="page-body"><div class="page-content-stack"><h${index===0?'1':'2'}>${title}</h${index===0?'1':'2'}><p>${body}</p></div></div>`;
+    const footer = `<footer class="bottom-strip">固定测试 · ${index+1} / ${pages.length}</footer>`;
+    return `<section class="page ${kind}">${includePageInner ? `<div class="page-inner">${eyebrow}${pageBody}${footer}</div>` : `${eyebrow}${pageBody}${footer}`}</section>`;
+  }).join('')}</body></html>`;
   return request('cap_filesystem_project_document_write', { operation: 'append', content: html }, '写入四页固定测试视觉 HTML');
 }
 
-function jsonForRequest(payload) {
+function jsonForRequest(payload, visualState) {
   const text = JSON.stringify(payload.messages || []);
-  if (/当前 Agent 阶段：单一 AI 视觉生成/.test(text)) return aiVisualAgentJson(payload);
+  if (/当前 Agent 阶段：单一 AI 视觉生成/.test(text)) return aiVisualAgentJson(payload, visualState);
   if (/你是公众号与小红书图文设计师/.test(text)) {
     const input = parseEmbeddedJson(userContent(payload)) || {};
     const pages = Array.isArray(input.pages) ? input.pages : [];
@@ -342,6 +347,7 @@ export async function startFakeGitHub() {
 
 export async function startFakeModel({ mode = 'normal' } = {}) {
   const requests = [];
+  const visualState = { phase: 'start' };
   const server = http.createServer(async (request, response) => {
     if (request.method !== 'POST' || !request.url?.endsWith('/chat/completions')) { response.writeHead(404); response.end(); return; }
     const payload = await readJson(request);
@@ -362,7 +368,7 @@ export async function startFakeModel({ mode = 'normal' } = {}) {
       ? { role: 'assistant', content: '{invalid fixture json' }
       : toolName
       ? { role: 'assistant', content: null, tool_calls: [{ id: 'fixture-call-1', type: 'function', function: { name: toolName, arguments: JSON.stringify(toolResponse(toolName, payload)) } }] }
-      : { role: 'assistant', content: payload.response_format ? JSON.stringify(jsonForRequest(payload)) : /social-card|social cards|hashtag|话题标签|小红书|公众号图文文案/i.test(JSON.stringify(payload.messages || [])) ? '公众号发布标题：E2E 固定图文测试：验证内容如何交付\n\n固定测试图文文案。\n\n#E2E测试 #固定夹具 #主链路验证 #可追踪输出 #功能回归' : articleMarkdown() };
+      : { role: 'assistant', content: payload.response_format ? JSON.stringify(jsonForRequest(payload, visualState)) : /social-card|social cards|hashtag|话题标签|小红书|公众号图文文案/i.test(JSON.stringify(payload.messages || [])) ? '公众号发布标题：E2E 固定图文测试：验证内容如何交付\n\n固定测试图文文案。\n\n#E2E测试 #固定夹具 #主链路验证 #可追踪输出 #功能回归' : articleMarkdown() };
     if (payload.stream) {
       response.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-cache' });
       const delta = toolName ? { role: 'assistant', tool_calls: [{ index: 0, id: 'fixture-call-1', type: 'function', function: { name: toolName, arguments: JSON.stringify(toolResponse(toolName, payload)) } }] } : { role: 'assistant', content: message.content };

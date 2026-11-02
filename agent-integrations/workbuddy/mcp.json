@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "jianzi_workbench": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["<JIANZI_PROJECT_ROOT>/scripts/agent-integration/mcp-server.mjs"],
+      "cwd": "<JIANZI_PROJECT_ROOT>",
+      "runtime": {
+        "type": "node",
+        "version": "24"
+      },
+      "timeout": 30000
+    }
+  }
+}

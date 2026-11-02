@@ -1,0 +1,11 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "jianzi-workbench-setup",
+  "version": "0.1.0",
+  "description": "从空目录安装见字工作台，并在 Codex 中完成账号画像与采集源初始化。",
+  "extensions": {
+    "com.openai": {
+      "onboardingSkill": "./skills/jianzi-project-onboarding/SKILL.md"
+    }
+  }
+}

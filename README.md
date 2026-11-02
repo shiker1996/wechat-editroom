@@ -72,6 +72,19 @@ ChatGPT 和秀米仍然可以是工作流中的工具，但它们之间缺少一
 
 > 当前桌面安装包优先支持 Windows 10/11 x64。macOS 和 Linux 可以运行源码版本，但暂未提供对应桌面安装包。
 
+## 也可以让 Codex、WorkBuddy 等 Agent 操作见字
+
+见字既可以独立运行，也可以作为本机内容工作台接入外部 Agent。通过 [MCP 与项目 Skills](./docs/agent-usage-guide.md)，Codex、WorkBuddy、DeepSeek Harness、Kimi 等支持本机 MCP 的 Agent 客户端可以读取账号画像和采集源、发起采集、查看研判结果，并把文章排版、封面和图文产物交给见字保存与校验。
+
+外部 Agent 使用当前会话的模型完成分析和生成；见字负责保存数据、执行安全与结构门禁、规范化 HTML、审计页面、截图和归档。走这条路径不需要再配置一套见字内部模型。Codex 和 WorkBuddy 有项目级安装命令；DeepSeek Harness、Kimi 等客户端可通过 MCP 的本机 `stdio` 服务连接，并按客户端方式加载项目 Skills。
+
+1. 安装并启动见字工作台，保持工作台和 Agent 客户端在同一台电脑上运行。
+2. 在项目根目录运行 `npm run jianzi -- install --agent codex` 或 `--agent workbuddy`；其他 MCP 客户端按其设置添加 `scripts/agent-integration/mcp-server.mjs`，命令为项目使用的 Node.js。
+3. 在客户端加载 `agent-integrations/skills/` 中的项目 Skills，刷新 MCP 连接，并调用 `jianzi_doctor` 确认连通。
+4. 让 Agent 按 [接入与操作指南](./docs/agent-usage-guide.md)配置账号画像、采集源并完成内容流程。
+
+如果只想在见字界面中使用内置 AI，仍可在“运行与配置”里配置模型；外部 Agent 接入与这项设置相互独立。
+
 ## 先看效果
 
 不想先安装？打开[在线教程与真实界面展示](https://wechat-newsroom-guide.vercel.app/)，先看看热点、选题池、文章编辑器和图文工作区。
