@@ -16,7 +16,7 @@
 |---|---|
 | [user-guide.md](./user-guide.md) | 面向使用者的完整手册：安装、配置、采集、选题、成稿、图文、自主写作、对话 Agent 失败提示、备份与排障 |
 | [agent-usage-guide.md](./agent-usage-guide.md) | 使用 Codex、WorkBuddy 或兼容 MCP 的 Agent 初始化/连接项目，配置账号画像和采集源，并完成采集到文章/图文生产 |
-| [configuration.md](./configuration.md) | 配置项参考：`.env`、`config.local.json`、`account-context.json`（含选题评分）、技能覆盖层 |
+| [configuration.md](./configuration.md) | 配置项参考：统一配置中心、`config.local.json`、`account-context.json`（含选题评分）、技能覆盖层；旧 `.env` 仅作为迁移来源说明 |
 | [release.md](./release.md) | 发布、升级、降级、备份恢复流程 |
 | [data-flow.md](./data-flow.md) | 第三方服务数据流：发送什么、何时发送、保存多久、如何删除 |
 
@@ -45,7 +45,7 @@
 | [agent-adapter-configurability-design.md](./design/agent-adapter-configurability-design.md) | Agent 能力适配层配置化设计：resourceKind 档案表 + Agent 双 map 声明，资源类能力接入免改代码（2026-08-15，阶段 1–4 已实施） |
 | [conversation-agent-form-unification-design.md](./design/conversation-agent-form-unification-design.md) | 对话 Agent 表单统一设计（`server/features/articles/domain/editorial-readiness.mjs` 的设计依据） |
 | [star-growth-roadmap.md](./design/star-growth-roadmap.md) | Star 增长路线图：发布临门一脚、首个公开 Release、可见性渠道与留存运营（待评审） |
-| [ai-visual-cover-design.md](./design/ai-visual-cover-design.md) | 公众号文章 AI 视觉封面：HTML/CSS 生成、主题 SPEC、标准回退和 900×383 交付（已实施） |
+| [ai-visual-cover-design.md](./design/ai-visual-cover-design.md) | 早期封面主题驱动设计记录；当前实现已改为每篇文章生成独立设计方案，不使用标准封面模式或主题选择 |
 
 ## 历史归档（archive/）
 

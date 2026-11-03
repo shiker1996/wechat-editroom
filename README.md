@@ -76,7 +76,7 @@ ChatGPT 和秀米仍然可以是工作流中的工具，但它们之间缺少一
 
 见字既可以独立运行，也可以作为本机内容工作台接入外部 Agent。通过 [MCP 与项目 Skills](./docs/agent-usage-guide.md)，Codex、WorkBuddy、DeepSeek Harness、Kimi 等支持本机 MCP 的 Agent 客户端可以读取账号画像和采集源、发起采集、查看研判结果，并把文章排版、封面和图文产物交给见字保存与校验。
 
-外部 Agent 使用当前会话的模型完成分析和生成；见字负责保存数据、执行安全与结构门禁、规范化 HTML、审计页面、截图和归档。走这条路径不需要再配置一套见字内部模型。Codex 和 WorkBuddy 有项目级安装命令；DeepSeek Harness、Kimi 等客户端可通过 MCP 的本机 `stdio` 服务连接，并按客户端方式加载项目 Skills。
+外部 Agent 使用当前会话的模型完成分析和生成。见字保存文章文档；可选的文章本地审计只提供结构、长度和标题风险提醒，不替代事实核验或审稿。排版、封面和图文提交会执行对应的结构/内容校验，图文还支持浏览器视觉审计、截图和归档。走外部 Agent 路径不需要再配置一套见字内部模型。Codex 和 WorkBuddy 有项目级安装命令；DeepSeek Harness、Kimi 等客户端可通过 MCP 的本机 `stdio` 服务连接，并按客户端方式加载项目 Skills。
 
 1. 安装并启动见字工作台，保持工作台和 Agent 客户端在同一台电脑上运行。
 2. 在项目根目录运行 `npm run jianzi -- install --agent codex` 或 `--agent workbuddy`；其他 MCP 客户端按其设置添加 `scripts/agent-integration/mcp-server.mjs`，命令为项目使用的 Node.js。

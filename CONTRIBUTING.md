@@ -35,6 +35,7 @@ npm test
 - 增删/修改 HTTP 路由 → 更新 `API.md`（`test/api-docs-routes.test.mjs` 双向校验）。
 - 增删环境变量或默认配置 → 更新 `.env.example` / `config.example.json`（`test/example-config-sync.test.mjs`）。
 - 修改 `social-card-prompts` 或故事板技能 references → 更新提示词快照测试。
+- 任何改动先按根目录 `AGENTS.md` 做与范围相称的变更前影响分析。跨层、多入口或多阶段能力按 `docs/workflows/TEMPLATE.md` 建立/更新当前流程契约；单点改动不要求新增契约。
 - 涉及目录结构、命令、约定的变化 → 更新 `AGENTS.md` / README 对应章节。
 
 ## 技能与插件扩展
