@@ -121,7 +121,7 @@ test('主链路 E2E：采集、文章与图文产物均可从真实 HTTP 服务�
       method: 'PATCH', body: { content_route: 'social_cards' },
     });
     await workbench.api(`/api/candidates/${articleCandidate.id}/editorial`, {
-      method: 'PUT', body: { confirmed_facts: '固定资料展示了一条可核验的测试事实。', author_opinions: '本文只验证流程完整性。', adopted_research_points: [], research_basis: '固定事实与来源能够支撑一篇流程验证文章。', forbidden_claims: '不得把测试数据写成真实行业结论。', next_action: 'WRITE_NOW', brief_status: 'LOCKED', reader_consequence: '开发者可以复跑同一条验证路径。', conflict: '改动可能导致产物缺失。' },
+      method: 'PUT', body: { confirmed_facts: '固定资料展示了一条可核验的测试事实。', author_opinions: '本文只验证流程完整性。', evidence_boundary: '核心论点是固定夹具能让流程复跑；对应事实来自本次 RSS 正文和测试服务返回；这些材料只支持流程验证，不代表真实行业结论。', adopted_research_points: [], research_basis: '固定事实与来源能够支撑一篇流程验证文章。', forbidden_claims: '不得把测试数据写成真实行业结论。', next_action: 'WRITE_NOW', brief_status: 'LOCKED', reader_consequence: '开发者可以复跑同一条验证路径。', conflict: '改动可能导致产物缺失。' },
     });
     const fetchedSource = await workbench.api(`/api/candidates/${articleCandidate.id}/source`, {
       method: 'POST', body: {},
