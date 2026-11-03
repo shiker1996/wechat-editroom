@@ -424,9 +424,6 @@ URL 规范化为裸仓库地址（https://github.com/owner/repo）；经手工�
 查询相似历史文章（基于 eventKey + 标题匹配）
 → 编辑室（历史覆盖提示）
 
-### GET /api/candidates/:id/writer-skills
-返回此候选可用的主写技能、推荐实现、当前默认和不可用原因。
-
 ### GET /api/candidates/:id/stage-skills
 返回标题、审稿、自然化和 SEO 阶段的可用技能槽位。
 

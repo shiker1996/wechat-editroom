@@ -249,16 +249,14 @@ test('复盘反馈生成最小配置与技能草案，确认前不写文件，�
   try {
     fs.mkdirSync(path.join(root, 'skills', 'title-generator'), { recursive: true });
     fs.mkdirSync(path.join(root, 'skills', 'wechat-mp-tech-hotspot'), { recursive: true });
-    fs.mkdirSync(path.join(root, 'skills', 'wechat-mp-tech-deep'), { recursive: true });
     fs.writeFileSync(path.join(root, 'skills', 'title-generator', 'SKILL.md'), '# 标题技能\n\n原规则。\n');
     fs.writeFileSync(path.join(root, 'skills', 'wechat-mp-tech-hotspot', 'SKILL.md'), '# 写作技能\n\n原规则。\n');
-    fs.writeFileSync(path.join(root, 'skills', 'wechat-mp-tech-deep', 'SKILL.md'), '# 技术深解\n\n原规则。\n');
     const accountContext = { name: '测试账号', contentRatio: { '开源项目': '60%' }, distributionStrategy: { recommendation: { purpose: '拉新' } }, scoring: { weights: { h: 0.6, b: 0.25, p: 0.15 }, categoryPreference: { '🤖 AI/技术动态': 0 } } };
     fs.writeFileSync(path.join(root, 'account-context.json'), JSON.stringify(accountContext, null, 2) + '\n');
-    const feedback = { id: 9, confidence: 'medium', linked_article_count: 4, metric_window_start: '2026-08-01', metric_window_end: '2026-08-30', writer_skill_evidence: [{ skill_id: 'wechat-mp-tech-deep', sample_count: 4 }] };
+    const feedback = { id: 9, confidence: 'medium', linked_article_count: 4, metric_window_start: '2026-08-01', metric_window_end: '2026-08-30', writer_skill_evidence: [{ skill_id: 'wechat-mp-tech-hotspot', sample_count: 4 }] };
     const draft = buildAdjustmentDraft({ workspaceRoot: root, feedback, strategy: { ready: true }, accountContext, writerSkillId: 'wechat-mp-tech-hotspot', modelResult: {
-      planning: { summary: '强化结果型标题和正文边界', selected_writer_skill_id: 'wechat-mp-tech-deep', writer_skill_reason: '正文反馈集中在原理解释和可复算证据，因此落到技术深解。', warnings: ['样本仍需继续积累'] },
-      patch: { account_patch: { scoring: { categoryPreference: { '🤖 AI/技术动态': 6 }, topicWeights: { '开源项目': 1.2 } }, contentRatio: { note: '不应写入' }, distributionStrategy: { preference: '不应写入' }, followReason: '不应自动改长期承诺', name: '不应被修改' }, skill_edits: [{ skill_id: 'title-generator', edits: [{ section: '生成', old_text: '原规则。', new_text: '优先突出已经核验的结果和读者收益。', reason: '标题信号显示需要加强结果兑现。' }] }, { skill_id: 'wechat-mp-tech-deep', edits: [{ section: '写作规则', old_text: '原规则。', new_text: '补充失败边界和适用条件。', reason: '正文反馈集中在原理和证据拆解。' }] }] },
+      planning: { summary: '强化结果型标题和正文边界', selected_writer_skill_id: 'wechat-mp-tech-hotspot', writer_skill_reason: '正文反馈集中在热点判断和证据表达。', warnings: ['样本仍需继续积累'] },
+      patch: { account_patch: { scoring: { categoryPreference: { '🤖 AI/技术动态': 6 }, topicWeights: { '开源项目': 1.2 } }, contentRatio: { note: '不应写入' }, distributionStrategy: { preference: '不应写入' }, followReason: '不应自动改长期承诺', name: '不应被修改' }, skill_edits: [{ skill_id: 'title-generator', edits: [{ section: '生成', old_text: '原规则。', new_text: '优先突出已经核验的结果和读者收益。', reason: '标题信号显示需要加强结果兑现。' }] }, { skill_id: 'wechat-mp-tech-hotspot', edits: [{ section: '写作规则', old_text: '原规则。', new_text: '补充热点判断和证据表达。', reason: '正文反馈集中在热点判断和证据表达。' }] }] },
     } });
     assert.equal(draft.changes.length, 3);
     assert.ok(!fs.existsSync(path.join(root, 'writing-skills')));
@@ -266,39 +264,39 @@ test('复盘反馈生成最小配置与技能草案，确认前不写文件，�
     assert.doesNotMatch(draft.changes.find((item) => item.id === 'account-context').new_content, /不应写入|不应自动改长期承诺|topicWeights/);
     assert.match(draft.changes.find((item) => item.id === 'title-generator').new_content, /优先突出已经核验的结果和读者收益/);
     assert.doesNotMatch(draft.changes.find((item) => item.id === 'title-generator').new_content, /标题信号|样本|非因果|根据反馈/);
-    assert.equal(draft.source.writer_skill_id, 'wechat-mp-tech-deep');
-    assert.match(draft.source.writer_skill_reason, /原理解释/);
+    assert.equal(draft.source.writer_skill_id, 'wechat-mp-tech-hotspot');
+    assert.match(draft.source.writer_skill_reason, /热点判断/);
     const result = confirmAdjustmentDraft({ workspaceRoot: root, draft });
     assert.equal(result.written.length, 3);
     assert.ok(fs.existsSync(path.join(root, 'writing-skills', 'title-generator', 'SKILL.md')));
-    assert.ok(fs.existsSync(path.join(root, 'writing-skills', 'wechat-mp-tech-deep', 'SKILL.md')));
+    assert.ok(fs.existsSync(path.join(root, 'writing-skills', 'wechat-mp-tech-hotspot', 'SKILL.md')));
     assert.match(loadSkillBundle({ workspaceRoot: root, skillName: 'title-generator' }).prompt, /优先突出已经核验的结果/);
     assert.equal(JSON.parse(fs.readFileSync(path.join(root, 'account-context.json'), 'utf8')).name, '测试账号');
     assert.equal(draft.changes.find((item) => item.id === 'title-generator').old_content, '# 标题技能\n\n原规则。\n');
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
-test('没有显式写作技能映射时，正文样本和结构信号允许 AI 推断写作技能', () => {
+test('没有显式写作技能映射时，只允许 AI 在当前技能目录中推断写作技能', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'content-feedback-adjustment-inference-'));
   try {
     fs.mkdirSync(path.join(root, 'skills', 'title-generator'), { recursive: true });
-    fs.mkdirSync(path.join(root, 'skills', 'wechat-mp-tech-deep'), { recursive: true });
+    fs.mkdirSync(path.join(root, 'skills', 'wechat-mp-tech-hotspot'), { recursive: true });
     fs.writeFileSync(path.join(root, 'skills', 'title-generator', 'SKILL.md'), '# 标题技能\n原有标题规则。\n');
-    fs.writeFileSync(path.join(root, 'skills', 'wechat-mp-tech-deep', 'SKILL.md'), '# 技术深解\n原有正文规则。\n');
+    fs.writeFileSync(path.join(root, 'skills', 'wechat-mp-tech-hotspot', 'SKILL.md'), '# 技术热点快评\n原有正文规则。\n');
     const draft = buildAdjustmentDraft({
       workspaceRoot: root,
       feedback: { linked_article_count: 5, body_signals: [{ id: 'evidence', sample_count: 5 }], writer_skill_evidence: [] },
       strategy: {},
       accountContext: {},
       modelResult: {
-        planning: { selected_writer_skill_id: 'wechat-mp-tech-deep', writer_skill_reason: '题材与正文结构均指向技术原理拆解。', target_intents: [{ skill_id: 'wechat-mp-tech-deep', intent: '强化技术原理和证据边界' }] },
-        patch: { skill_edits: [{ skill_id: 'wechat-mp-tech-deep', edits: [{ old_text: '原有正文规则。', new_text: '正文先解释原理，再给出可复核的证据和适用边界。', reason: '基于题材与正文结构的 AI 推断。' }] }] },
+        planning: { selected_writer_skill_id: 'wechat-mp-tech-hotspot', writer_skill_reason: '题材与正文结构均指向技术热点判断。', target_intents: [{ skill_id: 'wechat-mp-tech-hotspot', intent: '强化热点判断和证据边界' }] },
+        patch: { skill_edits: [{ skill_id: 'wechat-mp-tech-hotspot', edits: [{ old_text: '原有正文规则。', new_text: '正文先给出热点判断，再补充可复核的证据和适用边界。', reason: '基于题材与正文结构的 AI 推断。' }] }] },
       },
     });
-    assert.equal(draft.source.writer_skill_id, 'wechat-mp-tech-deep');
+    assert.equal(draft.source.writer_skill_id, 'wechat-mp-tech-hotspot');
     assert.equal(draft.source.writer_skill_selection_source, 'ai_inference');
     assert.equal(draft.changes.length, 1);
-    assert.equal(draft.changes[0].id, 'wechat-mp-tech-deep');
+    assert.equal(draft.changes[0].id, 'wechat-mp-tech-hotspot');
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 

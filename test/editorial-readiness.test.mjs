@@ -6,6 +6,7 @@ function editorial() {
   return {
     confirmed_facts: '官方公告与报道已经确认：该功能在 2026 年 9 月上线。',
     author_opinions: '我认为真正值得讨论的是上线后的责任边界。',
+    evidence_boundary: '核心判断是上线后仍有责任边界；公告只支持功能已上线，责任归属仍需结合具体事实判断。',
     research_basis: '',
     adopted_research_points: [],
     material_brief: {

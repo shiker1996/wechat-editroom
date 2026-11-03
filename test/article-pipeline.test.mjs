@@ -276,7 +276,7 @@ test('直写流程使用单阶段提示词，兼容旧技能组合器', () => {
 test('综合热点通过文章类型提示写作，不再依赖独立写作技能包', () => {
   const composite = loadSkillBundle({ workspaceRoot:process.cwd(), skillName:'wechat-mp-composite' });
   assert.equal(composite.fallback, true);
-  assert.match(articlePromptManifest('wechat-mp-composite').prompts.drafting.prompt, /多热点综合/);
+  assert.match(articlePromptManifest('wechat-mp-composite').prompts.drafting.prompt, /共同命题组织多条材料/);
   const source = fs.readFileSync(new URL('../server/features/articles/application/article-pipeline.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /loadArticleSkillBundle|writerSkillBundle/);
 });
@@ -292,7 +292,8 @@ test('文章类型从锁定简报或选题属性推导',()=>{
 
 test('热点文章契约明确拒绝伪装教程、工具清单和纯快讯',()=>{
   const skill=fs.readFileSync(new URL('../skills/wechat-mp-topic-to-article/SKILL.md',import.meta.url),'utf8');
-  assert.match(skill,/writer_skill_reason/);
+  assert.match(skill,/文章类型通过 `prompts\/articles\/` 中对应的提示词片段传入/);
+  assert.doesNotMatch(skill,/writer_skill_reason/);
   assert.match(skill,/不承接纯资讯早报/);
   assert.match(skill,/教程必须先建立环境、步骤、成功标准和作者实践证据/);
   assert.match(skill,/工具 → 图文/);
