@@ -61,11 +61,11 @@ export const JIANZI_TOOLS = [
   { name: 'jianzi_batch_research_get', description: '读取已归档的外部 Agent 选题研判报告。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。') }, required: ['batchId'] }, readOnlyHint: true },
   { name: 'jianzi_batch_candidates', description: '列出批次文章或图文候选。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), track: { type: 'string', enum: ['article', 'social_cards'] }, kind: string('文章候选过滤：all、hotspot 或 independent。') }, required: ['batchId'] }, readOnlyHint: true },
   { name: 'jianzi_candidate_add', description: '把 Agent 已研判选择的热点加入文章池或图文池。图文候选可指定事件、项目或自定义类型；不指定时按事件图文处理。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), hotspotIds: { type: 'array', items: { type: 'integer', minimum: 1 }, minItems: 1 }, tracks: { type: 'array', items: { type: 'string', enum: ['article', 'social_cards'] } }, socialMaterialType: { type: 'string', enum: ['event', 'repository', 'custom'], description: '图文类型。事件资讯选 event；软件项目介绍选 repository；其他自定义内容选 custom。' } }, required: ['batchId', 'hotspotIds'] }, readOnlyHint: false },
-  { name: 'jianzi_candidate_get', description: '读取候选、来源事实、已有研判和编辑决策。', inputSchema: { type: 'object', properties: { candidateId: id('候选 ID。') }, required: ['candidateId'] }, readOnlyHint: true },
+  { name: 'jianzi_candidate_get', description: '读取候选关联原文、来源事实、已有研判和编辑决策。返回的候选字段、抓取状态、评分和编辑记录属于内部写作上下文，只供分析，不能作为文章中的来源归因或过程叙述（例如“工作台采集到的摘要”“候选摘要显示”）。正文引用须使用读者可访问的来源名称/作者和 URL；无法核实就说明证据边界。', inputSchema: { type: 'object', properties: { candidateId: id('候选 ID。') }, required: ['candidateId'] }, readOnlyHint: true },
   { name: 'jianzi_candidate_source_fetch', description: '文章成稿或图文策划前必须调用：抓取并保存候选关联热点的原文。不能以外部搜索或候选摘要代替项目抓取；失败时先向用户报告原因和证据边界。默认抓取全部关联热点，可指定 hotspotId 或 eventId。', inputSchema: { type: 'object', properties: { candidateId: id('候选 ID。'), hotspotId: id('只抓取该候选关联的热点 ID。', false), eventId: string('只抓取该候选关联的事件 ID。'), force: { type: 'boolean', description: '忽略已有缓存并重新抓取。' } }, required: ['candidateId'] }, readOnlyHint: false, openWorldHint: true },
   { name: 'jianzi_candidate_editorial_update', description: '保存 Agent 形成的文章编辑判断；建议先展示用户确认，再锁题。', inputSchema: { type: 'object', properties: { candidateId: id('候选 ID。'), editorial: { type: 'object', description: '编辑决策字段；confirmed_facts、research_basis、open_questions 等文本字段使用字符串或字符串数组，不能使用对象数组。adopted_research_points 和 material_brief 使用各自的结构化格式。' } }, required: ['candidateId', 'editorial'] }, readOnlyHint: false },
   { name: 'jianzi_candidate_lock', description: '锁定已完成编辑判断的文章候选，工作台会执行编辑简报门禁。', inputSchema: { type: 'object', properties: { candidateId: id('候选 ID。') }, required: ['candidateId'] }, readOnlyHint: false },
-  { name: 'jianzi_article_local_audit', description: '使用文章成稿流程的确定性规则检查 Markdown 结构、默认字数范围及标题风险；不代表完成事实核验或审稿。', inputSchema: { type: 'object', properties: { article: string('完整 Markdown 文章。'), factBase: { type: 'object', description: '可选事实基座。' } }, required: ['article'] }, readOnlyHint: true },
+  { name: 'jianzi_article_local_audit', description: '使用文章成稿流程的确定性规则检查 Markdown 结构、默认字数范围、标题风险和常见内部流程措辞（仅提醒，不阻断）；不代表完成事实核验或审稿。', inputSchema: { type: 'object', properties: { article: string('完整 Markdown 文章。'), factBase: { type: 'object', description: '可选事实基座。' } }, required: ['article'] }, readOnlyHint: true },
   { name: 'jianzi_article_generate', description: '调用见字内部模型完成文章成稿、审稿和事实门禁；需要工作台已配置模型。', inputSchema: { type: 'object', properties: { candidateId: id('候选 ID。'), provider: string('可选的工作台模型服务商 ID。'), skillId: string('可选的写作 Skill ID。') }, required: ['candidateId'] }, readOnlyHint: false, openWorldHint: true },
   { name: 'jianzi_article_documents', description: '读取批次文章文档或指定候选的草稿/终稿。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), candidateId: string('候选 ID；不填时列出批次文档。'), kind: { type: 'string', enum: ['draft', 'final', 'daily-final'] } }, required: ['batchId'] }, readOnlyHint: true },
   { name: 'jianzi_article_document_save', description: '保存外部 Agent 已完成的文章草稿或终稿，不调用见字内部模型。编辑判断获确认只表示可以开始写作；写作后先保存 draft 并让用户审阅，用户确认已生成的文章后才保存 final。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), candidateId: id('文章候选 ID。'), kind: { type: 'string', enum: ['draft', 'final'] }, title: string('文章标题。'), content: string('文章 Markdown 正文。'), status: { type: 'string', enum: ['draft', 'review', 'final'] }, reviewState: string('可选审稿状态。') }, required: ['batchId', 'candidateId', 'kind', 'content'] }, readOnlyHint: false },
@@ -187,7 +187,19 @@ export async function executeJianziTool(client, name, input = {}) {
       const socialMaterialType = input.socialMaterialType || (tracks.includes('social_cards') ? 'event' : undefined);
       return client.post(`/api/batches/${batch}/candidates`, { hotspotIds: input.hotspotIds, tracks, ...(socialMaterialType ? { socialMaterialType } : {}) });
     }
-    case 'jianzi_candidate_get': return client.get(`/api/candidates/${candidate}`);
+    case 'jianzi_candidate_get': {
+      const result = await client.get(`/api/candidates/${candidate}`);
+      if (!result || typeof result !== 'object' || Array.isArray(result)) return result;
+      return {
+        ...result,
+        agent_guidance: {
+          sourceRecords: ['source_document', 'events[].hotspots[].sourceDoc', 'materials'],
+          sourceRule: 'Only attribute claims to a reader-accessible source record after checking its title, publisher, URL, and content. A candidate summary or editorial note is not itself a source.',
+          internalContextOnly: ['hotspot_raw_json', 'editorial', 'events[].card', 'tracks', 'scores', 'candidate/batch IDs', 'fetch status and quality metadata'],
+          writingRule: 'Do not narrate internal workflow in reader-facing copy (for example, "工作台采集到的摘要" or "候选摘要显示"). Explain uncertainty in terms of what the public source does or does not establish.',
+        },
+      };
+    }
     case 'jianzi_candidate_source_fetch': return client.post(`/api/candidates/${candidate}/source`, { hotspotId: input.hotspotId, eventId: input.eventId, force: input.force === true });
     case 'jianzi_candidate_editorial_update': return client.put(`/api/candidates/${candidate}/editorial`, input.editorial);
     case 'jianzi_candidate_lock': return client.post(`/api/candidates/${candidate}/lock`, {});
