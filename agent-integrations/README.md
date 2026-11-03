@@ -57,6 +57,6 @@ MCP 同时提供内部模型任务和外部 Agent 结果提交两条路径。默
 
 ## MCP 工具
 
-MCP 暴露 `jianzi_*` 具名工具，覆盖安装诊断、账号画像读写、采集器及采集源配置、批次/采集、热点标签、稳定事件、事件卡和研判报告提交、候选/编辑决策、文章文档、排版/封面/图文产物提交和后台任务轮询。图文 HTML 可在生成过程中调用浏览器审计工具反复检查；最终提交仍会复审、截图并归档。工具不提供任意 HTTP、数据库、shell、发布或删除能力。完整流程和具体工具顺序见 `skills/jianzi-topic-to-article`、`skills/jianzi-typeset-cover`、`skills/jianzi-social-cards`。
+MCP 暴露 `jianzi_*` 具名工具，覆盖安装诊断、账号画像读写、采集器及采集源配置、批次/采集、热点标签、稳定事件、事件卡和研判报告提交、热点候选、自主写作和自定义图文项目创建、编辑决策、文章文档、排版/封面/图文产物提交和后台任务轮询。自主写作项目可由 MCP 创建而不启动见字内部模型；自定义图文项目创建时保存事实基座，后续由外部 Agent 生成故事板与视觉产物。图文 HTML 可在生成过程中调用浏览器审计工具反复检查；最终提交仍会复审、截图并归档。工具不提供任意 HTTP、数据库、shell、发布或删除能力。完整流程和具体工具顺序见 `skills/jianzi-topic-to-article`、`skills/jianzi-typeset-cover`、`skills/jianzi-social-cards`。
 
 本机工作台只接受 loopback 连接，MCP 子进程必须运行在同一台电脑。远程 WorkBuddy Agent 无法直接访问用户电脑上的 `127.0.0.1`。

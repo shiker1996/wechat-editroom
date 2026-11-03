@@ -61,6 +61,8 @@ export const JIANZI_TOOLS = [
   { name: 'jianzi_batch_research_get', description: '读取已归档的外部 Agent 选题研判报告。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。') }, required: ['batchId'] }, readOnlyHint: true },
   { name: 'jianzi_batch_candidates', description: '列出批次文章或图文候选。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), track: { type: 'string', enum: ['article', 'social_cards'] }, kind: string('文章候选过滤：all、hotspot 或 independent。') }, required: ['batchId'] }, readOnlyHint: true },
   { name: 'jianzi_candidate_add', description: '把 Agent 已研判选择的热点加入文章池或图文池。图文候选可指定事件、项目或自定义类型；不指定时按事件图文处理。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), hotspotIds: { type: 'array', items: { type: 'integer', minimum: 1 }, minItems: 1 }, tracks: { type: 'array', items: { type: 'string', enum: ['article', 'social_cards'] } }, socialMaterialType: { type: 'string', enum: ['event', 'repository', 'custom'], description: '图文类型。事件资讯选 event；软件项目介绍选 repository；其他自定义内容选 custom。' } }, required: ['batchId', 'hotspotIds'] }, readOnlyHint: false },
+  { name: 'jianzi_independent_article_create', description: '为外部 Agent 创建教程或心得文章项目，写入自主写作事实基座并建立文章候选；不启动见字内部模型。创建后由外部 Agent 按事实基座成稿，再用 jianzi_article_document_save 保存。教程需提供运行环境和至少两个步骤；核心要点至少三条，并用【体验】/【素材】/【建议】标明来源。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), articleMode: { type: 'string', enum: ['tutorial', 'experience'], description: 'tutorial 为使用教程，experience 为心得经验；默认为 tutorial。' }, topic: string('文章主题。'), audience: string('目标读者。'), thesis: string('核心观点；心得经验必填。'), environment: string('教程适用的软件、系统或版本环境；教程必填。'), points: { type: 'array', minItems: 3, items: { type: 'string' }, description: '至少三条事实或要点，每条用【体验】、【素材】或【建议】标明来源等级；可在素材项中附来源 URL。' }, materialUrls: { type: 'array', items: { type: 'string', format: 'uri' }, description: '需要抓取并保存的公开素材 URL。' }, steps: { type: 'array', minItems: 2, items: { type: 'string' }, description: '教程步骤，至少两步。' }, prerequisites: string('教程前置条件，可用换行分隔。'), expected_results: string('预期结果，可用换行分隔。'), common_errors: string('常见问题，可用换行分隔。'), creationRequestId: string('可选幂等请求 ID。') }, required: ['batchId', 'topic', 'points'] }, readOnlyHint: false, openWorldHint: true },
+  { name: 'jianzi_custom_social_create', description: '创建自定义公众号/小红书图文项目并保存事实基座；不调用见字内部模型。创建后读取图文事实与门禁，制定故事板，再按图文流程审核和提交。核心要点至少三条，至少一条标注【体验】或【素材】；每条来源等级可选【体验】、【素材】、【建议】。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), contentType: { type: 'string', enum: ['tutorial', 'list', 'opinion'], description: '内容类型：教程、清单或观点。' }, channel: { type: 'string', enum: ['wechat', 'xiaohongshu'], description: '发布渠道，默认为公众号。' }, topic: string('图文主题。'), audience: string('目标读者。'), scenario: string('使用场景。'), thesis: string('核心观点。'), points: { type: 'array', minItems: 3, items: { type: 'string' }, description: '至少三条要点，每条用【体验】、【素材】或【建议】标明来源等级。' }, materialUrls: { type: 'array', items: { type: 'string', format: 'uri' }, description: '需要抓取并保存的公开素材 URL。' }, steps: { type: 'array', items: { type: 'string' }, description: '教程步骤。' }, items: { type: 'array', items: { type: 'string' }, description: '清单条目。' }, limitations: string('限制或适用边界。'), expectedPages: { type: 'integer', minimum: 4, maximum: 10, description: '建议页数。' } }, required: ['batchId', 'contentType', 'topic', 'points'] }, readOnlyHint: false, openWorldHint: true },
   { name: 'jianzi_candidate_get', description: '读取候选关联原文、来源事实、已有研判和编辑决策。返回的候选字段、抓取状态、评分和编辑记录属于内部写作上下文，只供分析，不能作为文章中的来源归因或过程叙述（例如“工作台采集到的摘要”“候选摘要显示”）。正文引用须使用读者可访问的来源名称/作者和 URL；无法核实就说明证据边界。', inputSchema: { type: 'object', properties: { candidateId: id('候选 ID。') }, required: ['candidateId'] }, readOnlyHint: true },
   { name: 'jianzi_candidate_source_fetch', description: '文章成稿或图文策划前必须调用：抓取并保存候选关联热点的原文。不能以外部搜索或候选摘要代替项目抓取；失败时先向用户报告原因和证据边界。默认抓取全部关联热点，可指定 hotspotId 或 eventId。', inputSchema: { type: 'object', properties: { candidateId: id('候选 ID。'), hotspotId: id('只抓取该候选关联的热点 ID。', false), eventId: string('只抓取该候选关联的事件 ID。'), force: { type: 'boolean', description: '忽略已有缓存并重新抓取。' } }, required: ['candidateId'] }, readOnlyHint: false, openWorldHint: true },
   { name: 'jianzi_candidate_editorial_update', description: '保存 Agent 形成的文章编辑判断；建议先展示用户确认，再锁题。', inputSchema: { type: 'object', properties: { candidateId: id('候选 ID。'), editorial: { type: 'object', description: '编辑决策字段；confirmed_facts、research_basis、open_questions 等文本字段使用字符串或字符串数组，不能使用对象数组。adopted_research_points 和 material_brief 使用各自的结构化格式。' } }, required: ['candidateId', 'editorial'] }, readOnlyHint: false },
@@ -186,6 +188,19 @@ export async function executeJianziTool(client, name, input = {}) {
       const tracks = input.tracks?.length ? input.tracks : ['article'];
       const socialMaterialType = input.socialMaterialType || (tracks.includes('social_cards') ? 'event' : undefined);
       return client.post(`/api/batches/${batch}/candidates`, { hotspotIds: input.hotspotIds, tracks, ...(socialMaterialType ? { socialMaterialType } : {}) });
+    }
+    case 'jianzi_independent_article_create': {
+      const { batchId: _batchId, ...payload } = input;
+      return redactSensitive(await client.post(`/api/batches/${batch}/tutorials`, { ...payload, deferGeneration: true }));
+    }
+    case 'jianzi_custom_social_create': {
+      const { batchId: _batchId, contentType, expectedPages, ...payload } = input;
+      return redactSensitive(await client.post(`/api/batches/${batch}/custom-social-candidates`, {
+        ...payload,
+        content_type: contentType,
+        expected_pages: expectedPages,
+        channel: payload.channel === 'xiaohongshu' ? 'xiaohongshu' : 'wechat',
+      }));
     }
     case 'jianzi_candidate_get': {
       const result = await client.get(`/api/candidates/${candidate}`);
