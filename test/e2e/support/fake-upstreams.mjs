@@ -260,6 +260,8 @@ function jsonForRequest(payload, visualState) {
 function toolResponse(toolName, payload = {}) {
   const requestText = JSON.stringify(payload.messages || []);
   if (/title_plan|hotspotAnchorRule|title_lock|SELECTED_TITLE/i.test(`${toolName} ${requestText}`)) return { selectedTitle: 'E2E 文章采集样本：固定事实如何进入最终内容', titleCandidates: [{ title: 'E2E 文章采集样本：固定事实如何进入最终内容', reason: '固定主链路标题夹具' }], hotspotAnchor: 'E2E 文章采集样本', coreKeywords: [] };
+  if (/article_review_gate/i.test(toolName)) return { pass: true, issues: [], evidence_checks: [] };
+  if (/article_quality_gate/i.test(toolName)) return { pass: true, issues: [], evidence_checks: [] };
   if (/research_coverage/i.test(toolName)) {
     const pointId = JSON.stringify(payload.messages || []).match(/"point_id"\s*:\s*"([^"]+)"/)?.[1] || 'e2e-research-1';
     return { status: 'pass', summary: '固定文章完整回应已采用的研判点。', items: [{ point_id: pointId, status: 'full', coverage: '文章说明采集结果如何进入最终产物。', explanation: '正文覆盖了固定夹具检查的完整链路。', article_excerpt: '检查任务状态和最终文件。' }], omitted_points: [], contradicted_points: [], rejected_point_leakage: [], repair_suggestions: [] };
