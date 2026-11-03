@@ -81,7 +81,6 @@ export async function handleTaskRoutes({ request, response, pathname, searchPara
     if (!Array.isArray(input.items)||input.items.length<1||input.items.length>200) return respond(json,response,400,{error:'items 必须包含 1–200 张事件卡'});
     const hotspots = batch.hotspots.filter(isResearchEligibleHotspot).filter((item)=>isFreshForBatch(item,batch.batch_date,batchMaxAgeHours(batch))).filter((item)=>{const tags=tagsOf(item);return tags.eventKey&&tags.preScores;});
     const events = resolveStableBatchEvents({store,workspaceRoot:config.workspaceRoot,batch,hotspots});
-    if(input.items.length!==events.length)return respond(json,response,422,{error:`事件卡数量必须覆盖全部 ${events.length} 个稳定事件`});
     const expected = new Map(events.map((event)=>[String(event.event_id),event]));
     const ids = new Set();
     for (const item of input.items) {
@@ -93,11 +92,15 @@ export async function handleTaskRoutes({ request, response, pathname, searchPara
     const list=(value,max=5)=>Array.isArray(value)?value.map((item)=>text(item,120)).filter(Boolean).slice(0,max):[];
     const items=input.items.map((raw)=>({event_id:String(raw.event_id),title:expected.get(String(raw.event_id)).representative_title,conclusion:text(raw.conclusion),background:text(raw.background,120),confirmed_facts:list(raw.confirmed_facts),source_increment:(Array.isArray(raw.source_increment)?raw.source_increment:[]).map((item)=>({source:text(item?.source,40),adds:text(item?.adds,120)})).filter((item)=>item.source||item.adds).slice(0,6),disagreements:list(raw.disagreements,4),timeline:(Array.isArray(raw.timeline)?raw.timeline:[]).map((item)=>({time:text(item?.time,30),fact:text(item?.fact,120)})).filter((item)=>item.fact).slice(0,5),unverified:list(raw.unverified,4),angles:list(raw.angles,3)}));
     const eventCardsPath=path.join(batchWorkdir(batch),'sources','event-cards.json');
+    let existingCards=[];try{existingCards=JSON.parse(fs.readFileSync(eventCardsPath,'utf8')).items||[];}catch{}
+    const mergedCards=new Map(existingCards.filter((card)=>expected.has(String(card.event_id))).map((card)=>[String(card.event_id),card]));
+    for(const item of items)mergedCards.set(item.event_id,item);
+    const allItems=[...mergedCards.values()];
     fs.mkdirSync(path.dirname(eventCardsPath),{recursive:true});
-    fs.writeFileSync(eventCardsPath,JSON.stringify({generated_at:new Date().toISOString(),total_events:items.length,failed:[],items},null,2),'utf8');
+    fs.writeFileSync(eventCardsPath,JSON.stringify({generated_at:new Date().toISOString(),total_events:events.length,completed_events:allItems.length,failed:[],items:allItems},null,2),'utf8');
     const stat=fs.statSync(eventCardsPath);
     store.upsertArtifact({batchId,kind:'事件事实卡',name:'event-cards.json',path:eventCardsPath,size:stat.size,modifiedAt:stat.mtime.toISOString()});
-    return respond(json,response,200,{batchId,status:'saved',count:items.length,path:'sources/event-cards.json'});
+    return respond(json,response,200,{batchId,status:allItems.length===events.length?'saved':'partial',received:items.length,completed:allItems.length,total:events.length,remaining:Math.max(0,events.length-allItems.length),path:'sources/event-cards.json'});
   }
   const externalResearchMatch = pathname.match(/^\/api\/batches\/([^/]+)\/external\/research$/);
   if (externalResearchMatch && request.method === 'GET') {

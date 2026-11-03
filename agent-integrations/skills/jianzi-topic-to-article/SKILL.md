@@ -9,7 +9,7 @@ description: 使用见字工作台完成热点采集、选题研判、文章简�
 
 1. 调用 `jianzi_batches_list` 复用用户指定的批次；没有合适批次时先创建 `jianzi_batch_create`。
 2. 调用 `jianzi_batch_collect` 启动采集，再用 `jianzi_job_wait` 等待完成。报告失败来源，不要把部分成功说成完整采集。
-3. 外部 Agent 路径：先调用 `jianzi_account_profile` 获取真实账号画像，再调用 `jianzi_batch_hotspots` 读取原始热点与项目发现元数据，按项目 `hotspot-tagging` Skill 执行打标；分批调用 `jianzi_batch_tags_submit` 保存标签。然后调用 `jianzi_batch_events` 获取稳定事件组，逐事件综合原文形成事件事实卡并用 `jianzi_batch_event_cards_submit` 保存；读取 `jianzi_batch_ranking`，结合事件卡和账号画像完成研判后，用 `jianzi_batch_research_submit` 保存命题、切入角度、读者利益和风险理由。只有用户选中的热点才通过 `jianzi_candidate_add` 加入候选。
+3. 外部 Agent 路径：先调用 `jianzi_account_profile` 获取真实账号画像，再调用 `jianzi_batch_hotspots` 读取原始热点与项目发现元数据，按项目 `hotspot-tagging` Skill 执行打标；分批调用 `jianzi_batch_tags_submit` 保存标签。然后调用 `jianzi_batch_events` 获取稳定事件组，逐事件综合原文形成事件事实卡，每次最多 200 张调用 `jianzi_batch_event_cards_submit`；根据返回的 `completed`、`total`、`remaining` 继续提交，直到 `remaining` 为 0，再读取 `jianzi_batch_ranking`，结合事件卡和账号画像完成研判，并用 `jianzi_batch_research_submit` 保存命题、切入角度、读者利益和风险理由。只有用户选中的热点才通过 `jianzi_candidate_add` 加入候选。
    - 打标必须遵循 `hotspot-tagging` Skill，只处理 `researchEligible: true` 的热点：分类使用账号配置，事件要素写入 `eventParts.who/what`（系统据此生成 `eventKey`）；分数上限 conflict/audience=20、informationGain/emotion=15、timeliness/impact/sourceReliability=10。风险只标记不擅自删除热点。
    - 若用户明确选择见字内部 AI 自动研判，才调用 `jianzi_batch_auto_research`。
 4. 对已加入候选池的选题，先调用 `jianzi_candidate_source_fetch` 抓取并保存关联原文，再读取 `jianzi_candidate_get` 获取来源、事实和现有编辑决策；读取 `jianzi_account_profile` 了解受众与账号定位。原文抓取失败时先报告原因，不要直接进入成稿。
