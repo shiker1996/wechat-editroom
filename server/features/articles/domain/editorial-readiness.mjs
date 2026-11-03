@@ -39,15 +39,37 @@ export function confirmedFactsDecision(value){
   return substantiveDecision(text)&&!GENERIC_FACTS_PATTERN.test(text);
 }
 
+export const EDITORIAL_ARTICLE_TYPES=Object.freeze([
+  'wechat-mp-tech-hotspot',
+  'wechat-mp-tech-deep',
+  'wechat-mp-deep-dive',
+  'wechat-mp-gossip-chill',
+  'wechat-mp-composite',
+]);
+
+function articleTypeOf(candidate={},editorial={}){
+  const material=editorial.material_brief&&typeof editorial.material_brief==='object'?editorial.material_brief:{};
+  return String(editorial.article_type||material.article_type||candidate.article_type||'').trim();
+}
+
+function requiredForField(field,{candidate={},editorial={}}={}){
+  const type=articleTypeOf(candidate,editorial);
+  if(field.key==='article_type')return true;
+  if(field.key==='author_opinions')return ['wechat-mp-gossip-chill','wechat-mp-deep-dive'].includes(type)||String(editorial.writing_stance||'').toLowerCase()==='opinion';
+  return field.required;
+}
+
 // 编辑室表单项的唯一权威清单：scope 决定值从候选还是底稿会话读取。
-// 顺序即依赖链：先明确事实、观点、角度和命题，再决定采用哪些研判拓展点，
-// 最后用 research_basis 解释这些拓展点如何服务于文章。
+// 先确定写作类型，再按类型收集事实、观点/主线、中心命题与依据；
+// 观点字段仅在观点型或作者明确选择 opinion 时成为必填项。
 export const EDITORIAL_FIELDS=Object.freeze([
+  {key:'article_type',label:'写作类型',required:true,scope:'editorial'},
   {key:'writing_stance',label:'写作立场',required:false,scope:'editorial'},
   {key:'confirmed_facts',label:'已确认事实',required:true,scope:'editorial'},
-  {key:'author_opinions',label:'明确观点',required:true,scope:'editorial'},
+  {key:'author_opinions',label:'明确观点',required:false,scope:'editorial'},
   {key:'angle',label:'写作角度',required:true,scope:'candidate'},
   {key:'thesis',label:'锁定命题',required:true,scope:'candidate'},
+  {key:'evidence_boundary',label:'论点—论据对应与证据边界',required:true,scope:'editorial'},
   {key:'adopted_research_points',label:'采用的研判拓展点',required:false,scope:'editorial'},
   {key:'research_basis',label:'采用的研判主线',required:false,scope:'editorial'},
   // 读者后果与冲突由规划阶段可依据事实和命题提出草案；只有核心事实、角度或风险不清时才需要作者补充。
@@ -69,6 +91,7 @@ export function resolveEditorialMode(candidate={}){
 }
 
 export function editorialFieldComplete(field,value){
+  if(field.key==='article_type')return EDITORIAL_ARTICLE_TYPES.includes(String(value??'').trim());
   if(field.key==='writing_stance'){const normalized=String(value??'').trim().toLowerCase();return !normalized||WRITING_STANCES.includes(normalized);}
   if(field.key==='research_basis')return researchBasisDecision(value);
   if(field.key==='confirmed_facts')return confirmedFactsDecision(value);
@@ -91,7 +114,7 @@ export function evaluateEditorialReadiness({candidate={},editorial={}}={}){
     const value=field.key==='adopted_research_points'
       ? rawValue.map((item)=>item.statement).join('；')
       : rawValue;
-    const required=field.required;
+    const required=requiredForField(field,{candidate,editorial});
     return {...field,required,value,rawValue,ok:editorialFieldComplete(field,rawValue)};
   });
   const missing=fields.filter((field)=>field.required&&!field.ok).map((field)=>field.label);
