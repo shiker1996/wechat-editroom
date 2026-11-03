@@ -198,11 +198,20 @@ npm run jianzi -- batch collect --batch <批次ID>
 npm run jianzi -- batch ranking --batch <批次ID>
 ```
 
+外部 Agent 完成热点打标和全部事件事实卡后，调用 `jianzi_research_stage_prepare`。工作台返回原研判 pipeline 下一次模型调用的 `messages`、`jsonMode`、`tools` 和 `taskId`；Agent 根据这些输入生成原始结果，再调用 `jianzi_research_stage_submit`。重复到返回 `completed`，工作台会按原有规则生成文章候选池和图文预选池。这个过程无需在工作台配置模型。中途更改热点或事件卡时，用 `prepare` 的 `reset: true` 重新开始。
+
+同一流程也可通过 CLI 执行，JSON 阶段的文件填写 JSON 对象，单事件研判报告填写 Markdown：
+
+```powershell
+npm run jianzi -- research prepare --batch <批次ID>
+npm run jianzi -- research submit --batch <批次ID> --task <任务ID> --file <输出文件>
+```
+
 AI 自动研判可使用 `npm run jianzi -- batch auto --batch <批次ID>`。命令返回后台任务时，使用 `npm run jianzi -- job wait --job <任务ID> --timeout 240` 等待，并根据任务最终状态报告结果。
 
 ### 6.2 文章成稿、排版与封面
 
-> 从批次 `<批次ID>` 的候选中，结合账号画像比较选题。先向我说明事实依据、未知项和风险；我确认后再锁定候选、生成文章终稿，并继续生成 AI 排版和封面。
+> 从批次 `<批次ID>` 的候选中，结合账号画像比较选题。对选中的候选，先调用项目原文抓取工具并核对结果，再向我说明事实依据、未知项和风险；我确认编辑判断后锁题并生成待审草稿。请明确告知草稿状态，等我审阅并确认文章内容后再标记终稿、继续生成 AI 排版和封面。编辑判断确认不等于终稿确认。
 
 默认由 Codex 当前会话完成文章、排版和封面，再通过外部 Agent MCP 提交工具保存；见字执行门禁并归档。只有用户明确要求见字内部 AI 时，才调用内部生成工具并确认模型已配置。排版、封面或图文提交成功后，从工具结果 `artifactEntries` 取出预览入口，在最终回复中附上可点击链接；异步任务则从 `jianzi_job_wait` 结果读取入口。
 

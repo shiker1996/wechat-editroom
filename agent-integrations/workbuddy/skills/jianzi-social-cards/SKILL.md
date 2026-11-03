@@ -12,4 +12,4 @@ description: 在见字工作台中研判图文选题、制定故事板、生成 
 5. 检查页数、每页目标、证据对应关系、事实覆盖、开头和结尾。故事板方案需用户认可后调用 `jianzi_card_lock`。
 6. 默认由外部 Agent 按故事板与事实基座，为本次生成新的视觉方案，再生成分页 HTML 与配套文案。生成过程中调用 `jianzi_card_visual_audit` 审计整组或逐页 HTML；按报告修复溢出后重新审计。最终通过 `jianzi_card_visual_submit` 一并提交方案和产物，工作台会再次执行页数与文案门禁、浏览器审计、PNG 截图和归档。
 7. `jianzi_card_storyboard_generate` 和 `jianzi_card_generate` 是见字内部模型路径；只有用户明确要求时使用。提交工具成功返回后，才能说明 HTML/PNG 已通过工作台门禁。
-8. 图文提交或生成成功后，从工具结果的 `artifactEntries` 取出事件图文入口 URL，并在最终回复中提供可点击链接；异步任务在 `jianzi_job_wait` 的最终结果中也会返回入口。不能只说“已生成”而遗漏 HTML/PNG 的查看和下载入口。
+8. 图文提交或生成成功后，从工具结果的 `artifactEntries` 取出与候选类型匹配的图文入口 URL（repository=工具图文、event=事件图文、custom=自定义图文），并在最终回复中提供可点击链接；异步任务在 `jianzi_job_wait` 的最终结果中也会返回入口。不能只说“已生成”而遗漏 HTML/PNG 的查看和下载入口。

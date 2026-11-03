@@ -51,6 +51,7 @@ export async function evaluateProjectReaderValue({ gateway, workspaceRoot, proje
     const scored = results.map(scoreProjectReaderValue);
     return { ...base, status: 'completed', results: scored, input, skill: bundle?.skill || 'project-reader-value', callId: result.callId || null, usage: result.usage || null };
   } catch (error) {
+    if (error.code === 'EXTERNAL_STAGE_PENDING' || error.code === 'EXTERNAL_STAGE_REPLAY_CONFLICT') throw error;
     return { ...base, status: 'failed', reason: text(error?.message || error, 240), input };
   }
 }

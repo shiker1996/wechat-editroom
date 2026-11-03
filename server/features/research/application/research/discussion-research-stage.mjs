@@ -1440,6 +1440,7 @@ export async function screenReaderImpactEvents({ gateway, store, events = [], ba
       items.push(...normalized);
       audit.push({ chunk: index + 1, event_ids: chunk.map((item) => item.event_id), returned_count: normalized.length, requests, responses });
     } catch (error) {
+      if (error.code === 'EXTERNAL_STAGE_PENDING' || error.code === 'EXTERNAL_STAGE_REPLAY_CONFLICT') throw error;
       audit.push({ chunk: index + 1, event_ids: chunk.map((item) => item.event_id), returned_count: 0, requests, responses, error: String(error?.message || error) });
       onProgress('全量读者影响初筛第 ' + (index + 1) + '/' + chunks.length + ' 批未完成；本批不补入深研范围');
     }
@@ -1927,6 +1928,7 @@ export async function generateDiscussionResearchSinglePass({ gateway, store, eve
       }
       reports.push(parsedReport);
     } catch (error) {
+      if (error.code === 'EXTERNAL_STAGE_PENDING' || error.code === 'EXTERNAL_STAGE_REPLAY_CONFLICT') throw error;
       onModelResponse?.({
         phase: 'single_event',
         attempt: 0,

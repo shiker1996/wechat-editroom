@@ -382,7 +382,17 @@ export async function aiReviewGate({gateway,store,provider,batchId,candidateId,a
     evidence_checks_status: 'model_omitted' }, article);
 }
 
-export async function runArticlePipeline({gateway,store,batchId,candidateId,provider,workspaceRoot,snapshotId=null,skillSelection=null,stageSelections=null,articleLength=null,rootRunId=null,workflowRunId=null,onProgress=()=>{}}) {
+export function buildArticleFactBaseRequest({ provider, batchId, candidateId, brief }) {
+  return { provider, purpose: 'article-fact-base', batchId, candidateId, jsonMode: true, messages: [
+    { role: 'system', protected: true, content: ARTICLE_PROMPTS.facts },
+    { role: 'user', protected: true, content: JSON.stringify({ topic: brief.topic, researchBasis: brief.researchBasis,
+      adoptedResearchPoints: brief.adoptedResearchPoints, rejectedAngles: brief.rejectedAngles,
+      confirmedFacts: brief.confirmedFacts, authorOpinions: brief.authorOpinions, forbiddenClaims: brief.forbiddenClaims,
+      materialBrief: brief.materialBrief, sourceUrl: brief.sourceUrl, sourceText: brief.sourceText || '' }) },
+  ] };
+}
+
+export function prepareArticlePipelineContext({ store, batchId, candidateId, workspaceRoot }) {
   const candidate=store.getCandidate(candidateId); if(!candidate||candidate.batch_id!==batchId)throw new Error('候选不存在或不属于当前批次');
   const classification = { editorial_category: candidate.editorial_category || '', material_type: candidate.material_type || '',
     article_route_approved: Boolean(candidate.article_route_approved), article_eligible: Boolean(candidate.article_eligible),
@@ -400,7 +410,6 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   // F 分数只决定自动入池；能完成编辑会并锁定简报，表示作者已人工确认该选题，
   // 手动确认的低分选题也应允许进入成稿链。
   const batch=store.getBatch(batchId); const workdir=candidateArticleDir(workspaceRoot,batch,candidate);
-  fs.mkdirSync(workdir,{recursive:true}); let providerConfig=gateway.config.providers[provider||gateway.config.defaultProvider];
   const sourceInput=readArticleSourceInput({candidate,workspaceRoot,store});
   const sourceUrls=sourceInput.sourceUrls.join(String.fromCharCode(10));
   const readerStake=String(candidate.reader_stake||'').trim();
@@ -426,6 +435,15 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   // 原文用于准备事实记录，正文写作只消费可追溯的记录。
   if (sourceInput.issue) throw Object.assign(new Error(sourceInput.issue), { fatalSourceCache: true });
   brief.sourceText=sourceInput.sourceText;
+  return { candidate, classification, editorial, batch, workdir, articleType, stanceDecision, writingStance,
+    citationPolicy, visualDecision, brief };
+}
+
+export async function runArticlePipeline({gateway,store,batchId,candidateId,provider,workspaceRoot,snapshotId=null,skillSelection=null,stageSelections=null,articleLength=null,rootRunId=null,workflowRunId=null,onProgress=()=>{}}) {
+  const { candidate, classification, editorial, batch, workdir, articleType, stanceDecision, writingStance,
+    citationPolicy, visualDecision, brief } = prepareArticlePipelineContext({ store, batchId, candidateId, workspaceRoot });
+  fs.mkdirSync(workdir,{recursive:true});
+  let providerConfig=gateway.config.providers[provider||gateway.config.defaultProvider];
   const historicalSnapshot=snapshotId?store.getGenerationSnapshot?.(snapshotId):null;
   const historicalWriter=historicalSnapshot?.snapshot?.selection?.selectedSkill
     ||historicalSnapshot?.snapshot?.skills?.[0]?.id;
@@ -514,10 +532,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   // parseModelJson 只能看到半截 JSON，后续成稿不会开始。
   // Always regenerate from the locked brief and current source inputs. An older
   // editor-room preflight artifact is only a readiness snapshot, never a fact-base cache.
-  const rawFactBase=parseJsonResult(await gateway.complete({provider,purpose:'article-fact-base',batchId,candidateId,jsonMode:true,messages:[
-      {role:'system',protected:true,content:ARTICLE_PROMPTS.facts},
-      {role:'user',protected:true,content:JSON.stringify({topic:brief.topic,researchBasis:brief.researchBasis,adoptedResearchPoints:brief.adoptedResearchPoints,rejectedAngles:brief.rejectedAngles,confirmedFacts:brief.confirmedFacts,authorOpinions:brief.authorOpinions,forbiddenClaims:brief.forbiddenClaims,materialBrief:brief.materialBrief,sourceUrl:brief.sourceUrl,sourceText:brief.sourceText||''})},
-    ]}),store);
+  const rawFactBase=parseJsonResult(await gateway.complete(buildArticleFactBaseRequest({ provider, batchId, candidateId, brief })),store);
   const factBase=enrichFactBaseClaims(rawFactBase,{citationPolicy});
   brief.factBase=factBase;
   const publicationClaimRegister=buildPublicationClaimRegister(factBase,{citationPolicy});

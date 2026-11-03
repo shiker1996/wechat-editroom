@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { deriveEventKey, normalizeEventParts, tagBatch } from '../../../features/research/llm/tasks.mjs';
-import { ensureBatchEventCards, loadStableBatchEvents, resolveScoring } from '../../../features/research/index.mjs';
+import { advanceExternalResearch, ensureBatchEventCards, loadStableBatchEvents, resolveScoring } from '../../../features/research/index.mjs';
 import { resolveArticleStageSkills } from '../../skills/entry-routing.mjs';
 import { isFreshForBatch } from '../../../features/research/index.mjs';
 import { dailyFocusOptions } from '../../../features/articles/index.mjs';
@@ -14,6 +14,25 @@ import { tagsOf } from '../../../features/research/domain/hotspot-clustering.mjs
 
 export async function handleTaskRoutes({ request, response, pathname, searchParams, store, body, json, aiJobs, jobs, models, root, config,
   batchWorkdir, batchMaxAgeHours }) {
+  const externalStageMatch = pathname.match(/^\/api\/batches\/([^/]+)\/external\/research-stage\/(prepare|submit)$/);
+  if (externalStageMatch && request.method === 'POST') {
+    const batchId = decodeURIComponent(externalStageMatch[1]);
+    const batch = store.getBatch(batchId);
+    if (!batch) return respond(json, response, 404, { error: '批次不存在' });
+    const input = await body(request) || {};
+    if (externalStageMatch[2] === 'submit' && (typeof input.taskId !== 'string' || !input.taskId.trim()
+      || !Object.hasOwn(input, 'output'))) {
+      return respond(json, response, 400, { error: '提交阶段结果须提供 taskId 和 output' });
+    }
+    try {
+      const result = await advanceExternalResearch({ store, batchId, workspaceRoot: config.workspaceRoot,
+        maxAgeHours: batchMaxAgeHours(batch), ...(externalStageMatch[2] === 'submit'
+          ? { taskId: input.taskId, output: input.output } : { reset: input.reset === true }) });
+      return respond(json, response, result.status === 'pending' ? 202 : 200, result);
+    } catch (error) {
+      return respond(json, response, error.statusCode || 422, { error: error.message });
+    }
+  }
   const pipelineFailureGate=(batchId,stages,action)=>{const failures=store.listPipelineFailures(batchId,{statuses:['open','retrying'],stages});return failures.length
     ?{error:`上游环节仍有 ${failures.length} 条待处理失败，请先重试或跳过后再${action}`,code:'PIPELINE_FAILURES_PENDING',failureCount:failures.length,stages}:null;};
   const failureRetryMatch=pathname.match(/^\/api\/batches\/([^/]+)\/pipeline-failures\/(\d+)\/retry$/);
@@ -64,7 +83,9 @@ export async function handleTaskRoutes({ request, response, pathname, searchPara
     const batchId = decodeURIComponent(externalEventsMatch[1]);
     const batch = store.getBatch(batchId);
     if (!batch) return respond(json,response,404,{error:'批次不存在'});
-    const hotspots = batch.hotspots.filter(isResearchEligibleHotspot).filter((item)=>isFreshForBatch(item,batch.batch_date,batchMaxAgeHours(batch))).filter((item)=>{const tags=tagsOf(item);return tags.eventKey&&tags.preScores;});
+    const hotspots = batch.hotspots.filter(isResearchEligibleHotspot).filter((item)=>isFreshForBatch(item,batch.batch_date,batchMaxAgeHours(batch)));
+    const missing = hotspots.filter((item)=>{const tags=tagsOf(item);return !tags.eventKey||!tags.preScores;}).length;
+    if (missing) return respond(json,response,409,{error:`仍有 ${missing} 条热点缺少完整语义标注，请先完成打标`});
     if (!hotspots.length) return respond(json,response,409,{error:'请先完成批次热点打标'});
     const events = resolveStableBatchEvents({store,workspaceRoot:config.workspaceRoot,batch,hotspots});
     for(const [kind,name] of [['稳定事件聚类','event-clusters.json'],['事件归并影子','event-resolution-shadow.json']]){const filePath=path.join(batchWorkdir(batch),'sources',name);if(fs.existsSync(filePath)){const stat=fs.statSync(filePath);store.upsertArtifact({batchId,kind,name,path:filePath,size:stat.size,modifiedAt:stat.mtime.toISOString()});}}
@@ -79,7 +100,9 @@ export async function handleTaskRoutes({ request, response, pathname, searchPara
     if (!batch) return respond(json,response,404,{error:'批次不存在'});
     const input = await body(request);
     if (!Array.isArray(input.items)||input.items.length<1||input.items.length>200) return respond(json,response,400,{error:'items 必须包含 1–200 张事件卡'});
-    const hotspots = batch.hotspots.filter(isResearchEligibleHotspot).filter((item)=>isFreshForBatch(item,batch.batch_date,batchMaxAgeHours(batch))).filter((item)=>{const tags=tagsOf(item);return tags.eventKey&&tags.preScores;});
+    const hotspots = batch.hotspots.filter(isResearchEligibleHotspot).filter((item)=>isFreshForBatch(item,batch.batch_date,batchMaxAgeHours(batch)));
+    const missing = hotspots.filter((item)=>{const tags=tagsOf(item);return !tags.eventKey||!tags.preScores;}).length;
+    if (missing) return respond(json,response,409,{error:`仍有 ${missing} 条热点缺少完整语义标注，请先完成打标`});
     const events = resolveStableBatchEvents({store,workspaceRoot:config.workspaceRoot,batch,hotspots});
     const expected = new Map(events.map((event)=>[String(event.event_id),event]));
     const ids = new Set();

@@ -16,35 +16,43 @@ export class JianziApiClient {
     this.csrfToken = '';
   }
 
+  async refreshCsrfToken() {
+    const session = await this.fetch(`${this.baseUrl}/api/security/session`, { headers: { accept: 'application/json' } });
+    const sessionData = await readResponse(session);
+    this.csrfToken = String(sessionData.csrfToken || '');
+    if (!this.csrfToken) throw new Error('工作台未返回本地会话令牌，请刷新或重启工作台');
+  }
+
   async request(method, pathname, body) {
     const verb = String(method || 'GET').toUpperCase();
     if (!pathname.startsWith('/api/')) throw new Error('API 路径必须以 /api/ 开头');
-    const headers = { accept: 'application/json' };
-    if (!['GET', 'HEAD', 'OPTIONS'].includes(verb)) {
-      if (!this.csrfToken) {
-        const session = await this.fetch(`${this.baseUrl}/api/security/session`, { headers: { accept: 'application/json' } });
-        const sessionData = await readResponse(session);
-        this.csrfToken = String(sessionData.csrfToken || '');
-        if (!this.csrfToken) throw new Error('工作台未返回本地会话令牌，请刷新或重启工作台');
+    const requiresCsrf = !['GET', 'HEAD', 'OPTIONS'].includes(verb);
+    if (requiresCsrf && !this.csrfToken) await this.refreshCsrfToken();
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const headers = { accept: 'application/json' };
+      if (requiresCsrf) {
+        headers['x-csrf-token'] = this.csrfToken;
+        headers['content-type'] = 'application/json';
       }
-      headers['x-csrf-token'] = this.csrfToken;
-      headers['content-type'] = 'application/json';
-    }
-    const response = await this.fetch(`${this.baseUrl}${pathname}`, {
-      method: verb,
-      headers,
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      signal: AbortSignal.timeout(120_000),
-    });
-    const data = await readResponse(response);
-    if (!response.ok) {
+      const response = await this.fetch(`${this.baseUrl}${pathname}`, {
+        method: verb,
+        headers,
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        signal: AbortSignal.timeout(120_000),
+      });
+      const data = await readResponse(response);
+      if (response.ok) return data;
+      if (attempt === 0 && requiresCsrf && data.code === 'CSRF_INVALID') {
+        await this.refreshCsrfToken();
+        continue;
+      }
       const error = new Error(data.error || data.message || `工作台请求失败（HTTP ${response.status}）`);
       error.code = data.code || `HTTP_${response.status}`;
       error.status = response.status;
       error.details = data;
       throw error;
     }
-    return data;
   }
 
   get(pathname) { return this.request('GET', pathname); }

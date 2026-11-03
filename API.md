@@ -625,6 +625,15 @@ AI 规划配图占位
 ### POST /api/batches/:id/external/research
 提交外部 Agent 的事件研判与选题。`items` 为 1–200 项；每项须引用稳定 `eventId` 和属于该事件的一个或多个 `hotspotIds`，并提供 `thesis`、`reason`；可附标题、角度、读者收益、风险、推荐轨道和评分。提交前必须有覆盖全部已打标稳定事件的事件事实卡。报告保存至 `sources/external-research-report.json` 并登记为产物。
 
+### POST /api/batches/:id/external/research-stage/prepare
+外部 Agent 完成打标和事件卡后领取原研判流程的下一项模型任务；可传 `reset: true` 清除本批次外部阶段记录并重新开始。返回 `pending` 时包含任务 ID、消息和输出格式，返回 `completed` 时包含最终结果。
+
+### POST /api/batches/:id/external/research-stage/submit
+提交 `{ taskId, output }` 并继续研判；JSON 阶段提交对象，文本阶段提交字符串。相同结果重试返回当前状态；输入或阶段快照变化时返回冲突。
+
+### POST /api/external/article/local-audit
+提交 `{ article, factBase? }`，复用文章流程的本地结构、默认字数和标题风险检查；返回结果不代表完成事实核验或模型审稿。
+
 ### POST /api/batches/:id/external/typeset
 提交外部 Agent 生成的文章排版 HTML。请求需提供同批次的 `candidateId` 和 `html`，候选必须已有文章终稿。工作台会拒绝脚本、外部样式资源或结构缺失的 HTML，再运行公众号 HTML 规范化与门禁；成功后保存并登记 `article.ai.html`。可附 `designScheme` 作为方案记录。
 

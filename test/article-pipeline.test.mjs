@@ -302,7 +302,7 @@ test('热点文章契约明确拒绝伪装教程、工具清单和纯快讯',()=
 
 test('运行时删除大纲调用和读写依赖，保留研判输入和产物清单', () => {
   const source = fs.readFileSync(new URL('../server/features/articles/application/article-pipeline.mjs', import.meta.url), 'utf8');
-  const runtime = source.slice(source.indexOf('export async function runArticlePipeline'));
+  const runtime = source.slice(source.indexOf('export function prepareArticlePipelineContext'));
   assert.doesNotMatch(runtime, /02-outline\.md|article-planning|buildDraftOutlineView|buildArticlePlanningView/);
   assert.match(runtime, /researchBasis:editorial.research_basis/);
   assert.match(runtime, /packaging: \{ distributionLane: brief.distributionLane, readerStake: brief.readerStake \}/);

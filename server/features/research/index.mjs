@@ -25,6 +25,7 @@ export {
   topicValueForEvent,
   runResearchPipeline,
 } from './application/research-pipeline.mjs';
+export { advanceExternalResearch } from './application/external-research-stage-bridge.mjs';
 
 export { eventGroupsForCandidate, resolveEventAnalysis, synthesizeEventAnalysis } from './application/event-fact-service.mjs';
 export { enrichEventAnalysis, readEventAnalysisCache, sourceInput as eventResearchSourceInput, sourceSignature as eventResearchSourceSignature } from './application/event-research-analysis.mjs';
