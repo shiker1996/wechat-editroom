@@ -23,8 +23,10 @@
 在终端添加项目提供的 Codex 插件市场：
 
 ```powershell
-codex plugin marketplace add shiker1996/wechat-editroom --ref master --sparse agent-integrations/codex-marketplace
+codex plugin marketplace add shiker1996/wechat-editroom --ref master --sparse .agents/plugins --sparse agent-integrations/codex-marketplace/plugin
 ```
+
+这里需要同时检出市场清单目录和插件目录；`--sparse` 是仓库内的检出路径，市场清单固定放在 `.agents/plugins/marketplace.json`。
 
 然后在 Codex 的 Plugins 目录中找到并安装 `jianzi-workbench-setup`。Codex 官方说明支持通过 `codex plugin marketplace add` 添加带 Git ref 和 sparse 路径的插件市场，插件本身通过 Plugins 目录安装。[Codex 插件市场说明](https://developers.openai.com/plugins/build/plugins)
 

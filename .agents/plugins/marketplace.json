@@ -9,7 +9,7 @@
       "name": "jianzi-workbench-setup",
       "source": {
         "source": "local",
-        "path": "./plugin"
+        "path": "./agent-integrations/codex-marketplace/plugin"
       },
       "policy": {
         "installation": "AVAILABLE",
