@@ -148,11 +148,11 @@ test('只读接口返回消费者清单与详情，且不泄漏本地路径与�
   const missing=await callApi(null,'/api/system/capability-consumers/agent.unknown');
   assert.equal(missing.status,404);
   // 阶段 C：无归属技能消费者详情返回 skillAuthorizations（授权载体即自身）
-  const skill=await callApi(null,'/api/system/capability-consumers/wechat-mp-composite');
+  const skill=await callApi(null,'/api/system/capability-consumers/wechat-mp-tech-hotspot');
   assert.equal(skill.status,200);assert.equal(skill.data.type,'skill');
-  assert.deepEqual(skill.data.runtimeSkillIds,['wechat-mp-composite']);
+  assert.deepEqual(skill.data.runtimeSkillIds,['wechat-mp-tech-hotspot']);
   assert.equal(skill.data.skillAuthorizations.length,1);
-  assert.equal(skill.data.skillAuthorizations[0].skillId,'wechat-mp-composite');
+  assert.equal(skill.data.skillAuthorizations[0].skillId,'wechat-mp-tech-hotspot');
   assert.ok(skill.data.skillAuthorizations[0].editable.includes('cap_content_url_fetch'));
   const skillRow=skill.data.capabilities.find((item)=>item.capability==='cap_content_url_fetch');
   assert.equal(skillRow.skillAuthorizations[0].editable,true);assert.equal(skillRow.skillAuthorizations[0].allowed,true);

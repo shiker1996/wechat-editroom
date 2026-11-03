@@ -280,14 +280,14 @@ test('选题评分贯通分发池与读者利益并拦截伪通知', () => {
 
 test('通知池按最终分最多保留两条，非法推荐技能回退到可路由枚举', () => {
   const cards=[1,2,3].map((id)=>({candidateId:`C00${id}`,status:'PASS',source:{title:`平台变更${id}`,category:'🤖 AI/技术动态',poolRole:'核心8条',credibleScoop:0,riskLevel:'低'},
-    angle:'接口迁移',thesis:'平台变更要求迁移',recommendedSkill:'tool-review',
+    angle:'接口迁移',thesis:'平台变更要求迁移',recommendedArticleType:'tool-review',
     packaging:{distributionLane:'通知池',readerStake:`使用旧接口的开发者必须在8月前迁移，否则发布流程会中断并增加维护成本${id}`,notificationFit:5},
     bScores:{angleUniqueness:4,emotionSpread:4,titleHook:4,audienceRelevance:4,factSupport:5},
     hProfile:{historicalType:'bigtech',fiveSenseCount:4,fiveQuestionCount:3,recommendationFit:6,emotionTheme:4,searchFriendly:3}}));
   const scored=scoreCards(cards,{items:[]});
   assert.deepEqual(scored.map((item)=>item.distributionLane),['通知池','通知池','实验池']);
   assert.ok(scored[2].notificationBlockers.includes('batch-notification-quota'));
-  assert.ok(scored.every((item)=>item.recommendedSkill==='wechat-mp-tech-hotspot'));
+  assert.ok(scored.every((item)=>item.articleType==='wechat-mp-tech-hotspot'&&!Object.hasOwn(item,'recommendedSkill')));
 });
 
 test('图文推荐基于 GitHub 来源识别工具类候选', () => {

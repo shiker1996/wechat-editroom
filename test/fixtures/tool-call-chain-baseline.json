@@ -475,32 +475,8 @@
       "optionalCapabilities": []
     },
     {
-      "id": "wechat-mp-composite",
-      "name": "综合热点文章",
-      "requiredCapabilities": [],
-      "optionalCapabilities": [
-        "cap_content_url_fetch"
-      ]
-    },
-    {
       "id": "wechat-mp-daily",
       "name": "批次早报",
-      "requiredCapabilities": [],
-      "optionalCapabilities": [
-        "cap_content_url_fetch"
-      ]
-    },
-    {
-      "id": "wechat-mp-deep-dive",
-      "name": "深度分析文章",
-      "requiredCapabilities": [],
-      "optionalCapabilities": [
-        "cap_content_url_fetch"
-      ]
-    },
-    {
-      "id": "wechat-mp-gossip-chill",
-      "name": "轻松职场趣闻",
       "requiredCapabilities": [],
       "optionalCapabilities": [
         "cap_content_url_fetch"
@@ -514,14 +490,6 @@
         "cap_content_web_search",
         "cap_content_news_search",
         "cap_content_document_search"
-      ]
-    },
-    {
-      "id": "wechat-mp-tech-deep",
-      "name": "技术深解文章",
-      "requiredCapabilities": [],
-      "optionalCapabilities": [
-        "cap_content_url_fetch"
       ]
     },
     {

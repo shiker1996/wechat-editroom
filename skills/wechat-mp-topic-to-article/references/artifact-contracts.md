@@ -14,6 +14,7 @@ articles/<topic-slug>/
   03-titles.md
   04-draft.md
   04-quality-gate.json
+  05-full-edited.md
   05-humanized.md
   06-reviewed.md
   07-seo-keywords.md       # SEO 未启用时保存跳过说明，便于审计
@@ -104,13 +105,15 @@ articles/<topic-slug>/
 - 唯一一行 `SELECTED_TITLE: ...`
 - `writer_skill: ...`
 
-### 04-draft.md / 05-humanized.md
+### 04-draft.md / 05-full-edited.md / 05-humanized.md
 
 第一行是唯一 H1 标题。读者应能从正文链接、自然归因、脚注或文末来源说明追溯关键事实，按文章选择一种清楚、轻量的方式。相同来源支撑的连续事实只在事实簇首次出现时归因；不得机械添加“来源：”或“来源：同上”，也不得逐句重复来源标签。
 
+自动成稿链将 `04-draft.md` 经过审稿和必要的字数调整后，原样写入 `05-full-edited.md` 和 `05-humanized.md`；这是旧文件名兼容产物，不代表又执行了 AI 全篇编辑或表达改写。
+
 `04-quality-gate.json` 保存初稿语义门禁结果，不进入正文。
 
-`05-voice-quality-gate.json` 保存自然化后的独立风格门禁结果、问题引文和返修轮数。门禁只记录具体、可定位且有实质影响的问题；最多自动返修一次。仍不通过时继续完成后续审稿、SEO 和终稿，最终文稿标记为待人工复核；问题在编辑室展示，人工确认前不得作为已通过稿发布。门禁问题引文统一保存为 `evidence`，兼容旧结果中的 `quote` 字段。
+旧版产物可能包含 `05-voice-quality-gate.json`。当前热点成稿链不运行独立 voice-quality-gate；只保留事实与逻辑审稿、发布门禁和确定性输出检查。
 
 ### 06-reviewed.md
 

@@ -1044,11 +1044,13 @@ async function loadLogs(logType) {
           ? `<details class="log-expand"><summary>${escapeHtml(message.slice(0, 200))}…</summary><span>${escapeHtml(message)}</span></details>`
           : `<span>${escapeHtml(message)}</span>`;
         const logKey = `${item.log_type}:${item.id}`;
-        const providerDisplay=item.log_type === "model" ? (item.provider_display || [item.provider,item.model].filter(Boolean).join(" · ")) : item.provider;
+        const providerDisplay=item.log_type === "model" ? (item.provider_display || [item.provider,item.model].filter(Boolean).join(" · ")) : item.provider_display;
+        const providerLabel=item.log_type === "model" ? "供应商 / 模型" : "实际供应商 / 模型";
+        const providerHint=item.log_type === "ai" ? "实际模型请查看「模型调用」记录" : item.log_type === "collection" ? "采集来源请查看「来源明细」记录" : "";
         const traceButton = item.root_run_id ? `<button type="button" class="inline-button log-trace-button" data-open-run-trace="${escapeHtml(item.root_run_id)}">${item.log_type === "collection" ? "查看采集 Workflow Trace" : "查看 Run Trace"}</button>` : "";
         const cancelButton = item.log_type === "ai" && item.status === "queued" ? `<button type="button" class="inline-button log-cancel-job-button" data-cancel-ai-job="${escapeHtml(item.id)}">取消排队</button>` : "";
         const actions = traceButton || cancelButton ? `<div class="log-actions">${traceButton}${cancelButton}</div>` : "";
-        return `<article class="log-entry ${sc}"><div class="log-head"><span class="log-type-badge">${tl}</span><time>${escapeHtml(ts)}</time>${item.batch_id ? `<span class="log-batch">${escapeHtml(item.batch_id)}</span>` : ""}<span class="log-status status-pill ${sc}">${escapeHtml(item.status)}</span></div><div class="log-body"><code>${escapeHtml(item.subtype || "")}</code>${body}</div>${providerDisplay ? `<div class="log-meta"><span>${item.log_type === "model" ? "供应商 / 模型" : "服务商"}：${escapeHtml(providerDisplay)}</span></div>` : ""}${actions}${item.log_type === "model" ? renderModelDetail(item, logKey) : ""}</article>`;
+        return `<article class="log-entry ${sc}"><div class="log-head"><span class="log-type-badge">${tl}</span><time>${escapeHtml(ts)}</time>${item.batch_id ? `<span class="log-batch">${escapeHtml(item.batch_id)}</span>` : ""}<span class="log-status status-pill ${sc}">${escapeHtml(item.status)}</span></div><div class="log-body"><code>${escapeHtml(item.subtype || "")}</code>${body}</div>${providerDisplay ? `<div class="log-meta"><span>${providerLabel}：${escapeHtml(providerDisplay)}</span></div>` : providerHint ? `<div class="log-meta"><span>${providerHint}</span></div>` : ""}${actions}${item.log_type === "model" ? renderModelDetail(item, logKey) : ""}</article>`;
       }).join("")
     : `<div class="empty-state">${logs.length ? "没有符合当前筛选条件的日志。" : "暂无日志记录。"}</div>`;
   list.querySelectorAll("details[data-log-detail]").forEach((detail) => {

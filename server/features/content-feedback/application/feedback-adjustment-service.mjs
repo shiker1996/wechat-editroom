@@ -14,18 +14,13 @@ export { applySkillEdits } from '../domain/skill-editing.mjs';
 
 export const FEEDBACK_ADJUSTMENT_VERSION = 'v7';
 export const WRITER_SKILL_IDS = Object.freeze([
-  'wechat-mp-tech-hotspot', 'wechat-mp-tech-deep', 'wechat-mp-deep-dive',
-  'wechat-mp-gossip-chill', 'wechat-mp-tutorial', 'wechat-mp-personal-writing', 'wechat-mp-daily', 'wechat-mp-composite',
+  'wechat-mp-tech-hotspot', 'wechat-mp-tutorial', 'wechat-mp-personal-writing', 'wechat-mp-daily',
 ]);
 export const WRITER_SKILL_LABELS = Object.freeze({
   'wechat-mp-tech-hotspot': '技术热点快评',
-  'wechat-mp-tech-deep': '技术深解',
-  'wechat-mp-deep-dive': '行业 / 职场深度',
-  'wechat-mp-gossip-chill': '轻松职场 / 趣闻',
   'wechat-mp-tutorial': '工具教程',
   'wechat-mp-personal-writing': '主动写作',
   'wechat-mp-daily': '大厂早报',
-  'wechat-mp-composite': '综合热点文章',
 });
 
 const ALLOWED_SCORING_KEYS = new Set(['weights', 'eventValueWeight', 'researchValueWeight', 'accountFit', 'accountFitByCategory', 'accountFitBonus', 'toolEngineeringBonus', 'minimumToolCandidates', 'categoryPreference', 'pBase', 'hBase', 'notificationPolicy']);

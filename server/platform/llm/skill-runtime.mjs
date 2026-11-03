@@ -91,21 +91,6 @@ export function loadSkillBundle({ workspaceRoot, skillName }) {
   return { skillName, prompt:'', files:[], hash:'', fallback:true,manifest:null,manifestStatus:'missing' };
 }
 
-export function loadArticleSkillBundle({ workspaceRoot, writerSkill }) {
-  const orchestrator = loadSkillBundle({ workspaceRoot, skillName: 'wechat-mp-topic-to-article' });
-  const writer = loadSkillBundle({ workspaceRoot, skillName: writerSkill });
-  if (writer.fallback) return { writerSkill, prompt: '', files: [], hash: '', fallback: true };
-  const prompt = [orchestrator.prompt, writer.prompt].filter(Boolean).join('\n\n---\n\n');
-  return {
-    root: writer.root,
-    writerSkill,
-    prompt,
-    files: [...new Set([...(orchestrator.files || []), ...(writer.files || [])])],
-    hash: crypto.createHash('sha256').update(prompt).digest('hex'),
-    fallback: false,
-  };
-}
-
 export function selectSkillPromptReferences(prompt,{include=[]}={}) {
   const allowed=new Set(include.map((item)=>String(item).replaceAll('/','\\').toLowerCase()));
   return String(prompt||'').split('\n\n---\n\n').filter((part)=>{

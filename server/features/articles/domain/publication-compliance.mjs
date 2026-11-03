@@ -135,7 +135,11 @@ export function buildPublicationClaimRegister(factBase = {}, { citationPolicy = 
       evidenceKind: text(item?.evidenceKind || item?.evidence_kind) || 'source_observation',
       attributionRequired: item?.attributionRequired ?? item?.attribution_required ?? Boolean(item?.sourceUrl),
       visibleCitation: text(item?.visibleCitation || item?.visible_citation) || citationPolicy,
-      publicationRule: status === 'verified' ? '可作为确定事实，但仍需保留来源归因' : '不得作为确定事实；只能降格、归因或删除',
+      publicationRule: status === 'verified'
+        ? '可作为已核实事实表述，并准确归因来源'
+        : status === 'opinion'
+          ? '作为作者观点呈现；仅在关键事实前提被已核实事实反驳时才削弱'
+          : '准确归属为来源说法；核验状态留在记录中，不自动扩写成免责声明',
     };
   }).filter((item) => item.claim);
 }
@@ -226,14 +230,11 @@ export function scanPublicationRisk({ article = '', title = '', factBase = {} } 
 
 export function publicationCompliancePrompt({ factBase = {}, claimRegister = [], scan = {}, writingStance = 'analysis', citationPolicy = 'cluster' } = {}) {
   return `发布合规专项要求：
-- 当前写作立场为 ${writingStance}，内部引用策略为 ${citationPolicy}。事实基座和主张登记是已有证据台账，不是唯一允许来源；审稿必须使用联网搜索核验关键主张，并可用可追溯的新来源补充。将新增核验结果记录到 evidence_checks，正文按来源簇自然归因，同一来源支撑的连续事实首次归因后不要求逐句重复。
-- 不能把传闻、匿名爆料、单方说法、模型推断或搜索摘要写成确定事实。
-- IPO、上市、估值、融资、破产、违法、诈骗、造假、压榨、性骚扰等高影响主张，必须检查直接证据、日期和归因；证据不足时必须删除、降格或停止发布。来源质量要区分硬阻塞和改进建议：已核验主张有可追溯 sourceUrl、文章明确归因时，聚合平台或二手媒体不是单独的失败理由；应要求正文说明“据某平台汇总”或其所引用的公告/财报，而不是要求模型自行补找原始链接。
-- 关键数字应有可追溯来源及统计期间、范围、适用时的分母/基数；同一原始报道的转载不算独立交叉验证。劳动权益、失业保险、福利资格、裁员/离职法律性质等结论必须写明适用国家/州/地区，并通过本次联网搜索核对该辖区可追溯的法律或官方原始来源；否则不得作为已核实的确定事实或写进确定性标题，只能准确归因于报道或删去。
-- 标题、摘要和前 200 字单独审核；正文中的限定语不能自动修复一个已经把传闻写成事实的标题。
-- 不能用“最后一次”“梦碎”“彻底失败”“必然”等绝对化或贬损化表达制造冲突，除非它是明确归因的原话且不会误导读者。
-- 争议内容应分别呈现各方说法并清楚归因；只有“是否得到独立确认”会改变读者判断时，才说明核验状态。归因已经清楚时，不再追加“这是单方说法”“尚未独立确认”等同义提醒。不要推断公司或个人动机。
-- 限定只保留会改变读者判断的部分。来源或具体数据口径已经在事实句中交代后，不要再补“不能外推”“不是普遍结论”等重复句；作者推断的依据和推理链清楚时，不要求补“这是判断”“不代表官方立场”等元话语。
+- 当前写作立场为 ${writingStance}，内部引用策略为 ${citationPolicy}。事实基座和主张登记是核验起点；使用联网搜索核验影响标题、核心结论和读者行动的事实，并将真实找到的证据及来源写入 evidence_checks。事实状态留在核验记录中，不自动扩写成正文限定。
+- 区分客观事实、来源转述和作者观点。可追溯来源支持的报道应准确归属一次；未核实不等于错误，也不要求反复声明“尚未确认”。同一来源支撑的连续事实可在首次出现时归因。
+- 作者可以基于事实提出解释和因果判断。只有观点的关键事实前提被已核实事实直接反驳或明确证伪时，才建议弱化或删除；缺少直接因果证据、存在其他解释、语气鲜明，都不构成反证。
+- 核验关键数字、统计期间、范围和适用时的分母。劳动权益、失业保险、福利资格及法律性质等客观法律主张，写明适用辖区并通过本次联网搜索核对该辖区的官方或法律原始来源；无法核实时，将具体事实作为准确归属的来源说法，不能包装成已核实的法律结论。
+- 标题、摘要和前 200 字单独审核；正文中的限定语不能自动修复一个把未经支持的事实写成确定结论的标题。检查隐私、名誉、法律、金融误导及版权风险。
 
 程序风险扫描（只作为需要重点核查的信号，不是程序对文章的最终定性）：
 ${JSON.stringify(scan)}
@@ -241,7 +242,7 @@ ${JSON.stringify(scan)}
 可用的事实主张登记：
 ${JSON.stringify(claimRegister)}
 
-请把必须修正的风险写入门禁 issues，并区分：publication_compliance、fact、title、citation、reputation、financial、privacy、copyright。只有本次联网搜索和现有来源都无法支持、来源不可追溯、争议/观点被写成确定事实、标题制造未经支持的高影响结论，或存在明确的法律/隐私/侵权风险时才阻止 pass；事实基座缺少某条证据本身不是失败理由。仅“建议追溯原始信源”或“聚合来源不是最佳来源”属于 citation 改进建议；如果当前事实已登记或由搜索补充且文章准确归因，不要仅因此返回 pass=false。高影响事实无法核验时不得返回 pass；已核验但来源层级较低的事实，应要求明确归因，而不是单独阻断。`;
+请把需要处理的问题写入门禁 issues，并区分：publication_compliance、fact、title、citation、reputation、financial、privacy、copyright。只有事实被已核实来源直接反驳、来源说法被误写成确定事实、标题作出未经支持的高影响事实承诺，或存在明确的法律/隐私/侵权风险时才阻止 pass。事实基座缺少证据、观点没有直接因果证明、存在其他解释，都不足以单独阻止 pass。高影响客观事实无法核验时不得按已核实事实通过；若正文准确呈现为可追溯来源的说法，来源层级较低或未能独立核实不单独阻断。仅“建议追溯更早来源”属于 citation 改进建议。`;
 }
 
 export function publicationComplianceIssue({ scan = {}, gate = {} } = {}) {

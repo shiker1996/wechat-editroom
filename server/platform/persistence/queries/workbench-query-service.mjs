@@ -417,7 +417,6 @@ export class WorkbenchQueryService {
         ? { ...row, workflow_status: workflowStatus }
         : { ...row, status: workflowStatus, workflow_status: workflowStatus };
     };
-    if(!rows.some((row)=>row.log_type==='model'))return rows.map(withWorkflowStatus);
     const connections=new Map();
     for(const row of this.db.prepare(`SELECT extension_id,value_json FROM extension_settings WHERE extension_type='model-connection' AND scope='workspace'`).all()){
       try{const value=JSON.parse(row.value_json||'{}');connections.set(row.extension_id,value);}catch{}
@@ -430,11 +429,35 @@ export class WorkbenchQueryService {
         modelProviders.set(row.extension_id,String(connection.label||value.connectionId||row.extension_id).trim());
       }catch{}
     }
+    const taskRows=rows.filter((row)=>['ai','collection'].includes(row.log_type));
+    const runIds=[...new Set(taskRows.flatMap((row)=>[row.root_run_id,row.workflow_run_id,row.agent_run_id].map((id)=>String(id||'').trim()).filter(Boolean)))];
+    const actualCallsByRunId=new Map();
+    if(runIds.length){
+      const placeholders=runIds.map(()=>'?').join(',');
+      const calls=this.db.prepare(`SELECT DISTINCT root_run_id, workflow_run_id, agent_run_id, provider, model
+        FROM model_calls WHERE root_run_id IN (${placeholders}) OR workflow_run_id IN (${placeholders}) OR agent_run_id IN (${placeholders})`)
+        .all(...runIds,...runIds,...runIds);
+      for(const call of calls){
+        const label=[modelProviders.get(call.provider)||call.provider,call.model].filter(Boolean).join(' · ');
+        if(!label)continue;
+        for(const id of [call.root_run_id,call.workflow_run_id,call.agent_run_id].map((value)=>String(value||'').trim()).filter(Boolean)){
+          if(!actualCallsByRunId.has(id))actualCallsByRunId.set(id,new Set());
+          actualCallsByRunId.get(id).add(label);
+        }
+      }
+    }
     return rows.map((row)=>{
       const statusRow = withWorkflowStatus(row);
-      if(statusRow.log_type!=='model')return statusRow;
-      const supplier=modelProviders.get(statusRow.provider)||statusRow.provider;
-      return {...statusRow,provider_display:[supplier,statusRow.model].filter(Boolean).join(' · ')};
+      if(statusRow.log_type==='model'){
+        const supplier=modelProviders.get(statusRow.provider)||statusRow.provider;
+        return {...statusRow,provider_display:[supplier,statusRow.model].filter(Boolean).join(' · ')};
+      }
+      if(['ai','collection'].includes(statusRow.log_type)){
+        const ids=[statusRow.root_run_id,statusRow.workflow_run_id,statusRow.agent_run_id].map((id)=>String(id||'').trim()).filter(Boolean);
+        const labels=[...new Set(ids.flatMap((id)=>[...(actualCallsByRunId.get(id)||[])]))];
+        return {...statusRow,provider_display:labels.length>3?`${labels.slice(0,3).join('、')} 等 ${labels.length} 种`:labels.join('、')};
+      }
+      return statusRow;
     });
   }
 }

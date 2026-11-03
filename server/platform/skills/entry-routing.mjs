@@ -143,7 +143,10 @@ export async function resolveEntryWriterSkill({
 export async function listArticleStageSkillSlots({workspaceRoot,entryPoint='hotspot-article'}){
   const skills=new SkillRegistry({workspaceRoot}).list();
   const catalog=readSkillPackageCatalog(workspaceRoot);
-  const slots=await Promise.all(ARTICLE_STAGE_SKILL_SLOTS.map(async(slot)=>{
+  const configuredSlots=entryPoint==='hotspot-article'
+    ?ARTICLE_STAGE_SKILL_SLOTS.filter((slot)=>!['humanizer','seo'].includes(slot.id))
+    :ARTICLE_STAGE_SKILL_SLOTS;
+  const slots=await Promise.all(configuredSlots.map(async(slot)=>{
     const candidates=skills.filter((skill)=>skillServesEntryPoint(skill,entryPoint)&&skill.kind===slot.kind
       &&skill.inputContract===slot.inputContract&&skill.outputContract===slot.outputContract);
     const items=await Promise.all(candidates.map(async(skill)=>{
