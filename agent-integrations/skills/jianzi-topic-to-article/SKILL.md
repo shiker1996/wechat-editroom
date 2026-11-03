@@ -13,6 +13,7 @@ description: 使用见字工作台完成热点采集、选题研判、文章简�
    - 打标必须遵循 `hotspot-tagging` Skill，只处理 `researchEligible: true` 的热点：分类使用账号配置，事件要素写入 `eventParts.who/what`（系统据此生成 `eventKey`）；分数上限 conflict/audience=20、informationGain/emotion=15、timeliness/impact/sourceReliability=10。风险只标记不擅自删除热点。
    - 文章与图文分别选题：原 pipeline 会保存文章候选与图文预选；文章读取 `jianzi_batch_ranking`，图文读取 `jianzi_batch_social_ranking`，把 T/J/A/C/F 与 G_social、入池理由分别交给用户审阅。不要用文章 F 分替代图文 G_social，也不要对同一批次再调用旧的 `jianzi_batch_research_submit` 重复计算。
    - 若用户明确选择见字内部 AI 自动研判，才调用 `jianzi_batch_auto_research`。
+   - 用户给定自主写作主题、教程或心得经验，而不是要求从热点池选题时，创建或复用批次后调用 `jianzi_independent_article_create`。教程需提供环境、至少两个步骤和三条带来源等级的要点；该工具只创建候选与事实基座，不启动见字内部模型。它已建立自主写作候选与锁定简报，不再执行热点候选的原文抓取、编辑判断和锁题步骤；若用户提供素材 URL，创建时会抓取并写入事实基座。外部 Agent 据事实基座写作并保存文章。
 4. 对已加入候选池的选题，**必须先调用 `jianzi_candidate_source_fetch`** 抓取并保存关联原文，再读取 `jianzi_candidate_get` 获取来源、事实和现有编辑决策；读取 `jianzi_account_profile` 了解受众与账号定位。不能用外部网页搜索代替这次项目内抓取，也不能仅因候选摘要已有内容就跳过。抓取失败时，先向用户报告工具结果和证据边界；只有用户明确同意基于现有材料继续，才可继续编辑判断和写作，并在文章中标明未核验内容。
 5. 先输出选题理由、事实与未知项、切入角度和风险。保存编辑决策时调用 `jianzi_candidate_editorial_update`。锁题 `jianzi_candidate_lock` 会触发门禁；若未就绪，按错误补齐事实或研判，不绕过门禁。
 6. 锁题通过后，读取候选的锁定简报和事实材料，直接写出含标题的完整文章。写作要求保持简洁：`请根据写作类型、锁定简报和事实材料，写一篇事实准确、观点清晰的公众号文章，格式为 Markdown。` 根据材料自然组织文章结构。
