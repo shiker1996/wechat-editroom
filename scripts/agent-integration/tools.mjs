@@ -50,23 +50,27 @@ export const JIANZI_TOOLS = [
   { name: 'jianzi_batch_collect', description: '启动批次热点采集；返回后台任务 ID，随后用 jianzi_job_wait 查询。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), maxAgeHours: { type: 'integer', enum: [24, 48, 72, 120, 168] } }, required: ['batchId'] }, readOnlyHint: false, openWorldHint: true },
   { name: 'jianzi_batch_auto_research', description: '调用见字内部模型完成批次打标、事件卡和研判自动流程；需要工作台已配置模型。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), provider: string('可选的工作台模型服务商 ID。') }, required: ['batchId'] }, readOnlyHint: false, openWorldHint: true },
   { name: 'jianzi_batch_ranking', description: '查看采集批次的热点排名与候选状态，供 Agent 自行研判选题。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。') }, required: ['batchId'] }, readOnlyHint: true },
+  { name: 'jianzi_batch_social_ranking', description: '查看工具与事件图文的 G_social 评分、素材类型、入池资格和预选状态；据此选择图文候选。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。') }, required: ['batchId'] }, readOnlyHint: true },
+  { name: 'jianzi_research_stage_prepare', description: '在外部 Agent 完成打标和事件卡后，运行原研判 pipeline，返回下一次模型调用的完整消息、工具、输出格式与任务 ID；完成时返回原研判结果。reset=true 会清除该批次此前提交的外部阶段响应并重新研判。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), reset: { type: 'boolean' } }, required: ['batchId'] }, readOnlyHint: false },
+  { name: 'jianzi_research_stage_submit', description: '提交当前阶段的模型输出：jsonMode=true 时为 JSON 对象，否则为 Markdown 字符串。原研判 pipeline 将继续校验、评分并入池。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), taskId: string('prepare 返回的任务 ID。'), output: { oneOf: [{ type: 'object' }, { type: 'string' }], description: '按任务消息与 jsonMode 生成的原始输出。' } }, required: ['batchId','taskId','output'] }, readOnlyHint: false },
   { name: 'jianzi_batch_hotspots', description: '读取批次采集热点及来源摘要，供外部 Agent 执行打标和研判；不返回凭据。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。') }, required: ['batchId'] }, readOnlyHint: true },
   { name: 'jianzi_batch_tags_submit', description: '提交外部 Agent 对批次热点的语义标签。preScores 上限：conflict/audience=20、informationGain/emotion=15、timeliness/impact/sourceReliability=10。eventParts.who/what 用于系统生成事件归并键。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), items: { type: 'array', minItems: 1, maxItems: 200, items: { type: 'object', properties: { id: { type: 'integer', minimum: 1 }, category: string('分类。'), marketScope: string('市场范围。'), chinaRelevance: { type: 'number', minimum: 0, maximum: 12 }, relevanceReason: string('相关性判断依据。'), riskLevel: string('低|中|高。'), riskReason: string('风险说明。'), score: { type: 'number', minimum: 0, maximum: 100 }, globalException: { type: 'boolean' }, eventParts: { type: 'object', properties: { who: string('主体'), what: string('动作/事实'), where: string('影响地区'), when: string('粗粒度时间'), actionType: string('动作类型'), object: string('对象'), occasion: string('命名场合') }, required: ['who','what'] }, keywords: { type: 'array', items: { type: 'string' } }, preScores: { type: 'object', properties: { conflict: { type: 'number', minimum: 0, maximum: 20 }, audience: { type: 'number', minimum: 0, maximum: 20 }, informationGain: { type: 'number', minimum: 0, maximum: 15 }, emotion: { type: 'number', minimum: 0, maximum: 15 }, timeliness: { type: 'number', minimum: 0, maximum: 10 }, impact: { type: 'number', minimum: 0, maximum: 10 }, sourceReliability: { type: 'number', minimum: 0, maximum: 10 } }, required: ['conflict','audience','informationGain','emotion','timeliness','impact','sourceReliability'] }, credibleScoop: { type: 'number' }, saturationPenalty: { type: 'number' }, duplicatePenalty: { type: 'number' }, blackHorseSignals: { type: 'array', items: { type: 'string' } } }, required: ['id','category','marketScope','chinaRelevance','relevanceReason','riskLevel','eventParts','preScores'] } } }, required: ['batchId','items'] }, readOnlyHint: false },
   { name: 'jianzi_batch_events', description: '基于已保存标签读取并稳定化批次事件分组，供外部 Agent 形成事件卡和研判。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。') }, required: ['batchId'] }, readOnlyHint: false },
-  { name: 'jianzi_batch_event_cards_submit', description: '提交外部 Agent 为稳定事件生成的事实卡；工作台校验事件 ID 并归档。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), items: { type: 'array', minItems: 1, maxItems: 200, items: { type: 'object', properties: { event_id: string('jianzi_batch_events 返回的稳定事件 ID。'), conclusion: string('核心结论。'), background: string('背景。'), confirmed_facts: { type: 'array', items: { type: 'string' } }, source_increment: { type: 'array', items: { type: 'object' } }, disagreements: { type: 'array', items: { type: 'string' } }, timeline: { type: 'array', items: { type: 'object' } }, unverified: { type: 'array', items: { type: 'string' } }, angles: { type: 'array', items: { type: 'string' } } }, required: ['event_id','conclusion'] } } }, required: ['batchId','items'] }, readOnlyHint: false },
-  { name: 'jianzi_batch_research_submit', description: '保存外部 Agent 的事件研判与选题建议；工作台校验稳定事件和热点归属并登记研判报告。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), summary: string('批次层面的研判摘要。'), items: { type: 'array', minItems: 1, maxItems: 200, items: { type: 'object', properties: { eventId: string('稳定事件 ID。'), hotspotIds: { type: 'array', minItems: 1, items: { type: 'integer', minimum: 1 } }, title: string('建议选题标题。'), thesis: string('选题命题。'), angle: string('文章切入角度。'), readerBenefit: string('读者利益。'), riskLevel: string('风险等级。'), riskReason: string('风险说明。'), reason: string('采用或淘汰的研判理由。'), recommendedTrack: { type: 'string', enum: ['article','social_cards'] }, score: { type: 'number', minimum: 0, maximum: 100 } }, required: ['eventId','hotspotIds','thesis','reason'] } } }, required: ['batchId','items'] }, readOnlyHint: false },
+  { name: 'jianzi_batch_event_cards_submit', description: '分批提交外部 Agent 为稳定事件生成的事实卡，每次最多 200 张；重复调用会按 event_id 合并。返回 completed/total/remaining；remaining 为 0 后再提交研判。工作台校验事件 ID 并归档。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), items: { type: 'array', minItems: 1, maxItems: 200, items: { type: 'object', properties: { event_id: string('jianzi_batch_events 返回的稳定事件 ID。'), conclusion: string('核心结论。'), background: string('背景。'), confirmed_facts: { type: 'array', items: { type: 'string' } }, source_increment: { type: 'array', items: { type: 'object' } }, disagreements: { type: 'array', items: { type: 'string' } }, timeline: { type: 'array', items: { type: 'object' } }, unverified: { type: 'array', items: { type: 'string' } }, angles: { type: 'array', items: { type: 'string' } } }, required: ['event_id','conclusion'] } } }, required: ['batchId','items'] }, readOnlyHint: false },
+  { name: 'jianzi_batch_research_submit', description: '保存外部 Agent 的事件研判与选题建议；工作台校验稳定事件和热点归属并登记研判报告。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), summary: string('批次层面的研判摘要。'), items: { type: 'array', minItems: 1, maxItems: 200, items: { type: 'object', properties: { eventId: string('稳定事件 ID。'), hotspotIds: { type: 'array', minItems: 1, items: { type: 'integer', minimum: 1 } }, title: string('建议选题标题。'), thesis: string('选题命题。'), angle: string('文章切入角度。'), readerBenefit: string('读者利益。'), riskLevel: string('风险等级。'), riskReason: string('风险说明。'), reason: string('采用或淘汰的研判理由。'), recommendedTrack: { type: 'string', enum: ['article','social_cards'] }, scoreInputs: { type: 'object', description: '提供公式输入维度；最终分由工作台计算。H/B/J 范围 0–100，竞争扣分为 0–15/0–20。', properties: { H: { type: 'number', minimum: 0, maximum: 100 }, B: { type: 'number', minimum: 0, maximum: 100 }, J: { type: 'number', minimum: 0, maximum: 100 }, saturationPenalty: { type: 'number', minimum: 0, maximum: 15 }, duplicatePenalty: { type: 'number', minimum: 0, maximum: 20 } }, required: ['H','B','J','saturationPenalty','duplicatePenalty'] } }, required: ['eventId','hotspotIds','thesis','reason','scoreInputs'] } } }, required: ['batchId','items'] }, readOnlyHint: false },
   { name: 'jianzi_batch_research_get', description: '读取已归档的外部 Agent 选题研判报告。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。') }, required: ['batchId'] }, readOnlyHint: true },
   { name: 'jianzi_batch_candidates', description: '列出批次文章或图文候选。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), track: { type: 'string', enum: ['article', 'social_cards'] }, kind: string('文章候选过滤：all、hotspot 或 independent。') }, required: ['batchId'] }, readOnlyHint: true },
   { name: 'jianzi_candidate_add', description: '把 Agent 已研判选择的热点加入文章池或图文池。图文候选可指定事件、项目或自定义类型；不指定时按事件图文处理。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), hotspotIds: { type: 'array', items: { type: 'integer', minimum: 1 }, minItems: 1 }, tracks: { type: 'array', items: { type: 'string', enum: ['article', 'social_cards'] } }, socialMaterialType: { type: 'string', enum: ['event', 'repository', 'custom'], description: '图文类型。事件资讯选 event；软件项目介绍选 repository；其他自定义内容选 custom。' } }, required: ['batchId', 'hotspotIds'] }, readOnlyHint: false },
   { name: 'jianzi_candidate_get', description: '读取候选、来源事实、已有研判和编辑决策。', inputSchema: { type: 'object', properties: { candidateId: id('候选 ID。') }, required: ['candidateId'] }, readOnlyHint: true },
-  { name: 'jianzi_candidate_source_fetch', description: '抓取并保存候选关联热点的原文，供文章成稿或图文故事板使用；默认抓取全部关联热点，可指定 hotspotId 或 eventId。', inputSchema: { type: 'object', properties: { candidateId: id('候选 ID。'), hotspotId: id('只抓取该候选关联的热点 ID。', false), eventId: string('只抓取该候选关联的事件 ID。'), force: { type: 'boolean', description: '忽略已有缓存并重新抓取。' } }, required: ['candidateId'] }, readOnlyHint: false, openWorldHint: true },
-  { name: 'jianzi_candidate_editorial_update', description: '保存 Agent 形成的文章编辑判断；建议先展示用户确认，再锁题。', inputSchema: { type: 'object', properties: { candidateId: id('候选 ID。'), editorial: { type: 'object', description: '编辑决策字段，如 editor_question、confirmed_facts、author_opinions、rejected_angles、open_questions、forbidden_claims、next_action。' } }, required: ['candidateId', 'editorial'] }, readOnlyHint: false },
+  { name: 'jianzi_candidate_source_fetch', description: '文章成稿或图文策划前必须调用：抓取并保存候选关联热点的原文。不能以外部搜索或候选摘要代替项目抓取；失败时先向用户报告原因和证据边界。默认抓取全部关联热点，可指定 hotspotId 或 eventId。', inputSchema: { type: 'object', properties: { candidateId: id('候选 ID。'), hotspotId: id('只抓取该候选关联的热点 ID。', false), eventId: string('只抓取该候选关联的事件 ID。'), force: { type: 'boolean', description: '忽略已有缓存并重新抓取。' } }, required: ['candidateId'] }, readOnlyHint: false, openWorldHint: true },
+  { name: 'jianzi_candidate_editorial_update', description: '保存 Agent 形成的文章编辑判断；建议先展示用户确认，再锁题。', inputSchema: { type: 'object', properties: { candidateId: id('候选 ID。'), editorial: { type: 'object', description: '编辑决策字段；confirmed_facts、research_basis、open_questions 等文本字段使用字符串或字符串数组，不能使用对象数组。adopted_research_points 和 material_brief 使用各自的结构化格式。' } }, required: ['candidateId', 'editorial'] }, readOnlyHint: false },
   { name: 'jianzi_candidate_lock', description: '锁定已完成编辑判断的文章候选，工作台会执行编辑简报门禁。', inputSchema: { type: 'object', properties: { candidateId: id('候选 ID。') }, required: ['candidateId'] }, readOnlyHint: false },
+  { name: 'jianzi_article_local_audit', description: '使用文章成稿流程的确定性规则检查 Markdown 结构、默认字数范围及标题风险；不代表完成事实核验或审稿。', inputSchema: { type: 'object', properties: { article: string('完整 Markdown 文章。'), factBase: { type: 'object', description: '可选事实基座。' } }, required: ['article'] }, readOnlyHint: true },
   { name: 'jianzi_article_generate', description: '调用见字内部模型完成文章成稿、审稿和事实门禁；需要工作台已配置模型。', inputSchema: { type: 'object', properties: { candidateId: id('候选 ID。'), provider: string('可选的工作台模型服务商 ID。'), skillId: string('可选的写作 Skill ID。') }, required: ['candidateId'] }, readOnlyHint: false, openWorldHint: true },
   { name: 'jianzi_article_documents', description: '读取批次文章文档或指定候选的草稿/终稿。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), candidateId: string('候选 ID；不填时列出批次文档。'), kind: { type: 'string', enum: ['draft', 'final', 'daily-final'] } }, required: ['batchId'] }, readOnlyHint: true },
-  { name: 'jianzi_article_document_save', description: '保存外部 Agent 已完成的文章草稿或终稿，不调用见字内部模型。终稿应先完成事实核验和用户确认。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), candidateId: id('文章候选 ID。'), kind: { type: 'string', enum: ['draft', 'final'] }, title: string('文章标题。'), content: string('文章 Markdown 正文。'), status: { type: 'string', enum: ['draft', 'review', 'final'] }, reviewState: string('可选审稿状态。') }, required: ['batchId', 'candidateId', 'kind', 'content'] }, readOnlyHint: false },
+  { name: 'jianzi_article_document_save', description: '保存外部 Agent 已完成的文章草稿或终稿，不调用见字内部模型。编辑判断获确认只表示可以开始写作；写作后先保存 draft 并让用户审阅，用户确认已生成的文章后才保存 final。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), candidateId: id('文章候选 ID。'), kind: { type: 'string', enum: ['draft', 'final'] }, title: string('文章标题。'), content: string('文章 Markdown 正文。'), status: { type: 'string', enum: ['draft', 'review', 'final'] }, reviewState: string('可选审稿状态。') }, required: ['batchId', 'candidateId', 'kind', 'content'] }, readOnlyHint: false },
   { name: 'jianzi_article_typeset', description: '调用见字内部模型与排版流程生成公众号 HTML；需要工作台已配置模型。成功后返回文章预览入口；在最终回复中附上该链接。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), candidateId: id('候选 ID。', true), imageDeliveryMode: { type: 'string', enum: ['auto', 'local', 'cdn'] } }, required: ['batchId', 'candidateId'] }, readOnlyHint: false, openWorldHint: true },
-  { name: 'jianzi_article_typeset_submit', description: '提交外部 Agent 生成的文章 HTML。工作台负责结构保真、公众号规范化、确定性门禁和产物归档；不调用工作台模型。成功后返回文章预览入口；在最终回复中附上该链接。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), candidateId: id('文章候选 ID。'), html: { type: 'string', minLength: 1, maxLength: 8000000, description: '基于终稿和排版设计方案生成的完整 HTML。' }, designScheme: { type: 'object', description: '本次文章排版设计方案，用于随 HTML 归档。' } }, required: ['batchId','candidateId','html'] }, readOnlyHint: false },
+  { name: 'jianzi_article_typeset_submit', description: '提交外部 Agent 生成的文章 HTML。仅在 jianzi_article_documents 已确认存在 final 后调用；若只有 draft，应先让用户审阅确认，不要提交。工作台负责结构保真、公众号规范化、确定性门禁和产物归档；不调用工作台模型。成功后返回文章预览入口；在最终回复中附上该链接。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), candidateId: id('文章候选 ID。'), html: { type: 'string', minLength: 1, maxLength: 8000000, description: '基于终稿和排版设计方案生成的完整 HTML。' }, designScheme: { type: 'object', description: '本次文章排版设计方案，用于随 HTML 归档。' } }, required: ['batchId','candidateId','html'] }, readOnlyHint: false },
   { name: 'jianzi_cover_generate', description: '为已完成的文章终稿生成 AI 视觉封面；调用工作台内部模型。成功后返回封面入口；在最终回复中附上该链接。', inputSchema: { type: 'object', properties: { candidateId: id('候选 ID。'), provider: string('可选的工作台模型服务商 ID。') }, required: ['candidateId'] }, readOnlyHint: false, openWorldHint: true },
   { name: 'jianzi_cover_submit', description: '提交外部 Agent 生成的 900×383 封面 HTML。工作台执行内容门禁、浏览器截图和产物归档；不调用工作台模型。成功后返回封面入口；在最终回复中附上该链接。', inputSchema: { type: 'object', properties: { candidateId: id('文章候选 ID。'), html: { type: 'string', minLength: 1, maxLength: 2000000 }, designScheme: { type: 'object', description: '本篇封面设计方案与约束说明，用于随产物归档。' } }, required: ['candidateId','html'] }, readOnlyHint: false },
   { name: 'jianzi_card_editorial_get', description: '读取图文故事板、图文事实基座和设计状态。', inputSchema: { type: 'object', properties: { candidateId: id('图文候选 ID。') }, required: ['candidateId'] }, readOnlyHint: true },
@@ -83,20 +87,33 @@ export const JIANZI_TOOLS = [
 const terminalJobStatuses = new Set(['completed', 'failed', 'cancelled', 'interrupted', 'stopped']);
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function withArtifactEntry(client, result, type) {
+async function withArtifactEntry(client, result, type, candidateId = null) {
   const entries = {
     articlePreview: { label: '文章预览', path: '/#preview' },
     cover: { label: '文章封面', path: '/#cover' },
-    socialEvent: { label: '事件图文', path: '/#social-event' },
   };
-  const entry = entries[type];
+  let entry = entries[type];
+  if (type === 'socialCards') {
+    const resolvedCandidateId = result?.candidateId || candidateId;
+    if (resolvedCandidateId) {
+      try {
+        const editorial = await client.get(`/api/candidates/${encodeURIComponent(String(resolvedCandidateId))}/card-editorial`);
+        const contentType = String(editorial?.contentType || '');
+        entry = ({
+          repository: { label: '工具图文', path: '/#social-editor' },
+          event: { label: '事件图文', path: '/#social-event' },
+          custom: { label: '自定义图文', path: '/#social-custom' },
+        })[contentType];
+      } catch {}
+    }
+  }
   if (!entry || !result || typeof result !== 'object' || result.status === 'failed') return result;
   const baseUrl = String(client.baseUrl || 'http://127.0.0.1:4317').replace(/\/$/, '');
   return { ...result, artifactEntries: [{ type, label: entry.label, url: `${baseUrl}${entry.path}` }] };
 }
 
 function artifactTypeForJob(job) {
-  return ({ typeset: 'articlePreview', 'cover-image': 'cover', 'social-card-beautify': 'socialEvent' })[String(job?.type || '')] || '';
+  return ({ typeset: 'articlePreview', 'cover-image': 'cover', 'social-card-beautify': 'socialCards' })[String(job?.type || '')] || '';
 }
 
 export async function executeJianziTool(client, name, input = {}) {
@@ -152,6 +169,9 @@ export async function executeJianziTool(client, name, input = {}) {
     case 'jianzi_batch_collect': return client.post(`/api/batches/${batch}/collect`, { maxAgeHours: input.maxAgeHours });
     case 'jianzi_batch_auto_research': return client.post(`/api/batches/${batch}/ai/auto`, { provider: input.provider });
     case 'jianzi_batch_ranking': return client.get(`/api/batches/${batch}/ranking`);
+    case 'jianzi_batch_social_ranking': return client.get(`/api/batches/${batch}/social-ranking`);
+    case 'jianzi_research_stage_prepare': return client.post(`/api/batches/${batch}/external/research-stage/prepare`, { reset: input.reset === true });
+    case 'jianzi_research_stage_submit': return client.post(`/api/batches/${batch}/external/research-stage/submit`, { taskId: input.taskId, output: input.output });
     case 'jianzi_batch_hotspots': {
       const data = await client.get(`/api/batches/${batch}`);
       return { batchId: data.id, hotspots: (data.hotspots || []).map((item) => { let raw = {}; try { raw = JSON.parse(item.raw_json || '{}'); } catch {} return { id: item.id, title: item.title, url: item.url, source: item.source, sourceGroup: item.source_group, sourceType: item.source_type, sourceName: item.source_name, publishedAt: item.published_at, researchEligible: item.research_eligible !== 0, summary: String(raw.summary || raw.description || '').slice(0, 4000), content: String(raw.content || raw.text || '').slice(0, 8000), repository: raw.repository || '', language: raw.language || '', stars: raw.stars ?? null, topics: (raw.topics || []).slice(0, 30), projectType: raw.projectType || '', scenarioIds: (raw.scenarioIds || []).slice(0, 30), directUseCase: raw.directUseCase || '', agentDependency: raw.agentDependency || '', agentSignals: (raw.agentSignals || []).slice(0, 12), discoveryContexts: (raw.discoveryContexts || []).slice(0, 12) }; }) };
@@ -171,6 +191,7 @@ export async function executeJianziTool(client, name, input = {}) {
     case 'jianzi_candidate_source_fetch': return client.post(`/api/candidates/${candidate}/source`, { hotspotId: input.hotspotId, eventId: input.eventId, force: input.force === true });
     case 'jianzi_candidate_editorial_update': return client.put(`/api/candidates/${candidate}/editorial`, input.editorial);
     case 'jianzi_candidate_lock': return client.post(`/api/candidates/${candidate}/lock`, {});
+    case 'jianzi_article_local_audit': return client.post('/api/external/article/local-audit', { article: input.article, factBase: input.factBase });
     case 'jianzi_article_generate': return client.post(`/api/candidates/${candidate}/ai/article`, { provider: input.provider, skillId: input.skillId });
     case 'jianzi_article_documents': {
       if (input.candidateId && input.kind) return client.get(`/api/batches/${batch}/documents?candidateId=${encodeURIComponent(input.candidateId)}&kind=${encodeURIComponent(input.kind)}`);
@@ -189,11 +210,11 @@ export async function executeJianziTool(client, name, input = {}) {
     }
     case 'jianzi_card_lock': return client.post(`/api/candidates/${candidate}/card-lock`, {});
     case 'jianzi_card_visual_audit': return client.post(`/api/candidates/${candidate}/social-cards/external/audit`, { html: input.html || '', page: input.page ?? null });
-    case 'jianzi_card_generate': return withArtifactEntry(client, await client.post(`/api/candidates/${candidate}/ai/social-card-beautify`, { provider: input.provider, styleBrief: input.styleBrief || '' }), 'socialEvent');
-    case 'jianzi_card_visual_submit': return withArtifactEntry(client, await client.post(`/api/candidates/${candidate}/social-cards/external`, { html: input.html || '', publishTitle: input.publishTitle || '', copy: input.copy || '', designScheme: input.designScheme || null }), 'socialEvent');
+    case 'jianzi_card_generate': return withArtifactEntry(client, await client.post(`/api/candidates/${candidate}/ai/social-card-beautify`, { provider: input.provider, styleBrief: input.styleBrief || '' }), 'socialCards', candidate);
+    case 'jianzi_card_visual_submit': return withArtifactEntry(client, await client.post(`/api/candidates/${candidate}/social-cards/external`, { html: input.html || '', publishTitle: input.publishTitle || '', copy: input.copy || '', designScheme: input.designScheme || null }), 'socialCards', candidate);
     case 'jianzi_job_get': {
       const job = await client.get(`/api/jobs/${encodeURIComponent(String(input.jobId || ''))}`);
-      return withArtifactEntry(client, job, artifactTypeForJob(job));
+      return withArtifactEntry(client, job, artifactTypeForJob(job), job.candidateId);
     }
     case 'jianzi_job_wait': {
       const timeout = Math.min(300, Math.max(1, Number(input.timeoutSeconds) || 180));
@@ -201,11 +222,11 @@ export async function executeJianziTool(client, name, input = {}) {
       let job;
       do {
         job = await client.get(`/api/jobs/${encodeURIComponent(String(input.jobId || ''))}`);
-        if (terminalJobStatuses.has(String(job.status || '').toLowerCase())) return withArtifactEntry(client, job, artifactTypeForJob(job));
-        if (Date.now() >= deadline) return withArtifactEntry(client, { ...job, waitTimedOut: true }, artifactTypeForJob(job));
+        if (terminalJobStatuses.has(String(job.status || '').toLowerCase())) return withArtifactEntry(client, job, artifactTypeForJob(job), job.candidateId);
+        if (Date.now() >= deadline) return withArtifactEntry(client, { ...job, waitTimedOut: true }, artifactTypeForJob(job), job.candidateId);
         await pause(1500);
       } while (Date.now() < deadline);
-      return withArtifactEntry(client, { ...job, waitTimedOut: true }, artifactTypeForJob(job));
+      return withArtifactEntry(client, { ...job, waitTimedOut: true }, artifactTypeForJob(job), job?.candidateId);
     }
     default: throw Object.assign(new Error(`未知的 jianzi 工具：${name}`), { code: 'UNKNOWN_TOOL' });
   }

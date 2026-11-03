@@ -39,6 +39,12 @@ function jsonFileOption(filePath, inlineValue, fallback) {
   return jsonOption(inlineValue, fallback);
 }
 
+function researchOutputOption(filePath, inlineValue) {
+  if (!filePath && inlineValue == null) throw new Error('research submit 需要 --file 或 --output');
+  const value = filePath && filePath !== true ? fs.readFileSync(path.resolve(String(filePath)), 'utf8') : String(inlineValue);
+  try { return JSON.parse(value); } catch { return value; }
+}
+
 function booleanOption(value, fallback) {
   if (value == null || value === true) return fallback;
   if (value === false) return false;
@@ -53,6 +59,7 @@ function print(value, asJson = false) {
 
 function help() {
   process.stdout.write(`见字 Agent CLI（jianzi）\n\n用法：\n  node scripts/agent-integration/cli.mjs doctor [--json]\n  node scripts/agent-integration/cli.mjs install --agent codex|workbuddy|both\n  node scripts/agent-integration/cli.mjs workbench-setup [--yes]\n  node scripts/agent-integration/cli.mjs batch list|create|collect|auto|ranking|candidates ...\n  node scripts/agent-integration/cli.mjs candidate add|get|update|lock ...\n  node scripts/agent-integration/cli.mjs article generate|documents|typeset ...\n  node scripts/agent-integration/cli.mjs cover generate ...\n  node scripts/agent-integration/cli.mjs account profile|update --file <json>\n  node scripts/agent-integration/cli.mjs collectors list|config-list|config-get|config-set|config-test ...\n  node scripts/agent-integration/cli.mjs sources list|capabilities|add|update|test ...\n  node scripts/agent-integration/cli.mjs card editorial|storyboard|update|lock|generate ...\n  node scripts/agent-integration/cli.mjs job get|wait ...\n  node scripts/agent-integration/cli.mjs mcp\n\n写操作和长任务返回 JSON；异步任务使用 job get/wait 查询。AI 成稿、排版、封面和图文命令会调用工作台内部模型。\n`);
+  process.stdout.write('\n外部 Agent 研判：research prepare --batch <ID>；research submit --batch <ID> --task <ID> --file <JSON或Markdown文件>\n');
 }
 
 async function dispatch(positional, options) {
@@ -90,6 +97,9 @@ async function dispatch(positional, options) {
     'batch:auto': ['jianzi_batch_auto_research', { batchId: options.batch, provider: options.provider }],
     'batch:ranking': ['jianzi_batch_ranking', { batchId: options.batch }],
     'batch:candidates': ['jianzi_batch_candidates', { batchId: options.batch, track: options.track, kind: options.kind }],
+    'research:prepare': ['jianzi_research_stage_prepare', { batchId: options.batch, reset: booleanOption(options.reset, false) }],
+    'research:submit': ['jianzi_research_stage_submit', { batchId: options.batch, taskId: options.task,
+      output: researchOutputOption(options.file, options.output) }],
     'candidate:add': ['jianzi_candidate_add', { batchId: options.batch, hotspotIds: jsonOption(options.hotspotIds, []), tracks: jsonOption(options.tracks, ['article']), socialMaterialType: options.materialType }],
     'candidate:get': ['jianzi_candidate_get', { candidateId: options.candidate }],
     'candidate:source': ['jianzi_candidate_source_fetch', { candidateId: options.candidate, hotspotId: options.hotspot ? Number(options.hotspot) : undefined, eventId: options.event, force: booleanOption(options.force, false) }],

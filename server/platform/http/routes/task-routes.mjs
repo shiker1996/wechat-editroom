@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { deriveEventKey, normalizeEventParts, tagBatch } from '../../../features/research/llm/tasks.mjs';
-import { ensureBatchEventCards, loadStableBatchEvents } from '../../../features/research/index.mjs';
+import { advanceExternalResearch, ensureBatchEventCards, loadStableBatchEvents, resolveScoring } from '../../../features/research/index.mjs';
 import { resolveArticleStageSkills } from '../../skills/entry-routing.mjs';
 import { isFreshForBatch } from '../../../features/research/index.mjs';
 import { dailyFocusOptions } from '../../../features/articles/index.mjs';
@@ -14,6 +14,25 @@ import { tagsOf } from '../../../features/research/domain/hotspot-clustering.mjs
 
 export async function handleTaskRoutes({ request, response, pathname, searchParams, store, body, json, aiJobs, jobs, models, root, config,
   batchWorkdir, batchMaxAgeHours }) {
+  const externalStageMatch = pathname.match(/^\/api\/batches\/([^/]+)\/external\/research-stage\/(prepare|submit)$/);
+  if (externalStageMatch && request.method === 'POST') {
+    const batchId = decodeURIComponent(externalStageMatch[1]);
+    const batch = store.getBatch(batchId);
+    if (!batch) return respond(json, response, 404, { error: '批次不存在' });
+    const input = await body(request) || {};
+    if (externalStageMatch[2] === 'submit' && (typeof input.taskId !== 'string' || !input.taskId.trim()
+      || !Object.hasOwn(input, 'output'))) {
+      return respond(json, response, 400, { error: '提交阶段结果须提供 taskId 和 output' });
+    }
+    try {
+      const result = await advanceExternalResearch({ store, batchId, workspaceRoot: config.workspaceRoot,
+        maxAgeHours: batchMaxAgeHours(batch), ...(externalStageMatch[2] === 'submit'
+          ? { taskId: input.taskId, output: input.output } : { reset: input.reset === true }) });
+      return respond(json, response, result.status === 'pending' ? 202 : 200, result);
+    } catch (error) {
+      return respond(json, response, error.statusCode || 422, { error: error.message });
+    }
+  }
   const pipelineFailureGate=(batchId,stages,action)=>{const failures=store.listPipelineFailures(batchId,{statuses:['open','retrying'],stages});return failures.length
     ?{error:`上游环节仍有 ${failures.length} 条待处理失败，请先重试或跳过后再${action}`,code:'PIPELINE_FAILURES_PENDING',failureCount:failures.length,stages}:null;};
   const failureRetryMatch=pathname.match(/^\/api\/batches\/([^/]+)\/pipeline-failures\/(\d+)\/retry$/);
@@ -64,7 +83,9 @@ export async function handleTaskRoutes({ request, response, pathname, searchPara
     const batchId = decodeURIComponent(externalEventsMatch[1]);
     const batch = store.getBatch(batchId);
     if (!batch) return respond(json,response,404,{error:'批次不存在'});
-    const hotspots = batch.hotspots.filter(isResearchEligibleHotspot).filter((item)=>isFreshForBatch(item,batch.batch_date,batchMaxAgeHours(batch))).filter((item)=>{const tags=tagsOf(item);return tags.eventKey&&tags.preScores;});
+    const hotspots = batch.hotspots.filter(isResearchEligibleHotspot).filter((item)=>isFreshForBatch(item,batch.batch_date,batchMaxAgeHours(batch)));
+    const missing = hotspots.filter((item)=>{const tags=tagsOf(item);return !tags.eventKey||!tags.preScores;}).length;
+    if (missing) return respond(json,response,409,{error:`仍有 ${missing} 条热点缺少完整语义标注，请先完成打标`});
     if (!hotspots.length) return respond(json,response,409,{error:'请先完成批次热点打标'});
     const events = resolveStableBatchEvents({store,workspaceRoot:config.workspaceRoot,batch,hotspots});
     for(const [kind,name] of [['稳定事件聚类','event-clusters.json'],['事件归并影子','event-resolution-shadow.json']]){const filePath=path.join(batchWorkdir(batch),'sources',name);if(fs.existsSync(filePath)){const stat=fs.statSync(filePath);store.upsertArtifact({batchId,kind,name,path:filePath,size:stat.size,modifiedAt:stat.mtime.toISOString()});}}
@@ -79,9 +100,10 @@ export async function handleTaskRoutes({ request, response, pathname, searchPara
     if (!batch) return respond(json,response,404,{error:'批次不存在'});
     const input = await body(request);
     if (!Array.isArray(input.items)||input.items.length<1||input.items.length>200) return respond(json,response,400,{error:'items 必须包含 1–200 张事件卡'});
-    const hotspots = batch.hotspots.filter(isResearchEligibleHotspot).filter((item)=>isFreshForBatch(item,batch.batch_date,batchMaxAgeHours(batch))).filter((item)=>{const tags=tagsOf(item);return tags.eventKey&&tags.preScores;});
+    const hotspots = batch.hotspots.filter(isResearchEligibleHotspot).filter((item)=>isFreshForBatch(item,batch.batch_date,batchMaxAgeHours(batch)));
+    const missing = hotspots.filter((item)=>{const tags=tagsOf(item);return !tags.eventKey||!tags.preScores;}).length;
+    if (missing) return respond(json,response,409,{error:`仍有 ${missing} 条热点缺少完整语义标注，请先完成打标`});
     const events = resolveStableBatchEvents({store,workspaceRoot:config.workspaceRoot,batch,hotspots});
-    if(input.items.length!==events.length)return respond(json,response,422,{error:`事件卡数量必须覆盖全部 ${events.length} 个稳定事件`});
     const expected = new Map(events.map((event)=>[String(event.event_id),event]));
     const ids = new Set();
     for (const item of input.items) {
@@ -93,11 +115,15 @@ export async function handleTaskRoutes({ request, response, pathname, searchPara
     const list=(value,max=5)=>Array.isArray(value)?value.map((item)=>text(item,120)).filter(Boolean).slice(0,max):[];
     const items=input.items.map((raw)=>({event_id:String(raw.event_id),title:expected.get(String(raw.event_id)).representative_title,conclusion:text(raw.conclusion),background:text(raw.background,120),confirmed_facts:list(raw.confirmed_facts),source_increment:(Array.isArray(raw.source_increment)?raw.source_increment:[]).map((item)=>({source:text(item?.source,40),adds:text(item?.adds,120)})).filter((item)=>item.source||item.adds).slice(0,6),disagreements:list(raw.disagreements,4),timeline:(Array.isArray(raw.timeline)?raw.timeline:[]).map((item)=>({time:text(item?.time,30),fact:text(item?.fact,120)})).filter((item)=>item.fact).slice(0,5),unverified:list(raw.unverified,4),angles:list(raw.angles,3)}));
     const eventCardsPath=path.join(batchWorkdir(batch),'sources','event-cards.json');
+    let existingCards=[];try{existingCards=JSON.parse(fs.readFileSync(eventCardsPath,'utf8')).items||[];}catch{}
+    const mergedCards=new Map(existingCards.filter((card)=>expected.has(String(card.event_id))).map((card)=>[String(card.event_id),card]));
+    for(const item of items)mergedCards.set(item.event_id,item);
+    const allItems=[...mergedCards.values()];
     fs.mkdirSync(path.dirname(eventCardsPath),{recursive:true});
-    fs.writeFileSync(eventCardsPath,JSON.stringify({generated_at:new Date().toISOString(),total_events:items.length,failed:[],items},null,2),'utf8');
+    fs.writeFileSync(eventCardsPath,JSON.stringify({generated_at:new Date().toISOString(),total_events:events.length,completed_events:allItems.length,failed:[],items:allItems},null,2),'utf8');
     const stat=fs.statSync(eventCardsPath);
     store.upsertArtifact({batchId,kind:'事件事实卡',name:'event-cards.json',path:eventCardsPath,size:stat.size,modifiedAt:stat.mtime.toISOString()});
-    return respond(json,response,200,{batchId,status:'saved',count:items.length,path:'sources/event-cards.json'});
+    return respond(json,response,200,{batchId,status:allItems.length===events.length?'saved':'partial',received:items.length,completed:allItems.length,total:events.length,remaining:Math.max(0,events.length-allItems.length),path:'sources/event-cards.json'});
   }
   const externalResearchMatch = pathname.match(/^\/api\/batches\/([^/]+)\/external\/research$/);
   if (externalResearchMatch && request.method === 'GET') {
@@ -128,11 +154,28 @@ export async function handleTaskRoutes({ request, response, pathname, searchPara
       if(!Array.isArray(item.hotspotIds)||item.hotspotIds.length<1||item.hotspotIds.some((id)=>!allowed.has(Number(id))))return respond(json,response,422,{error:`事件 ${eventId} 的 hotspotIds 不属于该事件`});
       seen.add(eventId);
     }
-    const report={schemaVersion:1,source:'external-agent',batchId,generatedAt:new Date().toISOString(),summary:String(input.summary||'').slice(0,4000),items:input.items.map((item)=>({eventId:String(item.eventId),eventTitle:byId.get(String(item.eventId)).representative_title,hotspotIds:[...new Set(item.hotspotIds.map(Number))],title:String(item.title||'').trim().slice(0,120),thesis:String(item.thesis).trim().slice(0,800),angle:String(item.angle||'').trim().slice(0,800),readerBenefit:String(item.readerBenefit||'').trim().slice(0,500),riskLevel:String(item.riskLevel||'').trim().slice(0,40),riskReason:String(item.riskReason||'').trim().slice(0,500),reason:String(item.reason).trim().slice(0,1200),recommendedTrack:['article','social_cards'].includes(item.recommendedTrack)?item.recommendedTrack:'article',score:Number.isFinite(Number(item.score))?Math.max(0,Math.min(100,Number(item.score))):null}))};
+    const scoring=resolveScoring();
+    let heatItems=[];try{heatItems=JSON.parse(fs.readFileSync(path.join(batchWorkdir(batch),'sources','event-heat-ranking.json'),'utf8')).items||[];}catch{}
+    const heatById=new Map(heatItems.map((item)=>[String(item.eventId||item.event_id||''),Number(item.eventValue??item.t??item.heatScore??item.eventHeatScore)]));
+    const scoreItems=input.items.map((item)=>{
+      const event=byId.get(String(item.eventId));const dims=item.scoreInputs||{};
+      const values=['H','B','J','saturationPenalty','duplicatePenalty'];
+      if(values.some((key)=>!Number.isFinite(Number(dims[key]))))throw Object.assign(new Error(`事件 ${item.eventId} 缺少 scoreInputs：需要 H、B、J、saturationPenalty、duplicatePenalty`),{statusCode:422});
+      const T=heatById.get(String(item.eventId));
+      if(!Number.isFinite(T))throw Object.assign(new Error(`事件 ${item.eventId} 缺少事件热度 T，无法计算最终分`),{statusCode:409});
+      const P=Number(scoring.accountFitByCategory?.[event.topic_category||event.topicCategory]||0);
+      const H=Math.max(0,Math.min(100,Number(dims.H)));const B=Math.max(0,Math.min(100,Number(dims.B)));const J=Math.max(0,Math.min(100,Number(dims.J)));
+      const S=Math.max(0,Math.min(15,Number(dims.saturationPenalty)));const D=Math.max(0,Math.min(20,Number(dims.duplicatePenalty)));const C=Math.min(35,S+D);
+      const A=Math.max(0,Math.min(100,H*scoring.weights.h+B*scoring.weights.b+P*scoring.weights.p));
+      const F=Math.max(0,Math.min(100,A*(1-scoring.eventValueWeight-scoring.researchValueWeight)+T*scoring.eventValueWeight+J*scoring.researchValueWeight-C));
+      return {eventId:String(item.eventId),title:String(item.title||event.representative_title).trim().slice(0,120),T:Number(T.toFixed(1)),J,H,B,P:Number(P.toFixed(1)),A:Number(A.toFixed(1)),S:Number(S.toFixed(1)),D:Number(D.toFixed(1)),C:Number(C.toFixed(1)),F:Number(F.toFixed(1))};
+    }).sort((a,b)=>b.F-a.F||a.eventId.localeCompare(b.eventId)).map((item,index)=>({...item,rank:index+1}));
+    const scoreById=new Map(scoreItems.map((item)=>[item.eventId,item]));
+    const report={schemaVersion:2,source:'external-agent',batchId,generatedAt:new Date().toISOString(),summary:String(input.summary||'').slice(0,4000),items:input.items.map((item)=>({eventId:String(item.eventId),eventTitle:byId.get(String(item.eventId)).representative_title,hotspotIds:[...new Set(item.hotspotIds.map(Number))],title:String(item.title||'').trim().slice(0,120),thesis:String(item.thesis).trim().slice(0,800),angle:String(item.angle||'').trim().slice(0,800),readerBenefit:String(item.readerBenefit||'').trim().slice(0,500),riskLevel:String(item.riskLevel||'').trim().slice(0,40),riskReason:String(item.riskReason||'').trim().slice(0,500),reason:String(item.reason).trim().slice(0,1200),recommendedTrack:['article','social_cards'].includes(item.recommendedTrack)?item.recommendedTrack:'article',score:scoreById.get(String(item.eventId)).F,scoreBreakdown:scoreById.get(String(item.eventId))}))};
     const reportPath=path.join(batchWorkdir(batch),'sources','external-research-report.json');
     fs.mkdirSync(path.dirname(reportPath),{recursive:true});fs.writeFileSync(reportPath,JSON.stringify(report,null,2),'utf8');
     const stat=fs.statSync(reportPath);store.upsertArtifact({batchId,kind:'外部 Agent 选题研判',name:'external-research-report.json',path:reportPath,size:stat.size,modifiedAt:stat.mtime.toISOString()});
-    return respond(json,response,200,{batchId,status:'saved',count:report.items.length,path:'sources/external-research-report.json'});
+    return respond(json,response,200,{batchId,status:'saved',count:report.items.length,ranking:scoreItems,path:'sources/external-research-report.json'});
   }
   const tagMatch = pathname.match(/^\/api\/batches\/([^/]+)\/ai\/tag$/);
   if (tagMatch && request.method === 'POST') {

@@ -53,7 +53,7 @@ npm run jianzi -- sources test --id <采集源ID>
 
 MCP 同时提供内部模型任务和外部 Agent 结果提交两条路径。默认 Skills 使用外部 Agent 当前会话完成打标、事件卡/研判、编辑决策、文章、排版、封面和图文生成，再通过受限 MCP 工具提交；工作台执行确定性校验、规范化、浏览器审计/截图与归档，不要求配置见字内部模型。`*_generate`、`*_auto_research` 等内部任务工具仍保留，只有用户明确选择时才使用。外部 Agent 的模型会话和凭据不会传入工作台；采集器凭据按用户确认通过工作台配置 API 保存，并在返回值中遮蔽。
 
-排版、封面和图文生成/提交成功后，MCP 与 CLI 结果会附带 `artifactEntries`，包含对应的工作台入口 URL（文章预览 `/#preview`、文章封面 `/#cover`、事件图文 `/#social-event`）。完成任务后，Agent 应从工具结果中取出对应 URL 并在最终回复中作为可点击链接提供；异步任务的 `jianzi_job_get` / `jianzi_job_wait` 也会根据任务类型返回入口。入口用于在工作台查看、复制或下载产物，不代表已发布到公众号。
+排版、封面和图文生成/提交成功后，MCP 与 CLI 结果会附带 `artifactEntries`，包含对应的工作台入口 URL（文章预览 `/#preview`、文章封面 `/#cover`、工具图文 `/#social-editor`、事件图文 `/#social-event`、自定义图文 `/#social-custom`）。完成任务后，Agent 应从工具结果中取出对应 URL 并在最终回复中作为可点击链接提供；异步任务的 `jianzi_job_get` / `jianzi_job_wait` 也会根据任务类型返回入口。入口用于在工作台查看、复制或下载产物，不代表已发布到公众号。
 
 ## MCP 工具
 

@@ -46,6 +46,10 @@ export class EditorialRepository {
           }))
         : input[sourceKey] ?? current[sourceKey];
       if (key === 'experience_required') return value ? 1 : 0;
+      if (key !== 'adopted_research_points_json' && key !== 'material_brief_json') {
+        if (Array.isArray(value) && value.every((item) => typeof item === 'string')) return value.join('\n');
+        if (typeof value !== 'string') throw Object.assign(new Error(`编辑字段 ${sourceKey} 须为文本或文本数组`), { code: 'INVALID_EDITORIAL_FIELD' });
+      }
       return value;
     });
     this.db.prepare(`INSERT INTO editorial_sessions (candidate_row_id,${fields.join(',')},updated_at)

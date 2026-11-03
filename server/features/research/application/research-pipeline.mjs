@@ -963,6 +963,7 @@ export async function runResearchPipeline({ gateway, store, batchId, provider, w
     base_report: discussionResearchBase,
     clusters,
     event_heat_ranking: eventHeatRanking,
+    reader_screening: readerScreening,
     input_profile: topicResult.topicInput?.policy?.input_profile || null,
     input_chars: topicRequest?.input_chars || 0,
     estimated_tokens: topicRequest?.estimated_input_tokens || 0,
@@ -1128,7 +1129,6 @@ export async function runResearchPipeline({ gateway, store, batchId, provider, w
   writeFile(path.join(sourcesDir,'brief-pool.json'),JSON.stringify({generated_at:new Date().toISOString(),items:briefPool},null,2));
   writeFile(path.join(sourcesDir,'social-card-preselection.json'),JSON.stringify({generated_at:new Date().toISOString(),items:socialPool},null,2));
   writeFile(path.join(sourcesDir,'social-card-ranking.json'),JSON.stringify({generated_at:new Date().toISOString(),items:socialRanking},null,2));
-  store.saveEliminationReasons(batchId,ranking);
   // 常规脑暴消费全部通过近期事实、可回答性与研判依据门禁的候选；核心/黑马/候补名额在角度评分后再分配。
   const brainstormInputs = breaking ? pool.selected : topicSelection.selected.filter(hasResearchBasis);
   if (!breaking && topicSelection.selected.length && !brainstormInputs.length) {
@@ -1163,6 +1163,7 @@ export async function runResearchPipeline({ gateway, store, batchId, provider, w
   if (dropped) onProgress(`${dropped} 个候选因状态、文章资格、读者入口门禁或最终名额未进入文章候选池；未入选原因写入候选排名产物`);
   if (!draftable.length && hasBrainstormInputs) throw new Error('没有可评分候选：请先补齐事件价值 T 和可核验事实');
   onProgress('写入临时总榜、编辑议题卡与选题池');
+  store.saveEliminationReasons(batchId,ranking);
   writeFile(path.join(workdir,'editorial-agenda.md'),markdownAgenda(rankedForOutput));
   writeFile(path.join(workdir,'topics-ranked.md'),markdownRanked(rankedForOutput,synthesis,briefPool,scoring));
   if (!breaking) {

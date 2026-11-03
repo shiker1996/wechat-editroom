@@ -1,4 +1,5 @@
 // 文章业务垂直入口。
+export { auditExternalArticleLocally } from './application/external-article-local-audit.mjs';
 // 生产路由、任务和编辑代理从这里取得文章生成、排版、配图和视觉规划能力。
 export {
   ARTICLE_LENGTH_RANGE,
@@ -7,6 +8,7 @@ export {
   articleStageOutputIssue,
   authorizedWritingBrief,
   buildArticleStageSystem,
+  buildArticleFactBaseRequest,
   buildDraftUserPrompt,
   buildPublicationClaimRegister,
   compositeSourceText,
@@ -15,6 +17,7 @@ export {
   publicationComplianceIssue,
   publicationCompliancePrompt,
   publicationFactBaseIssues,
+  prepareArticlePipelineContext,
   runArticlePipeline,
   runArticleReview,
   scanPublicationRisk,

@@ -120,9 +120,14 @@ test("浏览器 UI Smoke：首屏可进入素材入箱并快速保存素材", as
   assert.equal(await page.$eval("#quick-material-dialog", (dialog) => dialog.open), true);
   await page.type('#quick-material-form [name="title"]', "UI Smoke 素材");
   await page.type('#quick-material-form [name="rawText"]', "验证从工作台进入素材入箱并保存真实片段。");
+  const saveResponse = page.waitForResponse((response) =>
+    response.url().endsWith('/api/writing-materials') && response.request().method() === 'POST' && response.ok(),
+    { timeout: 15000 },
+  );
   await page.click('#quick-material-form button[type="submit"]');
+  await saveResponse;
   try {
-    await page.waitForFunction(() => !document.getElementById("quick-material-dialog")?.open);
+    await page.waitForFunction(() => !document.getElementById("quick-material-dialog")?.open, { timeout: 15000 });
   } catch (error) {
     error.message += `; quick state: ${JSON.stringify(await page.evaluate(() => ({ open: document.getElementById("quick-material-dialog")?.open, submitDisabled: document.querySelector("#quick-material-form button[type=submit]")?.disabled })))}; captured: ${JSON.stringify(capturedMaterials)}; page errors: ${pageErrors.map((item) => item.message).join(" | ")}`;
     throw error;

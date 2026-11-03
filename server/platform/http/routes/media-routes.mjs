@@ -1,6 +1,6 @@
 import { executeCapability } from '../../tools/capability-runtime.mjs';
 import { createStoreExecutionLogger } from '../../tools/execution-log.mjs';
-import { generateArticleImage, registerGeneratedSlotImage, renderCover, validateGeneratedCoverHtml } from '../../../features/articles/index.mjs';
+import { auditExternalArticleLocally, generateArticleImage, registerGeneratedSlotImage, renderCover, validateGeneratedCoverHtml } from '../../../features/articles/index.mjs';
 import { pipeFile } from '../route-helpers.mjs';
 import { createRequestHarnessGateway } from '../../skills/pipeline-runtime.mjs';
 import { deriveWritingStance, visualPolicyForStance } from '../../../shared/domain/writing-stance.mjs';
@@ -11,6 +11,13 @@ import { loadSkillBundle, resolveSkillFile } from '../../llm/skill-runtime.mjs';
 
 export async function handleMediaRoutes(context) {
   const { request, response, pathname, searchParams, store, config, json, body, path, fs, os, mime, root, execFileAsync, isInsideRoots, getImageWorkspace, getCdnUploadConfiguration, batchArticlesDir, saveLocalImage, uploadImageToCdn, articleWorkdir, models, planImagePlaceholders, writeUtf8, saveImageMetadata, imageManifestFile, aiJobs, planArticleVisuals, analyzeVisualComplexity } = context;
+  if (pathname === '/api/external/article/local-audit' && request.method === 'POST') {
+    const input = await body(request) || {};
+    if (typeof input.article !== 'string' || !input.article.trim() || input.article.length > 1000000) {
+      return json(response, 400, { error: '文章正文须为非空字符串，且不超过 100 万字符' });
+    }
+    return json(response, 200, auditExternalArticleLocally({ article: input.article, factBase: input.factBase || {} }));
+  }
   const imageWorkspaceResponse = async (workdir, extras = {}) => {
     const cdn = await getCdnUploadConfiguration();
     return { ...getImageWorkspace(workdir), ...cdn, deliveryMode:cdn.cdnConfigured === true ? 'cdn' : 'local', ...extras };

@@ -264,7 +264,8 @@ export async function handleArticleRoutes(context) {
   if (editorialMatch && request.method === 'PUT') {
     const candidateId = Number(editorialMatch[1]);
     if (!store.getCandidate(candidateId)) return json(response, 404, { error: '候选不存在' });
-    return json(response, 200, store.saveEditorial(candidateId, await body(request)));
+    try { return json(response, 200, store.saveEditorial(candidateId, await body(request))); }
+    catch (error) { if (error.code === 'INVALID_EDITORIAL_FIELD') return json(response, 400, { code: error.code, error: error.message }); throw error; }
   }
   const lockMatch = pathname.match(/^\/api\/candidates\/(\d+)\/lock$/);
   if (lockMatch && request.method === 'POST') {
