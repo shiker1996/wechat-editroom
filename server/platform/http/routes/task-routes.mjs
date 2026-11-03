@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { deriveEventKey, normalizeEventParts, tagBatch } from '../../../features/research/llm/tasks.mjs';
-import { ensureBatchEventCards, loadStableBatchEvents } from '../../../features/research/index.mjs';
+import { ensureBatchEventCards, loadStableBatchEvents, resolveScoring } from '../../../features/research/index.mjs';
 import { resolveArticleStageSkills } from '../../skills/entry-routing.mjs';
 import { isFreshForBatch } from '../../../features/research/index.mjs';
 import { dailyFocusOptions } from '../../../features/articles/index.mjs';
@@ -131,11 +131,28 @@ export async function handleTaskRoutes({ request, response, pathname, searchPara
       if(!Array.isArray(item.hotspotIds)||item.hotspotIds.length<1||item.hotspotIds.some((id)=>!allowed.has(Number(id))))return respond(json,response,422,{error:`事件 ${eventId} 的 hotspotIds 不属于该事件`});
       seen.add(eventId);
     }
-    const report={schemaVersion:1,source:'external-agent',batchId,generatedAt:new Date().toISOString(),summary:String(input.summary||'').slice(0,4000),items:input.items.map((item)=>({eventId:String(item.eventId),eventTitle:byId.get(String(item.eventId)).representative_title,hotspotIds:[...new Set(item.hotspotIds.map(Number))],title:String(item.title||'').trim().slice(0,120),thesis:String(item.thesis).trim().slice(0,800),angle:String(item.angle||'').trim().slice(0,800),readerBenefit:String(item.readerBenefit||'').trim().slice(0,500),riskLevel:String(item.riskLevel||'').trim().slice(0,40),riskReason:String(item.riskReason||'').trim().slice(0,500),reason:String(item.reason).trim().slice(0,1200),recommendedTrack:['article','social_cards'].includes(item.recommendedTrack)?item.recommendedTrack:'article',score:Number.isFinite(Number(item.score))?Math.max(0,Math.min(100,Number(item.score))):null}))};
+    const scoring=resolveScoring();
+    let heatItems=[];try{heatItems=JSON.parse(fs.readFileSync(path.join(batchWorkdir(batch),'sources','event-heat-ranking.json'),'utf8')).items||[];}catch{}
+    const heatById=new Map(heatItems.map((item)=>[String(item.eventId||item.event_id||''),Number(item.eventValue??item.t??item.heatScore??item.eventHeatScore)]));
+    const scoreItems=input.items.map((item)=>{
+      const event=byId.get(String(item.eventId));const dims=item.scoreInputs||{};
+      const values=['H','B','J','saturationPenalty','duplicatePenalty'];
+      if(values.some((key)=>!Number.isFinite(Number(dims[key]))))throw Object.assign(new Error(`事件 ${item.eventId} 缺少 scoreInputs：需要 H、B、J、saturationPenalty、duplicatePenalty`),{statusCode:422});
+      const T=heatById.get(String(item.eventId));
+      if(!Number.isFinite(T))throw Object.assign(new Error(`事件 ${item.eventId} 缺少事件热度 T，无法计算最终分`),{statusCode:409});
+      const P=Number(scoring.accountFitByCategory?.[event.topic_category||event.topicCategory]||0);
+      const H=Math.max(0,Math.min(100,Number(dims.H)));const B=Math.max(0,Math.min(100,Number(dims.B)));const J=Math.max(0,Math.min(100,Number(dims.J)));
+      const S=Math.max(0,Math.min(15,Number(dims.saturationPenalty)));const D=Math.max(0,Math.min(20,Number(dims.duplicatePenalty)));const C=Math.min(35,S+D);
+      const A=Math.max(0,Math.min(100,H*scoring.weights.h+B*scoring.weights.b+P*scoring.weights.p));
+      const F=Math.max(0,Math.min(100,A*(1-scoring.eventValueWeight-scoring.researchValueWeight)+T*scoring.eventValueWeight+J*scoring.researchValueWeight-C));
+      return {eventId:String(item.eventId),title:String(item.title||event.representative_title).trim().slice(0,120),T:Number(T.toFixed(1)),J,H,B,P:Number(P.toFixed(1)),A:Number(A.toFixed(1)),S:Number(S.toFixed(1)),D:Number(D.toFixed(1)),C:Number(C.toFixed(1)),F:Number(F.toFixed(1))};
+    }).sort((a,b)=>b.F-a.F||a.eventId.localeCompare(b.eventId)).map((item,index)=>({...item,rank:index+1}));
+    const scoreById=new Map(scoreItems.map((item)=>[item.eventId,item]));
+    const report={schemaVersion:2,source:'external-agent',batchId,generatedAt:new Date().toISOString(),summary:String(input.summary||'').slice(0,4000),items:input.items.map((item)=>({eventId:String(item.eventId),eventTitle:byId.get(String(item.eventId)).representative_title,hotspotIds:[...new Set(item.hotspotIds.map(Number))],title:String(item.title||'').trim().slice(0,120),thesis:String(item.thesis).trim().slice(0,800),angle:String(item.angle||'').trim().slice(0,800),readerBenefit:String(item.readerBenefit||'').trim().slice(0,500),riskLevel:String(item.riskLevel||'').trim().slice(0,40),riskReason:String(item.riskReason||'').trim().slice(0,500),reason:String(item.reason).trim().slice(0,1200),recommendedTrack:['article','social_cards'].includes(item.recommendedTrack)?item.recommendedTrack:'article',score:scoreById.get(String(item.eventId)).F,scoreBreakdown:scoreById.get(String(item.eventId))}))};
     const reportPath=path.join(batchWorkdir(batch),'sources','external-research-report.json');
     fs.mkdirSync(path.dirname(reportPath),{recursive:true});fs.writeFileSync(reportPath,JSON.stringify(report,null,2),'utf8');
     const stat=fs.statSync(reportPath);store.upsertArtifact({batchId,kind:'外部 Agent 选题研判',name:'external-research-report.json',path:reportPath,size:stat.size,modifiedAt:stat.mtime.toISOString()});
-    return respond(json,response,200,{batchId,status:'saved',count:report.items.length,path:'sources/external-research-report.json'});
+    return respond(json,response,200,{batchId,status:'saved',count:report.items.length,ranking:scoreItems,path:'sources/external-research-report.json'});
   }
   const tagMatch = pathname.match(/^\/api\/batches\/([^/]+)\/ai\/tag$/);
   if (tagMatch && request.method === 'POST') {
