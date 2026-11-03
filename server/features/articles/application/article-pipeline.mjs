@@ -10,7 +10,7 @@ import { evaluateEditorialReadiness } from '../domain/editorial-readiness.mjs';
 import { normalizeMaterialBrief, parseMaterialBrief } from '../../../shared/domain/material-brief.mjs';
 import { deriveWritingStance, stanceOverlay, citationPolicyForStance, visualPolicyForStance } from '../../../shared/domain/writing-stance.mjs';
 import { normalizeResearchPoints, normalizeRejectedAngles } from '../domain/research-selection.mjs';
-import { loadArticleSkillBundle, loadSkillBundle } from '../../../platform/llm/skill-runtime.mjs';
+import { loadSkillBundle } from '../../../platform/llm/skill-runtime.mjs';
 import { bindGenerationSnapshot, bindPipelineHarnessGateway, prepareSkillRun } from '../../../platform/skills/pipeline-runtime.mjs';
 import { configuredRepairAttempts, evaluateConfiguredGates } from '../../../platform/skills/configuration.mjs';
 import { batchTopicsDir, batchArticlesDir, candidateArticleDir } from '../../../platform/core/workspace-paths.mjs';
@@ -25,12 +25,12 @@ import {
 } from '../domain/publication-compliance.mjs';
 import {
   ARTICLE_LENGTH_RANGE, articleLengthStatus, articleStageOutputIssue, authorizedWritingBrief,
-  buildDraftUserPrompt, buildDraftOutlineView, buildArticlePlanningView, replaceArticleTitle, compositeSourceText, normalizePlanningResult, selectWriterSkill,
+  buildDraftUserPrompt, buildDraftOutlineView, buildArticlePlanningView, replaceArticleTitle, compositeSourceText, normalizePlanningResult, selectArticleType,
   readArticleSourceInput, sourceCacheIssue, buildResearchCoveragePrompt,
 } from './article-pipeline-contract.mjs';
 export {
   ARTICLE_LENGTH_RANGE, articleLengthStatus, articleStageOutputIssue, authorizedWritingBrief,
-  buildDraftUserPrompt, buildDraftOutlineView, buildArticlePlanningView, replaceArticleTitle, compositeSourceText, normalizePlanningResult, selectWriterSkill,
+  buildDraftUserPrompt, buildDraftOutlineView, buildArticlePlanningView, replaceArticleTitle, compositeSourceText, normalizePlanningResult, selectArticleType,
   readArticleSourceInput, sourceCacheIssue, unverifiedFactBaseIssue, buildResearchCoveragePrompt,
 } from './article-pipeline-contract.mjs';
 export {
@@ -127,13 +127,10 @@ export function buildReviewRepairPrompt({ factBase = {}, article = '', review = 
 
 function artifact(store,batchId,kind,name,filePath,trace={}) { const stat=fs.statSync(filePath); store.upsertArtifact({batchId,candidateId:trace.candidateId??null,kind,name,path:filePath,size:stat.size,modifiedAt:stat.mtime.toISOString(),rootRunId:trace.rootRunId??null,workflowRunId:trace.workflowRunId??null,stageId:trace.stageId??null}); }
 export const ARTICLE_STAGE_CONTRACT = Object.freeze([
-  { id: 'brief', skill: 'wechat-mp-topic-to-article' },
   { id: 'fact-base', skill: 'wechat-mp-topic-to-article' },
-  { id: 'drafting', skill: '$writer' },
+  { id: 'drafting', articleType: true },
   { id: 'review', skill: 'article-reviewer' },
-  { id: 'length-adjustment', skill: '$writer' },
-  { id: 'full-edit', skill: 'humanizer-zh' },
-  { id: 'humanize', skill: 'humanizer-zh' },
+  { id: 'length-adjustment', articleType: true },
   { id: 'title-lock', skill: 'title-generator' },
 ]);
 
@@ -157,24 +154,12 @@ export function buildPublicationComplianceRepairPrompt({ factBase = {}, claimReg
   const preservationRule = planningOnly
     ? '- 本次仅修复编辑规划元话语。保留标题、开头、章节顺序、事实、来源、作者判断和结尾；只改对应句子。'
     : '';
-  return `你是公众号文章的合规修订编辑。请直接修订文章，不要输出审阅报告、修订说明、工具操作过程或 JSON。
+  return `你是公众号文章事实修订编辑。按门禁问题修订完整文章，只处理确有事实错误、错误归因、标题误导或明确发布风险的内容。
 
-修订目标：只解决门禁明确指出的发布风险，保留作者已经确认的观点、角度、命题和研判拓展点。事实基座是已有证据线索，不是唯一事实来源；可依据当前联网搜索结果补充事实或来源，但只能使用搜索工具实际返回且能直接支撑主张的材料，不能按模型记忆补造事实、引语、来源或链接。修订后的新事实须由后续审稿复核并记入联网事实核验记录。输出完整文章时，未被问题涉及的句段必须原样保留。
+作者观点和因果解释，只有关键事实前提被已核实事实直接反驳或明确证伪时才弱化或删除。不因语气鲜明而要求弱化；缺少直接因果证据、来源暂未核实、存在其他解释，都不等于反证。来源说法有可追溯出处时，明确归因后保留；核验状态记录在门禁结果中，不扩写成重复免责声明。删除重复的“作者判断”“不能证明因果”等自我说明。
 
-必须执行的修订规则：
-- 只在门禁明确指出标题问题时修改标题。标题中的事实主张按事实证据核验；标题中的作者判断按观点表达处理。不得仅因标题有判断、数字或修辞，就默认改成中性标题。
-- 先区分可核验事实、来源说法、作者推断和价值判断。可核验事实缺少支持时，修正对应事实；来源说法要准确归因；有事实依据且推理链可理解的作者推断和价值判断可以保留，不要求统一添加“笔者认为”“从……看”“这可能意味着”等标记。
-- 只有当作者推断被写成了可核验的客观事实，且门禁指出具体句子时，才在该句作最小修改；不要把限定扩展到邻近观点或全篇。
-- 争议、负面和动机事实主张要准确归因；不得把作者解读写成公司已经承认的事实。作者对动机的推断可作为推断保留，但不得伪装成当事方已确认事实。
-- 事实中的数字、折价率、营收、分红和时间信息，必须就近使用事实基座或本次联网搜索实际返回的具体来源。新增来源只可使用搜索工具返回并核对过的 URL；数字和高影响事实找不到直接支持时，删除、降格或准确归因，不能自行补 URL、来源名称或外部事实。
-- 严格遵守作者明确不采用的方向和禁写边界，不得为了增强冲突补写退市、挤压投入、价格高估/低估、管理层动机或未披露时间表等结论。
-- 保留并兑现作者采用的研判拓展点，但不得把研判假设改写成已核验事实。
-${preserveVisuals ? '- 保留现有全部 Markdown 图片、图片占位 HTML 注释、Mermaid/ECharts 产物和相关链接，只修改必要的文字与标题，不得删除或重排这些视觉产物。' : ''}
+只修改门禁指出的句段及必要衔接，保留其余事实、观点力度、文章结构和作者语气。事实错误按已核实的具体来源修正；新来源只能使用搜索工具实际返回且能直接支撑主张的 URL，不能按模型记忆补造事实、引语、来源或链接。只在门禁明确指出标题问题时修改标题。${preserveVisuals ? '保留现有全部 Markdown 图片、图片占位 HTML 注释、Mermaid/ECharts 产物和相关链接。' : ''}
 ${preservationRule}
-
-这是定向修订，不是整篇重写。门禁明确指出的具体风险必须修复；没有指出的问题不应自行扩大。标题仅在标题问题被明确指出时修改。观点标题可直接表达作者判断，只要不把未核实事实伪装成事实。事实基座没有对应 claim 的计算结果、经济后果、历史动作或动机不得写成已发生事实；若作者以明确推理表达观点，可保留推断并保留原有表达力度。
-
-逐项修订顺序：对照每条门禁问题定位对应句段；标记其类别（事实、来源说法、作者推断、价值判断）；只核验事实和归因；只修改确有问题的句段；最后确认其余段落、观点力度和文章结构保持不变。不得把门禁没有指出的内容扩展成修订任务。
 
 门禁问题：
 ${JSON.stringify(issues)}
@@ -185,7 +170,7 @@ ${JSON.stringify(publicationScan)}
 事实基座：
 ${JSON.stringify(factBase)}
 
-发布主张登记（来源只能从这里使用）：
+发布主张登记：
 ${JSON.stringify(claimRegister)}
 
 作者采用的研判拓展点：
@@ -197,7 +182,7 @@ ${JSON.stringify(rejectedAngles)}
 待修订文章：
 ${String(article || '').trim()}
 
-只输出修订后的完整 Markdown 文章，必须保留唯一一级标题。输出前必须确认标题已按上述规则重新审核，且不得与原文风险标题相同。`;
+只输出修订后的完整 Markdown 文章。`;
 }
 
 async function textCall(gateway,input,system,user,maxOutputTokens=5000) {
@@ -317,7 +302,7 @@ export async function aiQualityGate({gateway,store,provider,batchId,candidateId,
   const purpose=`article-quality-gate-${stage}`;
   const messages=[
     {role:'system',protected:true,content:systemPrompt},
-    {role:'user',protected:true,content:`作者采用的研判拓展点：${JSON.stringify(researchPoints)}\n\n作者明确不采用的方向：${JSON.stringify(rejectedAngles)}\n\n判定口径：事实基座和主张登记是已有材料而非唯一来源。主动联网核验标题与关键主张，允许以搜索结果中可追溯、直接支撑的新来源补充事实；将核验结果及来源链接写进 evidence_checks 或具体 issue。未确认事实不得写成确定结论。第一人称作者判断或阅读动作（如“我看”“我读完后的判断”）不是亲测；只有声称本人测试、部署、使用并得到结果，且没有已确认实践证据时，才按未经核实的亲测处理。保留有事实依据、推理链清楚的作者判断，不要求用“这是判断”“不代表官方说法”自我标注。\n\n${publicationCompliancePrompt({factBase,claimRegister:publicationClaimRegister,scan:publicationScan,writingStance,citationPolicy})}\n\n待检查文章：\n${article}`},
+    {role:'user',protected:true,content:`作者采用的研判拓展点：${JSON.stringify(researchPoints)}\n\n作者明确不采用的方向：${JSON.stringify(rejectedAngles)}\n\n判定口径：事实基座和主张登记是核验起点，使用联网搜索核验标题与关键主张，并把真实找到的来源和结果写入 evidence_checks 或具体 issue。事实状态记录在核验结果中；有来源的报道准确归属即可。作者观点可以基于事实提出解释和因果判断，只有关键事实前提被已核实材料直接反驳或明确证伪时才建议弱化；未核实、缺少直接因果证据或存在其他解释本身不构成反证。不要要求正文增加“这是判断”“不代表官方说法”等自我说明。第一人称判断或阅读行为不等于亲测；只有声称本人测试、部署、使用并得到结果且没有已确认实践证据时，才按未经核实的亲测处理。\n\n${publicationCompliancePrompt({factBase,claimRegister:publicationClaimRegister,scan:publicationScan,writingStance,citationPolicy})}\n\n待检查文章：\n${article}`},
   ];
   const fallback=async()=>parseJsonResult(await gateway.complete({provider,purpose,batchId,candidateId,jsonMode:true,webSearch:true,maxOutputTokens,messages}),store);
   const toolMessages=[
@@ -416,7 +401,7 @@ export function prepareArticlePipelineContext({ store, batchId, candidateId, wor
   const requestedDistributionLane=normalizeDistributionLane(candidate.distribution_lane);
   const distributionLane=requestedDistributionLane==='通知池'&&!readerStake?'实验池':requestedDistributionLane;
   const materialBrief=normalizeMaterialBrief(editorial.material_brief);
-  const articleType=materialBrief.article_type || selectWriterSkill(candidate).skill;
+  const articleType=materialBrief.article_type || selectArticleType(candidate).articleType;
   const stanceDecision=deriveWritingStance({ articleType, materialBrief, editorial });
   const writingStance=stanceDecision.stance;
   const citationPolicy=citationPolicyForStance(writingStance);
@@ -439,60 +424,34 @@ export function prepareArticlePipelineContext({ store, batchId, candidateId, wor
     citationPolicy, visualDecision, brief };
 }
 
-export async function runArticlePipeline({gateway,store,batchId,candidateId,provider,workspaceRoot,snapshotId=null,skillSelection=null,stageSelections=null,articleLength=null,rootRunId=null,workflowRunId=null,onProgress=()=>{}}) {
+export async function runArticlePipeline({gateway,store,batchId,candidateId,provider,workspaceRoot,snapshotId=null,stageSelections=null,articleLength=null,rootRunId=null,workflowRunId=null,onProgress=()=>{}}) {
   const { candidate, classification, editorial, batch, workdir, articleType, stanceDecision, writingStance,
     citationPolicy, visualDecision, brief } = prepareArticlePipelineContext({ store, batchId, candidateId, workspaceRoot });
   fs.mkdirSync(workdir,{recursive:true});
   let providerConfig=gateway.config.providers[provider||gateway.config.defaultProvider];
   const historicalSnapshot=snapshotId?store.getGenerationSnapshot?.(snapshotId):null;
-  const historicalWriter=historicalSnapshot?.snapshot?.selection?.selectedSkill
-    ||historicalSnapshot?.snapshot?.skills?.[0]?.id;
-  const writerDecision=selectWriterSkill({...candidate,article_type:articleType});
-  const chosenWriterSkill = historicalWriter || skillSelection?.selectedSkill || writerDecision.skill;
-  const writerSelection={
-    ...(skillSelection||{}),
-    requestedSkill:skillSelection?.requestedSkill||'',
-    selectedSkill:chosenWriterSkill,
-    selectionSource:historicalWriter?'historical-snapshot':skillSelection?.selectionSource||'builtin-recommendation',
-    articleType,
-    recommendation:{skill:writerDecision.skill,reason:writerDecision.reason},
-    selectionReason:historicalWriter?'复用历史生成快照中的写作技能'
-      :skillSelection?.selectionSource==='user'?'用户手动指定写作技能'
-        :writerDecision.reason,
-  };
   const orchestratorSkill = loadSkillBundle({ workspaceRoot, skillName:'wechat-mp-topic-to-article' });
-  const writerSkillBundle = loadSkillBundle({ workspaceRoot, skillName:chosenWriterSkill });
-  const skillBundle = loadArticleSkillBundle({ workspaceRoot, writerSkill: chosenWriterSkill });
   const historicalStages=historicalSnapshot?.snapshot?.selection?.stages||{};
   const selectedStageIds={
     title:historicalStages.title?.selectedSkill||stageSelections?.title?.selectedSkill||'title-generator',
     reviewer:historicalStages.reviewer?.selectedSkill||stageSelections?.reviewer?.selectedSkill||'article-reviewer',
-    humanizer:historicalStages.humanizer?.selectedSkill||stageSelections?.humanizer?.selectedSkill||'humanizer-zh',
   };
   const stageSkills={
     'title-generator':loadSkillBundle({workspaceRoot,skillName:selectedStageIds.title}),
-    'humanizer-zh':loadSkillBundle({workspaceRoot,skillName:selectedStageIds.humanizer}),
     'article-reviewer':loadSkillBundle({workspaceRoot,skillName:selectedStageIds.reviewer}),
     'article-image-placeholders':loadSkillBundle({workspaceRoot,skillName:'article-image-placeholders'}),
     'article-visual-planner':loadSkillBundle({workspaceRoot,skillName:'article-visual-planner'}),
   };
-  const runtime=await prepareSkillRun({gateway,store,batchId,candidateId,purpose:'article',bundles:[writerSkillBundle,orchestratorSkill,...Object.values(stageSkills)],provider,snapshotId,
-    selection:(skillSelection||stageSelections)?{...writerSelection,entryPoint:'hotspot-article',stages:stageSelections||{}}:null});
+  const runtime=await prepareSkillRun({gateway,store,batchId,candidateId,purpose:'article',bundles:[orchestratorSkill,...Object.values(stageSkills)],provider,snapshotId,
+    selection:{entryPoint:'hotspot-article',articleType,stages:stageSelections||historicalStages}});
   gateway=bindGenerationSnapshot(gateway,runtime.snapshotId);
   gateway=bindPipelineHarnessGateway(gateway,{store,batchId,candidateId,provider,
     generationSnapshotId:runtime.snapshotId,rootRunId:rootRunId||`batch:${batchId}`,workflowRunId:workflowRunId||`article:${batchId}:${candidateId??'batch'}`,entryPoint:'article-pipeline'});
   provider=runtime.provider;providerConfig=runtime.providerConfig;
-  const configuredLength=writerSkillBundle.config?.gates?.length;
-  // 优先级：技能覆盖层 gates.length > config.local.json articleLength（含 pipelines.article 差异覆盖）> 默认目标 1600、区间 1300–1800
+  // 文章类型只决定写作表达；字数、修订次数与发布门禁统一由成稿流程配置管理。
   const resolvedArticleLength=resolveArticleLength({articleLength},'article');
-  const articleLengthRange=configuredLength
-    ? {
-      min:Number(configuredLength.minVisibleChars),
-      max:Number(configuredLength.maxVisibleChars),
-      targetVisibleChars:Math.min(Number(configuredLength.maxVisibleChars),Math.max(Number(configuredLength.minVisibleChars),resolvedArticleLength.targetVisibleChars)),
-    }
-    : resolvedArticleLength;
-  const repairAttempts=Math.max(0, Math.min(2, configuredRepairAttempts(writerSkillBundle.config,1)));
+  const articleLengthRange=resolvedArticleLength;
+  const repairAttempts=Math.max(0, Math.min(2, configuredRepairAttempts(orchestratorSkill.config,1)));
   const stageExecutions=[];
   const activeArtifacts = [];
   const stageManifestPath = path.join(workdir, '00-stage-executions.json');
@@ -503,13 +462,14 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   artifact(store, batchId, '阶段执行清单', '00-stage-executions.json', stageManifestPath, { candidateId, rootRunId, workflowRunId, stageId: 'article-pipeline' });
   const recordStage=(stage,bundle,inputArtifacts,outputArtifact,gate='passed')=>{
     const expected=ARTICLE_STAGE_CONTRACT[stageExecutions.length];
-    const actualSkill=bundle.skillName||bundle.writerSkill;
-    const expectedSkill=expected?.skill==='$writer'?chosenWriterSkill
+    const actualSkill=bundle.skillName||bundle.writerSkill||'';
+    const actualArticleType=bundle.articleType||'';
+    const expectedSkill=expected?.articleType?articleType
       : expected?.skill==='article-reviewer'?selectedStageIds.reviewer
-        : expected?.skill==='title-generator'?selectedStageIds.title
-          : expected?.skill==='humanizer-zh'?selectedStageIds.humanizer:expected?.skill;
-    if(!expected||expected.id!==stage||expectedSkill!==actualSkill)throw new Error(`成稿契约阶段不一致：期望 ${expected?.id||'结束'}/${expectedSkill||'-'}，实际 ${stage}/${actualSkill}`);
-    stageExecutions.push({stage,skill:actualSkill,skillHash:bundle.hash,skillFiles:bundle.files,inputArtifacts,outputArtifact,gate,fallback:bundle.fallback,promptVersion:ARTICLE_PROMPT_VERSION,promptSource: "prompts/manifest.json"});
+        : expected?.skill==='title-generator'?selectedStageIds.title:expected?.skill;
+    const actualIdentity=expected?.articleType?actualArticleType:actualSkill;
+    if(!expected||expected.id!==stage||expectedSkill!==actualIdentity)throw new Error(`成稿契约阶段不一致：期望 ${expected?.id||'结束'}/${expectedSkill||'-'}，实际 ${stage}/${actualIdentity||'-'}`);
+    stageExecutions.push({stage,...(expected.articleType?{articleType:actualArticleType,promptHash:bundle.promptHash}:{skill:actualSkill,skillHash:bundle.hash,skillFiles:bundle.files,fallback:bundle.fallback}),inputArtifacts,outputArtifact,gate,promptVersion:ARTICLE_PROMPT_VERSION,promptSource: "prompts/manifest.json"});
     activeArtifacts.push(...(Array.isArray(outputArtifact) ? outputArtifact : [outputArtifact]));
     flushStages();
   };
@@ -523,8 +483,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   const researchSelectionPath=path.join(workdir,'editorial-research-selection.json');
   writeFile(researchSelectionPath,JSON.stringify({candidate_id:candidate.candidate_id,selected:brief.adoptedResearchPoints,rejected:normalizeRejectedAngles(brief.rejectedAngles),generated_at:new Date().toISOString()},null,2));
   const skillManifestPath=path.join(workdir,'00-skill-manifest.json');
-  writeFile(skillManifestPath,JSON.stringify({pipelineVersion:ARTICLE_PROMPT_VERSION,promptMode:'standalone-runtime',skillsUsedFor:'routing-and-configuration',orchestrator:{skill:'wechat-mp-topic-to-article',hash:orchestratorSkill.hash,files:orchestratorSkill.files,fallback:orchestratorSkill.fallback},writerSkill:chosenWriterSkill,writerSkillSelection:writerSelection,articleType,writingStance,stanceSource:stanceDecision.source,stanceOverlayVersion:null,citationPolicy,visualPolicy:visualDecision.policy,stageSkillSelections:stageSelections||historicalStages,hash:skillBundle.hash,files:skillBundle.files,fallback:skillBundle.fallback,stageSkills:Object.fromEntries(Object.entries(stageSkills).map(([name,bundle])=>[name,{skill:bundle.skillName,hash:bundle.hash,files:bundle.files,fallback:bundle.fallback}])),loadedAt:new Date().toISOString()},null,2));
-  recordStage('brief',orchestratorSkill,['editorial','article-brief.md','editorial-research-selection.json'],'00-article-brief.md');
+  writeFile(skillManifestPath,JSON.stringify({pipelineVersion:ARTICLE_PROMPT_VERSION,promptMode:'standalone-runtime',skillsUsedFor:'workflow-and-stage-tools',orchestrator:{skill:'wechat-mp-topic-to-article',hash:orchestratorSkill.hash,files:orchestratorSkill.files,fallback:orchestratorSkill.fallback},articleType,articleTypeSelectionSource:'locked-brief',writingStance,stanceSource:stanceDecision.source,citationPolicy,visualPolicy:visualDecision.policy,stageSkillSelections:stageSelections||historicalStages,stageSkills:Object.fromEntries(Object.entries(stageSkills).map(([name,bundle])=>[name,{skill:bundle.skillName,hash:bundle.hash,files:bundle.files,fallback:bundle.fallback}])),loadedAt:new Date().toISOString()},null,2));
   onProgress('Step 1.5 基于来源建立结构化事实基座');
   // 事实基座包含逐条主张、证据和来源映射，内容量会随素材增长。
   // 不要在这里传固定 maxOutputTokens：gateway 的 article-fact-base
@@ -552,16 +511,18 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   if (!factGate.eligible) throw new Error(`文章事实门禁未通过：${factGate.reason}`);
   const readerContext = articleReaderContext(getAccountContext({ workspaceRoot }));
   const promptManifestPath = path.join(workdir, '00-prompt-manifest.json');
-  writeFile(promptManifestPath, JSON.stringify(articlePromptManifest(chosenWriterSkill), null, 2));
+  const promptManifest=articlePromptManifest(articleType);
+  writeFile(promptManifestPath, JSON.stringify(promptManifest, null, 2));
+  const articleTypeStage={articleType,promptHash:promptManifest.prompts.drafting.hash};
   const paths = Object.fromEntries(['04-draft.md', '06-reviewed.md', '06-review-quality-gate.json', '02-search-fact-checks.json', '07-length-adjusted.md',
     '07-length-adjustment.json', '05-full-edited.md', '05-humanized.md',
     '03-titles.md', '03-title-lock.json', '03-title-risk.json', '08-quality-gate.json', '10-publication-compliance.json', '09-FINAL.md']
     .map((name) => [name, path.join(workdir, name)]));
   const modelInput = { provider, batchId, candidateId };
   const maxTextTokens = Math.min(6500, providerConfig.maxOutputTokens || 6500);
-  const requireArticle = (result) => {
+  const requireDraftContent = (result) => {
     const article = cleanMarkdown(result.content);
-    const issue = articleStageOutputIssue(article, { requireArticle: true });
+    const issue = articleStageOutputIssue(article);
     if (issue) throw new Error(issue);
     return article;
   };
@@ -599,8 +560,8 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
       const issues = decision.issues || [];
       onProgress('按审稿定位修订问题句段');
       const offBrief = issues.some((issue) => issue.type === 'brief');
-      current = requireArticle(await textCall(gateway, { ...modelInput, webSearch: true, purpose: offBrief ? 'article-drafting-pipeline' : 'article-review-repair' },
-        offBrief ? draftSystemPrompt(chosenWriterSkill) : ARTICLE_PROMPTS.repair,
+      current = requireDraftContent(await textCall(gateway, { ...modelInput, webSearch: true, purpose: offBrief ? 'article-drafting-pipeline' : 'article-review-repair' },
+        offBrief ? draftSystemPrompt(articleType) : ARTICLE_PROMPTS.repair,
         offBrief
           ? JSON.stringify({ task: JSON.parse(buildDraftUserPrompt(brief.topic, writingBrief, { readerContext, length: articleLengthRange })), previous_article: current, issues })
           : buildReviewRepairPrompt({ factBase, article: current, review: decision }), maxTextTokens));
@@ -628,10 +589,10 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   };
 
   onProgress('Step 2 基于简报成稿并联网核验关键事实');
-  const draft = requireArticle(await textCall(gateway, { ...modelInput, webSearch: true, purpose: 'article-drafting-pipeline' },
-    draftSystemPrompt(chosenWriterSkill), buildDraftUserPrompt(brief.topic, writingBrief, { readerContext, length: articleLengthRange }), maxTextTokens));
+  const draft = requireDraftContent(await textCall(gateway, { ...modelInput, webSearch: true, purpose: 'article-drafting-pipeline' },
+    draftSystemPrompt(articleType), buildDraftUserPrompt(brief.topic, writingBrief, { readerContext, length: articleLengthRange }), maxTextTokens));
   writeFile(paths['04-draft.md'], draft);
-  recordStage('drafting', writerSkillBundle, ['00-article-brief.md', '02-fact-base.json'], '04-draft.md');
+  recordStage('drafting', articleTypeStage, ['00-article-brief.md', '02-fact-base.json'], '04-draft.md');
   store.saveDocument({ batchId, candidateId, kind: 'draft', title: extractArticleTitle(draft), content: draft, filePath: paths['04-draft.md'], status: 'draft' });
 
   onProgress('Step 3 事实与逻辑审稿');
@@ -653,7 +614,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
       const beforeCount = currentLength.count;
       const plan = planArticleLengthAdjustment(currentLength.count, articleLengthRange);
       const previous = final;
-      const adjusted = requireArticle(await textCall(gateway, { ...modelInput, purpose: 'article-final-repair-length' },
+      const adjusted = requireDraftContent(await textCall(gateway, { ...modelInput, purpose: 'article-final-repair-length' },
         ARTICLE_PROMPTS.lengthAdjust,
         JSON.stringify({
           reader_context: readerContext,
@@ -709,50 +670,14 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
     policy: { structuralThreshold: ARTICLE_LENGTH_ADJUSTMENT_THRESHOLD, targetMargin: Math.min(50, Math.max(10, Math.round((articleLengthRange.max - articleLengthRange.min) * 0.05))) },
     attempts: lengthAdjustmentAttempts,
   }, null, 2));
-  recordStage('length-adjustment', writerSkillBundle, ['06-reviewed.md'], ['07-length-adjusted.md', '07-length-adjustment.json'], lengthStageStatus);
+  recordStage('length-adjustment', articleTypeStage, ['06-reviewed.md'], ['07-length-adjusted.md', '07-length-adjustment.json'], lengthStageStatus);
 
-  onProgress('Step 5 全篇编辑');
-  const fullEdited = requireArticle(await textCall(gateway, { ...modelInput, purpose: 'article-humanize' },
-    ARTICLE_PROMPTS.fullEdit, JSON.stringify({
-      reader_context: readerContext,
-      locked_brief: writingBrief,
-      verified_facts: articleFactAuthorityView(searchAugmentedFactBase),
-      review_evidence: reviewDecision.evidence_checks || [],
-      article: final,
-    }), maxTextTokens));
-  const fullEditChanges = articleChangedPassages(final, fullEdited);
-  final = fullEdited;
-  if (fullEditChanges.before.length || fullEditChanges.after.length) {
-    onProgress('核对全篇编辑改动涉及的事实与推理');
-    const fullEditDecision = await reviewArticle(fullEdited, {
-      changed_passages: fullEditChanges,
-      instruction: '仅检查全篇编辑改动及受影响的论证；未改正文作为上下文。发现事实边界被削弱、归因丢失或论证含义改变时报告。',
-    });
-    reviewDecision = combineReviewDecisions(reviewDecision, fullEditDecision);
-    writeFile(paths['06-review-quality-gate.json'], JSON.stringify({ ...reviewDecision, history: reviewHistory }, null, 2));
-  }
+  onProgress('保留直写正文，整理兼容产物');
+  // Keep legacy artifact names for consumers; these are copies, not model stages.
   writeFile(paths['05-full-edited.md'], final);
-  recordStage('full-edit', stageSkills['humanizer-zh'], ['07-length-adjusted.md'], '05-full-edited.md', 'passed');
-
-  onProgress('Step 6 AI 表达精修');
-  const humanized = requireArticle(await textCall(gateway, { ...modelInput, purpose: 'article-humanize' },
-    ARTICLE_PROMPTS.humanize, JSON.stringify({ reader_context: readerContext, article: final }), maxTextTokens));
-  const humanizeChanges = articleChangedPassages(final, humanized);
-  final = humanized;
-  if (humanizeChanges.before.length || humanizeChanges.after.length) {
-    onProgress('核对表达精修改动涉及的事实与推理');
-    const humanizeDecision = await reviewArticle(humanized, {
-      changed_passages: humanizeChanges,
-      instruction: '仅检查表达精修改动及受影响的论证；未改正文作为上下文。只报告精修改动新增或加重的问题。',
-    });
-    reviewDecision = combineReviewDecisions(reviewDecision, humanizeDecision);
-    writeFile(paths['06-review-quality-gate.json'], JSON.stringify({ ...reviewDecision, history: reviewHistory }, null, 2));
-  }
   writeFile(paths['05-humanized.md'], final);
-  recordStage('humanize', stageSkills['humanizer-zh'], ['05-full-edited.md'], '05-humanized.md',
-    'passed');
 
-  onProgress('Step 7 根据完成的正文生成发布标题');
+  onProgress('Step 5 根据完成的正文生成发布标题');
   const titlePlan = await generateTitlePlan({ gateway, store, ...modelInput, systemPrompt: ARTICLE_PROMPTS.title,
     purpose: 'article-title-generation-final', fallbackTitle: extractArticleTitle(final) || brief.topic,
     payload: { topic: brief.topic, reader_context: readerContext, article: final,
@@ -761,8 +686,8 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
       keywords: parseMaterialBrief(editorial.material_brief).core_keywords || [], title_length: stageSkills['title-generator'].config?.gates?.length || null } });
   final = replaceArticleTitle(final, titlePlan.selectedTitle);
   writeFile(paths['03-titles.md'], '# 发布标题\n\n' + titlePlan.titleCandidates.map((item) => '- ' + item.title + '：' + item.reason).join('\n') + '\n\n推荐：' + titlePlan.selectedTitle);
-  writeFile(paths['03-title-lock.json'], JSON.stringify({ ...titlePlan, stage: 'after-polish' }, null, 2));
-  recordStage('title-lock', stageSkills['title-generator'], ['05-humanized.md'], ['03-titles.md', '03-title-lock.json']);
+  writeFile(paths['03-title-lock.json'], JSON.stringify({ ...titlePlan, stage: 'after-review' }, null, 2));
+  recordStage('title-lock', stageSkills['title-generator'], ['07-length-adjusted.md'], ['03-titles.md', '03-title-lock.json']);
 
   // Visual work is opt-in and happens after the body lifecycle. Do not run SEO rewrites.
   const visualNeed = parseMaterialBrief(editorial.material_brief).visual_need;
@@ -805,7 +730,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   const publicationScan = scanPublicationRisk({ article: final, factBase: publicationEvidence });
   writeFile(paths['03-title-risk.json'], JSON.stringify(publicationScan, null, 2));
   const length = articleLengthStatus(final, articleLengthRange);
-  const configured = evaluateConfiguredGates(writerSkillBundle.config, { factBase: publicationEvidence, output: final, visibleChars: length.count });
+  const configured = evaluateConfiguredGates(orchestratorSkill.config, { factBase: publicationEvidence, output: final, visibleChars: length.count });
   const localIssues = [
     ...(articleStageOutputIssue(final, { requireArticle: true }) ? [{ type: 'output', message: articleStageOutputIssue(final, { requireArticle: true }) }] : []),
     ...(!length.valid ? [{ type: 'length', message: `正文可见字数 ${length.count} 超出配置范围 ${articleLengthRange.min}–${articleLengthRange.max}` }] : []),
@@ -838,7 +763,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
     ['事实基座', '02-fact-base.json', factBasePath], ['发布主张登记', '02-publication-claim-register.json', publicationClaimRegisterPath],
     ...Object.entries(paths).map(([name, file]) => [({
       '04-draft.md': '文章初稿', '06-reviewed.md': '审稿稿', '07-length-adjusted.md': '字数调整稿',
-      '07-length-adjustment.json': '字数调整记录', '05-full-edited.md': '全篇编辑稿', '05-humanized.md': '表达精修稿',
+      '07-length-adjustment.json': '字数调整记录', '05-full-edited.md': '审稿后兼容副本', '05-humanized.md': '直写成稿副本',
       '06-review-quality-gate.json': '事实与逻辑审稿', '03-titles.md': '标题候选',
       '02-search-fact-checks.json': '联网事实核验记录',
       '03-title-lock.json': '最终标题锁定', '03-title-risk.json': '标题检查',
@@ -852,8 +777,8 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   for (const [kind, name, file] of outputs) artifact(store, batchId, kind, name, file, { candidateId, rootRunId, workflowRunId, stageId: 'article-pipeline' });
   store.updateBatch(batchId, { stage: 'typeset', status: 'review' });
   onProgress('成稿完成：' + length.count + ' 个可见字符' + (!length.valid ? '（字数超出配置范围，可在编辑器调整）' : ''));
-  return { workdir, finalPath: paths['09-FINAL.md'], visibleChars: length.count, writerSkill: chosenWriterSkill,
-    skillHash: skillBundle.hash, skillFallback: skillBundle.fallback, title: finalTitle, needsEditorialReview, publicationReady: !needsEditorialReview };
+  return { workdir, finalPath: paths['09-FINAL.md'], visibleChars: length.count, articleType,
+    skillHash: orchestratorSkill.hash, skillFallback: orchestratorSkill.fallback, title: finalTitle, needsEditorialReview, publicationReady: !needsEditorialReview };
 }
 
 function readJsonIfPresent(filePath, fallback = {}) {
@@ -896,7 +821,8 @@ export async function runArticleReview({ gateway, store, batchId, candidateId = 
   const publicationScan = scanPublicationRisk({ article, factBase: searchFactBase });
   const localIssues = publicationScan.titleBlockers.map((message) => ({ type: 'title', message }));
   if (reviewDecision.evidence_checks_status === 'model_omitted') localIssues.push({ type: 'publication_compliance', message: '联网审稿未返回 evidence_checks；需人工复核联网事实依据后发布。' });
-  const outputIssue = articleStageOutputIssue(article, { requireArticle: true });
+  const isDraft = documentKind === 'draft' || documentKind === 'daily-draft';
+  const outputIssue = articleStageOutputIssue(article, { requireArticle: !isDraft });
   if (outputIssue) localIssues.push({ type: 'output', message: outputIssue });
   const needsReview = articleGateNeedsEditorialReview(reviewDecision) || localIssues.length > 0;
   const evidencePath = path.join(workdir, '02-search-fact-checks.json');
@@ -921,7 +847,6 @@ export async function runArticleReview({ gateway, store, batchId, candidateId = 
   writeFile(manifestPath, JSON.stringify({ ...manifest, reviewVersion: ARTICLE_PROMPT_VERSION,
     activeReviewArtifacts: reports.map(([, name]) => name), reviewedAt: new Date().toISOString() }, null, 2));
   artifact(store, batchId, '阶段执行清单', '00-stage-executions.json', manifestPath, { candidateId, rootRunId, workflowRunId, stageId: 'article-review' });
-  const isDraft = documentKind === 'draft' || documentKind === 'daily-draft';
   const status = isDraft ? 'draft' : needsReview ? 'needs_review' : 'finalized';
   const saved = store.saveDocument({ batchId, candidateId, kind: documentKind, title: extractArticleTitle(article) || document.title,
     content: article, filePath: document.file_path, status, reviewState: needsReview ? 'needs_review' : 'passed' });

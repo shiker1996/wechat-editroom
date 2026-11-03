@@ -39,15 +39,20 @@ export function confirmedFactsDecision(value){
   return substantiveDecision(text)&&!GENERIC_FACTS_PATTERN.test(text);
 }
 
+function requiredForField(field,{editorial={}}={}){
+  if(field.key==='author_opinions')return String(editorial.writing_stance||'').toLowerCase()==='opinion';
+  return field.required;
+}
+
 // 编辑室表单项的唯一权威清单：scope 决定值从候选还是底稿会话读取。
-// 顺序即依赖链：先明确事实、观点、角度和命题，再决定采用哪些研判拓展点，
-// 最后用 research_basis 解释这些拓展点如何服务于文章。
+// 写作类型由主写技能路由决定，不作为作者底稿字段；观点字段仅在作者明确选择 opinion 时必填。
 export const EDITORIAL_FIELDS=Object.freeze([
   {key:'writing_stance',label:'写作立场',required:false,scope:'editorial'},
   {key:'confirmed_facts',label:'已确认事实',required:true,scope:'editorial'},
-  {key:'author_opinions',label:'明确观点',required:true,scope:'editorial'},
+  {key:'author_opinions',label:'明确观点',required:false,scope:'editorial'},
   {key:'angle',label:'写作角度',required:true,scope:'candidate'},
   {key:'thesis',label:'锁定命题',required:true,scope:'candidate'},
+  {key:'evidence_boundary',label:'论点—论据对应与证据边界',required:true,scope:'editorial'},
   {key:'adopted_research_points',label:'采用的研判拓展点',required:false,scope:'editorial'},
   {key:'research_basis',label:'采用的研判主线',required:false,scope:'editorial'},
   // 读者后果与冲突由规划阶段可依据事实和命题提出草案；只有核心事实、角度或风险不清时才需要作者补充。
@@ -91,7 +96,7 @@ export function evaluateEditorialReadiness({candidate={},editorial={}}={}){
     const value=field.key==='adopted_research_points'
       ? rawValue.map((item)=>item.statement).join('；')
       : rawValue;
-    const required=field.required;
+    const required=requiredForField(field,{editorial});
     return {...field,required,value,rawValue,ok:editorialFieldComplete(field,rawValue)};
   });
   const missing=fields.filter((field)=>field.required&&!field.ok).map((field)=>field.label);

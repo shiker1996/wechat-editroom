@@ -1,6 +1,6 @@
-import { evaluateEditorialReadiness, normalizeRejectedAngles, selectWriterSkill } from '../../../features/articles/index.mjs';
+import { evaluateEditorialReadiness, normalizeRejectedAngles } from '../../../features/articles/index.mjs';
 import { createRequestHarnessGateway, resolveSkillToolPolicy } from '../../skills/pipeline-runtime.mjs';
-import { listArticleStageSkillSlots, listEntryWriterSkills, resolveArticleStageSkills, resolveEntryWriterSkill } from '../../skills/entry-routing.mjs';
+import { listArticleStageSkillSlots, resolveArticleStageSkills } from '../../skills/entry-routing.mjs';
 import { executeCapabilityWithPreference } from '../../tools/capability-slots.mjs';
 import { getToolRegistry } from '../../tools/index.mjs';
 import { runEditorialAgentTurn } from '../../../features/articles/application/agent/editorial-adapter.mjs';
@@ -20,7 +20,7 @@ export async function handleArticleRoutes(context) {
   // agent-callsite: editorial — Phase 0 baseline; current production flow remains bespoke.
   const { request, response, pathname, store, json, body, candidateEventGroups, fetchCandidateSource, config, root, writeUtf8, path, batchWorkdir, lockedBrief, draftArticle, models, aiJobs, localSecurity } = context;
   async function fetchSourceForCandidate(candidate, input = {}) {
-    const skillId = selectWriterSkill(candidate).skill;
+    const skillId = 'wechat-mp-topic-to-article';
     const policy = await resolveSkillToolPolicy({ workspaceRoot: root, skillId });
     return fetchCandidateSource({
       store,
@@ -98,14 +98,6 @@ export async function handleArticleRoutes(context) {
     };
   }
   const editorialMatch = pathname.match(/^\/api\/candidates\/(\d+)\/editorial$/);
-  const writerSkillsMatch=pathname.match(/^\/api\/candidates\/(\d+)\/writer-skills$/);
-  if(writerSkillsMatch&&request.method==='GET'){
-    const candidate=store.getCandidate(Number(writerSkillsMatch[1]));
-    if(!candidate)return json(response,404,{error:'候选不存在'});
-    const writerRecommendation=selectWriterSkill(candidate);
-    const recommendedSkillId=writerRecommendation.skill;
-    return json(response,200,await listEntryWriterSkills({workspaceRoot:root,entryPoint:'hotspot-article',recommendedSkillId}));
-  }
   const stageSkillsMatch=pathname.match(/^\/api\/candidates\/(\d+)\/stage-skills$/);
   if(stageSkillsMatch&&request.method==='GET'){
     const candidate=store.getCandidate(Number(stageSkillsMatch[1]));
@@ -318,27 +310,16 @@ export async function handleArticleRoutes(context) {
     const candidate = store.getCandidate(Number(articleMatch[1]));
     if (!candidate) return json(response, 404, { error: '候选不存在' });
     const input = await body(request);
-    const explicitSkillId=String(input.skillId||'').trim();
     const requestedStages=input.stageSkills&&typeof input.stageSkills==='object'?input.stageSkills:{};
-    const hasExplicitStages=Object.values(requestedStages).some((value)=>String(value||'').trim());
-    const writerRecommendation=selectWriterSkill(candidate);
-    let previousSnapshot=(input.useLatestSkill===true||explicitSkillId||hasExplicitStages)?null:store.findLatestGenerationSnapshot({
+    // 成稿是用户主动发起的新运行，默认读取当前阶段模型与技能配置。
+    // 只有显式要求复用时才恢复旧快照，避免切换阶段模型后仍被历史模型锁定。
+    const reusePreviousSnapshot=input.reuseSnapshot===true||input.useLatestSkill===false;
+    const previousSnapshot=reusePreviousSnapshot?store.findLatestGenerationSnapshot({
       batchId:candidate.batch_id,candidateId:candidate.id,purposes:['article'],
-    });
-    const previousSelection=previousSnapshot?.snapshot?.selection||{};
-    if(writerRecommendation.source==='locked_article_type'
-      &&previousSelection.selectionSource!=='user'
-      &&previousSelection.selectedSkill!==writerRecommendation.skill){
-      previousSnapshot=null;
-    }
-    const recommendedSkillId=writerRecommendation.skill;
-    const skillSelection=previousSnapshot?null:await resolveEntryWriterSkill({
-      workspaceRoot:root,entryPoint:'hotspot-article',requestedSkillId:explicitSkillId,recommendedSkillId,
-      preferRecommended:writerRecommendation.source==='locked_article_type',
-    });
+    }):null;
     const stageSelections=previousSnapshot?null:await resolveArticleStageSkills({workspaceRoot:root,requested:requestedStages});
     return json(response, 202, aiJobs.start({ batchId: candidate.batch_id, candidateId: candidate.id,
-      provider:previousSnapshot?null:input.provider, type:'article', snapshotId:previousSnapshot?.id||null,skillSelection,stageSelections }));
+      provider:previousSnapshot?null:input.provider, type:'article', snapshotId:previousSnapshot?.id||null,stageSelections }));
   }
   return false;
 }

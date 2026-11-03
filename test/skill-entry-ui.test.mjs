@@ -9,11 +9,12 @@ const tutorial=fs.readFileSync(new URL('../public/src/views/tutorial.js',import.
 const daily=fs.readFileSync(new URL('../public/src/views/daily.js',import.meta.url),'utf8');
 const server=`${fs.readFileSync(new URL('../server/platform/http/routes/candidate-routes.mjs',import.meta.url),'utf8')}\n${fs.readFileSync(new URL('../server/platform/http/routes/task-routes.mjs',import.meta.url),'utf8')}`;
 
-test('article creation entries expose and submit compatible writer selections',()=>{
-  assert.match(html,/id="editorial-writer-skill"/);
+test('热点文章把文章类型直接交给 AI，仅保留阶段技能配置',()=>{
+  assert.match(html,/文章类型决定写法/);
+  assert.doesNotMatch(html,/id="editorial-writer-skill"/);
   assert.match(html,/id="tutorial-writer-skill"/);
-  assert.match(editorial,/\/writer-skills/);
-  assert.match(editorial,/skillId: document\.getElementById\("editorial-writer-skill"\)/);
+  assert.doesNotMatch(editorial,/\/writer-skills/);
+  assert.doesNotMatch(editorial,/editorial-writer-skill/);
   assert.match(tutorial,/creation-entry-points\/independent-writing\/skills/);
   assert.match(html,/name="skillId"/);
   assert.match(html,/id="editorial-stage-skills"/);

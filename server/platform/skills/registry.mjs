@@ -109,7 +109,8 @@ export function createGenerationSnapshot({ skillBundles, tools = [], provider, m
     selection:selection ? {
       requestedSkill:selection.requestedSkill || '',
       selectedSkill:selection.selectedSkill || skills[0]?.id || '',
-      selectionSource:selection.selectionSource || 'builtin-fallback',
+      selectionSource:selection.selectionSource || (selection.articleType ? 'article-type' : 'builtin-fallback'),
+      articleType:selection.articleType || '',
       entryPoint:selection.entryPoint || '',
       contentType:selection.contentType || '',
       stages:Object.fromEntries(Object.entries(selection.stages||{}).map(([slot,item])=>[slot,{

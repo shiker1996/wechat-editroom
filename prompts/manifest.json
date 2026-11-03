@@ -3,7 +3,7 @@
   "prompts": [
     {
       "id": "articles.facts",
-      "version": 1,
+      "version": 2,
       "file": "articles/facts.md",
       "purpose": "article-facts",
       "variables": [],
@@ -14,15 +14,15 @@
     },
     {
       "id": "articles.draft",
-      "version": 3,
+      "version": 14,
       "file": "articles/draft.md",
       "purpose": "article-draft",
       "variables": [],
       "components": [
-        "articles.writer-tech-deep",
-        "articles.writer-deep-dive",
-        "articles.writer-gossip-chill",
-        "articles.writer-composite"
+        "articles.type-tech-deep",
+        "articles.type-deep-dive",
+        "articles.type-gossip-chill",
+        "articles.type-composite"
       ],
       "output": {
         "format": "markdown"
@@ -30,7 +30,7 @@
     },
     {
       "id": "articles.review",
-      "version": 3,
+      "version": 7,
       "file": "articles/review.md",
       "purpose": "article-review",
       "variables": [],
@@ -41,7 +41,7 @@
     },
     {
       "id": "articles.repair",
-      "version": 1,
+      "version": 4,
       "file": "articles/repair.md",
       "purpose": "article-repair",
       "variables": [],
@@ -52,7 +52,7 @@
     },
     {
       "id": "articles.length-adjust",
-      "version": 1,
+      "version": 2,
       "file": "articles/length-adjust.md",
       "purpose": "article-length-adjust",
       "variables": [],
@@ -85,7 +85,7 @@
     },
     {
       "id": "articles.title",
-      "version": 2,
+      "version": 3,
       "file": "articles/title.md",
       "purpose": "article-title",
       "variables": [],
@@ -95,10 +95,10 @@
       }
     },
     {
-      "id": "articles.writer-tech-deep",
+      "id": "articles.type-tech-deep",
       "version": 1,
-      "file": "articles/writer-tech-deep.md",
-      "purpose": "article-writer-route-hint",
+      "file": "articles/type-tech-deep.md",
+      "purpose": "article-type-guidance",
       "variables": [],
       "components": [],
       "output": {
@@ -106,10 +106,10 @@
       }
     },
     {
-      "id": "articles.writer-deep-dive",
-      "version": 2,
-      "file": "articles/writer-deep-dive.md",
-      "purpose": "article-writer-route-hint",
+      "id": "articles.type-deep-dive",
+      "version": 4,
+      "file": "articles/type-deep-dive.md",
+      "purpose": "article-type-guidance",
       "variables": [],
       "components": [],
       "output": {
@@ -117,10 +117,10 @@
       }
     },
     {
-      "id": "articles.writer-gossip-chill",
+      "id": "articles.type-gossip-chill",
       "version": 1,
-      "file": "articles/writer-gossip-chill.md",
-      "purpose": "article-writer-route-hint",
+      "file": "articles/type-gossip-chill.md",
+      "purpose": "article-type-guidance",
       "variables": [],
       "components": [],
       "output": {
@@ -128,10 +128,10 @@
       }
     },
     {
-      "id": "articles.writer-composite",
+      "id": "articles.type-composite",
       "version": 1,
-      "file": "articles/writer-composite.md",
-      "purpose": "article-writer-route-hint",
+      "file": "articles/type-composite.md",
+      "purpose": "article-type-guidance",
       "variables": [],
       "components": [],
       "output": {

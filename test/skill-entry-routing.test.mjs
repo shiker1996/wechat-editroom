@@ -65,7 +65,7 @@ test('generation snapshot records the writer selection decision',()=>{
   });
   assert.deepEqual(snapshot.selection,{
     requestedSkill:'hotspot-other',selectedSkill:'hotspot-other',selectionSource:'user',
-    entryPoint:'hotspot-article',contentType:'',stages:{},
+    articleType:'',entryPoint:'hotspot-article',contentType:'',stages:{},
   });
 });
 

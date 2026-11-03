@@ -239,7 +239,7 @@ export function unverifiedFactBaseIssue(factBase) {
 
 export const ARTICLE_LENGTH_RANGE=Object.freeze({min:1300,max:1800,targetVisibleChars:1600});
 
-export function selectWriterSkill(candidate={}) {
+export function selectArticleType(candidate={}) {
   const rawMaterialBrief=candidate.materialBrief||candidate.material_brief||candidate.editorial?.material_brief||candidate.editorial?.materialBrief;
   let materialBrief=rawMaterialBrief;
   if(typeof rawMaterialBrief==='string'){
@@ -247,18 +247,18 @@ export function selectWriterSkill(candidate={}) {
   }
   const explicitType=String(candidate.article_type||candidate.articleType||materialBrief?.article_type||'').trim();
   if(explicitType&&['wechat-mp-composite','wechat-mp-gossip-chill','wechat-mp-tech-deep','wechat-mp-tech-hotspot','wechat-mp-deep-dive'].includes(explicitType)){
-    return {skill:explicitType,reason:`锁定简报明确指定文章类型 ${explicitType}`,source:'locked_article_type'};
+    return {articleType:explicitType,reason:`锁定简报明确指定文章类型 ${explicitType}`,source:'locked_article_type'};
   }
-  if(candidate.composite)return {skill:'wechat-mp-composite',reason:'候选由多个热点组成，需要按共同机制或趋势组织'};
+  if(candidate.composite)return {articleType:'wechat-mp-composite',reason:'候选由多个热点组成，需要按共同机制或趋势组织'};
   const angleText=[candidate.angle,candidate.thesis,candidate.editorial?.research_basis,candidate.editorial?.confirmed_facts].filter(Boolean).join(' ');
   const allText=[candidate.hotspot_title,candidate.category,angleText].filter(Boolean).join(' ');
   const serious=/裁员|事故|伤亡|骚扰|违法|诉讼|疾病|医疗|劳动仲裁|隐私泄露/.test(allText);
-  if(!serious&&/趣闻|离谱|八卦|段子|奇葩|荒诞|整活|吐槽/.test(angleText))return {skill:'wechat-mp-gossip-chill',reason:'角度明确采用轻量趣闻或职场反差表达，且不涉及严肃伤害事件'};
+  if(!serious&&/趣闻|离谱|八卦|段子|奇葩|荒诞|整活|吐槽/.test(angleText))return {articleType:'wechat-mp-gossip-chill',reason:'角度明确采用轻量趣闻或职场反差表达，且不涉及严肃伤害事件'};
   const deepIntent=/原理|机制拆解|架构拆解|技术拆解|性能拆解|成本拆解|成本测算|算一笔账|可复算|公式|吞吐|延迟|显存|算力成本|部署成本|推理成本|训练成本|量化|内核|技术路线|比较口径|基准测试/.test(angleText);
   const technicalSubject=/AI|模型|芯片|GPU|推理|训练|Token|MoE|Attention|Agent|数据库|框架|协议|算法|开源|性能|算力|架构|内核/i.test(allText);
-  if(deepIntent&&technicalSubject)return {skill:'wechat-mp-tech-deep',reason:'命题要求解释技术机制，或对性能、成本和指标进行可复算拆解'};
-  if(['🤖 AI/技术动态', '产品与技术动态'].includes(candidate.category)||technicalSubject)return {skill:'wechat-mp-tech-hotspot',reason:'主题属于技术、产品或行业动态，重点是事件影响而非完整原理推导'};
-  return {skill:'wechat-mp-deep-dive',reason:'主题需要从参与方、利益关系、因果链与反方边界展开'};
+  if(deepIntent&&technicalSubject)return {articleType:'wechat-mp-tech-deep',reason:'命题要求解释技术机制，或对性能、成本和指标进行可复算拆解'};
+  if(['🤖 AI/技术动态', '产品与技术动态'].includes(candidate.category)||technicalSubject)return {articleType:'wechat-mp-tech-hotspot',reason:'主题属于技术、产品或行业动态，重点是事件影响而非完整原理推导'};
+  return {articleType:'wechat-mp-deep-dive',reason:'主题需要从参与方、利益关系、因果链与反方边界展开'};
 }
 
 export function articleLengthStatus(article, range = ARTICLE_LENGTH_RANGE) {

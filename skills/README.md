@@ -23,13 +23,11 @@
 
 - `wechat-mp-topic-to-article`：公众号成稿总编排契约
 - `wechat-mp-tech-hotspot`：技术热点快评
-- `wechat-mp-tech-deep`：技术原理深解
-- `wechat-mp-deep-dive`：行业、职场和社会事件分析
-- `wechat-mp-gossip-chill`：轻量职场与大厂趣闻
-- `wechat-mp-composite`：多热点综合与趋势综述
 - `wechat-mp-daily`：围绕主体、动作或场合关系归纳关联事件的公众号早报
 - `wechat-mp-personal-writing`：根据作者真实经历、心得与判断生成自主经验文章
 - `wechat-mp-tutorial`：根据真实环境、步骤和证据生成可复现教程
+
+技术深解、事件分析、轻松趣闻和多热点综合作为 `article_type` 写入文章提示词，不再作为独立可安装技能维护；对应说明位于 `prompts/articles/`。
 
 当前文章入口分为热点事件文、批次早报文和自主写作文；自主写作内部按心得经验/使用教程选择独立事实契约与技能。三类成稿统一进入文章编辑器与公众号排版。工具清单不进入热点文章路由，由图文流程承接。
 - `title-generator`：标题生成与筛选

@@ -2,7 +2,7 @@ import { resolvePrompt } from '../../../platform/llm/prompt-registry.mjs';
 
 // Runtime prompts deliberately stand alone. Skill configuration still selects models,
 // length and routing; complete workflow/skill prose is not injected into each call.
-export const ARTICLE_PROMPT_VERSION = 'direct-brief-v7';
+export const ARTICLE_PROMPT_VERSION = 'direct-brief-v22';
 export const ARTICLE_LENGTH_ADJUSTMENT_THRESHOLD = 200;
 
 export function planArticleLengthAdjustment(currentVisibleChars, allowedRange) {
@@ -23,13 +23,18 @@ export function planArticleLengthAdjustment(currentVisibleChars, allowedRange) {
   };
 }
 
-const STAGES = Object.freeze({ facts:'articles.facts', drafting:'articles.draft', review:'articles.review', repair:'articles.repair', lengthAdjust:'articles.length-adjust', fullEdit:'articles.full-edit', humanize:'articles.humanize', title:'articles.title' });
-const WRITERS = Object.freeze({ 'wechat-mp-tech-deep':'articles.writer-tech-deep', 'wechat-mp-deep-dive':'articles.writer-deep-dive', 'wechat-mp-gossip-chill':'articles.writer-gossip-chill', 'wechat-mp-composite':'articles.writer-composite' });
+const STAGES = Object.freeze({ facts:'articles.facts', drafting:'articles.draft', review:'articles.review', repair:'articles.repair', lengthAdjust:'articles.length-adjust', title:'articles.title' });
+const ARTICLE_TYPE_COMPONENTS = Object.freeze({ 'wechat-mp-tech-deep':'articles.type-tech-deep', 'wechat-mp-deep-dive':'articles.type-deep-dive', 'wechat-mp-gossip-chill':'articles.type-gossip-chill', 'wechat-mp-composite':'articles.type-composite' });
 const stageAssets = Object.fromEntries(Object.entries(STAGES).map(([name,id])=>[name,name==='drafting'?resolvePrompt(id,{}, {components:[]}):resolvePrompt(id)]));
-export const ARTICLE_PROMPTS = Object.freeze(Object.fromEntries(Object.entries(stageAssets).map(([name,asset])=>[name,asset.text])));
+export const ARTICLE_PROMPTS = Object.freeze({
+  ...Object.fromEntries(Object.entries(stageAssets).map(([name,asset])=>[name,asset.text])),
+  // Kept for explicit/manual editing requests; the default pipeline skips both rewrites.
+  fullEdit: resolvePrompt('articles.full-edit').text,
+  humanize: resolvePrompt('articles.humanize').text,
+});
 
-export function draftSystemPrompt(writerSkill) {
-  const component=WRITERS[writerSkill];
+export function draftSystemPrompt(articleType) {
+  const component=ARTICLE_TYPE_COMPONENTS[articleType];
   return resolvePrompt('articles.draft',{}, {components:component?[component]:[]}).text;
 }
 export function articleReaderContext(account = {}) {
@@ -40,9 +45,9 @@ export function articleReaderContext(account = {}) {
   };
 }
 
-export function articlePromptManifest(writerSkill) {
+export function articlePromptManifest(articleType) {
   const prompts=Object.fromEntries(Object.entries(STAGES).map(([stage,id])=>{
-    const component=stage==='drafting'?WRITERS[writerSkill]:null;
+    const component=stage==='drafting'?ARTICLE_TYPE_COMPONENTS[articleType]:null;
     const resolved=stage==='drafting'?resolvePrompt(id,{}, {components:component?[component]:[]}):resolvePrompt(id);
     return [stage,{id,version:resolved.version,components:resolved.components,prompt:resolved.text,hash:resolved.promptHash,sourceHashes:resolved.sourceHashes}];
   }));

@@ -213,7 +213,7 @@ function jsonForRequest(payload, visualState) {
     hotspotAnchor: 'E2E 文章采集样本',
     coreKeywords: [],
   };
-  if (/请审核文章中的事实与论证/.test(text)) return { pass: true, issues: [], evidence_checks: [] };
+  if (/请审核文章中的事实与论证|审阅文章，判断是否存在事实错误/.test(text)) return { pass: true, issues: [], evidence_checks: [] };
   if (/请判断这篇文章是否存在明显、影响阅读体验的模板化\/AI 腔/.test(text)) return { pass: true, issues: [] };
   if (/文章简报和事实基座整理成一份文章大纲/.test(text)) return { outlineMarkdown: '## 背景\n\n## 验证步骤\n\n## 完成标准' };
   if (/hotspot-tagging|语义打标|preScores|eventParts/i.test(text)) return hotspotTaggingJson(payload);
@@ -259,6 +259,8 @@ function jsonForRequest(payload, visualState) {
 
 function toolResponse(toolName, payload = {}) {
   const requestText = JSON.stringify(payload.messages || []);
+  if (/article_review_gate/i.test(toolName)) return { pass: true, issues: [], evidence_checks: [] };
+  if (/article_quality_gate/i.test(toolName)) return { pass: true, issues: [], evidence_checks: [] };
   if (/title_plan|hotspotAnchorRule|title_lock|SELECTED_TITLE/i.test(`${toolName} ${requestText}`)) return { selectedTitle: 'E2E 文章采集样本：固定事实如何进入最终内容', titleCandidates: [{ title: 'E2E 文章采集样本：固定事实如何进入最终内容', reason: '固定主链路标题夹具' }], hotspotAnchor: 'E2E 文章采集样本', coreKeywords: [] };
   if (/research_coverage/i.test(toolName)) {
     const pointId = JSON.stringify(payload.messages || []).match(/"point_id"\s*:\s*"([^"]+)"/)?.[1] || 'e2e-research-1';
@@ -275,7 +277,7 @@ function replayIdForRequest(payload) {
   if (/当前 Agent 阶段：单一 AI 视觉生成/.test(text)) return 'social-card-ai-visual-generation';
   if (/你是公众号与小红书图文设计师/.test(text)) return 'social-card-design-scheme';
   if (/为这篇公众号文章生成\s*5 个发布标题|生成 5 个发布标题|唯一推荐标题/.test(text)) return 'article-title-plan';
-  if (/请审核文章中的事实与论证/.test(text)) return 'article-review';
+  if (/请审核文章中的事实与论证|审阅文章，判断是否存在事实错误/.test(text)) return 'article-review';
   if (/请判断这篇文章是否存在明显、影响阅读体验的模板化\/AI 腔/.test(text)) return 'article-voice-quality-gate';
   if (/hotspot-tagging|语义打标|preScores|eventParts/i.test(text)) return 'hotspot-tagging';
   if (/event-card|事件事实卡|classification_features/i.test(text)) return 'event-card';

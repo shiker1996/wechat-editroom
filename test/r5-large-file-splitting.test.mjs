@@ -3,12 +3,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { normalizePlanningResult, selectWriterSkill } from '../server/features/articles/application/article-pipeline-contract.mjs';
+import { normalizePlanningResult, selectArticleType } from '../server/features/articles/application/article-pipeline-contract.mjs';
 import { stageSkillPackageRestore, stageWritingSkillRestore } from '../server/platform/http/routes/system-restore-transactions.mjs';
 
 test('R5.4 文章流水线契约可脱离执行器独立使用',()=>{
   assert.deepEqual(normalizePlanningResult({coreKeywords:'Agent；ToolCall'}).coreKeywords,['Agent','ToolCall']);
-  assert.equal(selectWriterSkill({hotspot_title:'Agent 架构',angle:'拆解推理成本和架构'}).skill,'wechat-mp-tech-deep');
+  assert.equal(selectArticleType({hotspot_title:'Agent 架构',angle:'拆解推理成本和架构'}).articleType,'wechat-mp-tech-deep');
 });
 
 test('R5.4 写作技能恢复事务支持交换和回滚',()=>{

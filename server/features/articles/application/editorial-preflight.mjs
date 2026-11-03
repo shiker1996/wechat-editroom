@@ -10,6 +10,7 @@ import { readArticleSourceInput } from './article-pipeline-contract.mjs';
 
 const PREFLIGHT_FILE = 'editorial-preflight.json';
 const PREFLIGHT_EDITORIAL_FIELDS = Object.freeze([
+  'article_type',
   'writing_stance',
   'confirmed_facts',
   'research_basis',

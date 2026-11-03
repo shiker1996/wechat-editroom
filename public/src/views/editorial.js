@@ -5,7 +5,7 @@ import { streamChat } from "../core/stream-chat.js";
 import { escapeHtml, toast, providerOptions, withLoading, confirmAction, ensureModelOptions } from "../core/ui.js";
 import { state } from "../core/state.js";
 import { JOB_POLL_INTERVAL_MS } from "../core/constants.js";
-import { loadSkillSelect, loadStageSkillControls, selectedStageSkills } from "../core/skill-selection.js";
+import { loadStageSkillControls, selectedStageSkills } from "../core/skill-selection.js";
 import { distributionLane, distributionLaneClass, readerStakeText } from "../core/distribution-view.js";
 import { renderMarkdown } from "../core/markdown.js";
 
@@ -33,8 +33,6 @@ function bindEditorial() {
   });
   form.addEventListener("stage-skills-loaded", updateEditorialSkillSummary);
   document.getElementById("reset-editorial-skills")?.addEventListener("click",()=>{
-    const writer=document.getElementById("editorial-writer-skill");
-    if(writer)writer.value="";
     document.querySelectorAll("#editorial-stage-skills [data-stage-skill]").forEach((select)=>{select.value="";});
     updateEditorialSkillSummary();
   });
@@ -78,11 +76,9 @@ function bindEditorial() {
 function updateEditorialSkillSummary(){
   const summary=document.getElementById("editorial-skill-summary");
   if(!summary)return;
-  const writer=document.getElementById("editorial-writer-skill");
-  const writerLabel=writer?.value?writer.selectedOptions[0]?.textContent?.split(" · ")[0]:"系统推荐主写";
   const stageSelects=[...document.querySelectorAll("#editorial-stage-skills [data-stage-skill]")];
   const overridden=stageSelects.filter((select)=>select.value).length;
-  summary.textContent=`${writerLabel} · ${overridden?`${overridden} 个加工阶段已调整`:`${stageSelects.length||4} 个加工阶段使用默认配置`}`;
+  summary.textContent=`写作类型直传 AI · ${overridden?`${overridden} 个阶段已调整`:`${stageSelects.length||2} 个阶段使用默认配置`}`;
 }
 
 async function loadEditorialRoom(selectedId) {
@@ -283,7 +279,6 @@ async function openEditorial(id) {
   const candidate = await request(`/api/candidates/${id}`);
   state.editorialCandidate = candidate;
   await Promise.all([
-    loadSkillSelect(document.getElementById("editorial-writer-skill"), `/api/candidates/${id}/writer-skills`),
     loadStageSkillControls(document.getElementById("editorial-stage-skills"), `/api/candidates/${id}/stage-skills`),
   ]);
   updateEditorialSkillSummary();
@@ -713,8 +708,8 @@ async function startEditorialProduction() {
     }
     const result = await request(`/api/candidates/${candidateId}/ai/article`, { method: "POST", body: JSON.stringify({
       provider: document.getElementById("editorial-provider")?.value || "",
-      skillId: document.getElementById("editorial-writer-skill")?.value || "",
       stageSkills: selectedStageSkills(document.getElementById("editorial-stage-skills")),
+      useLatestSkill: true,
     }) });
     toast("完整成稿链已启动");
     // 成稿链长达数分钟：打开进度弹窗，轮询输出写入 #production-job-console

@@ -144,6 +144,7 @@ test('首次锁题没有编辑室预检缓存时仍可继续成稿', async () =>
     editorial: {
       confirmed_facts: '官方公告确认该功能已经上线。',
       author_opinions: '真正值得讨论的是上线后的责任边界。',
+      evidence_boundary: '核心判断是上线后仍有责任边界；公告只支持功能已上线，责任归属仍需结合具体事实判断。',
       adopted_research_points: [],
       research_basis: '',
       reader_consequence: '读者需要重新判断自己的使用成本。',

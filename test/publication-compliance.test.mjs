@@ -39,15 +39,15 @@ test('发布主张登记保留状态、来源和正文边界', () => {
     { id: 'c1', claim: '官方已确认', status: 'verified', sourceUrl: 'https://example.com/a', sourceType: 'official', boundary: '可确定陈述' },
     { claim: '员工说法', status: 'disputed', source_url: 'https://example.com/b' },
   ] });
-  assert.equal(register[0].publicationRule.includes('确定事实'), true);
+  assert.equal(register[0].publicationRule.includes('已核实事实'), true);
   assert.equal(register[1].sourceUrl, 'https://example.com/b');
-  assert.equal(register[1].publicationRule.includes('不得作为确定事实'), true);
+  assert.equal(register[1].publicationRule.includes('准确归属为来源说法'), true);
 });
 
 test('发布合规提示要求单独检查标题和高影响主张', () => {
   const prompt = publicationCompliancePrompt({ factBase: { claims: [] }, claimRegister: [], scan: { categories: ['financial'] } });
   assert.match(prompt, /标题、摘要和前 200 字单独审核/);
-  assert.match(prompt, /高影响事实无法核验时不得返回 pass/);
+  assert.match(prompt, /高影响客观事实无法核验时不得按已核实事实通过/);
   assert.match(prompt, /publication_compliance/);
 });
 

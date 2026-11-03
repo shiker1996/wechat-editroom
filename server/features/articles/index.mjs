@@ -21,7 +21,7 @@ export {
   runArticlePipeline,
   runArticleReview,
   scanPublicationRisk,
-  selectWriterSkill,
+  selectArticleType,
   sourceCacheIssue,
   unverifiedFactBaseIssue,
 } from './application/article-pipeline.mjs';

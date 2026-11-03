@@ -164,7 +164,7 @@ Agent Harness 改造把运行时概念收敛为四种对象分工：**Skill**（
 - 领域规则与推导位于 `server/shared/domain/material-brief.mjs`：`normalizeMaterialBrief` / `buildMaterialBrief` / `deriveMaterialReadiness`，字段含 `action` / `affected_group` / `reader_consequence` / `conflict` / `thesis` / `evidence_boundary` / `title_promise` / `article_type` 与 `material_readiness`（`insufficient` / `promising` / `verified` 三档路由）。
 - 编辑会适配器（`server/features/articles/application/agent/editorial-adapter.mjs`）新增表单字段与工具：`cap_agent_form_update` 增量维护 `affected_group` / `reader_consequence` / `conflict` / `evidence_boundary` / `reader_action`，`cap_editorial_research_select` 选择研判拓展点；`editorial-readiness.mjs` 将 `reader_consequence`、`conflict` 纳入锁题门禁。
 - 持久化：`editorial_sessions` 增加 `material_brief_json`（锁题快照），`editorial-repository.mjs` 展平 JSON 供表单与门禁。
-- 成稿链：`article-pipeline.mjs` / `article-routes.mjs` 将同一份结构化简报传给事实基座、规划、写作、标题与审稿阶段（`lockedBrief` 组装）。
+- 成稿链：`article-pipeline.mjs` / `article-routes.mjs` 将同一份结构化简报传给事实基座、写作、审稿和标题锁定阶段（`lockedBrief` 组装）；阶段顺序以[成稿运行阶段契约](../skills/wechat-mp-topic-to-article/references/runtime-stage-contracts.md)为准。
 
 ## 两条流水线
 
@@ -181,9 +181,9 @@ Agent Harness 改造把运行时概念收敛为四种对象分工：**Skill**（
        → 编辑会（editorial-room，对话式沉淀结构化决策，WRITE_NOW 门禁；
           回答中粘贴的链接自动抓取落 candidate_sources，逐条结果写入对话）
        → 成稿（article-pipeline，ARTICLE_STAGE_CONTRACT 固定阶段：
-          brief → fact-base → drafting($writer) → review → length-adjustment
-          → humanize → title-lock；初稿直接依据锁定简报与事实基座写作，不生成独立大纲；
-          每阶段产物落候选工作目录，具体返修按阶段契约执行；SEO 不属于自动成稿链）
+          锁定简报 + 来源材料 → fact-base → drafting(article_type 提示) → review
+          → length-adjustment（仅超出范围时调整）→ title-lock；初稿直接依据锁定简报与事实基座写作，不生成独立大纲；
+          humanize 不再作为执行阶段，旧文件名仅保留兼容副本；每阶段产物落候选工作目录，SEO 不属于自动成稿链）
        → 排版（typeset-pipeline：rendered → design → images → draft → normalized → gate；
           每篇生成设计方案后由 AI 生成 HTML，再规范化为内联样式并执行结构门禁，含 CDN 上传开关）
        → 封面图（cover-image-generator：每篇生成并校验封面设计方案，再由 AI 生成 HTML/CSS 后截图；

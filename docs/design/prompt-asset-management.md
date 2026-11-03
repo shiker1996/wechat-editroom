@@ -48,8 +48,8 @@ prompts/
     length-adjust.md
     humanize.md
     title.md
-    writer-tech-deep.md
-    writer-deep-dive.md
+    type-tech-deep.md
+    type-deep-dive.md
   daily/
     review-addendum.md
   research/
@@ -73,7 +73,7 @@ Markdown 文件由程序作为 UTF-8 原始文本读取，不解析标题、列�
   "id": "articles.draft",
   "version": 1,
   "file": "articles/draft.md",
-  "components": ["articles.writer-tech-deep"],
+  "components": ["articles.type-tech-deep"],
   "variables": ["brief", "facts", "length_range"],
   "output": { "format": "markdown" }
 }

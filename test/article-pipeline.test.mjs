@@ -3,10 +3,10 @@ import { ARTICLE_PROMPTS, articlePromptManifest, articleChangedPassages } from '
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { articleLengthStatus, articleStageOutputIssue, articleGateBlockingIssues, articleGateNeedsEditorialReview, authorizedWritingBrief, buildDraftUserPrompt, buildDraftOutlineView, replaceArticleTitle, buildArticleStageSystem, buildReviewRepairPrompt, buildPublicationComplianceRepairPrompt, compositeSourceText, normalizePlanningResult, selectWriterSkill, ARTICLE_LENGTH_RANGE, ARTICLE_STAGE_CONTRACT, ARTICLE_QUALITY_GATE_TOOL, ARTICLE_REVIEW_GATE_TOOL, aiQualityGate, aiReviewGate, sourceCacheIssue, unverifiedFactBaseIssue } from '../server/features/articles/application/article-pipeline.mjs';
+import { articleLengthStatus, articleStageOutputIssue, articleGateBlockingIssues, articleGateNeedsEditorialReview, authorizedWritingBrief, buildDraftUserPrompt, buildDraftOutlineView, replaceArticleTitle, buildArticleStageSystem, buildReviewRepairPrompt, buildPublicationComplianceRepairPrompt, compositeSourceText, normalizePlanningResult, selectArticleType, ARTICLE_LENGTH_RANGE, ARTICLE_STAGE_CONTRACT, ARTICLE_QUALITY_GATE_TOOL, ARTICLE_REVIEW_GATE_TOOL, aiQualityGate, aiReviewGate, sourceCacheIssue, unverifiedFactBaseIssue } from '../server/features/articles/application/article-pipeline.mjs';
 import { inspectPlanningMetaLeakage } from '../server/features/articles/domain/article-quality.mjs';
 import { inspectArticleQuality, inspectTrafficStructure } from '../server/features/articles/domain/article-quality.mjs';
-import { loadArticleSkillBundle, loadSkillBundle } from '../server/platform/llm/skill-runtime.mjs';
+import { loadSkillBundle } from '../server/platform/llm/skill-runtime.mjs';
 
 test('成稿规划兼容模型把数组字段返回为字符串', () => {
   const plan=normalizePlanningResult({distribution_lane:'通知池',reader_stake:'影响开发者成本',expectedAction:'收藏、分享',coreKeywords:'AI；编程工具',remainingRisks:'none',titleCandidates:'一个可用标题'});
@@ -127,7 +127,7 @@ test('必要修订只携带当前正文、问题和对应证据', () => {
   assert.deepEqual(input.issues, issues);
   assert.equal(input.evidence.claims[0].id, 'F1');
   assert.doesNotMatch(prompt, /旧大纲|05-humanized|publicationRule/);
-  assert.match(ARTICLE_PROMPTS.repair, /只修改问题所在句段/);
+  assert.match(ARTICLE_PROMPTS.repair, /只处理确有事实错误/);
 });
 
 test('合规修订提示词要求 AI 直接修订标题、归因和来源展示', () => {
@@ -165,10 +165,10 @@ test('综合候选汇总全部已抓取来源，写作简报移除来源原文',
 });
 
 test('审稿提示词检查证据和推理，允许明确的作者评价', () => {
-  assert.match(ARTICLE_PROMPTS.review, /缺失前提、因果跳跃/);
+  assert.match(ARTICLE_PROMPTS.review, /关键事实前提被已核实事实直接反驳/);
   assert.match(ARTICLE_PROMPTS.review, /不因语气鲜明而要求弱化/);
   assert.match(ARTICLE_PROMPTS.review, /不要求用免责声明代替修正/);
-  assert.match(ARTICLE_PROMPTS.drafting, /不虚构经历、引语、行为或结果/);
+  assert.match(ARTICLE_PROMPTS.drafting, /事实准确、观点清晰/);
   assert.match(ARTICLE_PROMPTS.fullEdit, /删除重复的限定和解释段落/);
   assert.match(ARTICLE_PROMPTS.humanize, /去掉生硬、模板化的 AI 表达/);
 });
@@ -220,7 +220,7 @@ test('发布标题在精修之后只生成一次', () => {
   const source = fs.readFileSync(new URL('../server/features/articles/application/article-pipeline.mjs', import.meta.url), 'utf8');
   const runtime = source.slice(source.indexOf('export async function runArticlePipeline'), source.indexOf('function readJsonIfPresent'));
   assert.equal([...runtime.matchAll(/await generateTitlePlan\(/g)].length, 1);
-  assert.ok(runtime.indexOf("purpose: 'article-humanize'") < runtime.indexOf('await generateTitlePlan'));
+  assert.doesNotMatch(runtime, /purpose: 'article-humanize'/);
   assert.match(runtime, /replaceArticleTitle\(final, titlePlan.selectedTitle\)/);
   assert.doesNotMatch(runtime, /article-seo|article-planning|aiQualityGate\(|aiVoiceQualityGate\(/);
 });
@@ -254,18 +254,18 @@ test('所有文章共用流量结构检查，缺少章节时明确暴露而不�
   assert.match(report.issues.join('；'), /3-5 个 H2/);
 });
 
-test('技能运行时加载完整写作技能并记录哈希', () => {
-  const bundle = loadArticleSkillBundle({ workspaceRoot: process.cwd(), writerSkill: 'wechat-mp-tech-hotspot' });
+test('成稿总契约技能从项目内加载并记录哈希', () => {
+  const bundle = loadSkillBundle({ workspaceRoot: process.cwd(), skillName: 'wechat-mp-topic-to-article' });
   assert.equal(bundle.fallback, false);
-  assert.match(bundle.prompt, /wechat-mp-tech-hotspot/);
+  assert.match(bundle.prompt, /wechat-mp-topic-to-article/);
   assert.match(bundle.hash, /^[a-f0-9]{64}$/);
   assert.ok(bundle.files.some((file) => /runtime-stage-contracts\.md$/.test(file)));
 });
 
 test('直写流程使用单阶段提示词，兼容旧技能组合器', () => {
-  assert.deepEqual(ARTICLE_STAGE_CONTRACT.map(({ id }) => id), ['brief', 'fact-base', 'drafting', 'review', 'length-adjustment', 'full-edit', 'humanize', 'title-lock']);
+  assert.deepEqual(ARTICLE_STAGE_CONTRACT.map(({ id }) => id), ['fact-base', 'drafting', 'review', 'length-adjustment', 'title-lock']);
   const manifest = articlePromptManifest('wechat-mp-tech-deep');
-  assert.equal(manifest.version, 'direct-brief-v7');
+  assert.equal(manifest.version, 'direct-brief-v22');
   assert.match(manifest.prompts.drafting.prompt, /技术深解需要解释机制/);
   assert.doesNotMatch(manifest.prompts.review.prompt, /## SKILL:|全流程|风格门禁/);
   assert.match(manifest.prompts.review.hash, /^sha256:[a-f0-9]{64}$/);
@@ -273,26 +273,27 @@ test('直写流程使用单阶段提示词，兼容旧技能组合器', () => {
   assert.match(system, /旧编排契约/);
 });
 
-test('综合选题写作规则来自项目子技能而非执行器内置提示词', () => {
+test('综合热点通过文章类型提示写作，不再依赖独立写作技能包', () => {
   const composite = loadSkillBundle({ workspaceRoot:process.cwd(), skillName:'wechat-mp-composite' });
-  assert.equal(composite.fallback, false);
-  assert.match(composite.prompt, /多个已核验热点/);
+  assert.equal(composite.fallback, true);
+  assert.match(articlePromptManifest('wechat-mp-composite').prompts.drafting.prompt, /共同命题组织多条材料/);
   const source = fs.readFileSync(new URL('../server/features/articles/application/article-pipeline.mjs', import.meta.url), 'utf8');
-  assert.doesNotMatch(source, /composeSkillPrompts|const compositeSkill|你是事实编辑/);
+  assert.doesNotMatch(source, /loadArticleSkillBundle|writerSkillBundle/);
 });
 
-test('写作类型路由覆盖技术深解并保护严肃议题边界',()=>{
-  assert.equal(selectWriterSkill({composite:true}).skill,'wechat-mp-composite');
-  assert.equal(selectWriterSkill({category:'🤖 AI/技术动态',hotspot_title:'新模型发布',angle:'解释这次发布对开发者的影响'}).skill,'wechat-mp-tech-hotspot');
-  assert.equal(selectWriterSkill({category:'🤖 AI/技术动态',hotspot_title:'MoE 模型',angle:'拆解推理架构和显存成本，给出可复算公式'}).skill,'wechat-mp-tech-deep');
-  assert.equal(selectWriterSkill({category:'🏢 大厂战略',angle:'一个离谱的职场趣闻'}).skill,'wechat-mp-gossip-chill');
-  assert.equal(selectWriterSkill({category:'🏢 大厂战略',angle:'离谱裁员事故背后的劳动关系'}).skill,'wechat-mp-deep-dive');
-  assert.match(selectWriterSkill({category:'📈 行业趋势',angle:'分析参与方利益关系'}).reason,/参与方/);
+test('文章类型从锁定简报或选题属性推导',()=>{
+  assert.equal(selectArticleType({composite:true}).articleType,'wechat-mp-composite');
+  assert.equal(selectArticleType({category:'🤖 AI/技术动态',hotspot_title:'新模型发布',angle:'解释这次发布对开发者的影响'}).articleType,'wechat-mp-tech-hotspot');
+  assert.equal(selectArticleType({category:'🤖 AI/技术动态',hotspot_title:'MoE 模型',angle:'拆解推理架构和显存成本，给出可复算公式'}).articleType,'wechat-mp-tech-deep');
+  assert.equal(selectArticleType({category:'🏢 大厂战略',angle:'一个离谱的职场趣闻'}).articleType,'wechat-mp-gossip-chill');
+  assert.equal(selectArticleType({category:'🏢 大厂战略',angle:'离谱裁员事故背后的劳动关系'}).articleType,'wechat-mp-deep-dive');
+  assert.match(selectArticleType({category:'📈 行业趋势',angle:'分析参与方利益关系'}).reason,/参与方/);
 });
 
 test('热点文章契约明确拒绝伪装教程、工具清单和纯快讯',()=>{
   const skill=fs.readFileSync(new URL('../skills/wechat-mp-topic-to-article/SKILL.md',import.meta.url),'utf8');
-  assert.match(skill,/writer_skill_reason/);
+  assert.match(skill,/文章类型通过 `prompts\/articles\/` 中对应的提示词片段传入/);
+  assert.doesNotMatch(skill,/writer_skill_reason/);
   assert.match(skill,/不承接纯资讯早报/);
   assert.match(skill,/教程必须先建立环境、步骤、成功标准和作者实践证据/);
   assert.match(skill,/工具 → 图文/);
@@ -311,7 +312,7 @@ test('运行时删除大纲调用和读写依赖，保留研判输入和产物�
 });
 
 test('阶段子技能从项目 skills 目录加载，覆盖层只替换正文', () => {
-  for (const skillName of ['title-generator','humanizer-zh','article-reviewer','seo-keyword-scoring','seo-content-optimizer','article-image-placeholders','wechat-mp-composite']) {
+  for (const skillName of ['title-generator','humanizer-zh','article-reviewer','seo-keyword-scoring','seo-content-optimizer','article-image-placeholders']) {
     const bundle = loadSkillBundle({ workspaceRoot: process.cwd(), skillName });
     assert.equal(bundle.fallback, false, skillName);
     assert.ok(bundle.root.startsWith(path.join(process.cwd(),'skills')), skillName+' 的技能包应从项目 skills 目录加载：'+bundle.root);

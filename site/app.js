@@ -5,9 +5,7 @@ const carouselSlides = [
   { image: './assets/ui-dashboard.png', kicker: '02 / WORKSPACE', title: '总览 Dashboard', description: '批次、任务与产物一眼回到工作现场' },
   { image: './assets/ui-atlas.png', kicker: '03 / HOTSPOT ATLAS', title: '热点全景', description: '从信息源进入事件与候选选题' },
   { image: './assets/ui-editorial.png', kicker: '04 / EDITORIAL ROOM', title: 'AI 编辑会', description: '把角度、事实和风险放在同一张桌上' },
-  { image: './assets/ui-editor.png', kicker: '05 / DRAFTING', title: '文章编辑器', description: '成稿、审阅和版本修订' },
-  { image: './assets/ui-preview.png', kicker: '06 / DELIVERY', title: '公众号预览', description: '把文章推进到可交付 HTML' },
-  { image: './assets/ui-cover.png', kicker: '07 / VISUALS', title: '视觉交付', description: '封面、配图和社交图文' }
+  { image: './assets/ui-editor.png', kicker: '05 / DRAFTING', title: '文章编辑器', description: '成稿、审阅和版本修订' }
 ];
 
 function initCarousel() {
