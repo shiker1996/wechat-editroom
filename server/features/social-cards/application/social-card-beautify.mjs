@@ -864,6 +864,8 @@ export async function runSocialCardBeautify({ gateway, store, batchId, candidate
         documentArgs.requestId = String(request.requestId || '').trim();
       }
       if (operation === 'replace-page') pageRepairAttempts.push(Number(documentArgs.page));
+      // 只在 abort 实际成功后清旧报告，避免失败的 abort 让活动文档失去审计门禁。
+      if (operation === 'abort') abortPending = true;
       // resourceId 只用于 Agent 层的能力路由，不属于文档写入插件的实际入参；
       // 插件只接收 path、sessionId 以及 operation/content/revision 等写入字段。
       return { ...documentArgs, path: htmlPath, sessionId: documentWriteSessionId, requirePageAnchors: true };
@@ -878,6 +880,7 @@ export async function runSocialCardBeautify({ gateway, store, batchId, candidate
   ];
   let latestVisualAudit = null;
   const pageRepairAttempts = [];
+  let abortPending = false;
   const currentHtmlDigest = () => fs.existsSync(htmlPath)
     ? createHash('sha256').update(fs.readFileSync(htmlPath)).digest('hex')
     : '';
@@ -935,7 +938,13 @@ export async function runSocialCardBeautify({ gateway, store, batchId, candidate
       getVisualAuditResult: getCurrentVisualAudit,
       maxOutputTokens: providerMaxOutputTokens,
       onProgress,
-      onEvent,
+      onEvent: (event) => {
+        if (event?.capability === AI_VISUAL_DOCUMENT_WRITE && abortPending) {
+          if (event.type === 'tool.completed') latestVisualAudit = null;
+          if (event.type === 'tool.completed' || event.type === 'tool.failed') abortPending = false;
+        }
+        onEvent?.(event);
+      },
     });
     const generatedHtml = fs.existsSync(htmlPath) ? fs.readFileSync(htmlPath, 'utf8') : '';
     const generatedPageCount = htmlPageCount(generatedHtml);

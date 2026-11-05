@@ -188,7 +188,7 @@ function fixtureVisualAppend(request, { includePageInner = false } = {}) {
     const eyebrow = `<div class="eyebrow">${String(index+1).padStart(2,'0')} · E2E FIXTURE</div>`;
     const pageBody = `<div class="page-body"><div class="page-content-stack"><h${index===0?'1':'2'}>${title}</h${index===0?'1':'2'}><p>${body}</p></div></div>`;
     const footer = `<footer class="bottom-strip">固定测试 · ${index+1} / ${pages.length}</footer>`;
-    return `<section class="page ${kind}">${includePageInner ? `<div class="page-inner">${eyebrow}${pageBody}${footer}</div>` : `${eyebrow}${pageBody}${footer}`}</section>`;
+    return `<!-- CARD-PAGE:${index + 1}:START -->\n<section class="page ${kind}" data-page="${index + 1}">${includePageInner ? `<div class="page-inner">${eyebrow}${pageBody}${footer}</div>` : `${eyebrow}${pageBody}${footer}`}</section>\n<!-- CARD-PAGE:${index + 1}:END -->`;
   }).join('')}</body></html>`;
   return request('cap_filesystem_project_document_write', { operation: 'append', content: html }, '写入四页固定测试视觉 HTML');
 }
