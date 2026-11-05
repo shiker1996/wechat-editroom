@@ -2,11 +2,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 const MAX_CHUNK_BYTES = 16 * 1024;
+const MAX_PAGE_BYTES = 64 * 1024;
 const MAX_DOCUMENT_BYTES = 2 * 1024 * 1024;
 const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/;
 // 与 Agent ToolRequest 协议保持一致：模型生成的 requestId 允许下划线，
 // 例如 tr_visual_append_3。插件不能比上层协议更严格，否则合法请求会被误拒绝。
 const REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,119}$/;
+const PAGE_MARKER = (page, edge) => `<!-- CARD-PAGE:${page}:${edge} -->`;
 const locks = new Map();
 
 function fallbackResult() {
@@ -130,6 +132,67 @@ function validateRevision(input, state) {
   }
 }
 
+function validatePageFragment(content, page, label) {
+  const roots = [...String(content).matchAll(/<(section|div)\b[^>]*>/gi)]
+    .filter(([tag]) => {
+      const className = tag.match(/\bclass\s*=\s*(["'])(.*?)\1/i)?.[2] || '';
+      return className.split(/\s+/).includes('page');
+    });
+  if (roots.length !== 1) throw new Error(`${label} 必须且只能包含一个 .page 根元素`);
+  const attrs = roots[0][0];
+  const pageAttribute = attrs.match(/\bdata-page\s*=\s*(["'])(.*?)\1/i)?.[2];
+  if (Number(pageAttribute) !== page || String(pageAttribute) !== String(page)) {
+    throw new Error(`${label} 的 .page 根元素必须设置 data-page="${page}"`);
+  }
+}
+
+function findUniqueMarker(html, marker, label) {
+  const first = html.indexOf(marker);
+  if (first < 0 || html.indexOf(marker, first + marker.length) >= 0) {
+    throw new Error(`${label} 锚点必须且只能出现一次：${marker}`);
+  }
+  return first;
+}
+
+function findElementEnd(html, tagName, openingTagEnd) {
+  const tags = new RegExp(`<\\/?${tagName}\\b[^>]*>`, 'gi');
+  tags.lastIndex = openingTagEnd;
+  let depth = 1;
+  let match;
+  while ((match = tags.exec(html))) {
+    const isClosing = /^<\//.test(match[0]);
+    const isVoid = /\/>$/.test(match[0]);
+    if (isClosing) depth -= 1;
+    else if (!isVoid) depth += 1;
+    if (depth === 0) return tags.lastIndex;
+  }
+  return -1;
+}
+
+function validateDocumentPageAnchors(html) {
+  const pages = [...html.matchAll(/<(section|div)\b[^>]*>/gi)]
+    .filter(([tag]) => (tag.match(/\bclass\s*=\s*(["'])(.*?)\1/i)?.[2] || '').split(/\s+/).includes('page'));
+  for (let index = 0; index < pages.length; index += 1) {
+    const page = index + 1;
+    const openingTag = pages[index][0];
+    const dataPage = openingTag.match(/\bdata-page\s*=\s*(["'])(.*?)\1/i)?.[2];
+    if (String(dataPage) !== String(page)) throw new Error(`第 ${page} 个 .page 必须设置 data-page="${page}"，并与 DOM 顺序一致`);
+    const startMarker = PAGE_MARKER(page, 'START');
+    const endMarker = PAGE_MARKER(page, 'END');
+    const start = findUniqueMarker(html, startMarker, `第 ${page} 页起始`);
+    const end = findUniqueMarker(html, endMarker, `第 ${page} 页结束`);
+    const elementEnd = findElementEnd(html, pages[index][1], pages[index].index + openingTag.length);
+    if (start >= pages[index].index || elementEnd < 0 || end < elementEnd) {
+      throw new Error(`第 ${page} 页锚点必须包住它的 .page 根元素`);
+    }
+    if (index > 0 && start <= pages[index - 1].index) throw new Error('页面锚点顺序必须与 DOM 顺序一致');
+    if (pages[index + 1] && end >= pages[index + 1].index) throw new Error('页面结束锚点不能越过下一页的 .page 根元素');
+  }
+  if (!pages.length) throw new Error('文档中没有可定位的 .page 根元素');
+  const markerPages = [...html.matchAll(/<!--\s*CARD-PAGE:(\d+):(START|END)\s*-->/g)];
+  if (markerPages.length !== pages.length * 2) throw new Error('文档含有缺失或多余的页面锚点');
+}
+
 async function executeLocked(input, context) {
   const { ok } = context.result || fallbackResult();
   const target = targetPath(input, context);
@@ -163,6 +226,7 @@ async function executeLocked(input, context) {
   if (operation === 'append') {
     const requestId = safeIdentifier(input.requestId, REQUEST_ID, 'requestId');
     if (state.requestIds?.[requestId]) {
+      if (state.requestIds[requestId].operation && state.requestIds[requestId].operation !== operation) throw new Error('requestId 已用于其他写入操作');
       return ok(resultData(operation, sessionId, target, state, { ...state.requestIds[requestId], alreadyApplied: true }));
     }
     validateRevision(input, state);
@@ -176,7 +240,54 @@ async function executeLocked(input, context) {
     state.revision += 1;
     state.updatedAt = new Date().toISOString();
     const digest = documentDigest(target);
-    const applied = { revision: state.revision, appendedBytes: bytes, totalBytes: digest.totalBytes, sha256: digest.sha256 };
+    const applied = { operation, revision: state.revision, appendedBytes: bytes, totalBytes: digest.totalBytes, sha256: digest.sha256 };
+    state.requestIds = { ...(state.requestIds || {}), [requestId]: applied };
+    writeState(metadata, state);
+    return ok(resultData(operation, sessionId, target, state, applied));
+  }
+
+  if (operation === 'replace-page') {
+    const requestId = safeIdentifier(input.requestId, REQUEST_ID, 'requestId');
+    if (state.requestIds?.[requestId]) {
+      if (state.requestIds[requestId].operation && state.requestIds[requestId].operation !== operation) throw new Error('requestId 已用于其他写入操作');
+      return ok(resultData(operation, sessionId, target, state, { ...state.requestIds[requestId], alreadyApplied: true }));
+    }
+    validateRevision(input, state);
+    const page = Number(input.page);
+    if (!Number.isInteger(page) || page < 1 || page > 100) throw new Error('replace-page 的 page 必须是 1–100 的整数');
+    const content = String(input.content ?? '');
+    const bytes = Buffer.byteLength(content, 'utf8');
+    if (!bytes) throw new Error('replace-page 操作缺少 content');
+    if (bytes > MAX_PAGE_BYTES) throw new Error(`单页内容不能超过 ${MAX_PAGE_BYTES} 字节`);
+    if (/<!--\s*CARD-PAGE:\d+:(?:START|END)\s*-->/.test(content)) throw new Error('单页替换内容不能包含页面边界锚点');
+    validatePageFragment(content, page, '新页面');
+
+    const html = fs.readFileSync(target, 'utf8');
+    validateDocumentPageAnchors(html);
+    const startMarker = PAGE_MARKER(page, 'START');
+    const endMarker = PAGE_MARKER(page, 'END');
+    const start = findUniqueMarker(html, startMarker, '起始');
+    const end = findUniqueMarker(html, endMarker, '结束');
+    const contentStart = start + startMarker.length;
+    if (end < contentStart) throw new Error(`第 ${page} 页锚点顺序错误`);
+    const previousContent = html.slice(contentStart, end);
+    validatePageFragment(previousContent, page, '现有页面');
+    const updated = `${html.slice(0, contentStart)}${content}${html.slice(end)}`;
+    const totalBytes = Buffer.byteLength(updated, 'utf8');
+    if (totalBytes > MAX_DOCUMENT_BYTES) throw new Error(`文档不能超过 ${MAX_DOCUMENT_BYTES} 字节`);
+    fs.writeFileSync(target, updated, 'utf8');
+    state.revision += 1;
+    state.updatedAt = new Date().toISOString();
+    const digest = documentDigest(target);
+    const applied = {
+      operation,
+      revision: state.revision,
+      page,
+      replacedBytes: Buffer.byteLength(previousContent, 'utf8'),
+      insertedBytes: bytes,
+      totalBytes: digest.totalBytes,
+      sha256: digest.sha256,
+    };
     state.requestIds = { ...(state.requestIds || {}), [requestId]: applied };
     writeState(metadata, state);
     return ok(resultData(operation, sessionId, target, state, applied));
@@ -184,6 +295,7 @@ async function executeLocked(input, context) {
 
   if (operation === 'finish') {
     validateRevision(input, state);
+    if (input.requirePageAnchors === true) validateDocumentPageAnchors(fs.readFileSync(target, 'utf8'));
     state.status = 'finished';
     state.updatedAt = new Date().toISOString();
     state.finishedAt = state.updatedAt;
@@ -222,5 +334,5 @@ export async function execute(input, context = {}) {
 
 export async function health(context = {}) {
   const { ok: okResult } = context.result || fallbackResult();
-  return okResult({ available: true, provider: 'local-ai-visual-document-writer', maxChunkBytes: MAX_CHUNK_BYTES, maxDocumentBytes: MAX_DOCUMENT_BYTES });
+  return okResult({ available: true, provider: 'local-ai-visual-document-writer', maxChunkBytes: MAX_CHUNK_BYTES, maxPageBytes: MAX_PAGE_BYTES, maxDocumentBytes: MAX_DOCUMENT_BYTES });
 }

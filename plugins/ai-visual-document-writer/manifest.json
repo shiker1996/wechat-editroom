@@ -23,6 +23,7 @@
         "enum": [
           "begin",
           "append",
+          "replace-page",
           "finish",
           "abort"
         ]
@@ -48,6 +49,14 @@
       "expectedRevision": {
         "type": "integer",
         "minimum": 0
+      },
+      "page": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100
+      },
+      "requirePageAnchors": {
+        "type": "boolean"
       }
     },
     "additionalProperties": false
@@ -70,12 +79,15 @@
       "status": { "type": "string" },
       "revision": { "type": "integer" },
       "appendedBytes": { "type": "integer" },
+      "page": { "type": "integer" },
+      "replacedBytes": { "type": "integer" },
+      "insertedBytes": { "type": "integer" },
       "totalBytes": { "type": "integer" },
       "sha256": { "type": "string" },
       "alreadyApplied": { "type": "boolean" }
     }
   },
-  "description": "在授权的候选工作目录内，按 Agent 提交顺序原样追加 AI 视觉 HTML/CSS 分块；不解析、不改写、不补充视觉内容。",
+  "description": "在授权的候选工作目录内原样追加 AI 视觉 HTML/CSS 分块；也可按 CARD-PAGE 页码锚点精确替换一个 .page 根元素，不改写其他页面。",
   "enabledByDefault": true,
   "schemaVersion": 1,
   "kind": "tool",

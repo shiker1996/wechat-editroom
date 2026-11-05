@@ -36,7 +36,10 @@ function visualAuditInstruction(auditCapability, report) {
   if (report.stale) return `HTML 在最近一次审计后又有修改；用 {"auditAttempt":${Number(report.auditAttempt || 1) + 1}} 重新调用 ${auditCapability} 审计当前完整文档，审计通过前不要 finish。`;
   if (report.valid) return `${auditCapability} 最近一次审计已通过；若此后未追加或改写 HTML，现在用 cap_filesystem_project_document_write 的 finish 完成文档。`;
   const issues = (report.issues || []).map((issue) => issue.message).filter(Boolean).join('；') || '页面尺寸检查未通过';
-  return `最近一次 ${auditCapability} 审计未通过：${issues}。不得删减事实或只追加样式掩盖问题；先 abort 当前文档，再 begin 并完整重写修正版，保留所有事实，之后用 {"auditAttempt":${Number(report.auditAttempt || 1) + 1}} 重新调用 ${auditCapability} 审计。`;
+  const allIssuesScoped = (report.issues || []).length > 0 && (report.issues || []).every((issue) => issue.code === 'CONTENT_OVERFLOW' && Number.isInteger(Number(issue.page)) && Number(issue.page) > 0);
+  const pages = [...new Set((report.issues || []).map((issue) => Number(issue.page)).filter((page) => Number.isInteger(page) && page > 0))];
+  if (allIssuesScoped && pages.length) return `最近一次 ${auditCapability} 审计未通过：${issues}。这些都是带页码的 CONTENT_OVERFLOW 问题，失败页码为 ${pages.join('、')}（按 .page 页面顺序编号）。只用 operation=replace-page 替换其中一页，page 填页码，content 只包含该页完整根元素 <section class="page" data-page="页码">…</section>；保留该页全部事实、原角色和顺序，并保留页面外的 CSS、主题和其他页原样不动。一次只修一页；改完后用 {"auditAttempt":${Number(report.auditAttempt || 1) + 1}} 重新审计整份 HTML，再处理仍失败的页。禁止 abort 或重写其他页面；只有写入器明确报告锚点或页面根结构无法局部替换时，才 abort 后完整重建。`;
+  return `最近一次 ${auditCapability} 审计未通过：${issues}。报告没有可定位页码，无法安全局部修复；先 abort 当前文档，再 begin 并完整重写修正版，保留所有事实，之后用 {"auditAttempt":${Number(report.auditAttempt || 1) + 1}} 重新调用 ${auditCapability} 审计。`;
 }
 
 function generationInstruction({ sourceRead, documentStarted, documentFinished, pageCount, targetPageCount, minPages, maxPages, outputPath, documentLabel, auditCapability = '', auditReport = null }) {
@@ -64,7 +67,7 @@ function generationStageOverride({ requiredPageCount, pageCountTolerance, canvas
 - 当前只允许调用 cap_filesystem_project_read、cap_filesystem_project_document_write${auditCapability ? ` 和 ${auditCapability}` : ''}。
 - 只使用 cap_filesystem_project_document_write 写入文件；不要输出完整 HTML/CSS 到 final 或普通回答。
 - 写入目标固定为 project:current 下的 ${outputPath}；resourceId、path 和 sessionId 由服务端自动注入。
-- 第一次写入必须是 operation=begin；之后使用 operation=append 原样追加 HTML/CSS 分块。${auditCapability ? `完整 HTML 草稿写完后、finish 前，必须调用 ${auditCapability} 审计全部页面；若发现溢出，必须 abort 当前会话、重新 begin 并完整重写修正版，保留所有事实，再重新审计。` : '所有内容写完后使用 operation=finish。'} finish 成功后才能返回 final。
+- 第一次写入必须是 operation=begin；之后使用 operation=append 原样追加 HTML/CSS 分块。${auditCapability ? '每页必须按 DOM 顺序从 1 开始编号，并使用唯一边界注释 <!-- CARD-PAGE:N:START --> 与 <!-- CARD-PAGE:N:END --> 包住唯一根元素 <section class="page" data-page="N">…</section>。完整 HTML 草稿写完后、finish 前，必须审计全部页面；只有所有问题都是带页码的 CONTENT_OVERFLOW 时，才用 replace-page 一次修改其中一页并重新审计整份 HTML；其他样式/结构错误无法由单页内容安全定位，应 abort 后完整重建。写入器明确拒绝锚点结构时也可全量重建。' : '所有内容写完后使用 operation=finish。'} finish 成功后才能返回 final。
 - append 的 content 是原始 HTML/CSS，不要让程序替你拼接、改写、补 CSS、补结构或插入主题装饰。每块不超过 ${AI_VISUAL_DOCUMENT_CHUNK_MAX_CHARS} 字符，并为每块使用唯一 requestId；能填写时使用上一次结果中的 expectedRevision。
 - 不要假设程序会保留预置页面壳，最终文件必须由你的分块内容本身构成完整 HTML。
 - 写入前逐页估算正文、标题和页脚的垂直容量；如果内容放不进固定画布，优先在允许范围内拆成新页（最多比故事板多 ${tolerance} 页），完整保留事实、限制和观察点。不得靠删事实、压成不可读小字、遮挡或裁切来满足页数。
@@ -133,6 +136,7 @@ export async function runAiVisualDocumentAgent({
   let sourceRead = false;
   let documentStarted = false;
   let documentFinished = false;
+  let pageRepairAttempted = false;
   let pendingOperation = null;
   let lastModelResult = null;
   let planningThinkingUsed = false;
@@ -251,7 +255,7 @@ export async function runAiVisualDocumentAgent({
         if (pendingOperation === 'begin') documentStarted = true;
         if (pendingOperation === 'abort') { documentStarted = false; documentFinished = false; }
         if (pendingOperation === 'finish') documentFinished = true;
-        onProgress(`AI 视觉 Agent 已原样追加 ${documentLabel} HTML/CSS 分块…`);
+        onProgress(pendingOperation === 'replace-page' ? 'AI 视觉 Agent 已提交页面局部修复…' : 'AI 视觉 Agent 已原样追加 HTML/CSS 分块…');
         pendingOperation = null;
       }
       if (event?.type === 'tool.completed' && event?.capability === auditCapability) {
@@ -285,7 +289,7 @@ export async function runAiVisualDocumentAgent({
         const call = result.toolCalls[0];
         const capability = capabilityForToolName(call.name, generationCatalog);
         const operation = String(call.input?.operation || '');
-        if (capability === documentWriteCapability && ['begin', 'append', 'finish', 'abort'].includes(operation)) pendingOperation = operation;
+        if (capability === documentWriteCapability && ['begin', 'append', 'replace-page', 'finish', 'abort'].includes(operation)) pendingOperation = operation;
         if (capability === auditCapability) pendingOperation = 'audit';
         return { nativeTools: true, content: result.content || '', toolCalls: result.toolCalls };
       }
@@ -320,29 +324,41 @@ export async function runAiVisualDocumentAgent({
           if (getVisualAuditResult()?.valid === false && !getVisualAuditResult()?.stale) {
             if (recoveryAttempts >= 2) throw new AgentContractError('INVALID_AGENT_ENVELOPE', 'AI 视觉 Agent 未修正审计问题便重复调用审计工具');
             recoveryAttempts += 1;
-            parsed = await recoverToolRequest({ parsed, history, step, signal, label: 'AI 视觉 Agent 重复审计恢复', instruction: `上一轮 ${auditCapability} 已发现问题。先按报告 abort 当前写入会话并完整重写修正版，保留全部事实；完成修正后再调用审计工具。不要重复审计未修改的 HTML。` });
+            parsed = await recoverToolRequest({ parsed, history, step, signal, label: 'AI 视觉 Agent 重复审计恢复', instruction: `${visualAuditInstruction(auditCapability, getVisualAuditResult())} 不要重复审计未修改的 HTML。` });
             continue;
           }
           if (documentFinished) {
             if (recoveryAttempts >= 2) throw new AgentContractError('INVALID_AGENT_ENVELOPE', 'AI 视觉 Agent 在文档完成后尝试审计；审计必须在 finish 前执行');
             recoveryAttempts += 1;
-            parsed = await recoverToolRequest({ parsed, history, step, signal, label: 'AI 视觉 Agent 审计时机恢复', instruction: `审计必须在文档 finish 前执行。当前会话已 finish；请 abort 当前会话、重新 begin 并完整重写 HTML，再调用 ${auditCapability} 审计，审计通过后才 finish。` });
+            parsed = await recoverToolRequest({ parsed, history, step, signal, label: 'AI 视觉 Agent 审计时机恢复', instruction: `审计必须在文档 finish 前执行。当前文档已 finish；请按文档级恢复流程重新开始生成，再调用 ${auditCapability} 审计，审计通过后才 finish。` });
             continue;
           }
           pendingOperation = 'audit';
           return validateAgentEnvelope({ ...parsed, requests: [request] }, { maxRequests: 1 });
         }
         const operation = String(request.arguments?.operation || '');
-        if (auditCapability && getVisualAuditResult()?.valid === false && !getVisualAuditResult()?.stale && request.capability === documentWriteCapability && operation !== 'abort') {
-          if (recoveryAttempts >= 2) throw new AgentContractError('INVALID_AGENT_ENVELOPE', 'AI 视觉 Agent 未 abort 并重写审计未通过的文档');
+        const currentAudit = getVisualAuditResult();
+        const allIssuesScoped = (currentAudit?.issues || []).length > 0 && (currentAudit?.issues || []).every((issue) => issue.code === 'CONTENT_OVERFLOW' && Number.isInteger(Number(issue.page)) && Number(issue.page) > 0);
+        const failedPages = allIssuesScoped ? [...new Set((currentAudit?.issues || []).map((issue) => Number(issue.page)))] : [];
+        const pageRepairAllowed = operation === 'replace-page' && failedPages.includes(Number(request.arguments?.page));
+        if (pageRepairAllowed) pageRepairAttempted = true;
+        const documentRebuildAllowed = operation === 'abort' && (failedPages.length === 0 || pageRepairAttempted);
+        if (operation === 'replace-page' && !pageRepairAllowed) {
+          if (recoveryAttempts >= 2) throw new AgentContractError('INVALID_AGENT_ENVELOPE', 'replace-page 没有对应的当前审计失败页码');
           recoveryAttempts += 1;
-          parsed = await recoverToolRequest({ parsed, history, step, signal, label: 'AI 视觉 Agent 视觉修正恢复', instruction: `${visualAuditInstruction(auditCapability, getVisualAuditResult())} 当前写入请求未执行；唯一允许的下一步是 operation=abort，之后重新 begin 并完整重写。` });
+          parsed = await recoverToolRequest({ parsed, history, step, signal, label: 'AI 视觉 Agent 页码修复校验', instruction: `replace-page 只能用于最近一次未通过审计明确指出的页码。${visualAuditInstruction(auditCapability, currentAudit)} 当前写入请求未执行。` });
           continue;
         }
-        if (!['begin', 'append', 'finish', 'abort'].includes(operation)) {
+        if (auditCapability && currentAudit?.valid === false && !currentAudit?.stale && request.capability === documentWriteCapability && !pageRepairAllowed && !documentRebuildAllowed) {
+          if (recoveryAttempts >= 2) throw new AgentContractError('INVALID_AGENT_ENVELOPE', 'AI 视觉 Agent 未按审计页码执行局部修复');
+          recoveryAttempts += 1;
+          parsed = await recoverToolRequest({ parsed, history, step, signal, label: 'AI 视觉 Agent 视觉修正恢复', instruction: `${visualAuditInstruction(auditCapability, currentAudit)} 当前写入请求未执行。` });
+          continue;
+        }
+        if (!['begin', 'append', 'replace-page', 'finish', 'abort'].includes(operation)) {
           if (recoveryAttempts >= 2) throw new AgentContractError('INVALID_AGENT_ENVELOPE', 'AI 视觉 Agent 连续返回不可用的写入操作，未执行空写入');
           recoveryAttempts += 1;
-          parsed = await recoverToolRequest({ parsed, history, step, signal, label: 'AI 视觉 Agent 写入操作恢复', instruction: '上一条文档写入请求未执行，原因：operation 必须是 begin、append、finish 或 abort。请只返回一个完整合法的文档写入请求，不要返回空 append、解释或完整 HTML。服务端会补齐资源参数。' });
+          parsed = await recoverToolRequest({ parsed, history, step, signal, label: 'AI 视觉 Agent 写入操作恢复', instruction: '上一条文档写入请求未执行，原因：operation 必须是 begin、append、replace-page、finish 或 abort。请只返回一个完整合法的文档写入请求，不要返回空 append、解释或完整 HTML。服务端会补齐资源参数。' });
           continue;
         }
         const latestAudit = getVisualAuditResult();
@@ -353,10 +369,10 @@ export async function runAiVisualDocumentAgent({
           continue;
         }
         const content = String(request.arguments?.content ?? '');
-        if (operation === 'append' && !content) {
+        if (['append', 'replace-page'].includes(operation) && !content) {
           if (recoveryAttempts >= 2) throw new AgentContractError('INVALID_AGENT_ENVELOPE', 'AI 视觉 Agent 连续返回空 append，未执行空写入');
           recoveryAttempts += 1;
-          parsed = await recoverToolRequest({ parsed, history, step, signal, label: 'AI 视觉 Agent 分块大小恢复', instruction: '上一条 append 请求未执行，因为 content 为空。请继续写入尚未写入的 HTML/CSS，只返回一个 content 非空的完整合法 append 工具请求；不要返回空 append、解释或完整 HTML。服务端会补齐资源参数。' });
+          parsed = await recoverToolRequest({ parsed, history, step, signal, label: 'AI 视觉 Agent 写入内容恢复', instruction: '上一条写入请求未执行，因为 content 为空。请按当前阶段返回非空的 append 分块，或返回符合页码锚点协议的完整 replace-page 页面内容；不要返回解释或完整 HTML。服务端会补齐资源参数。' });
           continue;
         }
         if (operation === 'append') {

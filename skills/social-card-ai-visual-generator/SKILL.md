@@ -105,10 +105,18 @@ Pipeline 每次运行只把候选专属资料放入 `render_request.workspace.fi
 写入协议：
 
 ```text
-begin → append（多个原始 HTML/CSS 分块）→ 浏览器逐页审计 →（必要时 abort 后完整重写并复审）→ finish → final
+begin → append（多个原始 HTML/CSS 分块）→ 整份浏览器逐页审计 →（按页码 replace-page 局部修复并复审，可重复）→ finish → final
 ```
 
-分块只解决模型单次输出长度，不改变整份文档的设计责任。每个 `append` 原样写入不超过工具上限的 HTML/CSS；不要输出完整 HTML JSON，不要依赖程序拼接、补 CSS、补布局结构或补装饰。完整 HTML 草稿写完后、`finish` 前必须调用 `cap_social_card_visual_audit` 审计全部页面，首次 `auditAttempt` 为 1；重写或修改 HTML 后递增序号并复审。审计反馈若指出内容溢出，使用 `abort` 后 `begin` 重写完整 HTML，保留所有事实。只有审计通过、所有页面和闭合标签写完并成功 `finish` 后，才能返回：
+分块只解决模型单次输出长度，不改变整份文档的设计责任。每个 `append` 原样写入不超过工具上限的 HTML/CSS；不要输出完整 HTML JSON，不要依赖程序拼接、补 CSS、补布局结构或补装饰。每个页面都必须有稳定页码锚点，且页码与 `.page` 在 DOM 中的顺序一致：
+
+```html
+<!-- CARD-PAGE:1:START -->
+<section class="page" data-page="1">…</section>
+<!-- CARD-PAGE:1:END -->
+```
+
+完整 HTML 草稿写完后、`finish` 前必须调用 `cap_social_card_visual_audit` 审计全部页面，首次 `auditAttempt` 为 1。只有报告中的所有问题都是带页码的 `CONTENT_OVERFLOW` 时，才一次使用 `replace-page` 修复一页：`page` 填审计返回的页码，`content` 只放该页完整 `.page` 根元素，不带锚点；其他页面、全局 CSS、事实与页序保持不变。替换后对整份 HTML 递增 `auditAttempt` 重新审计；若仍有问题，继续按页修复。出现样式/结构错误或报告没有可定位页码时，使用 `abort` 并完整重建；写入器明确拒绝锚点/页面根结构、确实无法局部替换时也可全量重建。只有审计通过、所有页面和闭合标签写完并成功 `finish` 后，才能返回：
 
 ```json
 {"type":"final","assistantReply":"已完成 AI 视觉 HTML 生成"}

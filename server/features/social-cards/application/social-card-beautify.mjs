@@ -607,7 +607,7 @@ function aiVisualDocumentWriteCatalogItem(registry) {
   return {
     capability: AI_VISUAL_DOCUMENT_WRITE,
     name: manifest.name || 'AI 视觉文档分块写入',
-    description: '在当前候选目录内原样分块追加完整 HTML/CSS；不解析、不改写、不拼接视觉内容。',
+    description: '原样分块追加 HTML/CSS，或使用页面锚点只替换指定页；其他页面字节保持不变。',
     inputSchema: {
       type: 'object',
       additionalProperties: false,
@@ -617,10 +617,11 @@ function aiVisualDocumentWriteCatalogItem(registry) {
       properties: {
         resourceId: { type: 'string', enum: ['project:current'] },
         path: { type: 'string', enum: [SOCIAL_CARD_BEAUTIFY_HTML] },
-        operation: { type: 'string', enum: ['begin', 'append', 'finish', 'abort'] },
+        operation: { type: 'string', enum: ['begin', 'append', 'replace-page', 'finish', 'abort'] },
         sessionId: { type: 'string', minLength: 1, maxLength: 120 },
         requestId: { type: 'string', minLength: 1, maxLength: 120 },
         expectedRevision: { type: 'integer', minimum: 0 },
+        page: { type: 'integer', minimum: 1, maximum: 100 },
         content: { type: 'string', maxLength: 12_000 },
       },
     },
@@ -837,15 +838,35 @@ export async function runSocialCardBeautify({ gateway, store, batchId, candidate
     const args = argumentsValue && typeof argumentsValue === 'object' ? argumentsValue : {};
     if (request.capability === AI_VISUAL_DOCUMENT_WRITE) {
       const { resourceId: _resourceId, path: _path, sessionId: _sessionId, ...documentArgs } = args;
+      const operation = String(documentArgs.operation || '');
+      const audit = getCurrentVisualAudit();
+      const scopedAuditFailure = audit?.valid === false && !audit.stale;
+      const allIssuesScoped = (audit?.issues || []).length > 0 && (audit?.issues || []).every((issue) => issue.code === 'CONTENT_OVERFLOW' && Number.isInteger(Number(issue.page)) && Number(issue.page) > 0);
+      const failedPages = allIssuesScoped ? [...new Set((audit?.issues || []).map((issue) => Number(issue.page)))] : [];
+      if (operation === 'replace-page' && (!scopedAuditFailure || !failedPages.includes(Number(documentArgs.page)))) {
+        throw new Error('replace-page 只能用于最近一次未通过的程序审计明确指出的页码；先审计当前完整 HTML');
+      }
+      if (operation === 'finish' && (audit?.valid !== true || Number(audit.pageCount) !== htmlPageCount(fs.existsSync(htmlPath) ? fs.readFileSync(htmlPath, 'utf8') : ''))) {
+        throw new Error('整份 HTML 的当前版本尚未通过逐页审计，不能 finish；请先修复并重新审计');
+      }
+      if (scopedAuditFailure && failedPages.length) {
+        const rebuildingAfterRejectedRepair = operation === 'abort' && failedPages.some((page) => pageRepairAttempts.includes(page));
+        if ((operation !== 'replace-page' || !failedPages.includes(Number(documentArgs.page))) && !rebuildingAfterRejectedRepair) {
+          throw new Error(`程序审计仅指出第 ${failedPages.join('、')} 页有问题；只允许 replace-page 替换其中一页，然后重新审计整份 HTML。写入器明确报告该页锚点或根结构无效时，才可 abort 后完整重建`);
+        }
+      } else if (scopedAuditFailure && !['abort'].includes(operation)) {
+        throw new Error('程序审计未能定位到具体页面；请 abort 当前文档后完整重建，再重新审计');
+      }
       // ToolRequest 的 requestId 是 Agent 本轮调用的幂等键。模型通常只在
       // 外层信封提供它，应用层必须传给文档插件，否则 append 会被插件当成
       // 缺少 requestId 而拒绝，且内容不会落盘。
-      if (String(documentArgs.operation || '') === 'append' && !String(documentArgs.requestId || '').trim()) {
+      if (['append', 'replace-page'].includes(operation) && !String(documentArgs.requestId || '').trim()) {
         documentArgs.requestId = String(request.requestId || '').trim();
       }
+      if (operation === 'replace-page') pageRepairAttempts.push(Number(documentArgs.page));
       // resourceId 只用于 Agent 层的能力路由，不属于文档写入插件的实际入参；
       // 插件只接收 path、sessionId 以及 operation/content/revision 等写入字段。
-      return { ...documentArgs, path: htmlPath, sessionId: documentWriteSessionId };
+      return { ...documentArgs, path: htmlPath, sessionId: documentWriteSessionId, requirePageAnchors: true };
     }
     if (request.capability === AI_VISUAL_DOCUMENT_AUDIT) return args;
     return resolveResourceArguments(args, request, { resources, workspaceRoot });
@@ -856,6 +877,7 @@ export async function runSocialCardBeautify({ gateway, store, batchId, candidate
     aiVisualDocumentAuditCatalogItem(),
   ];
   let latestVisualAudit = null;
+  const pageRepairAttempts = [];
   const currentHtmlDigest = () => fs.existsSync(htmlPath)
     ? createHash('sha256').update(fs.readFileSync(htmlPath)).digest('hex')
     : '';
@@ -877,7 +899,7 @@ export async function runSocialCardBeautify({ gateway, store, batchId, candidate
     skill: AI_VISUAL_SKILL_NAME,
     inputArtifacts: workspaceFiles,
     outputArtifact: SOCIAL_CARD_BEAUTIFY_HTML,
-    metadata: { agentEntryPoint: 'social-card-ai-visual-generation', auditToolsVisible: true },
+    metadata: { agentEntryPoint: 'social-card-ai-visual-generation', auditToolsVisible: true, pageRepairAttempts },
   });
   let generationAgent;
   const existingSessionId = resuming ? findActiveDocumentWriteSessionId(htmlPath) : '';
@@ -934,6 +956,7 @@ export async function runSocialCardBeautify({ gateway, store, batchId, candidate
           pageCount: generatedPageCount,
           documentFinished: generationAgent?.documentFinished === true,
           visualAudit: generationAgent?.visualAudit || null,
+          pageRepairAttempts: [...pageRepairAttempts],
         },
       });
       throw error;
@@ -949,10 +972,11 @@ export async function runSocialCardBeautify({ gateway, store, batchId, candidate
         pageCount: generatedPageCount,
         documentFinished: generationAgent.documentFinished === true,
         visualAudit: generationAgent.visualAudit || null,
+        pageRepairAttempts: [...pageRepairAttempts],
       },
     });
   } catch (error) {
-    generationStage.fail(error);
+    generationStage.fail(error, { metadata: { pageRepairAttempts: [...pageRepairAttempts] } });
     throw error;
   }
   return runAiVisualScreenshotDeliveryOnly({
