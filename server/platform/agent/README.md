@@ -121,6 +121,7 @@ Workflow/Agent Run Trace 转为质量指标、脱敏回放 fixture 和两次运�
 
 `ai-visual-document-agent.mjs` 提供基于 `cap_filesystem_project_read` 与
 `cap_filesystem_project_document_write` 的单 Agent 文档生成协议：读取输入、begin、append
-分块、finish，再返回 final。它只负责协议编排和画布/输出路径等运行参数，不绑定具体业务
-主题或页面尺寸；社交卡和文章封面应通过 feature 层 adapter 注入各自的 skill、输入文件、
-画布和输出文件名。
+分块、finish，再返回 final。社交卡额外启用程序视觉审计与页码锚点 `replace-page` 局部修复；
+修复后重审整份 HTML。文档写入插件支持该操作，但文章封面不在工具 schema 中暴露它。Agent
+只负责协议编排和画布/输出路径等运行参数，不绑定具体业务主题或页面尺寸；社交卡和文章封面
+通过 feature 层 adapter 注入各自的 skill、输入文件、画布和输出文件名。

@@ -21,8 +21,8 @@ const GUIDANCE = Object.freeze({
     options: { includePaths: '只读取的相对路径列表。', maxFiles: '最多读取的文件数。', maxFileBytes: '单个文件的最大读取字节数。', maxCharsPerFile: '单个文件最多返回的字符数。', maxTotalChars: '本次最多返回的总字符数。' },
   },
   cap_filesystem_project_document_write: {
-    operation: '写入操作：begin、append、finish 或 abort。', sessionId: '当前文档写入会话 ID。', requestId: '本次 append 请求的幂等 ID。',
-    path: '服务端授权的目标文档路径。', content: '要追加的 HTML/CSS 分块内容。', expectedRevision: '执行前预期的文档版本号。',
+    operation: '写入操作：begin、append、replace-page（工具向当前能力开放时按页码锚点替换一页）、finish 或 abort。', sessionId: '当前文档写入会话 ID。', requestId: '本次 append 或 replace-page 请求的幂等 ID。', page: 'replace-page 要替换的页码。',
+    path: '服务端授权的目标文档路径。', content: 'append 时是 HTML/CSS 分块；replace-page 时是完整单页根元素。', expectedRevision: '执行前预期的文档版本号。',
   },
   cap_diagram_mermaid_render: { inputPath: '授权工作区内的 Mermaid 输入文件路径。', outputPath: '渲染图片输出路径。', imageDir: '图片资源输出目录。', tokensPath: '可选的设计 token 文件路径。' },
   cap_diagram_echarts_render: { inputPath: '授权工作区内的 ECharts 输入文件路径。', outputPath: '渲染图片输出路径。', imageDir: '图片资源输出目录。', tokensPath: '可选的设计 token 文件路径。' },
