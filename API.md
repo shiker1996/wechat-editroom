@@ -629,7 +629,7 @@ AI 规划配图占位
 提交 `{ taskId, output }` 并继续研判；JSON 阶段提交对象，文本阶段提交字符串。相同结果重试返回当前状态；输入或阶段快照变化时返回冲突。
 
 ### POST /api/external/article/local-audit
-提交 `{ article, factBase? }`，复用文章流程的本地结构、默认字数和标题风险检查；返回结果不代表完成事实核验或模型审稿。
+提交 `{ article, factBase?, articleLength?: { min, max } }`，复用文章流程的本地结构、可指定可见字数范围和标题风险检查；未传 `articleLength` 时使用默认范围。返回结果不代表完成事实核验或模型审稿。
 
 ### POST /api/batches/:id/external/typeset
 提交外部 Agent 生成的文章排版 HTML。请求需提供同批次的 `candidateId` 和 `html`，候选必须已有文章终稿。工作台会拒绝脚本、外部样式资源或结构缺失的 HTML，再运行公众号 HTML 规范化与门禁；成功后保存并登记 `article.ai.html`。可附 `designScheme` 作为方案记录。
@@ -999,6 +999,10 @@ GET 返回脱敏后的当前运行设置；PUT 更新受支持的 `.env` 字段�
 ### POST /api/system/collector-plugins/:id/configuration/test
 
 校验采集插件全局配置是否完整；正式采集与单源测试使用同一份解析结果。
+
+### 外部 Agent 的集成配置 MCP 工具
+
+MCP `jianzi_integration_configuration_catalog/get/save/test` 仅开放采集器和 `upyun-image-upload` 配置资源，底层使用统一配置路由 `GET|PUT /api/system/configuration/:type/:id` 与 `POST /api/system/configuration/:type/:id/test`。秘密字段由统一配置服务存入隔离凭据 Profile，查询与保存结果只返回配置状态，不回显秘密。MCP 工具层会再次限制 `type` 和插件 ID；完整性测试不执行第三方连通性测试。
 
 ### POST /api/collection-sources
 

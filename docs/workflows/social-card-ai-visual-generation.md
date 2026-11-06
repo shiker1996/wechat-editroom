@@ -10,6 +10,7 @@
 | 入口 | 实现位置 | 说明 |
 | --- | --- | --- |
 | 社交卡图文编排 | `server/features/social-cards/application/social-card-beautify.mjs` | 准备输入、写入与审计工具、运行生成 Agent、记录阶段并启动交付 |
+| 外部 Agent MCP | `scripts/agent-integration/tools.mjs`、`server/platform/http/routes/media-routes.mjs` | 外部 Agent 提交整份 HTML 做浏览器审计；Agent 在自己的草稿中返修，再重审并提交 |
 | 单 Agent 文档协议 | `server/platform/agent/ai-visual-document-agent.mjs` | 读取资料、管理写入/审计时序及 finish 条件；社交卡和文章封面共用 Agent 编排 |
 | 社交卡写入能力 | `plugins/ai-visual-document-writer/adapter.mjs`、`plugins/ai-visual-document-writer/manifest.json` | 在活动会话内追加文档，或按锚点精确替换单页 |
 | 程序布局审计 | `server/features/social-cards/application/social-card-visual-audit.mjs`、`server/platform/browser/html-layout-probe.mjs` | Chromium 按 DOM 中 `.page` 顺序编号，检查 375×667 页面与正文容器溢出 |
@@ -28,6 +29,7 @@
 ## 入口间差异
 
 - 社交卡使用程序视觉审计，并通过工具 schema 暴露 `replace-page`；服务端参数解析器与写入插件共同限制只修当前审计失败的页。
+- MCP 外部 Agent 路径通过 `jianzi_card_visual_audit` 接收诊断结果并自行修改 HTML，再调用 `jianzi_card_visual_submit`；它不共享内部 Agent 写入会话，因此不调用 `replace-page`。Skill 要求只修改报错页并重新审计整组 HTML。
 - 文章封面复用共享 Agent 和写入插件，但其工具 schema 不暴露页级操作，也不使用本契约中的社交卡审计门禁。
 - Agent 的原生 function tool 和 JSON ToolRequest 两条调用路径共用社交卡参数解析器和同一个写入插件；非原生路径另有 Agent 层早期恢复校验。
 

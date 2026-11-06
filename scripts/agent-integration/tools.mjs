@@ -30,6 +30,14 @@ function safeSource(source) {
   return redactSensitive({ ...safe, ...(sourceConfig ? { config: sourceConfig } : {}) });
 }
 
+function safeImageResult(result) {
+  if (Array.isArray(result)) return result.map(safeImageResult);
+  if (!result || typeof result !== 'object') return result;
+  return Object.fromEntries(Object.entries(result)
+    .filter(([key]) => key !== 'localPath')
+    .map(([key, value]) => [key, safeImageResult(value)]));
+}
+
 export const JIANZI_TOOLS = [
   { name: 'jianzi_doctor', description: '检查见字工作台连接、Node 运行时和核心功能是否可用。', inputSchema: { type: 'object', properties: {} }, readOnlyHint: true },
   { name: 'jianzi_account_profile', description: '读取账号画像，用于选题定位、语气和受众判断。', inputSchema: { type: 'object', properties: {} }, readOnlyHint: true },
@@ -41,6 +49,10 @@ export const JIANZI_TOOLS = [
   { name: 'jianzi_collector_configuration_get', description: '读取指定采集器的配置状态与 schema，不返回已保存的秘密值。', inputSchema: { type: 'object', properties: { collectorId: string('采集器 ID。') }, required: ['collectorId'] }, readOnlyHint: true },
   { name: 'jianzi_collector_configuration_save', description: '保存用户确认的采集器配置。先读取配置 schema；凭据只提交，不复述或写入输出。', inputSchema: { type: 'object', properties: { collectorId: string('采集器 ID。'), configuration: { type: 'object', description: '按配置 schema 提供的字段。' } }, required: ['collectorId', 'configuration'] }, readOnlyHint: false },
   { name: 'jianzi_collector_configuration_test', description: '检查采集器配置是否完整。', inputSchema: { type: 'object', properties: { collectorId: string('采集器 ID。') }, required: ['collectorId'] }, readOnlyHint: false },
+  { name: 'jianzi_integration_configuration_catalog', description: '列出外部 Agent 可配置的集成：采集器和又拍云图片 CDN。只返回配置 schema 与秘密字段状态。', inputSchema: { type: 'object', properties: {} }, readOnlyHint: true },
+  { name: 'jianzi_integration_configuration_get', description: '读取采集器或又拍云图片 CDN 的配置状态和 schema；绝不返回已保存的凭据值。', inputSchema: { type: 'object', properties: { type: { type: 'string', enum: ['collector','tool'], description: '配置类型。tool 仅支持 upyun-image-upload。' }, id: string('配置资源 ID；type=tool 时必须为 upyun-image-upload。') }, required: ['type','id'] }, readOnlyHint: true },
+  { name: 'jianzi_integration_configuration_save', description: '保存用户明确提供并确认的采集器或又拍云图片 CDN 配置。保存前先读取 schema；秘密字段只提交给本机工作台，工具结果不会回显凭据。', inputSchema: { type: 'object', properties: { type: { type: 'string', enum: ['collector','tool'], description: '配置类型。tool 仅支持 upyun-image-upload。' }, id: string('配置资源 ID；type=tool 时必须为 upyun-image-upload。'), configuration: { type: 'object', description: '按配置 schema 提供字段；不要从对话历史推断或复述秘密。' } }, required: ['type','id','configuration'] }, readOnlyHint: false },
+  { name: 'jianzi_integration_configuration_test', description: '检查采集器或又拍云图片 CDN 当前配置是否完整。此检查验证 schema 完整性，不代表外部服务连通性。', inputSchema: { type: 'object', properties: { type: { type: 'string', enum: ['collector','tool'], description: '配置类型。tool 仅支持 upyun-image-upload。' }, id: string('配置资源 ID；type=tool 时必须为 upyun-image-upload。') }, required: ['type','id'] }, readOnlyHint: true },
   { name: 'jianzi_collection_sources_list', description: '列出已配置采集源及启用状态。', inputSchema: { type: 'object', properties: {} }, readOnlyHint: true },
   { name: 'jianzi_collection_source_create', description: '创建采集源；创建前先向用户确认来源和配置。', inputSchema: { type: 'object', properties: { pluginId: string('采集器 ID。'), label: string('采集源显示名称。'), config: { type: 'object', description: '与采集器 schema 对应的来源配置。' }, enabled: { type: 'boolean', description: '是否立即启用，默认 true。' } }, required: ['pluginId', 'config'] }, readOnlyHint: false, openWorldHint: true },
   { name: 'jianzi_collection_source_update', description: '修改现有采集源的名称、配置或启用状态。', inputSchema: { type: 'object', properties: { sourceId: id('采集源 ID。'), label: string('采集源显示名称。'), config: { type: 'object', description: '需修改或补充的来源配置字段。' }, enabled: { type: 'boolean' } }, required: ['sourceId'] }, readOnlyHint: false, openWorldHint: true },
@@ -67,10 +79,14 @@ export const JIANZI_TOOLS = [
   { name: 'jianzi_candidate_source_fetch', description: '文章成稿或图文策划前必须调用：抓取并保存候选关联热点的原文。不能以外部搜索或候选摘要代替项目抓取；失败时先向用户报告原因和证据边界。默认抓取全部关联热点，可指定 hotspotId 或 eventId。', inputSchema: { type: 'object', properties: { candidateId: id('候选 ID。'), hotspotId: id('只抓取该候选关联的热点 ID。', false), eventId: string('只抓取该候选关联的事件 ID。'), force: { type: 'boolean', description: '忽略已有缓存并重新抓取。' } }, required: ['candidateId'] }, readOnlyHint: false, openWorldHint: true },
   { name: 'jianzi_candidate_editorial_update', description: '保存 Agent 形成的文章编辑判断；建议先展示用户确认，再锁题。', inputSchema: { type: 'object', properties: { candidateId: id('候选 ID。'), editorial: { type: 'object', description: '编辑决策字段；confirmed_facts、research_basis、open_questions 等文本字段使用字符串或字符串数组，不能使用对象数组。adopted_research_points 和 material_brief 使用各自的结构化格式。' } }, required: ['candidateId', 'editorial'] }, readOnlyHint: false },
   { name: 'jianzi_candidate_lock', description: '锁定已完成编辑判断的文章候选，工作台会执行编辑简报门禁。', inputSchema: { type: 'object', properties: { candidateId: id('候选 ID。') }, required: ['candidateId'] }, readOnlyHint: false },
-  { name: 'jianzi_article_local_audit', description: '使用文章成稿流程的确定性规则检查 Markdown 结构、默认字数范围、标题风险和常见内部流程措辞（仅提醒，不阻断）；不代表完成事实核验或审稿。', inputSchema: { type: 'object', properties: { article: string('完整 Markdown 文章。'), factBase: { type: 'object', description: '可选事实基座。' } }, required: ['article'] }, readOnlyHint: true },
+  { name: 'jianzi_article_local_audit', description: '使用文章成稿流程的确定性规则检查 Markdown 结构、字数范围、标题风险和常见内部流程措辞（仅提醒，不阻断）；不代表完成事实核验或审稿。传入 articleLength 时使用该范围，否则使用默认范围。', inputSchema: { type: 'object', properties: { article: string('完整 Markdown 文章。'), factBase: { type: 'object', description: '可选事实基座。' }, articleLength: { type: 'object', properties: { min: { type: 'integer', minimum: 0, maximum: 50000 }, max: { type: 'integer', minimum: 0, maximum: 50000 } }, required: ['min','max'], description: '可选的可见字数范围，通常取自 jianzi_settings_summary.articleLength。' } }, required: ['article'] }, readOnlyHint: true },
   { name: 'jianzi_article_generate', description: '调用见字内部模型运行文章成稿流程：建立事实基座、直接写作、审稿、按需调整长度并锁定标题；需要工作台已配置模型。外部 Agent 自行写作并保存文档时无需调用此工具。', inputSchema: { type: 'object', properties: { candidateId: id('候选 ID。'), provider: string('可选的工作台模型服务商 ID。'), skillId: string('可选的写作 Skill ID。') }, required: ['candidateId'] }, readOnlyHint: false, openWorldHint: true },
   { name: 'jianzi_article_documents', description: '读取批次文章文档或指定候选的草稿/终稿。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), candidateId: string('候选 ID；不填时列出批次文档。'), kind: { type: 'string', enum: ['draft', 'final', 'daily-final'] } }, required: ['batchId'] }, readOnlyHint: true },
   { name: 'jianzi_article_document_save', description: '保存外部 Agent 已完成的文章草稿或终稿，不调用见字内部模型。写作应直接依据锁定简报和事实材料生成含标题的完整 Markdown；审稿只处理已核实的事实错误、错误归因、标题误导或明确发布风险，不因观点缺少直接因果证据而追加免责声明。编辑判断获确认只表示可以开始写作；先保存 draft 并让用户审阅，用户确认已生成的文章后才保存 final。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), candidateId: id('文章候选 ID。'), kind: { type: 'string', enum: ['draft', 'final'] }, title: string('文章标题。'), content: string('文章 Markdown 正文。'), status: { type: 'string', enum: ['draft', 'review', 'final'] }, reviewState: string('可选审稿状态。') }, required: ['batchId', 'candidateId', 'kind', 'content'] }, readOnlyHint: false },
+  { name: 'jianzi_article_images', description: '读取文章配图工作区、占位状态和 CDN 配置状态；不会返回本地文件内容或凭据。', inputSchema: { type: 'object', properties: { candidateId: id('文章候选 ID。') }, required: ['candidateId'] }, readOnlyHint: true },
+  { name: 'jianzi_article_images_plan', description: '根据已保存的文章终稿规划配图占位，并更新终稿与配图资产清单。', inputSchema: { type: 'object', properties: { candidateId: id('文章候选 ID。'), provider: string('可选的工作台模型服务商 ID。') }, required: ['candidateId'] }, readOnlyHint: false, openWorldHint: true },
+  { name: 'jianzi_article_image_generate', description: '为指定的可生成配图占位生成图片并保存到本地工作区。', inputSchema: { type: 'object', properties: { candidateId: id('文章候选 ID。'), imageId: string('jianzi_article_images 返回的配图占位 ID。') }, required: ['candidateId','imageId'] }, readOnlyHint: false, openWorldHint: true },
+  { name: 'jianzi_article_image_upload', description: '将指定配图上传到已配置的 CDN 并返回公开地址；这是外部写入操作，只在用户明确要求上传时调用。', inputSchema: { type: 'object', properties: { candidateId: id('文章候选 ID。'), imageId: string('jianzi_article_images 返回的配图占位 ID。') }, required: ['candidateId','imageId'] }, readOnlyHint: false, openWorldHint: true },
   { name: 'jianzi_article_typeset', description: '调用见字内部模型与排版流程生成公众号 HTML；需要工作台已配置模型。成功后返回文章预览入口；在最终回复中附上该链接。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), candidateId: id('候选 ID。', true), imageDeliveryMode: { type: 'string', enum: ['auto', 'local', 'cdn'] } }, required: ['batchId', 'candidateId'] }, readOnlyHint: false, openWorldHint: true },
   { name: 'jianzi_article_typeset_submit', description: '提交外部 Agent 生成的文章 HTML。仅在 jianzi_article_documents 已确认存在 final 后调用；若只有 draft，应先让用户审阅确认，不要提交。工作台负责结构保真、公众号规范化、确定性门禁和产物归档；不调用工作台模型。成功后返回文章预览入口；在最终回复中附上该链接。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), candidateId: id('文章候选 ID。'), html: { type: 'string', minLength: 1, maxLength: 8000000, description: '基于终稿和排版设计方案生成的完整 HTML。' }, designScheme: { type: 'object', description: '本次文章排版设计方案，用于随 HTML 归档。' } }, required: ['batchId','candidateId','html'] }, readOnlyHint: false },
   { name: 'jianzi_cover_generate', description: '为已完成的文章终稿生成 AI 视觉封面；调用工作台内部模型。成功后返回封面入口；在最终回复中附上该链接。', inputSchema: { type: 'object', properties: { candidateId: id('候选 ID。'), provider: string('可选的工作台模型服务商 ID。') }, required: ['candidateId'] }, readOnlyHint: false, openWorldHint: true },
@@ -159,6 +175,25 @@ export async function executeJianziTool(client, name, input = {}) {
     case 'jianzi_collector_configuration_get': return redactSensitive(await client.get(`/api/system/configuration/collector/${encodeURIComponent(String(input.collectorId || ''))}`));
     case 'jianzi_collector_configuration_save': return redactSensitive(await client.put(`/api/system/configuration/collector/${encodeURIComponent(String(input.collectorId || ''))}`, input.configuration || {}));
     case 'jianzi_collector_configuration_test': return redactSensitive(await client.post(`/api/system/configuration/collector/${encodeURIComponent(String(input.collectorId || ''))}/test`, {}));
+    case 'jianzi_integration_configuration_catalog': {
+      const data = await client.get('/api/system/configuration/catalog');
+      return { items: (data.items || []).filter((item) => item.type === 'collector' || (item.type === 'tool' && item.id === 'upyun-image-upload')) };
+    }
+    case 'jianzi_integration_configuration_get':
+    case 'jianzi_integration_configuration_save':
+    case 'jianzi_integration_configuration_test': {
+      const type = String(input.type || '');
+      const resourceId = String(input.id || '');
+      if (!['collector','tool'].includes(type) || (type === 'tool' && resourceId !== 'upyun-image-upload')) throw new Error('仅支持采集器和 upyun-image-upload 图片上传配置');
+      if (type === 'collector') {
+        const data = await client.get('/api/system/configuration/catalog');
+        if (!(data.items || []).some((item) => item.type === 'collector' && item.id === resourceId)) throw new Error('采集器配置资源不存在或不允许通过 MCP 配置');
+      }
+      const resourcePath = `/api/system/configuration/${encodeURIComponent(type)}/${encodeURIComponent(resourceId)}`;
+      if (name === 'jianzi_integration_configuration_get') return client.get(resourcePath);
+      if (name === 'jianzi_integration_configuration_save') return client.put(resourcePath, input.configuration || {});
+      return client.post(`${resourcePath}/test`, {});
+    }
     case 'jianzi_collection_sources_list': {
       const data = await client.get('/api/collection-sources');
       return { ...data, items: (data.items || []).map(safeSource) };
@@ -218,13 +253,17 @@ export async function executeJianziTool(client, name, input = {}) {
     case 'jianzi_candidate_source_fetch': return client.post(`/api/candidates/${candidate}/source`, { hotspotId: input.hotspotId, eventId: input.eventId, force: input.force === true });
     case 'jianzi_candidate_editorial_update': return client.put(`/api/candidates/${candidate}/editorial`, input.editorial);
     case 'jianzi_candidate_lock': return client.post(`/api/candidates/${candidate}/lock`, {});
-    case 'jianzi_article_local_audit': return client.post('/api/external/article/local-audit', { article: input.article, factBase: input.factBase });
+    case 'jianzi_article_local_audit': return client.post('/api/external/article/local-audit', { article: input.article, factBase: input.factBase, articleLength: input.articleLength });
     case 'jianzi_article_generate': return client.post(`/api/candidates/${candidate}/ai/article`, { provider: input.provider, skillId: input.skillId });
     case 'jianzi_article_documents': {
       if (input.candidateId && input.kind) return client.get(`/api/batches/${batch}/documents?candidateId=${encodeURIComponent(input.candidateId)}&kind=${encodeURIComponent(input.kind)}`);
       return client.get(`/api/batches/${batch}/documents`);
     }
     case 'jianzi_article_document_save': return client.put(`/api/batches/${batch}/documents`, { candidateId: input.candidateId, kind: input.kind, title: input.title || '', content: input.content || '', status: input.status || (input.kind === 'final' ? 'review' : 'draft'), reviewState: input.reviewState || null });
+    case 'jianzi_article_images': return safeImageResult(await client.get(`/api/candidates/${candidate}/images`));
+    case 'jianzi_article_images_plan': return safeImageResult(await client.post(`/api/candidates/${candidate}/images/plan`, { provider: input.provider }));
+    case 'jianzi_article_image_generate': return safeImageResult(await client.post(`/api/candidates/${candidate}/images/${encodeURIComponent(String(input.imageId || ''))}/generate`, {}));
+    case 'jianzi_article_image_upload': return safeImageResult(await client.post(`/api/candidates/${candidate}/images/${encodeURIComponent(String(input.imageId || ''))}/cdn`, {}));
     case 'jianzi_article_typeset': return withArtifactEntry(client, await client.post(`/api/batches/${batch}/ai/typeset`, { candidateId: input.candidateId, imageDeliveryMode: input.imageDeliveryMode || 'auto' }), 'articlePreview');
     case 'jianzi_article_typeset_submit': return withArtifactEntry(client, await client.post(`/api/batches/${batch}/external/typeset`, { candidateId: input.candidateId, html: input.html || '', designScheme: input.designScheme || null }), 'articlePreview');
     case 'jianzi_cover_generate': return withArtifactEntry(client, await client.post(`/api/candidates/${candidate}/cover/generate`, { provider: input.provider, mode: 'ai-visual' }), 'cover');
