@@ -59,6 +59,6 @@ MCP 服务入口路径在 patch 中按 profile 写死（当前 `profiles/desktop
 
 ## npm 正式发布
 
-正式发布由仓库的 `Publish DSH plugin to npm` GitHub Actions 工作流执行。将插件 `package.json` 的版本更新并合入主分支后，推送对应标签 `dsh-plugin-v<版本号>`（例如 `dsh-plugin-v0.2.28`）。工作流会核对标签和包版本、构建、生成 `.tgz`、上传 GitHub Actions 产物，并将同一个 `.tgz` 发布到 npm。不要用普通 CI 提交触发发布。
+正式发布由仓库的 `Publish DSH plugin to npm` GitHub Actions 工作流执行。将插件 `package.json` 的版本更新并合入主分支后，推送对应标签 `dsh-plugin-v<版本号>`（例如 `dsh-plugin-v0.2.29`）。工作流会核对标签和包版本、构建、生成 `.tgz`、上传 GitHub Actions 产物，并将同一个 `.tgz` 发布到 npm。不要用普通 CI 提交触发发布。
 
-首次发布前，需由维护者使用 npm 账号完成一次初始化发布，令 `jianzi-content-workbench` 出现在 npm Registry。随后在该 npm 包设置的 **Trusted Publisher** 中配置 GitHub Actions：用户 `shiker1996`、仓库 `wechat-editroom`、工作流文件名 `publish-dsh-plugin.yml`，并允许直接发布。当前 Registry 尚无此包；缺少这次初始化发布时，后续 CI 发布会收到 404。完成配置后，后续版本由上述标签触发，无需长期 npm 发布令牌。
+首次版本已由维护者本地发布到 npm Registry。后续在该 npm 包设置的 **Trusted Publisher** 中配置 GitHub Actions：用户 `shiker1996`、仓库 `wechat-editroom`、工作流文件名 `publish-dsh-plugin.yml`，并允许直接发布。配置完成后，由上述标签触发的发布工作流将通过 OIDC 发布，无需长期 npm 发布令牌。
