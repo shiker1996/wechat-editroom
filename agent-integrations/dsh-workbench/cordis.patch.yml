@@ -1,4 +1,13 @@
 - insert:
+    - id: jianzi-mcp-client
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: jianzi_workbench
+        transport: stdio
+        command: node
+        args:
+          - !!js dshHomePath('profiles/desktop/node_modules/jianzi-content-workbench/mcp-server.mjs')
+        cwd: !!js dshHomePath('profiles/desktop')
     - id: jianzi-content-workbench
       name: jianzi-content-workbench
       config: {}

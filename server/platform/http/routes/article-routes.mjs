@@ -113,15 +113,22 @@ export async function handleArticleRoutes(context) {
   if (docContentMatch && request.method === "GET") {
     const doc = store.getDocumentContent(Number(docContentMatch[1]));
     if (!doc) return json(response, 404, { code: 'DOCUMENT_NOT_FOUND', error: '文稿不存在' });
-    // 内容日历将终稿放进同源预览 iframe；覆盖全局的 frame-ancestors 'none'，
-    // 否则 Chromium 会把合法的本地文稿显示成“拒绝连接”。正文仍保持纯文本，
-    // 不执行文章里的任何 HTML、脚本或资源。
+    // Render article text in a self-contained, explicitly themed document so
+    // DSH's dark-mode defaults cannot make it unreadable on a white background.
+    // Escape all stored content and keep scripts, remote assets, and navigation disabled.
+    const articleText = String(doc.content || doc.title || '').replace(/[&<>"']/g, (character) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    })[character]);
     response.writeHead(200, {
-      "content-type": "text/plain; charset=utf-8",
-      "content-security-policy": "default-src 'none'; base-uri 'none'; object-src 'none'; frame-ancestors 'self'; script-src 'none'; style-src 'none'; img-src 'none'; connect-src 'none';",
+      "content-type": "text/html; charset=utf-8",
+      "content-security-policy": "default-src 'none'; base-uri 'none'; object-src 'none'; frame-ancestors 'self' dsh-app://app; script-src 'none'; style-src 'unsafe-inline'; img-src 'none'; connect-src 'none';",
       "cache-control": "no-store",
     });
-    return response.end(doc.content || doc.title || "");
+    return response.end(`<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><style>html,body{min-height:100%;margin:0;background:#fff;color:#202124}body{padding:24px clamp(18px,4vw,56px);font:15px/1.85 system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}main{max-width:900px;margin:0 auto;white-space:pre-wrap;overflow-wrap:anywhere}::selection{background:#315fce;color:#fff}</style></head><body><main>${articleText}</main></body></html>`);
   }
 
   const reviewIssuesMatch = pathname.match(/^\/api\/documents\/(\d+)\/review-issues$/);

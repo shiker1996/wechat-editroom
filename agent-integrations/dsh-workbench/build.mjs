@@ -6,4 +6,5 @@ const repo = path.resolve(root, '../..');
 await mkdir(path.join(root, 'shared'), { recursive: true });
 await cp(path.join(repo, 'scripts/agent-integration/client.mjs'), path.join(root, 'shared/client.mjs'));
 await cp(path.join(repo, 'scripts/agent-integration/tools.mjs'), path.join(root, 'shared/tools.mjs'));
+await cp(path.join(repo, 'scripts/agent-integration/mcp-server-core.mjs'), path.join(root, 'shared/mcp-server-core.mjs'));
 console.log('Built DSH workbench package from the shared Jianzi MCP tool implementation.');

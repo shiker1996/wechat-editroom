@@ -1,26 +1,37 @@
 {
   "name": "jianzi-content-workbench",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.2.21",
+  "icon": "./icon.svg",
+  "description": "DSH content workbench panel that starts native Agent sessions backed by Jianzi MCP tools.",
   "type": "module",
-  "main": "./dsh/index.mjs",
   "exports": {
     ".": "./dsh/index.mjs",
     "./client": "./lib/client.js",
     "./package.json": "./package.json",
-    "./cordis.patch.yml": "./cordis.patch.yml"
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
   },
-  "files": ["dsh", "lib", "shared", "cordis.patch.yml", "README.md"],
+  "files": [
+    "dsh",
+    "lib",
+    "shared",
+    "mcp-server.mjs",
+    "cordis.patch.yml",
+    "README.md",
+    "locale/*.json",
+    "icon.svg"
+  ],
   "dsh": {
     "bundle": { "patch": "./cordis.patch.yml" },
     "client": {
       "platform": "web",
-      "inject": ["dsh-desktop-workbenches"]
+      "immediately": true
     }
   },
   "peerDependencies": {
-    "@deepseek-ai/schemastery": "*",
-    "@deepseek-ai/dsh-tools": "*"
+    "@deepseek-ai/dsh-mcp-client": "0.2.2-rc.1",
+    "@deepseek-ai/schemastery": "*"
   },
   "scripts": { "build": "node ./build.mjs" }
 }

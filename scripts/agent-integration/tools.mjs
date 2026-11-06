@@ -1,4 +1,4 @@
-const id = (name, description, required = true) => ({ type: 'integer', ...(required ? { minimum: 1 } : {}), description });
+const id = (description, required = true) => ({ type: 'integer', ...(required ? { minimum: 1 } : {}), description });
 const string = (description, extra = {}) => ({ type: 'string', description, ...extra });
 const sensitiveField = /^(?:api[_-]?key|token|secret|password|authorization|cookie|credential|credentials)$/i;
 
@@ -83,6 +83,7 @@ export const JIANZI_TOOLS = [
   { name: 'jianzi_article_generate', description: '调用见字内部模型运行文章成稿流程：建立事实基座、直接写作、审稿、按需调整长度并锁定标题；需要工作台已配置模型。外部 Agent 自行写作并保存文档时无需调用此工具。', inputSchema: { type: 'object', properties: { candidateId: id('候选 ID。'), provider: string('可选的工作台模型服务商 ID。'), skillId: string('可选的写作 Skill ID。') }, required: ['candidateId'] }, readOnlyHint: false, openWorldHint: true },
   { name: 'jianzi_article_documents', description: '读取批次文章文档或指定候选的草稿/终稿。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), candidateId: string('候选 ID；不填时列出批次文档。'), kind: { type: 'string', enum: ['draft', 'final', 'daily-final'] } }, required: ['batchId'] }, readOnlyHint: true },
   { name: 'jianzi_article_document_save', description: '保存外部 Agent 已完成的文章草稿或终稿，不调用见字内部模型。写作应直接依据锁定简报和事实材料生成含标题的完整 Markdown；审稿只处理已核实的事实错误、错误归因、标题误导或明确发布风险，不因观点缺少直接因果证据而追加免责声明。编辑判断获确认只表示可以开始写作；先保存 draft 并让用户审阅，用户确认已生成的文章后才保存 final。', inputSchema: { type: 'object', properties: { batchId: string('批次 ID。'), candidateId: id('文章候选 ID。'), kind: { type: 'string', enum: ['draft', 'final'] }, title: string('文章标题。'), content: string('文章 Markdown 正文。'), status: { type: 'string', enum: ['draft', 'review', 'final'] }, reviewState: string('可选审稿状态。') }, required: ['batchId', 'candidateId', 'kind', 'content'] }, readOnlyHint: false },
+  { name: 'jianzi_calendar_list', description: '读取内容日历条目，包括文章、已交付图文和写作计划。可用 month（YYYY-MM）筛选月份；省略时读取默认日历范围。只读，不修改日历。', inputSchema: { type: 'object', properties: { month: { type: 'string', pattern: '^\\d{4}-(0[1-9]|1[0-2])$', description: '可选月份，格式 YYYY-MM。' } } }, readOnlyHint: true },
   { name: 'jianzi_article_images', description: '读取文章配图工作区、占位状态和 CDN 配置状态；不会返回本地文件内容或凭据。', inputSchema: { type: 'object', properties: { candidateId: id('文章候选 ID。') }, required: ['candidateId'] }, readOnlyHint: true },
   { name: 'jianzi_article_images_plan', description: '根据已保存的文章终稿规划配图占位，并更新终稿与配图资产清单。', inputSchema: { type: 'object', properties: { candidateId: id('文章候选 ID。'), provider: string('可选的工作台模型服务商 ID。') }, required: ['candidateId'] }, readOnlyHint: false, openWorldHint: true },
   { name: 'jianzi_article_image_generate', description: '为指定的可生成配图占位生成图片并保存到本地工作区。', inputSchema: { type: 'object', properties: { candidateId: id('文章候选 ID。'), imageId: string('jianzi_article_images 返回的配图占位 ID。') }, required: ['candidateId','imageId'] }, readOnlyHint: false, openWorldHint: true },
@@ -258,6 +259,10 @@ export async function executeJianziTool(client, name, input = {}) {
     case 'jianzi_article_documents': {
       if (input.candidateId && input.kind) return client.get(`/api/batches/${batch}/documents?candidateId=${encodeURIComponent(input.candidateId)}&kind=${encodeURIComponent(input.kind)}`);
       return client.get(`/api/batches/${batch}/documents`);
+    }
+    case 'jianzi_calendar_list': {
+      const month = String(input.month || '').trim();
+      return client.get(`/api/calendar${month ? `?month=${encodeURIComponent(month)}` : ''}`);
     }
     case 'jianzi_article_document_save': return client.put(`/api/batches/${batch}/documents`, { candidateId: input.candidateId, kind: input.kind, title: input.title || '', content: input.content || '', status: input.status || (input.kind === 'final' ? 'review' : 'draft'), reviewState: input.reviewState || null });
     case 'jianzi_article_images': return safeImageResult(await client.get(`/api/candidates/${candidate}/images`));

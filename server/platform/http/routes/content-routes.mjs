@@ -11,7 +11,7 @@ import { enrichWechatReview } from '../../../features/content-feedback/applicati
 import { parseModelJson } from '../../llm/model-json.mjs';
 import { createRequestHarnessGateway } from '../../skills/pipeline-runtime.mjs';
 
-const ARTIFACT_PREVIEW_CONTENT_SECURITY_POLICY = "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; frame-src 'self'";
+const ARTIFACT_PREVIEW_CONTENT_SECURITY_POLICY = "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'self' dsh-app://app; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; frame-src 'self'";
 
 function enrichCalendarEntry(entry, insights, feedback) {
   if (entry?.content_type !== 'writing_plan') return entry;

@@ -1,28 +1,120 @@
-import Schema from '@deepseek-ai/schemastery';
 import { createJianziClient } from '../shared/client.mjs';
-import { executeJianziTool, JIANZI_TOOLS } from '../shared/tools.mjs';
+import { executeJianziTool } from '../shared/tools.mjs';
 
 export const name = 'jianzi-content-workbench';
-export const inject = ['tools'];
-export const Config = Schema.object({});
 
+const json = (payload, status = 200) => new Response(JSON.stringify(payload), {
+  status,
+  headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
+});
+
+const failed = (error) => ({
+  ok: false,
+  error: { code: error.code || 'JIANZI_READ_FAILED', message: error.message || String(error) },
+});
+
+// The Client panel cannot call MCP tools: those belong to the model-facing tool
+// registry. It reads the same Jianzi tool implementations through these
+// read-only Host routes instead, which the desktop shell forwards same-origin.
 export function apply(ctx) {
-  const client = createJianziClient();
-  const disposers = [];
-  for (const tool of JIANZI_TOOLS) {
-    const required = new Set(tool.inputSchema.required || []);
-    const parameters = Object.fromEntries(Object.entries(tool.inputSchema.properties || {}).map(([key, value]) => [
-      key,
-      { ...value, ...(required.has(key) ? { required: true } : {}) },
-    ]));
-    disposers.push(ctx.tools.register({
-      name: tool.name,
-      description: tool.description,
-      parameters,
-      async execute(args) {
-        return executeJianziTool(client, tool.name, args || {});
-      },
-    }));
+  let server;
+  try {
+    server = typeof ctx.get === 'function' ? ctx.get('webServer') : undefined;
+  } catch {
+    server = undefined;
   }
-  ctx.effect(() => () => disposers.forEach((dispose) => dispose?.()));
+  if (!server || typeof server.register !== 'function') return;
+
+  const client = createJianziClient();
+  const read = async (tool, args) => {
+    try {
+      return { ok: true, data: await executeJianziTool(client, tool, args || {}) };
+    } catch (error) {
+      return failed(error);
+    }
+  };
+
+  ctx.effect(() => server.register({
+    kind: 'exact',
+    path: '/jianzi/status',
+    resource: async () => json(await read('jianzi_doctor')),
+  }), 'jianzi: status route');
+
+  ctx.effect(() => server.register({
+    kind: 'exact',
+    path: '/jianzi/batches',
+    resource: async (request) => {
+      const url = new URL(request.url);
+      const limit = Math.min(20, Math.max(1, Number(url.searchParams.get('limit')) || 8));
+      return json(await read('jianzi_batches_list', { limit }));
+    },
+  }), 'jianzi: batches route');
+
+  ctx.effect(() => server.register({
+    kind: 'exact',
+    path: '/jianzi/candidates',
+    resource: async (request) => {
+      const url = new URL(request.url);
+      const batchId = String(url.searchParams.get('batch') || '').trim();
+      if (!batchId) {
+        return json({ ok: false, error: { code: 'BATCH_REQUIRED', message: 'batch query parameter is required' } }, 400);
+      }
+      const track = url.searchParams.get('track') === 'social_cards' ? 'social_cards' : 'article';
+      return json(await read('jianzi_batch_candidates', { batchId, track, kind: 'all' }));
+    },
+  }), 'jianzi: candidates route');
+
+  ctx.effect(() => server.register({
+    kind: 'exact',
+    path: '/jianzi/social-ranking',
+    resource: async (request) => {
+      const url = new URL(request.url);
+      const batchId = String(url.searchParams.get('batch') || '').trim();
+      if (!batchId) {
+        return json({ ok: false, error: { code: 'BATCH_REQUIRED', message: 'batch query parameter is required' } }, 400);
+      }
+      return json(await read('jianzi_batch_social_ranking', { batchId }));
+    },
+  }), 'jianzi: social ranking route');
+
+  ctx.effect(() => server.register({
+    kind: 'exact',
+    path: '/jianzi/jobs',
+    resource: async (request) => {
+      const url = new URL(request.url);
+      const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit')) || 12));
+      const batchId = String(url.searchParams.get('batch') || '').trim();
+      try {
+        const rows = await client.get(`/api/jobs?limit=${limit}`);
+        const list = Array.isArray(rows) ? rows : [];
+        return json({ ok: true, data: batchId ? list.filter((row) => row.batch_id === batchId) : list });
+      } catch (error) {
+        return json(failed(error));
+      }
+    },
+  }), 'jianzi: jobs route');
+
+  ctx.effect(() => server.register({
+    kind: 'exact',
+    path: '/jianzi/calendar',
+    resource: async (request) => {
+      const url = new URL(request.url);
+      const month = String(url.searchParams.get('month') || '').trim();
+      const batchId = String(url.searchParams.get('batch') || '').trim();
+      const result = await read('jianzi_calendar_list', month ? { month } : {});
+      if (!result.ok || !Array.isArray(result.data)) return json(result);
+      const baseUrl = String(client.baseUrl || 'http://127.0.0.1:4317').replace(/\/+$/, '');
+      const data = result.data.filter((entry) => !batchId || String(entry?.batch_id || '') === batchId).map((entry) => {
+        const id = Number(entry?.id);
+        if (!Number.isSafeInteger(id) || id < 1) return entry;
+        const path = entry.content_type === 'article'
+          ? `/api/documents/${id}/content`
+          : entry.content_type === 'social_cards'
+            ? `/api/artifacts/${id}/preview`
+            : '';
+        return path ? { ...entry, previewUrl: `${baseUrl}${path}` } : entry;
+      });
+      return json({ ...result, data });
+    },
+  }), 'jianzi: calendar route');
 }
