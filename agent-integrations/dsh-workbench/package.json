@@ -1,0 +1,26 @@
+{
+  "name": "jianzi-content-workbench",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dsh/index.mjs",
+  "exports": {
+    ".": "./dsh/index.mjs",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml"
+  },
+  "files": ["dsh", "lib", "shared", "cordis.patch.yml", "README.md"],
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": {
+      "platform": "web",
+      "inject": ["dsh-desktop-workbenches"]
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/schemastery": "*",
+    "@deepseek-ai/dsh-tools": "*"
+  },
+  "scripts": { "build": "node ./build.mjs" }
+}

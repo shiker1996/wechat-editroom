@@ -1,0 +1,4 @@
+- insert:
+    - id: jianzi-content-workbench
+      name: jianzi-content-workbench
+      config: {}
