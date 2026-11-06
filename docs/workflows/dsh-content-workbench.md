@@ -35,6 +35,8 @@
 
 当工作台服务未运行时，DSH Agent 可调用 `jianzi_workbench_start`；DSH 面板状态卡的「准备启动任务」按钮会把启动提示词放入 DSH 原生会话，由 Agent 在用户发送后调用该 MCP 工具。提示词要求 Agent 从当前会话选中的 DSH 工作空间取得本机绝对路径并作为 `projectRoot` 传入，用户不必在面板重复输入；若 Agent 无法获取工作空间路径，应先询问用户，不得把 DSH profile/插件目录当作项目路径。工具复用 `scripts/runtime/start-workbench.ps1` 或 `.sh`，无浏览器启动，并异步轮询 `/api/overview`；就绪接口返回有效 JSON 后立即执行核心健康检查和 `workspaceId` 指纹比对，最长等待 90 秒。DSH MCP 单次工具调用 timeout 为 120 秒。端口被占用、环境错误或 90 秒内未就绪时，Agent 应报告具体原因并停止重试；发现指纹不匹配或服务版本不支持指纹时，不得继续业务读写。
 
+「检查环境」任务先检查当前工作空间是否为有效见字项目。若目录不存在或缺少启动入口，启动工具不会尝试安装；Agent 会先说明需要克隆项目，并征求是否克隆到空目录的确认。克隆后按项目向导逐项配置，不自动安装 RSSHub 或覆盖现有文件。
+
 完整的启动恢复契约见[外部 Agent 工作台生命周期](external-agent-workbench-lifecycle.md)。
 
 面板自身不直接调用 MCP 工具。它通过 Host 插件注册的只读路由读取同一套实现的数据：`/jianzi/status`（`jianzi_doctor`）、`/jianzi/batches`（`jianzi_batches_list`）、`/jianzi/candidates`（`jianzi_batch_candidates`）、`/jianzi/social-ranking`（`jianzi_batch_social_ranking`）、`/jianzi/jobs`（本地 `/api/jobs`）与 `/jianzi/calendar`（`jianzi_calendar_list`）。需要执行启动时，面板通过 `uiWorkspace.startSession` 准备原生会话草稿，由 Agent 调用 `jianzi_workbench_start`。日历 Host 路由根据 MCP 返回的文章文档 ID 或图文产物 ID，附加由实际 `client.baseUrl` 生成的只读预览链接；文章链接访问 `/api/documents/{id}/content`，图文链接访问 `/api/artifacts/{id}/preview`。内容日历和选题快捷区的已有文章/图文预览均在 DSH 面板内以抽屉展示。选中文章候选时，如果已有终稿，面板显示现有预览与独立的“仍要准备新草稿”操作，Agent 必须保留旧终稿；若只有草稿状态，则先检查现有文档，避免重复成稿；若产物状态读取失败，禁用重新生成入口并提示用户重选批次。选中图文候选时会结合资格、是否入池和是否已有已交付产物显示对应操作；已有图文显示预览与单独的“准备重新生成”操作；再次提交会写回固定产物路径，可能替换现有 HTML/PNG，因此 Agent 必须在提交前再次说明影响并取得明确确认，门禁未通过时禁止提交。快捷操作只准备携带所选标题、ID 和状态的 DSH 原生任务草稿，不直接写入业务数据；图文未入池时，Agent 必须先获得用户明确同意才能加入。

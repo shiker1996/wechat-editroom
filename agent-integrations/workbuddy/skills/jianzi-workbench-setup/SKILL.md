@@ -7,6 +7,8 @@ description: 安装、诊断和配置见字工作台与 Codex/WorkBuddy 集成�
 
 见字工作台是运行在本机的内容生产系统。先确认用户正在项目目录中，并让 MCP 工具 `jianzi_doctor` 检查 `http://127.0.0.1:4317`。若服务未运行，调用 `jianzi_workbench_start`；它会运行项目官方启动脚本、不打开浏览器并等待 ready，然后再次验证健康状态。
 
+如果当前目录不是见字项目（缺少 `server.mjs` 或 `scripts/runtime/start-workbench.ps1` / `.sh`），启动工具不能安装或克隆项目。先说明本机缺少项目 checkout，并询问用户是否将 `https://github.com/shiker1996/wechat-editroom.git` 克隆到一个空目录；只有用户确认后才克隆，绝不覆盖非空目录。克隆后再运行项目安装向导。若当前 Agent 没有终端或工作区文件权限，停止并给出手动步骤。
+
 ## 配置步骤
 
 1. 如工作台尚未安装依赖或缺少运行配置，说明将运行项目自带安装引导：Windows 执行 `setup-workbench.cmd`，macOS/Linux 执行 `./setup-workbench.sh`。这两个入口会先按项目现有规则选择或引导安装 Node，再启动 setup。首次运行时让用户决定是否安装 RSSHub；不要传 `--yes`，以便在用户选择 RSSHub 时先跳过通用安装，再按下一步固定版本。
