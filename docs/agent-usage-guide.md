@@ -16,7 +16,21 @@
 
 外部 Agent 使用当前会话模型完成分析和生成。MCP 的校验职责按产物类型区分：文章保存接口负责保存文档；`jianzi_article_local_audit` 可选地提醒 Markdown 结构、长度和标题风险，不替代事实核验或审稿，也不会因这些提醒阻止保存。排版、封面和图文提交则由工作台执行各自的结构/内容门禁；图文生成可使用浏览器审计，提交后截图并归档。因此默认外部 Agent 流程不要求配置见字内部模型。账号画像、采集源配置和批次数据仍由工作台保存和管理。
 
-DSH Desktop 可使用 `agent-integrations/dsh-workbench/` 本地工作台包。构建前运行 `node agent-integrations/dsh-workbench/build.mjs`，然后在该目录执行 `pnpm pack`；包内复用相同的 `jianzi_*` 工具描述与执行器。启动见字本机工作台后，DSH Agent 可执行相同采集、选题、文章和排版工具。面板链接到见字现有业务页面；本地安装按 [DSH 官方工作台开发规范](https://dshdesktop.com/workbench/docs/development/)执行。该适配不代表已上架 DSH 市场。
+### DeepSeek Harness 桌面端：在原生面板中使用见字 MCP
+
+官方 DeepSeek Harness 桌面应用（[deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)）可安装见字内容工作台插件。插件在 DSH 原生面板展示工作流入口、批次与选题、内容日历和产物抽屉；按钮只把任务草稿放入原生会话，用户发送后，DSH Agent 通过插件附带的 `jianzi_*` MCP 工具操作见字本机服务。面板不会嵌入见字网页；写作和内容生成使用当前 DSH 会话模型，默认不需要配置见字内部模型。
+
+操作时，DSH 当前会话需打开见字项目目录，见字工作台服务也需在同一台电脑运行。项目级 Skills 提供具体流程规则；MCP 提供业务读写、健康检查和产物查询。未连接时可从面板准备启动任务；若需从空目录初始化项目，使用「检查环境」流程，Agent 必须先说明并征求克隆确认，不覆盖已有文件，也不会擅自安装 RSSHub。
+
+当前安装方式是从仓库构建 `.tgz` 并在 DSH 插件管理器本地安装：
+
+```sh
+node agent-integrations/dsh-workbench/build.mjs
+cd agent-integrations/dsh-workbench
+pnpm pack
+```
+
+在 DSH 桌面应用的「插件 → 添加插件」中选择生成的 `.tgz`。目前 npm 包尚未发布，也没有发布供用户添加的 DSH 插件索引条目；npm 正式发布工作流已配置，插件索引可按官方流程单独生成和托管。[官方插件发布说明](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/develop/basic/publish.md)与[插件索引说明](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/guide/plugin-market.md)介绍了这两种分发方式。见字 DSH 工作流、面板能力和发布细节见[当前流程契约](workflows/dsh-content-workbench.md)与[插件 README](../agent-integrations/dsh-workbench/README.md)。
 
 ## 2. Codex：从空目录安装
 
@@ -113,9 +127,9 @@ npm run jianzi -- doctor --json
 
 > 先检查见字工作台是否连接。如果账号画像未配置，采访我并在确认后保存；然后列出采集器和当前采集源，说明每种来源的前置条件。先不要启动采集。
 
-### 3.3 DeepSeek Harness、Kimi 和其他 MCP 客户端
+### 3.3 其他 MCP 客户端：手动配置
 
-只要客户端能在本机启动 MCP `stdio` 服务，就可以连接同一个工作台 MCP；无需申请平台 Runtime OAuth，也无需在见字中配置该 Agent 平台的模型。CLI 的 `install --agent` 目前为 Codex 与 WorkBuddy 生成项目级客户端配置；其他客户端在 MCP 设置中手动添加服务，并从 `agent-integrations/skills/` 安装其支持的项目 Skills。
+DeepSeek Harness 桌面端建议使用上方介绍的专用见字插件。若使用其他能在本机启动 MCP `stdio` 服务的客户端，可按下方配置连接同一个工作台 MCP；无需申请平台 Runtime OAuth，也无需在见字中配置该 Agent 平台的模型。CLI 的 `install --agent` 目前为 Codex 与 WorkBuddy 生成项目级客户端配置；其余客户端在 MCP 设置中手动添加服务，并从 `agent-integrations/skills/` 安装其支持的项目 Skills。
 
 通用配置示例（各客户端的字段名和设置界面可能不同）：
 

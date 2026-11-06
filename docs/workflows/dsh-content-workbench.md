@@ -39,7 +39,7 @@
 
 完整的启动恢复契约见[外部 Agent 工作台生命周期](external-agent-workbench-lifecycle.md)。
 
-面板自身不直接调用 MCP 工具。它通过 Host 插件注册的只读路由读取同一套实现的数据：`/jianzi/status`（`jianzi_doctor`）、`/jianzi/batches`（`jianzi_batches_list`）、`/jianzi/candidates`（`jianzi_batch_candidates`）、`/jianzi/social-ranking`（`jianzi_batch_social_ranking`）、`/jianzi/jobs`（本地 `/api/jobs`）与 `/jianzi/calendar`（`jianzi_calendar_list`）。需要执行启动时，面板通过 `uiWorkspace.startSession` 准备原生会话草稿，由 Agent 调用 `jianzi_workbench_start`。日历 Host 路由根据 MCP 返回的文章文档 ID 或图文产物 ID，附加由实际 `client.baseUrl` 生成的只读预览链接；文章链接访问 `/api/documents/{id}/content`，图文链接访问 `/api/artifacts/{id}/preview`。内容日历和选题快捷区的已有文章/图文预览均在 DSH 面板内以抽屉展示。选中文章候选时，如果已有终稿，面板显示现有预览与独立的“仍要准备新草稿”操作，Agent 必须保留旧终稿；若只有草稿状态，则先检查现有文档，避免重复成稿；若产物状态读取失败，禁用重新生成入口并提示用户重选批次。选中图文候选时会结合资格、是否入池和是否已有已交付产物显示对应操作；已有图文显示预览与单独的“准备重新生成”操作；再次提交会写回固定产物路径，可能替换现有 HTML/PNG，因此 Agent 必须在提交前再次说明影响并取得明确确认，门禁未通过时禁止提交。快捷操作只准备携带所选标题、ID 和状态的 DSH 原生任务草稿，不直接写入业务数据；图文未入池时，Agent 必须先获得用户明确同意才能加入。
+面板自身不直接调用 MCP 工具。它通过 Host 插件注册的只读路由读取同一套实现的数据：`/jianzi/status`（`jianzi_doctor`）、`/jianzi/batches`（`jianzi_batches_list`）、`/jianzi/candidates`（`jianzi_batch_candidates`）、`/jianzi/social-ranking`（`jianzi_batch_social_ranking`）、`/jianzi/jobs`（本地 `/api/jobs`）与 `/jianzi/calendar`（`jianzi_calendar_list`）。需要执行启动时，面板通过 `uiWorkspace.startSession` 准备 DSH 原生会话草稿，由 Agent 调用 `jianzi_workbench_start`。日历 Host 路由根据 MCP 返回的文章文档 ID 或图文产物 ID，附加由实际 `client.baseUrl` 生成的只读预览链接；文章链接访问 `/api/documents/{id}/content`，图文链接访问 `/api/artifacts/{id}/preview`。内容日历和选题快捷区的已有文章/图文预览均在 DSH 面板内以抽屉展示。选中文章候选时，如果已有终稿，面板显示现有预览与独立的“仍要准备新草稿”操作，Agent 必须保留旧终稿；若只有草稿状态，则先检查现有文档，避免重复成稿；若产物状态读取失败，禁用重新生成入口并提示用户重选批次。选中图文候选时会结合资格、是否入池和是否已有已交付产物显示对应操作；已有图文显示预览与单独的“准备重新生成”操作；再次提交会写回固定产物路径，可能替换现有 HTML/PNG，因此 Agent 必须在提交前再次说明影响并取得明确确认，门禁未通过时禁止提交。快捷操作只准备携带所选标题、ID 和状态的 DSH 原生任务草稿，不直接写入业务数据；图文未入池时，Agent 必须先获得用户明确同意才能加入。
 
 DSH Agent 可通过只读 MCP 工具 `jianzi_calendar_list` 查询 `/api/calendar` 的内容日历条目，按 `month`（`YYYY-MM`）可选过滤；结果包含终稿文章、已交付图文和写作计划。
 
@@ -49,5 +49,6 @@ MCP 工具定义与执行器以 `scripts/agent-integration/tools.mjs` 和 `scrip
 
 - 插件目录：`agent-integrations/dsh-workbench/`；插件清单图标复用 `build/brand-seal.svg`（exe 图标的矢量源）；构建后通过 `pnpm pack` 生成供 DSH 插件管理器安装的 `.tgz`。
 - DSH 运行依赖：官方 `@deepseek-ai/dsh-mcp-client`，由 Harness 安装提供并在 `package.json` 中声明为 peer；Cordis patch 配置 stdio transport 和插件包内 MCP 服务入口。
-- MCP 服务入口路径在 patch 中按 profile 定位（当前写死 `profiles/desktop`，与 DSH Desktop 的活动 profile 一致）；在其他 profile 安装时需同步修改该路径。
+- MCP 服务入口路径在 patch 中按 profile 定位（当前写死 `profiles/desktop`，与 DeepSeek Harness 桌面端的活动 profile 一致）；在其他 profile 安装时需同步修改该路径。
 - 构建命令：`node agent-integrations/dsh-workbench/build.mjs`；打包命令：在插件目录运行 `pnpm pack`。
+- 当前交付状态：本地可构建并从官方 DeepSeek Harness 桌面应用的插件管理器安装 `.tgz`；`jianzi-content-workbench` 尚未发布到 npm，也未发布供用户添加的 DSH 插件索引条目。npm 发布工作流见插件 README；官方索引可按 [插件索引说明](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/guide/plugin-market.md)单独生成和托管。

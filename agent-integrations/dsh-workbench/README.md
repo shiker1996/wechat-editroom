@@ -51,12 +51,14 @@ cd agent-integrations/dsh-workbench
 pnpm pack
 ```
 
-在 DSH 插件管理器用「添加插件」选择生成的 `.tgz`，或让 Agent 用 `plugin_manager` 的 `install_bundle` 指定本目录。`@deepseek-ai/dsh-mcp-client` 与 `@deepseek-ai/schemastery` 由 Harness 提供，声明为 `peerDependencies`。安装后重启或重新加载 DSH，让 patch 中的 MCP 客户端行生效。
+在官方 DeepSeek Harness 桌面应用（[deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)）的「插件 → 添加插件」选择生成的 `.tgz`，安装后在已安装插件中启用见字内容工作台。`@deepseek-ai/dsh-mcp-client` 与 `@deepseek-ai/schemastery` 由 Harness 提供，声明为 `peerDependencies`。如安装器提示需重启，再按提示重启或重新加载 DSH。
+
+当前插件可从源码构建 `.tgz` 并本地安装；npm 包尚未发布，也没有发布供用户添加的 DSH 插件索引条目。官方 Harness 支持通过插件管理器安装包名、Git 仓库、tarball 或本地路径；本仓库插件位于 monorepo 子目录，现阶段推荐按上述步骤本地打包安装。详见官方[插件打包与发布说明](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/develop/basic/publish.md)及[插件索引说明](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/guide/plugin-market.md)。
 
 MCP 服务入口路径在 patch 中按 profile 写死（当前 `profiles/desktop`）；在其他 profile 安装时需要同步修改。
 
 ## npm 正式发布
 
-正式发布由仓库的 `Publish DSH plugin to npm` GitHub Actions 工作流执行。将插件 `package.json` 的版本更新并合入主分支后，推送对应标签 `dsh-plugin-v<版本号>`（例如 `dsh-plugin-v0.2.22`），工作流会核对标签和包版本、构建并检查包内容，然后发布到 npm。不要用普通 CI 提交触发发布。
+正式发布由仓库的 `Publish DSH plugin to npm` GitHub Actions 工作流执行。将插件 `package.json` 的版本更新并合入主分支后，推送对应标签 `dsh-plugin-v<版本号>`（例如 `dsh-plugin-v0.2.28`）。工作流会核对标签和包版本、构建、生成 `.tgz`、上传 GitHub Actions 产物，并将同一个 `.tgz` 发布到 npm。不要用普通 CI 提交触发发布。
 
-首次启用工作流前，需要在 npm 包设置的 **Trusted Publisher** 中配置 GitHub Actions：用户 `shiker1996`、仓库 `wechat-editroom`、工作流文件名 `publish-dsh-plugin.yml`，并允许直接 `npm publish`。当前包名尚未在 npm Registry 中注册，因此首次发布需要先由维护者完成一次 npm 初始化发布，再配置 Trusted Publisher；之后版本通过上述标签由 CI 发布，无需长期 npm 发布令牌。
+首次发布前，需由维护者使用 npm 账号完成一次初始化发布，令 `jianzi-content-workbench` 出现在 npm Registry。随后在该 npm 包设置的 **Trusted Publisher** 中配置 GitHub Actions：用户 `shiker1996`、仓库 `wechat-editroom`、工作流文件名 `publish-dsh-plugin.yml`，并允许直接发布。当前 Registry 尚无此包；缺少这次初始化发布时，后续 CI 发布会收到 404。完成配置后，后续版本由上述标签触发，无需长期 npm 发布令牌。

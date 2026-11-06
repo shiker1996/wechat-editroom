@@ -47,5 +47,18 @@ jobs:
       - name: Validate npm package contents
         run: npm pack --dry-run
 
-      - name: Publish package with npm Trusted Publishing
-        run: npm publish
+      - name: Create npm package tarball
+        run: |
+          mkdir -p artifacts
+          npm pack --pack-destination ./artifacts
+
+      - name: Upload package tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: jianzi-content-workbench-${{ github.ref_name }}
+          path: agent-integrations/dsh-workbench/artifacts/*.tgz
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish package tarball with npm Trusted Publishing
+        run: npm publish ./artifacts/*.tgz
