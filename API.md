@@ -1000,6 +1000,10 @@ GET 返回脱敏后的当前运行设置；PUT 更新受支持的 `.env` 字段�
 
 校验采集插件全局配置是否完整；正式采集与单源测试使用同一份解析结果。
 
+### 外部 Agent 的集成配置 MCP 工具
+
+MCP `jianzi_integration_configuration_catalog/get/save/test` 仅开放采集器和 `upyun-image-upload` 配置资源，底层使用统一配置路由 `GET|PUT /api/system/configuration/:type/:id` 与 `POST /api/system/configuration/:type/:id/test`。秘密字段由统一配置服务存入隔离凭据 Profile，查询与保存结果只返回配置状态，不回显秘密。MCP 工具层会再次限制 `type` 和插件 ID；完整性测试不执行第三方连通性测试。
+
 ### POST /api/collection-sources
 
 创建统一来源实例。当前支持 Reddit、RSSHub/X 和直连 Feed；服务端负责规范化稳定 `sourceKey` 和重复检查。
