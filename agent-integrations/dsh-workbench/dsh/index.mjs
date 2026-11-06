@@ -8,10 +8,13 @@ const json = (payload, status = 200) => new Response(JSON.stringify(payload), {
   headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
 });
 
-const failed = (error) => ({
-  ok: false,
-  error: { code: error.code || 'JIANZI_READ_FAILED', message: error.message || String(error) },
-});
+const failed = (error) => {
+  console.error('Jianzi workbench route failure', error);
+  return {
+    ok: false,
+    error: { code: error?.code || 'JIANZI_READ_FAILED', message: 'Request failed' },
+  };
+};
 
 // The Client panel cannot call MCP tools: those belong to the model-facing tool
 // registry. It reads Jianzi data through read-only Host routes. Startup actions
