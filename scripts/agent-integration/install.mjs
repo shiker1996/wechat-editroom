@@ -62,7 +62,7 @@ function installWorkBuddy() {
     type: 'stdio',
     command: process.execPath,
     args: [SERVER_FILE],
-    timeout: 30000,
+    timeout: 120000,
   };
   fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
 

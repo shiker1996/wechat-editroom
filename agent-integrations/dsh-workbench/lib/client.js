@@ -25,6 +25,10 @@ window.__ModuleLoader__.load({
         statusOk: 'ok',
         statusBad: 'not ready',
         refresh: 'Refresh',
+        startProject: 'Prepare start task',
+        startingProject: 'Preparing DSH conversation…',
+        projectReady: 'Startup task added to a native DSH conversation. Review it and press Send.',
+        promptStartProject: 'Start the Jianzi workbench for the currently selected DSH workspace. Determine the absolute path of this conversation\'s selected workspace and pass it as projectRoot to the MCP tool jianzi_workbench_start. Do not use the DSH profile/plugin directory as the project path. Wait for the tool to confirm the service is ready and the workspace fingerprint matches. If the workspace path is unavailable, ask me for it instead of guessing. If startup fails, report the returned error and stop; do not retry or run setup/configuration tasks. After success, report the project path and service address. Do not perform any other work.',
         recentBatches: 'Recent batches (click to fill)',
         noBatches: 'No batches yet',
         pickBatch: 'Fill',
@@ -122,7 +126,7 @@ window.__ModuleLoader__.load({
         hotspotIdLabel: 'Hotspot ID: ',
         yes: 'yes',
         no: 'no',
-        promptSetup: 'Load the jianzi-workbench-setup skill and check the local Jianzi workbench. Use the Jianzi MCP tools to verify: the service is reachable, RSSHub and collection sources are configured, the account profile is saved, and collectors are configured. If RSSHub is not installed, give me the setup-workbench steps instead of installing it yourself. Do not edit .env or any secret fields. Report each check in one line.',
+        promptSetup: 'Load the jianzi-workbench-setup skill and check the local Jianzi workbench. Call jianzi_doctor first; if the service is not running, call jianzi_workbench_start and wait for ready plus a matching project fingerprint before continuing. Use the configured JIANZI_PROJECT_ROOT or ask me for the local project absolute path if it is missing. Then use the Jianzi MCP tools to verify: RSSHub and collection sources are configured, the account profile is saved, and collectors are configured. If RSSHub is not installed, give me the setup-workbench steps instead of installing it yourself. Do not edit .env or any secret fields. Report each check in one line.',
         promptTopics: 'Load the jianzi-topic-to-article skill and run its topic-discovery stage. Follow the skill order strictly: create or reuse a batch, collect and wait for the job, submit tags, build events and fact cards, run the research stages, then read the rankings. Do not call any Jianzi internal-model tool. Finish with a ranked shortlist that includes batch ID, candidate/hotspot IDs, rationale, risks, and source links. Stop for my topic choice before adding a candidate or drafting an article.',
         promptArticle: 'Load the jianzi-topic-to-article skill and run its article stage. Fetch the candidate source first, read the candidate, account profile, and article-length settings, and show me the editorial angle for confirmation. Then save a draft and read it back. Do not save a final and do not start typesetting until I confirm the generated article.',
         promptTypeset: 'Load the jianzi-typeset-cover skill and run typesetting and cover generation. Read the article documents first: continue only when a user-confirmed final exists. If only a draft exists, stop and explain. Generate the WeChat HTML, submit it for typesetting, generate the cover, and return both preview links. Do not publish to WeChat and do not call Jianzi internal-model typesetting tools.',
@@ -144,6 +148,10 @@ window.__ModuleLoader__.load({
         statusOk: '正常',
         statusBad: '未就绪',
         refresh: '刷新',
+        startProject: '准备启动任务',
+        startingProject: '正在准备 DSH 会话…',
+        projectReady: '启动任务已放入 DSH 原生会话，检查后按发送即可执行。',
+        promptStartProject: '启动当前 DSH 会话所选工作空间对应的见字工作台。先确定本会话当前选中工作空间的本机绝对路径，并将该路径作为 projectRoot 参数传给见字 MCP 工具 jianzi_workbench_start。不要把 DSH profile 或插件目录当成项目路径。等待工具确认服务就绪且工作区指纹匹配；如果无法读取当前工作空间路径，先向我询问，不要猜路径。若启动失败，说明工具返回的具体错误并停止，不要重试，也不要继续做环境配置。成功后汇报项目路径和服务地址。除此之外不要执行其他操作。',
         recentBatches: '最近批次（点击填入）',
         noBatches: '还没有批次',
         pickBatch: '填入',
@@ -241,7 +249,7 @@ window.__ModuleLoader__.load({
         hotspotIdLabel: '热点 ID：',
         yes: '是',
         no: '否',
-        promptSetup: '加载 jianzi-workbench-setup 技能，检查本机见字工作台。用见字 MCP 工具确认：服务可访问、RSSHub 与采集源已配置、账号画像已保存、采集器配置完整。RSSHub 未安装时给我 setup-workbench 的操作步骤，不要自行安装；不要读取或输出 .env 与任何密钥字段。每项检查用一句话汇报结论。',
+        promptSetup: '加载 jianzi-workbench-setup 技能，检查本机见字工作台。先调用 jianzi_doctor；若服务未运行，调用 jianzi_workbench_start，并等待 ready 且项目指纹匹配后再继续。使用已配置的 JIANZI_PROJECT_ROOT；未配置时先向我询问本机项目绝对路径。然后用见字 MCP 工具确认：RSSHub 与采集源已配置、账号画像已保存、采集器配置完整。RSSHub 未安装时给我 setup-workbench 的操作步骤，不要自行安装；不要读取或输出 .env 与任何密钥字段。每项检查用一句话汇报结论。',
         promptTopics: '加载 jianzi-topic-to-article 技能，执行选题阶段。严格按技能顺序：创建或复用批次 → 采集并等待任务完成 → 提交打标 → 生成事件与事实卡 → 运行研判阶段 → 读取榜单。不要调用见字内部模型工具。最后给我一份排序清单，包含批次 ID、候选/热点 ID、理由、风险和来源链接；等我选题后再加入候选或写文章。',
         promptArticle: '加载 jianzi-topic-to-article 技能，执行文章阶段。先抓取候选原文，读取候选、账号画像和文章字数设置，把编辑角度给我确认；确认后保存 draft 并回读。未经我确认不要保存 final，也不要开始排版。',
         promptTypeset: '加载 jianzi-typeset-cover 技能，执行排版与封面。先读取文章文档，只有存在我确认过的 final 才继续；只有 draft 就停下来说明。生成公众号 HTML 并提交排版，再生成封面，返回两个预览入口。不要发布到公众号，也不要调用见字内部模型排版工具。',
@@ -304,6 +312,11 @@ window.__ModuleLoader__.load({
       .jianzi-desk__status-pill{padding:4px 8px;border:1px solid var(--desk-line);border-radius:999px;color:var(--desk-muted);font-size:11px;line-height:1.25}
       .jianzi-desk__status-pill b{margin-left:4px;color:var(--desk-copy);font-weight:650}
       .jianzi-desk__hint{display:block;margin-top:10px;color:var(--desk-soft);font-size:12px;line-height:1.5}
+      .jianzi-desk__start{display:grid;gap:7px;margin-top:13px;padding-top:12px;border-top:1px solid var(--desk-line)}
+      .jianzi-desk__start button{flex:none;border:1px solid rgba(215,166,111,.68);border-radius:8px;background:var(--desk-accent);color:var(--desk-accent-ink);padding:8px 11px;font:700 12px/1.2 'Noto Sans SC','Microsoft YaHei',sans-serif;cursor:pointer}
+      .jianzi-desk__start button:disabled{opacity:.55;cursor:wait}
+      .jianzi-desk__start-message{margin:0;color:var(--desk-muted);font-size:12px;line-height:1.45;white-space:pre-wrap}
+      .jianzi-desk__start-message--ok{color:#9acaa5}.jianzi-desk__start-message--error{color:#e59a86}
       .jianzi-desk__batch-picker{padding:18px 0 2px}
       .jianzi-desk__picker-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:9px}
       .jianzi-desk__picker-head strong{font-size:13px;font-weight:700}.jianzi-desk__picker-head span{color:var(--desk-soft);font-size:12px}
@@ -472,6 +485,8 @@ window.__ModuleLoader__.load({
       const [preview, setPreview] = React.useState(null);
       const [loadingCalendar, setLoadingCalendar] = React.useState(true);
       const [loadingStatus, setLoadingStatus] = React.useState(true);
+      const [startingProject, setStartingProject] = React.useState(false);
+      const [startupMessage, setStartupMessage] = React.useState(null);
 
       const openPreview = (title, url) => setPreview({ title, url });
 
@@ -504,6 +519,20 @@ window.__ModuleLoader__.load({
         setHealth(doctor || null);
         setBatches(Array.isArray(list) ? list : []);
         setLoadingStatus(false);
+      };
+
+      const startProject = async () => {
+        if (startingProject) return;
+        setStartingProject(true);
+        setStartupMessage(null);
+        try {
+          await startTask(tr('promptStartProject'));
+          setStartupMessage({ kind: 'ok', text: tr('projectReady') });
+        } catch (error) {
+          setStartupMessage({ kind: 'error', text: error?.message || tr('failure') });
+        } finally {
+          setStartingProject(false);
+        }
       };
 
       React.useEffect(() => {
@@ -735,6 +764,10 @@ window.__ModuleLoader__.load({
                 h('div', { className: 'jianzi-desk__status-details' },
                   [['RSSHub', Boolean(health && health.health && health.health.rsshub && health.health.rsshub.ok)], ['GitHub', Boolean(health && health.health && health.health.github && health.health.github.authenticated)]].map(([name, ready]) => h('span', { className: 'jianzi-desk__status-pill', key: name }, name, h('b', null, health ? (ready ? tr('statusOk') : tr('statusBad')) : '—'))),
                 ),
+                !health && !loadingStatus ? h('div', { className: 'jianzi-desk__start' },
+                  h('button', { type: 'button', onClick: () => void startProject(), disabled: startingProject }, startingProject ? tr('startingProject') : tr('startProject')),
+                  startupMessage ? h('p', { className: `jianzi-desk__start-message jianzi-desk__start-message--${startupMessage.kind}`, role: 'status' }, startupMessage.text) : null,
+                ) : null,
                 h('span', { className: 'jianzi-desk__hint' }, tr('tipText')),
               ),
             ),

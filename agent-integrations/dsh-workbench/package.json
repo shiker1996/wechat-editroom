@@ -1,8 +1,13 @@
 {
   "name": "jianzi-content-workbench",
-  "version": "0.2.21",
+  "version": "0.2.27",
   "icon": "./icon.svg",
   "description": "DSH content workbench panel that starts native Agent sessions backed by Jianzi MCP tools.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shiker1996/wechat-editroom",
+    "directory": "agent-integrations/dsh-workbench"
+  },
   "type": "module",
   "exports": {
     ".": "./dsh/index.mjs",

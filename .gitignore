@@ -60,6 +60,7 @@ output/
 .codex/config.toml
 .mcp.json
 .codebuddy/
+.workbuddy/
 
 # 复盘确认后的技能运行时覆盖层
 /writing-skills/

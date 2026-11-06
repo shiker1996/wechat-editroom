@@ -296,11 +296,14 @@ export async function handleSystemRoutes(context) {
     ]);
     const githubHealth=target === 'all' || target === 'github' ? getGitHubApiHealth() : null;
     if(githubHealth){const manifest=createBuiltinCollectorRegistry().getManifest('github-discovery-collector');const state=extensionConfiguration.describe({extensionType:'collector',extensionId:manifest.id,manifest});githubHealth.tokenConfigured=Boolean(state.credentialStatus?.fields?.token?.configured);}
+    const projectRoot = fs.realpathSync(path.resolve(resourceRoot));
+    const workspaceFingerprint = crypto.createHash('sha256').update(process.platform === 'win32' ? projectRoot.toLowerCase() : projectRoot).digest('hex').slice(0, 16);
     json(response, 200, {
       reddit,
       rsshub,
       github: githubHealth,
       node: process.version,
+      workspaceId: workspaceFingerprint,
       now: new Date().toISOString(),
       target,
     });

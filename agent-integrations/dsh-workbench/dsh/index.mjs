@@ -14,8 +14,8 @@ const failed = (error) => ({
 });
 
 // The Client panel cannot call MCP tools: those belong to the model-facing tool
-// registry. It reads the same Jianzi tool implementations through these
-// read-only Host routes instead, which the desktop shell forwards same-origin.
+// registry. It reads Jianzi data through read-only Host routes. Startup actions
+// are prepared as native DSH prompts so the Agent invokes the MCP tool.
 export function apply(ctx) {
   let server;
   try {

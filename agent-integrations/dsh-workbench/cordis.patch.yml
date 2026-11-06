@@ -8,6 +8,7 @@
         args:
           - !!js dshHomePath('profiles/desktop/node_modules/jianzi-content-workbench/mcp-server.mjs')
         cwd: !!js dshHomePath('profiles/desktop')
+        toolCallTimeoutMs: 120000
     - id: jianzi-content-workbench
       name: jianzi-content-workbench
       config: {}

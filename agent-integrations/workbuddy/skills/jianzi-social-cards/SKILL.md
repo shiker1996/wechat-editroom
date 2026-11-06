@@ -5,6 +5,8 @@ description: 在见字工作台中研判图文选题、制定故事板、生成 
 
 # 图文故事板与 AI 视觉生成
 
+开始业务流程前先调用 `jianzi_doctor`。若工作台未连接，调用 `jianzi_workbench_start`，等待其返回 ready 且项目指纹匹配后再继续；DSH/npm 包需传本机项目绝对路径 `projectRoot` 或配置 `JIANZI_PROJECT_ROOT`。启动失败、指纹不匹配或超时后停止业务操作并报告诊断，不要重复启动。
+
 1. 图文候选应位于 `social_cards` 轨道。使用 `jianzi_batch_candidates` 查询；缺少事件/仓库候选时调用 `jianzi_batch_social_ranking`，依据 G_social、入池资格、素材类型及理由向用户推荐，确认后用 `jianzi_candidate_add` 加入图文池。事件资讯显式设为 `socialMaterialType: "event"`；软件项目介绍设为 `repository`，其他自定义内容设为 `custom`。用户提出自选主题、教程、清单或观点图文时，调用 `jianzi_custom_social_create` 创建项目和事实基座，不要伪装成热点候选。
 2. 调用 `jianzi_candidate_source_fetch` 抓取并保存候选关联原文，再根据抓取结果核对事实。
 3. 调用 `jianzi_card_editorial_get` 查看故事板、事实基座和门禁状态。事件型图文缺少事件事实卡时，先完成批次外部研判：热点打标后调用 `jianzi_batch_events`，根据事件与原文生成事件事实卡，再调用 `jianzi_batch_event_cards_submit` 保存。

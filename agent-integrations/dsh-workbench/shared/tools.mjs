@@ -1,3 +1,8 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { spawn } from 'node:child_process';
+
 const id = (description, required = true) => ({ type: 'integer', ...(required ? { minimum: 1 } : {}), description });
 const string = (description, extra = {}) => ({ type: 'string', description, ...extra });
 const sensitiveField = /^(?:api[_-]?key|token|secret|password|authorization|cookie|credential|credentials)$/i;
@@ -40,6 +45,7 @@ function safeImageResult(result) {
 
 export const JIANZI_TOOLS = [
   { name: 'jianzi_doctor', description: '检查见字工作台连接、Node 运行时和核心功能是否可用。', inputSchema: { type: 'object', properties: {} }, readOnlyHint: true },
+  { name: 'jianzi_workbench_start', description: '当用户要求启动已停止的本机见字工作台，或 jianzi_doctor 报告服务未运行时，调用项目官方启动脚本并等待服务 ready，再执行健康检查。不会打开浏览器或修改业务数据。源码 MCP 默认使用当前项目根目录；打包/独立 MCP 可传项目绝对路径 projectRoot，或设置 JIANZI_PROJECT_ROOT。', inputSchema: { type: 'object', properties: { projectRoot: string('见字项目的本机绝对路径。源码集成可省略；DSH/npm 包未配置 JIANZI_PROJECT_ROOT 时必须提供。') } }, readOnlyHint: false },
   { name: 'jianzi_account_profile', description: '读取账号画像，用于选题定位、语气和受众判断。', inputSchema: { type: 'object', properties: {} }, readOnlyHint: true },
   { name: 'jianzi_account_profile_update', description: '保存用户确认过的账号画像。至少包含公众号名称、简介、核心读者和一个内容支柱。', inputSchema: { type: 'object', properties: { context: { type: 'object', description: '符合 account-context.json 格式的账号画像字段。' } }, required: ['context'] }, readOnlyHint: false },
   { name: 'jianzi_settings_summary', description: '读取非敏感设置与模型配置状态；不会返回 API Key、API 地址或调用日志。', inputSchema: { type: 'object', properties: {} }, readOnlyHint: true },
@@ -106,6 +112,129 @@ export const JIANZI_TOOLS = [
 const terminalJobStatuses = new Set(['completed', 'failed', 'cancelled', 'interrupted', 'stopped']);
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+function startupProjectRoot(requestedRoot, contextRoot) {
+  const value = requestedRoot || process.env.JIANZI_PROJECT_ROOT || contextRoot;
+  if (typeof value !== 'string' || !value.trim()) {
+    const error = new Error('没有可用的见字项目路径。请传 projectRoot（本机绝对路径），或为 MCP 配置 JIANZI_PROJECT_ROOT。');
+    error.code = 'WORKBENCH_PROJECT_ROOT_REQUIRED';
+    throw error;
+  }
+  if (!path.isAbsolute(value)) {
+    const error = new Error('projectRoot 必须是见字项目的本机绝对路径。');
+    error.code = 'WORKBENCH_PROJECT_ROOT_INVALID';
+    throw error;
+  }
+  const root = path.resolve(value);
+  const startupScript = path.join(root, 'scripts', 'runtime', process.platform === 'win32' ? 'start-workbench.ps1' : 'start-workbench.sh');
+  if (!fs.existsSync(path.join(root, 'server.mjs')) || !fs.existsSync(startupScript)) {
+    const error = new Error(`指定目录不是可启动的见字项目，缺少 server.mjs 或 ${path.relative(root, startupScript)}。`);
+    error.code = 'WORKBENCH_PROJECT_ROOT_INVALID';
+    throw error;
+  }
+  return { root, startupScript };
+}
+
+async function startWorkbenchProcess(client, requestedRoot, contextRoot) {
+  const { root, startupScript } = startupProjectRoot(requestedRoot, contextRoot);
+  const url = new URL(client.baseUrl);
+  const port = Number(url.port || (url.protocol === 'https:' ? 443 : 80));
+  const args = process.platform === 'win32'
+    ? ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', startupScript, '-Port', String(port), '-NoBrowser']
+    : [startupScript, '--port', String(port), '--no-browser'];
+  const child = spawn(process.platform === 'win32' ? 'powershell.exe' : 'bash', args, {
+    cwd: root,
+    windowsHide: true,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, WORKBENCH_PORT: String(port) },
+  });
+
+  return new Promise((resolve, reject) => {
+    const startedAt = Date.now();
+    let output = '';
+    let settled = false;
+    let pollTimer;
+    const append = (chunk) => {
+      output = `${output}${chunk}`.slice(-16_000);
+    };
+    const cleanup = () => {
+      settled = true;
+      clearTimeout(deadline);
+      clearTimeout(pollTimer);
+      child.stdout?.removeListener('data', append);
+      child.stderr?.removeListener('data', append);
+    };
+    const fail = (error, code = 'WORKBENCH_START_FAILED') => {
+      if (settled) return;
+      cleanup();
+      if (child.exitCode === null && !child.killed) child.kill();
+      const detail = output.trim().split(/\r?\n/).slice(-12).join('\n').slice(-3000);
+      const failure = new Error([error.message || String(error), detail].filter(Boolean).join('\n'));
+      failure.code = error.code === 'ETIMEDOUT' ? 'WORKBENCH_START_TIMEOUT' : code;
+      failure.details = { projectRoot: root, address: client.baseUrl };
+      reject(failure);
+    };
+    const deadline = setTimeout(() => {
+      const timeout = new Error(`工作台 ${url.origin} 未能在 90 秒内通过 /api/overview 健康检查。`);
+      timeout.code = 'ETIMEDOUT';
+      fail(timeout, 'WORKBENCH_START_TIMEOUT');
+    }, 90_000);
+
+    child.stdout?.on('data', append);
+    child.stderr?.on('data', append);
+    child.once('error', (error) => fail(error));
+    child.once('close', (status, signal) => {
+      if (status !== 0 && !settled) {
+        fail(new Error(`启动脚本退出，状态码 ${status ?? 'unknown'}${signal ? `（${signal}）` : ''}`));
+      }
+    });
+
+    const pollReady = async () => {
+      if (settled) return;
+      try {
+        const response = await client.fetch(`${client.baseUrl}/api/overview`, {
+          headers: { accept: 'application/json' },
+          signal: AbortSignal.timeout(2_000),
+        });
+        if (response.ok) {
+          const text = await response.text();
+          if (!text) throw new Error('工作台就绪接口返回了空响应');
+          JSON.parse(text);
+          cleanup();
+          if (child.exitCode === null && !child.killed) child.kill();
+          resolve({
+            projectRoot: root,
+            address: client.baseUrl,
+            startupOutput: output.trim().split(/\r?\n/).slice(-3).join('\n'),
+          });
+          return;
+        }
+      } catch {}
+      if (settled) return;
+      if (Date.now() - startedAt >= 90_000) return;
+      pollTimer = setTimeout(pollReady, 500);
+    };
+    void pollReady();
+  });
+}
+
+function workspaceFingerprint(root) {
+  const resolved = fs.realpathSync(path.resolve(root));
+  return crypto.createHash('sha256')
+    .update(process.platform === 'win32' ? resolved.toLowerCase() : resolved)
+    .digest('hex')
+    .slice(0, 16);
+}
+
+function unavailableWorkbenchError(error, address) {
+  const causeCode = error?.cause?.code || error?.code;
+  if (!['ECONNREFUSED', 'ECONNRESET', 'EHOSTUNREACH', 'ENETUNREACH', 'ETIMEDOUT'].includes(causeCode)
+    && !['AbortError', 'TimeoutError'].includes(error?.name)) return error;
+  const unavailable = new Error(`见字工作台服务未就绪：${address}`);
+  unavailable.code = 'WORKBENCH_NOT_RUNNING';
+  unavailable.details = { address, cause: causeCode || error.name };
+  return unavailable;
+}
+
 async function withArtifactEntry(client, result, type, candidateId = null) {
   const entries = {
     articlePreview: { label: '文章预览', path: '/#preview' },
@@ -135,13 +264,35 @@ function artifactTypeForJob(job) {
   return ({ typeset: 'articlePreview', 'cover-image': 'cover', 'social-card-beautify': 'socialCards' })[String(job?.type || '')] || '';
 }
 
-export async function executeJianziTool(client, name, input = {}) {
+export async function executeJianziTool(client, name, input = {}, context = {}) {
   const batch = encodeURIComponent(String(input.batchId || ''));
   const candidate = encodeURIComponent(String(input.candidateId || ''));
   switch (name) {
     case 'jianzi_doctor': {
-      const [health, batches] = await Promise.all([client.get('/api/system/health'), client.get('/api/batches?limit=1')]);
-      return { connected: true, node: health.node, health, sampleBatchCount: Array.isArray(batches) ? batches.length : 0 };
+      try {
+        const [health, batches] = await Promise.all([client.get('/api/system/health'), client.get('/api/batches?limit=1')]);
+        return { connected: true, node: health.node, health, sampleBatchCount: Array.isArray(batches) ? batches.length : 0 };
+      } catch (error) {
+        throw unavailableWorkbenchError(error, client.baseUrl);
+      }
+    }
+    case 'jianzi_workbench_start': {
+      const startup = await startWorkbenchProcess(client, input.projectRoot, context.projectRoot);
+      const doctor = await executeJianziTool(client, 'jianzi_doctor');
+      const expectedWorkspaceId = workspaceFingerprint(startup.projectRoot);
+      if (!doctor.health?.workspaceId) {
+        const error = new Error('服务已响应，但版本未提供项目指纹；无法确认它属于目标工作台，请升级并重启目标项目后重试。');
+        error.code = 'WORKBENCH_IDENTITY_UNAVAILABLE';
+        error.details = { address: startup.address };
+        throw error;
+      }
+      if (doctor.health.workspaceId !== expectedWorkspaceId) {
+        const error = new Error('该端口连接到另一个见字项目。为避免读写错项目，已停止后续操作；请为目标项目配置独立端口后重试。');
+        error.code = 'WORKBENCH_PROJECT_MISMATCH';
+        error.details = { address: startup.address, expectedWorkspaceId, connectedWorkspaceId: doctor.health.workspaceId };
+        throw error;
+      }
+      return { ...startup, ready: true, health: doctor.health };
     }
     case 'jianzi_account_profile': return client.get('/api/system/account-context');
     case 'jianzi_account_profile_update': return client.put('/api/system/account-context', input.context || {});

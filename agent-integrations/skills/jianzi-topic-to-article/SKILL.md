@@ -5,6 +5,8 @@ description: 使用见字工作台完成热点采集、选题研判、文章简�
 
 # 采集、研判与文章成稿
 
+开始业务流程前先调用 `jianzi_doctor`。若工作台未连接，调用 `jianzi_workbench_start`，等待其返回 ready 且项目指纹匹配后再继续；DSH/npm 包需传本机项目绝对路径 `projectRoot` 或配置 `JIANZI_PROJECT_ROOT`。启动失败、指纹不匹配或超时后停止业务操作并报告诊断，不要重复启动。
+
 ## 工作流
 
 1. 调用 `jianzi_batches_list` 复用用户指定的批次；没有合适批次时先创建 `jianzi_batch_create`。
