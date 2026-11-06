@@ -1,0 +1,42 @@
+{
+  "name": "jianzi-content-workbench",
+  "version": "0.2.28",
+  "icon": "./icon.svg",
+  "description": "DSH content workbench panel that starts native Agent sessions backed by Jianzi MCP tools.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shiker1996/wechat-editroom",
+    "directory": "agent-integrations/dsh-workbench"
+  },
+  "type": "module",
+  "exports": {
+    ".": "./dsh/index.mjs",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "dsh",
+    "lib",
+    "shared",
+    "mcp-server.mjs",
+    "cordis.patch.yml",
+    "README.md",
+    "locale/*.json",
+    "icon.svg"
+  ],
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-mcp-client": "0.2.2-rc.1",
+    "@deepseek-ai/schemastery": "*"
+  },
+  "scripts": { "build": "node ./build.mjs" }
+}

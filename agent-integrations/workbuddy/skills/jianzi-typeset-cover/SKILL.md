@@ -5,6 +5,8 @@ description: 对见字工作台中的文章执行公众号 AI 排版和 AI 视�
 
 # 文章排版与封面
 
+开始业务流程前先调用 `jianzi_doctor`。若工作台未连接，调用 `jianzi_workbench_start`，等待其返回 ready 且项目指纹匹配后再继续；DSH/npm 包需传本机项目绝对路径 `projectRoot` 或配置 `JIANZI_PROJECT_ROOT`。启动失败、指纹不匹配或超时后停止业务操作并报告诊断，不要重复启动。
+
 1. 确认文章候选 ID、批次 ID 和终稿。通过 `jianzi_article_documents` 读取 `final`；没有终稿时先提示回到成稿流程。
 2. 默认由当前外部 Agent 根据终稿与 `wechat-article-typeset` / `magazine-design-advisor` 技能，为本篇生成设计方案和完整 HTML，再将两者传给 `jianzi_article_typeset_submit`。工作台会校验结构保真、运行公众号 HTML 规范化和确定性门禁，再归档 HTML 与设计方案。校验失败时按返回的门禁问题修复 HTML 后重提。
 3. 用户需要封面时，根据文章终稿为本篇制定封面设计方案并生成单页 900×383 HTML，标题必须完整可见；将设计方案和 HTML 一起传给 `jianzi_cover_submit`。工作台校验封面约束、浏览器截图并归档设计方案/HTML/PNG。

@@ -5,7 +5,9 @@ description: 安装、诊断和配置见字工作台与 Codex/WorkBuddy 集成�
 
 # 见字工作台安装与配置
 
-见字工作台是运行在本机的内容生产系统。先确认用户正在项目目录中，并让 MCP 工具 `jianzi_doctor` 检查 `http://127.0.0.1:4317`。
+见字工作台是运行在本机的内容生产系统。先确认用户正在项目目录中，并让 MCP 工具 `jianzi_doctor` 检查 `http://127.0.0.1:4317`。若服务未运行，调用 `jianzi_workbench_start`；它会运行项目官方启动脚本、不打开浏览器并等待 ready，然后再次验证健康状态。
+
+如果当前目录不是见字项目（缺少 `server.mjs` 或 `scripts/runtime/start-workbench.ps1` / `.sh`），启动工具不能安装或克隆项目。先说明本机缺少项目 checkout，并询问用户是否将 `https://github.com/shiker1996/wechat-editroom.git` 克隆到一个空目录；只有用户确认后才克隆，绝不覆盖非空目录。克隆后再运行项目安装向导。若当前 Agent 没有终端或工作区文件权限，停止并给出手动步骤。
 
 ## 配置步骤
 
@@ -14,7 +16,7 @@ description: 安装、诊断和配置见字工作台与 Codex/WorkBuddy 集成�
 3. 配置当前 Agent：执行 `node scripts/agent-integration/cli.mjs install --agent codex`、`--agent workbuddy` 或 `--agent both`。
 4. Codex 使用项目级 `.codex/config.toml` 和 `.agents/skills/`；首次使用时需要信任该项目并重启/刷新 MCP。
 5. WorkBuddy 使用项目级 `.mcp.json` 与 `.codebuddy/skills/`。若该 WorkBuddy 客户端不加载项目配置，引导用户在连接器设置中导入 `agent-integrations/workbuddy` 并检查本机 MCP 进程权限。
-6. 再次调用 `jianzi_doctor`。若连接失败，确认工作台正在运行、端口配置一致，然后重启 MCP 连接。
+6. 再次调用 `jianzi_doctor`。若服务未运行，调用 `jianzi_workbench_start` 自动拉起并等待 ready；工具会核对 `workspaceId`，避免连到另一项目。若启动工具报端口占用、环境检查失败、项目指纹不匹配或超时，按返回信息排障，不要盲目重复启动。服务 ready 但 MCP 仍连不上时，再重启 MCP 连接。DSH/npm 包没有源码项目上下文，需给启动工具传本机绝对路径 `projectRoot`，或给 MCP 进程配置 `JIANZI_PROJECT_ROOT`。
 
 新项目或隔离测试项目必须使用自己的 `config.local.json`、数据库、数据目录和可选 RSSHub checkout。不要把配置中的 RSSHub 地址改为另一个项目正在运行的服务，也不要复用其他项目的数据，除非用户明确要求迁移或共享。
 

@@ -16,6 +16,8 @@
 
 外部 Agent 使用当前会话模型完成分析和生成。MCP 的校验职责按产物类型区分：文章保存接口负责保存文档；`jianzi_article_local_audit` 可选地提醒 Markdown 结构、长度和标题风险，不替代事实核验或审稿，也不会因这些提醒阻止保存。排版、封面和图文提交则由工作台执行各自的结构/内容门禁；图文生成可使用浏览器审计，提交后截图并归档。因此默认外部 Agent 流程不要求配置见字内部模型。账号画像、采集源配置和批次数据仍由工作台保存和管理。
 
+DSH Desktop 可使用 `agent-integrations/dsh-workbench/` 本地工作台包。构建前运行 `node agent-integrations/dsh-workbench/build.mjs`，然后在该目录执行 `pnpm pack`；包内复用相同的 `jianzi_*` 工具描述与执行器。启动见字本机工作台后，DSH Agent 可执行相同采集、选题、文章和排版工具。面板链接到见字现有业务页面；本地安装按 [DSH 官方工作台开发规范](https://dshdesktop.com/workbench/docs/development/)执行。该适配不代表已上架 DSH 市场。
+
 ## 2. Codex：从空目录安装
 
 ### 2.1 准备 Codex 引导插件
@@ -255,7 +257,7 @@ npm run jianzi -- job get --job <任务ID>
 
 ### `doctor` 显示未连接
 
-先确认 `npm start` 正在运行，并核对工作台端口。默认端口为 `4317`；非默认端口时给 CLI 增加 `--server`，再重新连接 MCP。
+先调用 MCP 工具 `jianzi_workbench_start`。源码版 MCP 会自动使用当前项目根目录，调用官方启动脚本并等待服务 ready 后再做健康检查，同时核对项目指纹；也可以在项目根目录运行 `npm run jianzi -- workbench-start --json`。默认端口为 `4317`；自定义端口需通过 `JIANZI_WORKBENCH_URL` 指定，启动与就绪检查会使用同一端口。DSH/npm 插件没有源码项目上下文，需给工具传 `projectRoot` 本机绝对路径，或为 MCP 进程设置 `JIANZI_PROJECT_ROOT`。若端口被占用、指纹不匹配、环境检查失败或等待超时，按错误信息排障，不要重复拉起或终止未知进程。
 
 ### 采集器或来源测试失败
 

@@ -58,7 +58,7 @@ function print(value, asJson = false) {
 }
 
 function help() {
-  process.stdout.write(`见字 Agent CLI（jianzi）\n\n用法：\n  node scripts/agent-integration/cli.mjs doctor [--json]\n  node scripts/agent-integration/cli.mjs install --agent codex|workbuddy|both\n  node scripts/agent-integration/cli.mjs workbench-setup [--yes]\n  node scripts/agent-integration/cli.mjs batch list|create|collect|auto|ranking|candidates ...\n  node scripts/agent-integration/cli.mjs candidate add|get|update|lock ...\n  node scripts/agent-integration/cli.mjs article generate|documents|typeset ...\n  node scripts/agent-integration/cli.mjs cover generate ...\n  node scripts/agent-integration/cli.mjs account profile|update --file <json>\n  node scripts/agent-integration/cli.mjs collectors list|config-list|config-get|config-set|config-test ...\n  node scripts/agent-integration/cli.mjs sources list|capabilities|add|update|test ...\n  node scripts/agent-integration/cli.mjs card editorial|storyboard|update|lock|generate ...\n  node scripts/agent-integration/cli.mjs job get|wait ...\n  node scripts/agent-integration/cli.mjs mcp\n\n写操作和长任务返回 JSON；异步任务使用 job get/wait 查询。AI 成稿、排版、封面和图文命令会调用工作台内部模型。\n`);
+  process.stdout.write(`见字 Agent CLI（jianzi）\n\n用法：\n  node scripts/agent-integration/cli.mjs doctor [--json]\n  node scripts/agent-integration/cli.mjs install --agent codex|workbuddy|both\n  node scripts/agent-integration/cli.mjs workbench-setup [--yes]\n  node scripts/agent-integration/cli.mjs workbench-start [--json]\n  node scripts/agent-integration/cli.mjs batch list|create|collect|auto|ranking|candidates ...\n  node scripts/agent-integration/cli.mjs candidate add|get|update|lock ...\n  node scripts/agent-integration/cli.mjs article generate|documents|typeset ...\n  node scripts/agent-integration/cli.mjs cover generate ...\n  node scripts/agent-integration/cli.mjs account profile|update --file <json>\n  node scripts/agent-integration/cli.mjs collectors list|config-list|config-get|config-set|config-test ...\n  node scripts/agent-integration/cli.mjs sources list|capabilities|add|update|test ...\n  node scripts/agent-integration/cli.mjs card editorial|storyboard|update|lock|generate ...\n  node scripts/agent-integration/cli.mjs job get|wait ...\n  node scripts/agent-integration/cli.mjs mcp\n\n写操作和长任务返回 JSON；异步任务使用 job get/wait 查询。AI 成稿、排版、封面和图文命令会调用工作台内部模型。\n`);
   process.stdout.write('\n外部 Agent 研判：research prepare --batch <ID>；research submit --batch <ID> --task <ID> --file <JSON或Markdown文件>\n');
 }
 
@@ -88,6 +88,10 @@ async function dispatch(positional, options) {
       skillSource: path.join(root, 'agent-integrations', 'skills'),
     };
     return print({ ...health, integration, nodeSupported: Number(process.versions.node.split('.')[0]) >= 24 }, Boolean(options.json));
+  }
+  if (group === 'workbench-start') {
+    const started = await executeJianziTool(client, 'jianzi_workbench_start', {}, { projectRoot: root });
+    return print(started, Boolean(options.json));
   }
   let toolName = '';
   const mapped = {

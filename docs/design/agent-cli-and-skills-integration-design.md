@@ -126,7 +126,7 @@ node scripts/agent-integration/cli.mjs --help
 npm run jianzi -- batch candidates --batch <批次ID> --json
 ```
 
-CLI 仍调用本机已启动的工作台服务；若服务未启动，`doctor` 报告连接错误，普通命令返回非零退出码。CLI 默认不暗中启动第二个服务实例。`npm run jianzi -- install --agent codex|workbuddy|both` 安装对应 Skills 并写入项目级 MCP 配置；`workbench-setup` 委托现有安装引导。
+CLI 普通业务命令仍要求工作台服务已启动，`doctor` 报告连接错误，业务命令返回非零退出码；它们不会暗中启动第二个服务实例。外部 Agent 可显式调用 `jianzi_workbench_start`，或运行 `npm run jianzi -- workbench-start`；该入口复用项目官方启动脚本，不打开浏览器并等待健康端点 ready 后再复核 `jianzi_doctor`，随后核对健康响应中的不透明 `workspaceId`，防止误连其他项目。`npm run jianzi -- install --agent codex|workbuddy|both` 安装对应 Skills 并写入项目级 MCP 配置；`workbench-setup` 委托现有安装引导。
 
 ### 5.2 HTTP Client
 
@@ -349,7 +349,7 @@ CLI 对 HTTP/业务错误保留服务端 `code`，并追加命令层分类：
 
 | 错误类别 | Agent 建议动作 |
 | --- | --- |
-| `WORKBENCH_NOT_RUNNING` | 提示启动工作台；不自行拉起重复实例 |
+| `WORKBENCH_NOT_RUNNING` | 显式调用 `jianzi_workbench_start`；启动器发现同项目服务已运行时复用，发现端口冲突、项目指纹不匹配或环境问题时返回诊断，不终止未知进程 |
 | `INVALID_ARGUMENT` | 根据 Schema 修正参数后重试 |
 | `NOT_FOUND` | 重新查询 batch/candidate/job ID |
 | `PRECONDITION_FAILED` / 业务 409 | 读取缺少的阶段/门禁，不盲目重复请求 |
