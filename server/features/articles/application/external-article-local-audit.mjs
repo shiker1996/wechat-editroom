@@ -1,4 +1,4 @@
-import { articleLengthStatus, articleStageOutputIssue } from './article-pipeline-contract.mjs';
+import { ARTICLE_LENGTH_RANGE, articleLengthStatus, articleStageOutputIssue } from './article-pipeline-contract.mjs';
 import { scanPublicationRisk } from '../domain/publication-compliance.mjs';
 
 const INTERNAL_WORKFLOW_PATTERNS = [
@@ -16,9 +16,15 @@ function internalWorkflowWarnings(article = '') {
 }
 
 // These checks are shared with the article pipeline; model review is separate.
-export function auditExternalArticleLocally({ article, factBase = {} }) {
+export function auditExternalArticleLocally({ article, factBase = {}, articleLength = ARTICLE_LENGTH_RANGE }) {
   const outputIssue = articleStageOutputIssue(article, { requireArticle: true });
-  const length = articleLengthStatus(article);
+  const min = Number(articleLength?.min);
+  const max = Number(articleLength?.max);
+  if (articleLength != null && (!Number.isInteger(min) || !Number.isInteger(max) || min < 0 || max < min || max > 50000)) {
+    throw new Error('articleLength 必须包含 0–50000 范围内且 min 不大于 max 的整数');
+  }
+  const range = articleLength == null ? ARTICLE_LENGTH_RANGE : { min, max };
+  const length = articleLengthStatus(article, range);
   const scan = scanPublicationRisk({ article, factBase });
   return { outputIssue, length, titleBlockers: scan.titleBlockers,
     internalWorkflowWarnings: internalWorkflowWarnings(article),

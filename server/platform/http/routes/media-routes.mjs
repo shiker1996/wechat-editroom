@@ -16,7 +16,11 @@ export async function handleMediaRoutes(context) {
     if (typeof input.article !== 'string' || !input.article.trim() || input.article.length > 1000000) {
       return json(response, 400, { error: '文章正文须为非空字符串，且不超过 100 万字符' });
     }
-    return json(response, 200, auditExternalArticleLocally({ article: input.article, factBase: input.factBase || {} }));
+    try {
+      return json(response, 200, auditExternalArticleLocally({ article: input.article, factBase: input.factBase || {}, articleLength: input.articleLength }));
+    } catch (error) {
+      return json(response, 400, { error:error.message });
+    }
   }
   const imageWorkspaceResponse = async (workdir, extras = {}) => {
     const cdn = await getCdnUploadConfiguration();

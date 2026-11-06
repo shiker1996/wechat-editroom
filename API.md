@@ -629,7 +629,7 @@ AI 规划配图占位
 提交 `{ taskId, output }` 并继续研判；JSON 阶段提交对象，文本阶段提交字符串。相同结果重试返回当前状态；输入或阶段快照变化时返回冲突。
 
 ### POST /api/external/article/local-audit
-提交 `{ article, factBase? }`，复用文章流程的本地结构、默认字数和标题风险检查；返回结果不代表完成事实核验或模型审稿。
+提交 `{ article, factBase?, articleLength?: { min, max } }`，复用文章流程的本地结构、可指定可见字数范围和标题风险检查；未传 `articleLength` 时使用默认范围。返回结果不代表完成事实核验或模型审稿。
 
 ### POST /api/batches/:id/external/typeset
 提交外部 Agent 生成的文章排版 HTML。请求需提供同批次的 `candidateId` 和 `html`，候选必须已有文章终稿。工作台会拒绝脚本、外部样式资源或结构缺失的 HTML，再运行公众号 HTML 规范化与门禁；成功后保存并登记 `article.ai.html`。可附 `designScheme` 作为方案记录。
