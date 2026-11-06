@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="380" viewBox="0 0 1600 380" role="img" aria-labelledby="title desc">
+  <title id="title">Agent 接入指南</title>
+  <desc id="desc">选择 DSH、Codex、WorkBuddy 或其他 MCP 客户端，连接本机见字工作台。</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#192735"/><stop offset="1" stop-color="#344956"/></linearGradient>
+    <pattern id="grid" width="30" height="30" patternUnits="userSpaceOnUse"><path d="M30 0H0V30" fill="none" stroke="#fffaf2" stroke-opacity=".055"/></pattern>
+  </defs>
+  <rect width="1600" height="380" rx="22" fill="url(#bg)"/><rect width="1600" height="380" rx="22" fill="url(#grid)"/>
+  <circle cx="1515" cy="360" r="250" fill="#b8d8c8" opacity=".08"/>
+  <g transform="translate(72 84)"><rect width="210" height="210" rx="12" fill="#a6534d"/><rect x="12" y="12" width="186" height="186" rx="5" fill="none" stroke="#fffaf2" stroke-opacity=".5" stroke-width="2"/><text x="105" y="156" text-anchor="middle" fill="#fffaf2" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="132" font-weight="700">见</text></g>
+  <g font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif">
+    <text x="340" y="105" fill="#dfbd8f" font-size="18" letter-spacing="5">外部 Agent · 本机 MCP</text>
+    <text x="336" y="190" fill="#fffaf2" font-size="51" font-weight="700">让常用的 Agent 操作见字</text>
+    <text x="340" y="239" fill="#fffaf2" fill-opacity=".78" font-size="21">模型继续用当前会话；文章与内容数据保存在本机工作台。</text>
+    <text x="340" y="295" fill="#b8d8c8" font-size="16">先选客户端，再照步骤连接；默认不需要配置见字内部模型</text>
+  </g>
+  <g transform="translate(1040 134)" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" text-anchor="middle">
+    <g fill="#263947" stroke="#fffaf2" stroke-opacity=".32"><rect x="0" y="18" width="145" height="92" rx="10"/><rect x="184" y="18" width="145" height="92" rx="10"/><rect x="368" y="18" width="145" height="92" rx="10"/></g>
+    <path d="M150 64h26m-8-8 8 8-8 8M334 64h26m-8-8 8 8-8 8" fill="none" stroke="#dfbd8f" stroke-width="2"/>
+    <g fill="#fffaf2" font-size="17"><text x="72" y="58">选择客户端</text><text x="72" y="84" fill="#b8d8c8" font-size="12">DSH / Codex / 其他</text><text x="256" y="58">连接本机</text><text x="256" y="84" fill="#b8d8c8" font-size="12">MCP + Skills</text><text x="440" y="58">完成任务</text><text x="440" y="84" fill="#b8d8c8" font-size="12">先检查，再执行</text></g>
+  </g>
+</svg>

@@ -8,14 +8,14 @@
 
 <p align="center"><strong>A local-first editorial workbench that takes a WeChat story from signal to publishable output.</strong></p>
 
-见字 is not another “type a topic and wait for an article” chat box. It is a focused workflow for real content production:
+If you are tired of copying sources, decisions, and drafts between browser tabs and chat histories, 见字 keeps them together in one local editorial workflow:
 
 <p align="center">Discover <strong>→</strong> investigate <strong>→</strong> decide <strong>→</strong> write <strong>→</strong> review <strong>→</strong> format <strong>→</strong> deliver</p>
 
 <p align="center">
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="MIT License"></a>
   <a href="./docs/user-guide.md#1-安装与启动"><img src="https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6?logo=windows&amp;logoColor=white" alt="Platform: Windows 10/11"></a>
-  <a href="https://github.com/shiker1996/wechat-newsroom-workbench/releases/latest"><img src="https://img.shields.io/github/v/release/shiker1996/wechat-newsroom-workbench?label=latest%20release" alt="Latest release"></a>
+  <a href="https://github.com/shiker1996/wechat-editroom/releases/latest"><img src="https://img.shields.io/github/v/release/shiker1996/wechat-editroom?label=latest%20release" alt="Latest release"></a>
 </p>
 
 <p align="center">
@@ -23,9 +23,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/shiker1996/wechat-newsroom-workbench/releases/latest">Download the Windows app</a> ·
+  <a href="https://github.com/shiker1996/wechat-editroom/releases/latest">Download the Windows app</a> ·
   <a href="https://wechat-newsroom-guide.vercel.app/">Take the online tour</a> ·
-  <a href="https://github.com/shiker1996/wechat-newsroom-workbench/issues">Report an issue</a>
+  <a href="https://github.com/shiker1996/wechat-editroom/issues">Report an issue</a>
 </p>
 
 ## Who is it for?
@@ -52,9 +52,9 @@ Writing, review, SEO, WeChat HTML, covers, charts, and paged social cards live i
 
 The Windows app provides a native window, menus, shortcuts, a first-run guide, and a selectable runtime data directory. Your workspace stays local by default; large external dependencies such as RSSHub are enabled when needed.
 
-## Why not just ChatGPT plus a formatting tool?
+## Spend less time copying, keep more of the editorial trail
 
-ChatGPT and other editors can still be part of the workflow. 见字 provides the missing editorial desk between them:
+ChatGPT and other model tools can still be part of your workflow. 见字 connects the sources, editorial decisions, writing, and delivery steps:
 
 | Typical workflow | 见字 |
 |---|---|
@@ -65,17 +65,17 @@ ChatGPT and other editors can still be part of the workflow. 见字 provides the
 
 ## Start in five minutes
 
-1. Download the latest Windows installer from [GitHub Releases](https://github.com/shiker1996/wechat-newsroom-workbench/releases/latest).
-2. Choose the application directory and runtime data directory.
-3. Follow the in-app guide to connect an OpenAI-compatible model.
-4. Add one source, test it, and create today’s batch.
-5. Move from collection to a first article or social-card deliverable.
+1. Download the latest Windows installer from [GitHub Releases](https://github.com/shiker1996/wechat-editroom/releases/latest).
+2. Install and launch 见字, then choose a workspace and follow the in-app setup.
+3. Add an RSS/Atom source and test the connection.
+4. Create today’s batch and collect items for review.
+5. Draft an article, then format it or create social cards when ready.
 
-Normal users do not need to install Node.js separately. RSSHub, Chrome, and other optional capabilities can be configured when they are actually needed.
+The Windows desktop app does not require a separate Node.js installation. You can start with an RSS/Atom source and add RSSHub, Chrome, and other optional tools later. If you use Codex, WorkBuddy, or DeepSeek Harness, follow the [Agent setup guide](./docs/agent-usage-guide.md); these workflows use the model in your current agent session, so you do not need to configure a separate 见字 model.
 
 > The desktop installer currently targets Windows 10/11 x64. macOS and Linux can run the source workflow experimentally, but desktop installers are not published yet.
 
-## Use 见字 with Codex, WorkBuddy, and other agents
+## Use 见字 with Codex, WorkBuddy, and DeepSeek Harness
 
 见字 can run on its own or serve as a local content workbench for an external agent. Through [MCP and project Skills](./docs/agent-usage-guide.md), compatible local MCP clients such as Codex, WorkBuddy, DeepSeek Harness, and Kimi can read the account profile and sources, start collection, inspect research results, and submit formatted articles, covers, and social cards for storage and validation.
 

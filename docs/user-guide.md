@@ -1,14 +1,32 @@
-# 见字工作台详细使用手册
+# 见字工作台上手指南
 
-> 类别：现状。适用于 0.8.0，按当前界面与运行行为维护。
+<p align="center"><img src="./user-guide-banner.svg" alt="从第一次启动开始，完成第一篇内容交付" width="100%"></p>
+
+先选一种运行方式，再按本页完成首次配置和内容流程。第一次使用不用先装齐所有采集器：RSSHub、Chrome、Python 和第三方搜索/CDN 都可以等需要时再启用。
+
+| 你要做什么 | 从这里开始 | 需要准备什么 |
+|---|---|---|
+| 直接在 Windows 使用 | 下载并安装 [Windows 桌面版](https://github.com/shiker1996/wechat-editroom/releases/latest) | 不需要单独安装 Node.js |
+| 从源码运行或接入 Agent | 按“源码版安装”运行初始化脚本 | Node.js 24；初始化脚本会检查运行环境 |
+| 先了解界面 | 打开[在线界面导览](https://wechat-newsroom-guide.vercel.app/) | 不需要安装，也不需要模型密钥 |
+
+## 本页导航
+
+[安装与启动](#1-安装与启动) · [首次配置](#2-首次配置) · [采集热点](#4-每日热点工作流) · [文章与图文](#5-从选题到文章) · [备份与清理](#10-数据备份与清理) · [常见问题](#11-常见问题)
 
 ## 1. 安装与启动
 
-### 1.1 准备环境
+### 1.1 Windows 桌面版（推荐）
 
-推荐 Windows 10/11、Node.js 24+。首次安装约需 1–2 GB，用于 npm 依赖以及部分渲染技能的 Chromium。Chrome、RSSHub、Python 和第三方搜索/CDN 服务均为按功能选装。
+1. 从 [GitHub Releases](https://github.com/shiker1996/wechat-editroom/releases/latest) 下载最新 Windows 安装包。
+2. 安装并启动见字，按应用内引导配置模型和工作区。
+3. 先添加一个 RSS/Atom 来源并测试，再开始第一批采集。
 
-### 1.2 一键安装
+桌面版自带运行环境，普通用户不需要安装 Node.js。使用内置 AI 时需要模型服务商和 API Key；若通过 Codex、WorkBuddy 或 DSH 等外部 Agent 生成内容，见字内部模型可以不配置。
+
+### 1.2 源码版安装（用于开发或接入 Agent）
+
+源码版要求 Node.js 24。初始化入口会检查系统环境，并引导完成依赖和本地配置；首次安装可能下载约 1–2 GB 的依赖和渲染组件。RSSHub、Chrome、Python 及第三方搜索/CDN 服务按需安装。
 
 双击 `setup-workbench.cmd/sh`。向导会检查 Node.js、安装依赖、创建本地配置并引导模型设置。步骤失败后可以重复运行，不会重复破坏已完成配置。
 

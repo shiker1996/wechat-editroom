@@ -1,6 +1,26 @@
 # 见字 DSH 内容工作台
 
-见字的 DSH 插件面板：把“准备 → 选题 → 文章 → 排版封面 → 图文”五段流程接进 DSH 原生会话。面板不嵌入见字网页，也不直接访问见字 API；它只准备任务草稿，由 Agent 加载项目技能、通过 MCP 工具操作见字。
+在[官方 DeepSeek Harness 桌面应用](https://github.com/deepseek-ai/deepseek-harness)里安装见字插件，把找选题、写文章、看内容日历和打开交付物放在一个入口中。按钮会先准备一条会话草稿；你检查并发送后，DSH Agent 再通过见字 MCP 工具执行。文章仍由当前 DSH 会话模型生成，业务记录保存在本机见字项目。
+
+![见字内容工作台在 DeepSeek Harness 中的产品截图](./assets/dsh-workbench-overview.jpg)
+
+## 安装和开始使用
+
+1. 打开官方 DeepSeek Harness 桌面应用的「插件 → 添加插件」。
+2. 输入 `jianzi-content-workbench` 并安装。
+3. 在已安装插件中启用见字内容工作台；若提示重启，按提示重启或重新加载。
+4. 打开见字项目作为 DSH 当前会话的工作空间，并确认见字服务在本机运行。
+5. 打开「见字内容工作台」，选择阶段和批次，检查自动准备的会话草稿后发送。
+
+未连接时，可从状态卡准备启动任务。启动操作需要当前 DSH 会话能识别所选工作空间的本机绝对路径；如果项目目录尚不存在，请先通过检查环境流程确认初始化方案。启动不会自动克隆项目或安装 RSSHub。
+
+**常见问题**
+
+- **需要单独配置见字模型吗？** 不需要。默认使用当前 DSH 会话模型；见字内部模型仅用于明确选择见字自己的 AI 生成工具。
+- **按钮会直接执行任务吗？** 不会。按钮只生成草稿，检查后由你发送。
+- **安装时需要找插件市场吗？** 不需要。在「添加插件」中直接输入 npm 包名 `jianzi-content-workbench`。
+
+更多连接与客户端设置见[Agent 接入指南](../../docs/agent-usage-guide.md)。
 
 ## 五段流程
 
@@ -42,10 +62,6 @@ Host 插件（`dsh/index.mjs`）通过官方 `ctx.webServer.register` 注册读�
 选中批次后，面板下方的「选题与执行」区会显示三栏：批次状态与最近任务（`/jianzi/jobs`）、文章选题（按 F 分，点击填入候选 ID）、图文选题（按 G_social，标注工具/事件图文与资格状态）。
 
 再往下是「内容日历」：按月展示文章、图文与写作计划，按日期分组并统计数量，可用 ‹ › 切换月份。
-
-## 安装
-
-在官方 DeepSeek Harness 桌面应用（[deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)）打开「插件 → 添加插件」，输入 npm 包名 `jianzi-content-workbench` 并安装，然后在已安装插件中启用见字内容工作台。`@deepseek-ai/dsh-mcp-client` 与 `@deepseek-ai/schemastery` 由 Harness 提供，声明为 `peerDependencies`。如安装器提示需重启，再按提示重启或重新加载 DSH。
 
 ## 开发者本地构建
 

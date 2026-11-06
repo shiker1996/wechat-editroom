@@ -6,23 +6,23 @@
 
 [中文](./README.md) · [English](./README.en.md)
 
-<p align="center"><strong>从热点到成稿，把公众号内容生产变成一张可以回头检查的工作台。</strong></p>
+<p align="center"><strong>把找热点、选题、写稿和排版放进同一条可回看的工作流程。</strong></p>
 
-见字不是一个“输入主题、等待生成”的聊天框，而是一套面向真实内容生产的本地 AI 编辑工作台：
+如果你经常在浏览器、聊天记录和排版工具之间来回复制，见字可以把来源、编辑判断、文章和交付物放回同一张本地工作台：
 
 <p align="center">找热点 <strong>→</strong> 研判事实 <strong>→</strong> 做编辑决策 <strong>→</strong> 写稿 <strong>→</strong> 审稿 <strong>→</strong> 排版 <strong>→</strong> 交付文章、封面与图文</p>
 
 <p align="center">
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="MIT License"></a>
   <a href="./docs/user-guide.md#1-安装与启动"><img src="https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6?logo=windows&amp;logoColor=white" alt="Platform: Windows 10/11"></a>
-  <a href="https://github.com/shiker1996/wechat-newsroom-workbench/releases/latest"><img src="https://img.shields.io/github/v/release/shiker1996/wechat-newsroom-workbench?label=latest%20release" alt="Latest release"></a>
+  <a href="https://github.com/shiker1996/wechat-editroom/releases/latest"><img src="https://img.shields.io/github/v/release/shiker1996/wechat-editroom?label=latest%20release" alt="Latest release"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/shiker1996/wechat-newsroom-workbench/releases/latest">下载 Windows 桌面版</a> ·
+  <a href="https://github.com/shiker1996/wechat-editroom/releases/latest">下载 Windows 桌面版</a> ·
   <a href="https://wechat-newsroom-guide.vercel.app/">查看真实界面</a> ·
   <a href="https://www.bilibili.com/video/BV1KjYj6GEJU">观看 B 站教程 ↗</a> ·
-  <a href="https://github.com/shiker1996/wechat-newsroom-workbench/issues">反馈问题</a>
+  <a href="https://github.com/shiker1996/wechat-editroom/issues">反馈问题</a>
 </p>
 
 ## 它适合谁？
@@ -49,9 +49,9 @@
 
 Windows 桌面版提供原生窗口、菜单、快捷键、首次使用引导和可选运行数据目录。文章、图片与日志默认保存在本机；RSSHub 等较大的外部依赖按需启用，不会在安装时一次性下载。
 
-## 为什么不是 ChatGPT + 秀米？
+## 少一些来回复制，多一些可追溯的编辑过程
 
-ChatGPT 和秀米仍然可以是工作流中的工具，但它们之间缺少一张“编辑桌”：
+见字可以和 ChatGPT 等模型工具配合使用；它补上了信息来源、编辑判断和文章交付之间的衔接：
 
 | 传统做法 | 见字 |
 |---|---|
@@ -62,13 +62,13 @@ ChatGPT 和秀米仍然可以是工作流中的工具，但它们之间缺少一
 
 ## 五分钟开始
 
-1. 从 [GitHub Releases](https://github.com/shiker1996/wechat-newsroom-workbench/releases/latest) 下载 Windows 安装包。
-2. 安装时选择应用目录和运行数据目录。
-3. 首次启动按应用内引导配置一个 OpenAI 兼容模型。
-4. 添加一个采集源，测试连接后创建今日批次。
-5. 体验从采集、选题到文章或图文交付的完整流程。
+1. 从 [GitHub Releases](https://github.com/shiker1996/wechat-editroom/releases/latest) 下载 Windows 安装包。
+2. 安装并启动，按应用内引导设置工作区和模型。
+3. 添加一个 RSS/Atom 来源，先测试连接。
+4. 创建今天的批次，完成采集和选题。
+5. 生成文章草稿，确认后再排版或制作图文。
 
-普通用户不需要单独安装 Node.js。首次启动向导会告诉你哪些能力已经可用，RSSHub、Chrome 等外部能力可以在真正需要时再配置。
+Windows 桌面版不需要单独安装 Node.js。你也不必一开始装齐所有采集器：先用 RSS/Atom 跑通流程，RSSHub、Chrome 等能力等需要时再添加。使用 Codex、WorkBuddy 或 DSH 时，可直接按 [Agent 接入指南](./docs/agent-usage-guide.md)操作；默认使用 Agent 当前会话模型，不需要另配见字模型。
 
 > 当前桌面安装包优先支持 Windows 10/11 x64。macOS 和 Linux 可以运行源码版本，但暂未提供对应桌面安装包。
 
@@ -103,7 +103,7 @@ ChatGPT 和秀米仍然可以是工作流中的工具，但它们之间缺少一
 
 ## 给开发者
 
-如果你想参与开发、运行源码演示或研究本地优先的 Agent 工作流，请看：
+如果你想运行源码、接入 Agent 或了解扩展方式，请看：
 
 - [详细使用手册](./docs/user-guide.md)：安装、配置、采集、写作、图文和排障。
 - [移动端使用说明](./docs/mobile-access.md)：通过私有网络在手机上访问家中电脑上的工作台。

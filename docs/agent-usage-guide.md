@@ -1,10 +1,23 @@
 # 使用 Codex / WorkBuddy / MCP Agent 安装和操作见字工作台
 
+<p align="center"><img src="./agent-guide-banner.svg" alt="让常用的 Agent 通过 MCP 操作见字工作台" width="100%"></p>
+
+用你熟悉的 Agent 操作见字：DSH 用户先安装插件，Codex 和 WorkBuddy 用户按下方步骤连接项目。**内容由当前会话模型生成，账号画像、采集源和内容产物仍保存在本机见字项目中。**
+
+| 你正在使用 | 快速入口 | 需要准备 |
+|---|---|---|
+| DeepSeek Harness 桌面端 | 安装插件包 `jianzi-content-workbench`，然后看下方 DSH 步骤 | DSH 与见字项目在同一台电脑；会话工作空间打开见字项目 |
+| Codex | 从空目录安装，按 Codex 步骤添加项目级 MCP 与 Skills | 本机终端和 Git；引导流程会检查 Node.js |
+| WorkBuddy | 连接已有项目，按 WorkBuddy 步骤安装 MCP | 能访问本机项目和 `127.0.0.1`；安装向导会检查 Node.js |
+| 其他 MCP Agent | 参照手动连接与 MCP 工具说明 | 支持本机 `stdio` MCP |
+
+> 不确定用哪种方式？桌面版见字不需要单独安装 Node.js；Agent 接入的是本机源码项目。先选上表中的客户端，再按对应步骤操作。
+
 > 类别：使用指南  
 > 状态：已实施  
 > 适用于：Codex、WorkBuddy、DeepSeek Harness、Kimi 等可运行本机 MCP `stdio` 服务的 Agent 客户端；Windows 示例使用 PowerShell
 
-本文介绍怎样让 Codex、WorkBuddy 或其他兼容 MCP 的 Agent 客户端连接见字工作台，配置账号画像和采集源，并通过自然语言完成采集、研判、文章、排版、封面和图文流程。
+本文按客户端分别说明安装和连接方法，并带你配置账号画像、采集源，再通过自然语言完成采集、研判、文章、排版、封面和图文流程。
 
 ## 1. 先理解三个组成部分
 

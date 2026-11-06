@@ -21,6 +21,7 @@
     "dsh",
     "lib",
     "shared",
+    "assets",
     "mcp-server.mjs",
     "cordis.patch.yml",
     "README.md",
