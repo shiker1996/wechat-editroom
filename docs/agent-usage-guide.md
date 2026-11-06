@@ -22,15 +22,7 @@
 
 操作时，DSH 当前会话需打开见字项目目录，见字工作台服务也需在同一台电脑运行。项目级 Skills 提供具体流程规则；MCP 提供业务读写、健康检查和产物查询。未连接时可从面板准备启动任务；若需从空目录初始化项目，使用「检查环境」流程，Agent 必须先说明并征求克隆确认，不覆盖已有文件，也不会擅自安装 RSSHub。
 
-当前安装方式是从仓库构建 `.tgz` 并在 DSH 插件管理器本地安装：
-
-```sh
-node agent-integrations/dsh-workbench/build.mjs
-cd agent-integrations/dsh-workbench
-pnpm pack
-```
-
-在 DSH 桌面应用的「插件 → 添加插件」中选择生成的 `.tgz`。目前 npm 包尚未发布，也没有发布供用户添加的 DSH 插件索引条目；npm 正式发布工作流已配置，插件索引可按官方流程单独生成和托管。[官方插件发布说明](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/develop/basic/publish.md)与[插件索引说明](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/guide/plugin-market.md)介绍了这两种分发方式。见字 DSH 工作流、面板能力和发布细节见[当前流程契约](workflows/dsh-content-workbench.md)与[插件 README](../agent-integrations/dsh-workbench/README.md)。
+安装时，在 DSH 桌面应用的「插件 → 添加插件」中输入 `jianzi-content-workbench` 并安装，然后在已安装插件中启用。npm 包已发布；DSH 插件索引尚未单独发布，添加插件时无需搜索索引。[官方插件发布说明](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/develop/basic/publish.md)与[插件索引说明](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/guide/plugin-market.md)介绍了包安装与索引分发。见字 DSH 工作流、面板能力和开发者本地打包方法见[当前流程契约](workflows/dsh-content-workbench.md)与[插件 README](../agent-integrations/dsh-workbench/README.md)。
 
 ## 2. Codex：从空目录安装
 

@@ -43,7 +43,13 @@ Host 插件（`dsh/index.mjs`）通过官方 `ctx.webServer.register` 注册读�
 
 再往下是「内容日历」：按月展示文章、图文与写作计划，按日期分组并统计数量，可用 ‹ › 切换月份。
 
-## 构建与安装
+## 安装
+
+在官方 DeepSeek Harness 桌面应用（[deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)）打开「插件 → 添加插件」，输入 npm 包名 `jianzi-content-workbench` 并安装，然后在已安装插件中启用见字内容工作台。`@deepseek-ai/dsh-mcp-client` 与 `@deepseek-ai/schemastery` 由 Harness 提供，声明为 `peerDependencies`。如安装器提示需重启，再按提示重启或重新加载 DSH。
+
+## 开发者本地构建
+
+从仓库根目录运行：
 
 ```sh
 node agent-integrations/dsh-workbench/build.mjs
@@ -51,9 +57,7 @@ cd agent-integrations/dsh-workbench
 pnpm pack
 ```
 
-在官方 DeepSeek Harness 桌面应用（[deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)）的「插件 → 添加插件」选择生成的 `.tgz`，安装后在已安装插件中启用见字内容工作台。`@deepseek-ai/dsh-mcp-client` 与 `@deepseek-ai/schemastery` 由 Harness 提供，声明为 `peerDependencies`。如安装器提示需重启，再按提示重启或重新加载 DSH。
-
-当前插件可从源码构建 `.tgz` 并本地安装；npm 包尚未发布，也没有发布供用户添加的 DSH 插件索引条目。官方 Harness 支持通过插件管理器安装包名、Git 仓库、tarball 或本地路径；本仓库插件位于 monorepo 子目录，现阶段推荐按上述步骤本地打包安装。详见官方[插件打包与发布说明](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/develop/basic/publish.md)及[插件索引说明](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/guide/plugin-market.md)。
+本地 `.tgz` 安装适用于开发和调试；普通用户直接在插件管理器中输入 npm 包名即可。DSH 插件索引是另一种分发方式，目前未单独发布。详见官方[插件打包与发布说明](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/develop/basic/publish.md)及[插件索引说明](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/guide/plugin-market.md)。
 
 MCP 服务入口路径在 patch 中按 profile 写死（当前 `profiles/desktop`）；在其他 profile 安装时需要同步修改。
 
@@ -61,4 +65,4 @@ MCP 服务入口路径在 patch 中按 profile 写死（当前 `profiles/desktop
 
 正式发布由仓库的 `Publish DSH plugin to npm` GitHub Actions 工作流执行。将插件 `package.json` 的版本更新并合入主分支后，推送对应标签 `dsh-plugin-v<版本号>`（例如 `dsh-plugin-v0.2.29`）。工作流会核对标签和包版本、构建、生成 `.tgz`、上传 GitHub Actions 产物，并将同一个 `.tgz` 发布到 npm。不要用普通 CI 提交触发发布。
 
-首次版本已由维护者本地发布到 npm Registry。后续在该 npm 包设置的 **Trusted Publisher** 中配置 GitHub Actions：用户 `shiker1996`、仓库 `wechat-editroom`、工作流文件名 `publish-dsh-plugin.yml`，并允许直接发布。配置完成后，由上述标签触发的发布工作流将通过 OIDC 发布，无需长期 npm 发布令牌。
+首次版本已发布到 npm Registry，GitHub Actions 已配置 **Trusted Publisher**：用户 `shiker1996`、仓库 `wechat-editroom`、工作流文件名 `publish-dsh-plugin.yml`，并允许直接发布。后续推送匹配包版本的标签时，工作流会通过 OIDC 发布，无需长期 npm 发布令牌。
