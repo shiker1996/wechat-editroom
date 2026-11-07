@@ -173,6 +173,10 @@ npm run jianzi -- account update --file .\account-context.json
 
 字段结构可参考仓库根目录的 [`account-context.example.json`](../account-context.example.json)。该文件用于编辑画像，不应存放模型密钥、采集器密钥或账号密码。
 
+### 内容反馈与反哺草案
+
+在工作台已导入并关联公众号文章数据后，MCP Agent 可以读取反馈快照和策略候选，调用两阶段生成文章或图文反哺草案，并列出待确认草案。草案只保存为待确认记录，不会自动改账号配置、技能或 Prompt。查看 diff 后，只有你明确要求应用时，Agent 才能调用 `jianzi_content_feedback_adjustment_confirm`；也可用 `jianzi_content_feedback_adjustment_reject` 拒绝草案。常用工具：`jianzi_content_feedback_get`、`jianzi_content_feedback_strategy`、`jianzi_content_feedback_adjustment_generate`、`jianzi_content_feedback_adjustments_list`。
+
 ## 5. 配置采集器和采集源
 
 建议先让 Agent 盘点可用能力和现有配置，再决定启用哪些来源：

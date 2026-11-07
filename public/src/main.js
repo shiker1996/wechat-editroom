@@ -21,7 +21,7 @@ const viewModules = {
 // 三个导航入口共用同一视图 DOM：工具图文 / 自定义图文 / 事件图文都落在 #view-social-editor
 const viewSectionAliases = { "social-custom": "view-social-editor", "social-event": "view-social-editor" };
 
-const styleVersion = "20261024-dark-theme-contrast-fix-24";
+const styleVersion = "20261107-content-feedback-label-1";
 const styleModules = {
   social: "/assets/styles/social.css",
   topics: "/assets/styles/topics.css",

@@ -30,6 +30,8 @@ export {
   currentSkillFile,
   currentSkillPackageFiles,
   FEEDBACK_ADJUSTMENT_VERSION,
+  listArticlePromptTargets,
+  normalizeFeedbackAdjustmentPlanning,
   listWriterSkillCatalog,
   resolveTitleSkillTarget,
   resolveWriterSkillTarget,

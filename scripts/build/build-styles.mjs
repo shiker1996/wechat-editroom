@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const stylesRoot = path.join(root, 'public', 'styles');
 const generatedRoot = path.join(root, 'public', 'assets', 'styles');
-const styleVersion = '20260907-css-split-27';
+const styleVersion = '20261107-content-feedback-label-1';
 
 function readStyle(name) {
   return fs.readFileSync(path.join(stylesRoot, name), 'utf8').replace(/\s+$/, '');
