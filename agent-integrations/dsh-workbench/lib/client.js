@@ -92,6 +92,11 @@ window.__ModuleLoader__.load({
         stage5Detail: 'Turn a repository or news candidate into a social card set: storyboard, lock, visual submission.',
         stage5Action: 'Prepare card set',
         stage5Gate: 'Needs a card candidate and a locked storyboard',
+        stage6: '06 / FEEDBACK',
+        stage6Title: 'Review content feedback',
+        stage6Detail: 'Read performance signals and generate a reviewable article or social-card adjustment proposal.',
+        stage6Action: 'Prepare feedback proposal',
+        stage6Gate: 'Creates a pending proposal; applying it needs your confirmation',
         note: 'Each button opens a native DSH conversation with a task draft. Review it, press Send, and the Agent runs the matching project skill.',
         working: 'Preparing DSH conversation…',
         failure: 'Could not prepare a DSH conversation. Check that this DSH profile provides the uiWorkspace client service.',
@@ -131,6 +136,7 @@ window.__ModuleLoader__.load({
         promptArticle: 'Load the jianzi-topic-to-article skill and run its article stage. Fetch the candidate source first, read the candidate, account profile, and article-length settings, and show me the editorial angle for confirmation. Then save a draft and read it back. Do not save a final and do not start typesetting until I confirm the generated article.',
         promptTypeset: 'Load the jianzi-typeset-cover skill and run typesetting and cover generation. Read the article documents first: continue only when a user-confirmed final exists. If only a draft exists, stop and explain. Generate the WeChat HTML, submit it for typesetting, generate the cover, and return both preview links. Do not publish to WeChat and do not call Jianzi internal-model typesetting tools.',
         promptSocial: 'Load the jianzi-social-cards skill and run its card stage. Read the social ranking, pick a repository or event candidate, and confirm the material type with me if unclear. Then build the storyboard, let me approve it, lock it, and generate and submit the card visuals. Do not fake a hotspot candidate for a custom topic; use the custom social project flow instead.',
+        promptFeedback: 'Use the content-feedback MCP tools to read the latest feedback and strategy, then check existing adjustment proposals. Generate one proposal for the requested scope (article by default; use social for social-card feedback). Explain the evidence and limitations, and show the proposal ID and file changes. Generation must leave it pending review. Never call the confirm tool or write changes unless I explicitly ask you to apply this proposal.',
       },
       zh: {
         panelTitle: '见字内容工作台',
@@ -215,6 +221,11 @@ window.__ModuleLoader__.load({
         stage5Detail: '把仓库或资讯候选做成一套图文：故事板、锁定、视觉提交。',
         stage5Action: '准备图文',
         stage5Gate: '需要有图文候选并锁定故事板',
+        stage6: '06 / 复盘',
+        stage6Title: '内容反馈与策略调整',
+        stage6Detail: '读取公众号反馈和策略，生成可审阅的文章或图文调整草案。',
+        stage6Action: '生成反馈草案',
+        stage6Gate: '只生成待确认草案；应用前需要你明确确认',
         note: '按钮会在 DSH 原生会话中准备任务草稿，不会自动发送。检查后按发送，Agent 会加载对应技能开始执行。',
         working: '正在准备 DSH 会话…',
         failure: '无法准备 DSH 会话。请确认当前 DSH profile 提供 uiWorkspace 客户端服务。',
@@ -254,6 +265,7 @@ window.__ModuleLoader__.load({
         promptArticle: '加载 jianzi-topic-to-article 技能，执行文章阶段。先抓取候选原文，读取候选、账号画像和文章字数设置，把编辑角度给我确认；确认后保存 draft 并回读。未经我确认不要保存 final，也不要开始排版。',
         promptTypeset: '加载 jianzi-typeset-cover 技能，执行排版与封面。先读取文章文档，只有存在我确认过的 final 才继续；只有 draft 就停下来说明。生成公众号 HTML 并提交排版，再生成封面，返回两个预览入口。不要发布到公众号，也不要调用见字内部模型排版工具。',
         promptSocial: '加载 jianzi-social-cards 技能，执行图文阶段。先读图文榜单，选择仓库或事件候选；素材类型不明确时先问我。然后制定故事板、等我确认后锁定、生成并提交图文产物。自选主题不要伪装成热点候选，走自定义图文项目。',
+        promptFeedback: '调用内容反哺 MCP 工具读取最新反馈、策略和现有草案，再按我的要求生成一条文章或图文调整草案；未指定范围时默认文章，有明确图文要求时使用图文范围。说明证据与限制，并给出草案 ID 和文件改动。生成后必须保持待确认；除非我明确要求应用这条草案，否则绝不调用确认工具或写入修改。',
       },
     };
 
@@ -290,6 +302,7 @@ window.__ModuleLoader__.load({
       { id: 'article', key: '3', promptKey: 'promptArticle', fields: ['candidate', 'brief'] },
       { id: 'typeset', key: '4', promptKey: 'promptTypeset', fields: ['candidate', 'brief'] },
       { id: 'social', key: '5', promptKey: 'promptSocial', fields: ['batch', 'candidate', 'brief'] },
+      { id: 'feedback', key: '6', promptKey: 'promptFeedback', fields: [] },
     ];
 
     const styles = `
@@ -329,7 +342,7 @@ window.__ModuleLoader__.load({
       .jianzi-desk__selection-item{display:inline-flex;align-items:center;gap:6px;min-height:26px;padding:4px 9px;border-radius:7px;border:1px solid rgba(215,166,111,.22);background:rgba(215,166,111,.07);color:var(--desk-copy)}
       .jianzi-desk__clear{border:0;background:transparent;color:var(--desk-muted);font:600 12px/1.3 'Noto Sans SC','Microsoft YaHei',sans-serif;cursor:pointer;padding:4px}
       .jianzi-desk__clear:hover{color:var(--desk-accent)}.jianzi-desk__clear:disabled{opacity:.3;cursor:default}
-      .jianzi-desk__flows{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:13px;margin-top:21px}
+      .jianzi-desk__flows{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px;margin-top:21px}
       .jianzi-desk__flow{position:relative;display:flex;min-width:0;min-height:246px;flex-direction:column;padding:18px;border:1px solid var(--desk-line);border-radius:13px;background:linear-gradient(155deg,rgba(255,255,255,.055),rgba(255,255,255,.018) 72%);box-shadow:0 8px 20px rgba(0,0,0,.10);transition:transform .18s ease,border-color .18s ease,background .18s ease,box-shadow .18s ease}
       .jianzi-desk__flow:hover{transform:translateY(-2px);border-color:rgba(215,166,111,.48);background:linear-gradient(155deg,rgba(215,166,111,.09),rgba(255,255,255,.022) 72%);box-shadow:0 14px 28px rgba(0,0,0,.17)}
       .jianzi-desk__number{display:flex;align-items:center;gap:8px;color:var(--desk-accent);font-size:11px;font-weight:750;letter-spacing:.1em}

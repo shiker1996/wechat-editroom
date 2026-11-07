@@ -22,7 +22,7 @@
 
 更多连接与客户端设置见[Agent 接入指南](../../docs/agent-usage-guide.md)。
 
-## 五段流程
+## 六段流程
 
 | 阶段 | 面板动作 | 对应技能 / 门禁 |
 | --- | --- | --- |
@@ -31,6 +31,7 @@
 | 03 写作 | 准备文章草稿 | 同技能文章阶段：抓原文、确认角度、保存 draft；不保存 final |
 | 04 交付 | 准备排版交付 | `jianzi-typeset-cover`：只接受已确认终稿，生成 HTML 排版与封面，返回两个入口 |
 | 05 图文 | 准备图文 | `jianzi-social-cards`：工具/事件候选、故事板、锁定、视觉提交 |
+| 06 复盘 | 生成反馈草案 | 内容反馈 MCP：读取反馈、策略和现有草案，生成待确认的文章或图文调整草案；必须由用户明确确认后才应用 |
 
 面板输入只有三项：补充要求、批次 ID（可选）、候选 ID（可选）。留空时由 Agent 先列出现有批次或候选。任务以未发送草稿的形式进入原生会话，用户检查后按发送才执行。工作台未连接时，状态卡会提供「准备启动任务」按钮；提示词要求 Agent 使用当前 DSH 会话选中的工作空间绝对路径作为 `projectRoot`，调用 `jianzi_workbench_start` 启动，并等待服务就绪和项目指纹校验。若本机没有有效项目目录，检查提示会先询问是否克隆到空目录，确认后才初始化；启动工具本身不会克隆或安装项目。
 
@@ -55,7 +56,7 @@
 
 DSH Agent 还可直接通过 MCP 工具 `jianzi_calendar_list` 读取内容日历，包含终稿文章、已交付图文和写作计划；可传 `month`（`YYYY-MM`）筛选月份。它复用见字现有 `/api/calendar` 查询，不修改日历。
 
-内容反哺也通过同一套 MCP 工具提供：读取反馈和策略、生成/列出文章或图文调整草案、拒绝草案，以及在用户明确确认后写入调整。生成只创建待确认草案；应用工具才会写入本地账号配置、标题技能或 Prompt。
+内容反哺也通过首页「06 / 复盘」卡片和同一套 MCP 工具提供：读取反馈和策略、生成/列出文章或图文调整草案、拒绝草案，以及在用户明确确认后写入调整。生成只创建待确认草案；应用工具才会写入本地账号配置、标题技能或 Prompt。
 
 Host 插件（`dsh/index.mjs`）通过官方 `ctx.webServer.register` 注册读取路由，供面板同源 `fetch` 使用；项目启动则通过 DSH 原生会话提示词调用 MCP 工具，不经过 Host 请求响应解析。提示词要求 Agent 从当前会话工作空间取得绝对路径并传给工具；MCP 子进程自身运行在 DSH profile 目录，不能用它的当前目录推断项目路径。
 
@@ -81,6 +82,6 @@ MCP 服务入口路径在 patch 中按 profile 写死（当前 `profiles/desktop
 
 ## npm 正式发布
 
-正式发布由仓库的 `Publish DSH plugin to npm` GitHub Actions 工作流执行。将插件 `package.json` 的版本更新并合入主分支后，推送对应标签 `dsh-plugin-v<版本号>`（例如 `dsh-plugin-v0.2.29`）。工作流会核对标签和包版本、构建、生成 `.tgz`、上传 GitHub Actions 产物，并将同一个 `.tgz` 发布到 npm。不要用普通 CI 提交触发发布。
+正式发布由仓库的 `Publish DSH plugin to npm` GitHub Actions 工作流执行。将插件 `package.json` 的版本更新并合入主分支后，推送对应标签 `dsh-plugin-v<版本号>`（例如 `dsh-plugin-v0.2.30`）。工作流会核对标签和包版本、构建、生成 `.tgz`、上传 GitHub Actions 产物，并将同一个 `.tgz` 发布到 npm。不要用普通 CI 提交触发发布。
 
 首次版本已发布到 npm Registry，GitHub Actions 已配置 **Trusted Publisher**：用户 `shiker1996`、仓库 `wechat-editroom`、工作流文件名 `publish-dsh-plugin.yml`，并允许直接发布。后续推送匹配包版本的标签时，工作流会通过 OIDC 发布，无需长期 npm 发布令牌。

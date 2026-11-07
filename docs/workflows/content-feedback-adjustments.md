@@ -11,6 +11,7 @@
 | 入口 | 实现位置 | 说明 |
 | --- | --- | --- |
 | 工作台 UI | `public/index.html`、`public/src/views/content-feedback.js` | 查看反馈、生成和确认草案 |
+| DSH 首页 | `agent-integrations/dsh-workbench/lib/client.js` | 「06 / 复盘」卡片准备原生会话草稿，由 DSH Agent 通过内容反哺 MCP 生成待确认草案 |
 | HTTP 路由 | `server/platform/http/routes/content-feedback-routes.mjs` | 读取、生成、编辑、确认、拒绝草案 |
 | MCP | `scripts/agent-integration/tools.mjs`、`scripts/agent-integration/client.mjs` | 读取反馈/策略、生成/列出草案、按用户确认写入或拒绝；DSH 包通过 `agent-integrations/dsh-workbench/build.mjs` 同步共享实现 |
 | 文章反馈领域 | `server/features/content-feedback/domain/wechat-content-feedback.mjs` | 从关联文章和完成稿提取结构信号、文章类型映射和表现数据 |
