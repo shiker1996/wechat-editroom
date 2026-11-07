@@ -55,6 +55,7 @@ export const JIANZI_TOOLS = [
   { name: 'jianzi_account_profile_update', description: '保存用户确认过的账号画像。至少包含公众号名称、简介、核心读者和一个内容支柱。', inputSchema: { type: 'object', properties: { context: { type: 'object', description: '符合 account-context.json 格式的账号画像字段。' } }, required: ['context'] }, readOnlyHint: false },
   { name: 'jianzi_content_feedback_get', description: '读取最新公众号内容反馈快照与正文分析计数；用于解释历史题材、标题和正文结构信号。', inputSchema: { type: 'object', properties: {} }, readOnlyHint: true },
   { name: 'jianzi_content_feedback_strategy', description: '读取跨周期策略状态、账号定位字段映射候选和渠道数据限制。只读，不写入账号配置。', inputSchema: { type: 'object', properties: {} }, readOnlyHint: true },
+  { name: 'jianzi_content_feedback_import', description: '导入用户明确提供的公众号后台表格；自动合并导入数据、索引本地文章并匹配，再刷新内容反馈快照和策略建议。只产生数据快照与建议，不生成或应用配置/Prompt 草案。支持 CSV/TSV、旧版 XLS 或从附件准确提取的 CSV/TSV 文本；不支持直接解析 XLSX 二进制。', inputSchema: { type: 'object', properties: { fileName: { type: 'string', minLength: 1, maxLength: 255, description: '上传文件名。CSV 文本转换自 XLSX 时可保留原文件名；csvText 会作为文本解析。' }, importType: { type: 'string', enum: ['user_growth', 'notified_articles', 'unnotified_articles', 'content_trends', 'regular_readers'], description: '公众号导出类别；根据表头选择。文章表现表使用 notified_articles 或 unnotified_articles。' }, data: { type: 'string', maxLength: 8000000, description: '文件原始字节的 Base64，适用于 CSV/TSV 和旧版 XLS；与 csvText 二选一。' }, csvText: { type: 'string', maxLength: 8000000, description: '从上传附件准确提取的完整 CSV/TSV 文本；保留所有行与数字，不做汇总或推算。与 data 二选一。' } }, required: ['fileName', 'importType'] }, readOnlyHint: false },
   { name: 'jianzi_content_feedback_adjustments_list', description: '列出内容反哺调整草案及可编辑正文 Prompt。', inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 100, description: '返回数量，默认 20。' } } }, readOnlyHint: true },
   { name: 'jianzi_content_feedback_adjustment_generate', description: '调用工作台两阶段模型生成文章或图文内容反哺草案。草案只保存为待确认记录，不会自动写入账号配置、标题技能、正文 Prompt 或图文技能。', inputSchema: { type: 'object', properties: { scope: { type: 'string', enum: ['article', 'social'], description: '反馈范围，默认 article；social 用于图文故事板和文案技能。' }, feedbackSnapshotId: { type: 'integer', minimum: 1, description: '可选反馈快照 ID；省略时使用最新快照。' }, provider: string('可选的工作台模型服务商 ID。') } }, readOnlyHint: false },
   { name: 'jianzi_content_feedback_adjustment_confirm', description: '将待确认内容反哺草案写入本地账号配置、标题技能、文章 Prompt 或图文技能。仅在用户明确要求应用该草案后调用。', inputSchema: { type: 'object', properties: { adjustmentId: id('待确认调整草案 ID。') }, required: ['adjustmentId'] }, readOnlyHint: false },
@@ -309,6 +310,30 @@ export async function executeJianziTool(client, name, input = {}, context = {}) 
     case 'jianzi_account_profile_update': return client.put('/api/system/account-context', input.context || {});
     case 'jianzi_content_feedback_get': return client.get('/api/wechat/feedback');
     case 'jianzi_content_feedback_strategy': return client.get('/api/wechat/strategy');
+    case 'jianzi_content_feedback_import': {
+      const hasData = typeof input.data === 'string' && input.data.trim();
+      const hasCsvText = typeof input.csvText === 'string' && input.csvText.trim();
+      if (Boolean(hasData) === Boolean(hasCsvText)) throw Object.assign(new Error('请在 data（Base64 文件）和 csvText（CSV/TSV 文本）中恰好提供一种'), { code: 'INVALID_ARGUMENT' });
+      if (hasData && /\.xlsx?$/i.test(input.fileName || '') && !/\.xls$/i.test(input.fileName || '')) throw Object.assign(new Error('当前导入器支持旧版 .xls，不支持 XLSX 二进制；请在外部 Agent 中将附件准确提取为 csvText 后重试'), { code: 'UNSUPPORTED_FILE_FORMAT' });
+      const imported = await client.post('/api/wechat/import', {
+        fileName: String(input.fileName || '').trim(),
+        importType: input.importType,
+        data: hasData ? input.data.trim() : Buffer.from(input.csvText, 'utf8').toString('base64'),
+      });
+      const rebuilt = await client.post('/api/wechat/feedback/rebuild', {});
+      const [strategy, currentFeedback] = await Promise.all([
+        client.get('/api/wechat/strategy'),
+        client.get('/api/wechat/feedback'),
+      ]);
+      return {
+        imported: { id: imported.id, file_name: imported.file_name, import_type: imported.import_type, format: imported.format, row_count: imported.row_count },
+        index: imported.index,
+        matches: imported.matches,
+        feedback: { ...rebuilt.feedback, extracted_count: rebuilt.extracted, article_analysis_count: currentFeedback.stats?.linked_articles || 0, feature_count: currentFeedback.stats?.features || 0 },
+        strategy,
+        next_step: '如需 AI 调整草案，再调用 jianzi_content_feedback_adjustment_generate；草案保持待确认，需用户明确要求后才可应用。',
+      };
+    }
     case 'jianzi_content_feedback_adjustments_list': return client.get(`/api/wechat/feedback/adjustments?limit=${Math.min(100, Math.max(1, Number(input.limit) || 20))}`);
     case 'jianzi_content_feedback_adjustment_generate': return client.post('/api/wechat/feedback/adjustments/generate', {
       scope: input.scope === 'social' ? 'social' : 'article',

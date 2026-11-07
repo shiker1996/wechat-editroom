@@ -136,7 +136,7 @@ window.__ModuleLoader__.load({
         promptArticle: 'Load the jianzi-topic-to-article skill and run its article stage. Fetch the candidate source first, read the candidate, account profile, and article-length settings, and show me the editorial angle for confirmation. Then save a draft and read it back. Do not save a final and do not start typesetting until I confirm the generated article.',
         promptTypeset: 'Load the jianzi-typeset-cover skill and run typesetting and cover generation. Read the article documents first: continue only when a user-confirmed final exists. If only a draft exists, stop and explain. Generate the WeChat HTML, submit it for typesetting, generate the cover, and return both preview links. Do not publish to WeChat and do not call Jianzi internal-model typesetting tools.',
         promptSocial: 'Load the jianzi-social-cards skill and run its card stage. Read the social ranking, pick a repository or event candidate, and confirm the material type with me if unclear. Then build the storyboard, let me approve it, lock it, and generate and submit the card visuals. Do not fake a hotspot candidate for a custom topic; use the custom social project flow instead.',
-        promptFeedback: 'Use the content-feedback MCP tools to read the latest feedback and strategy, then check existing adjustment proposals. Generate one proposal for the requested scope (article by default; use social for social-card feedback). Explain the evidence and limitations, and show the proposal ID and file changes. Generation must leave it pending review. Never call the confirm tool or write changes unless I explicitly ask you to apply this proposal.',
+        promptFeedback: 'If I attached a WeChat export table, identify its import type from the headers and import the complete data with the content-feedback import MCP tool (use exact Base64 bytes or faithfully extracted CSV/TSV text; never summarize, invent rows, or change values). The tool indexes local articles, matches metrics, and rebuilds the feedback snapshot and strategy. Then read the refreshed feedback and strategy. If I asked for an adjustment, generate one pending proposal for the requested scope (article by default; social for social-card feedback), and show evidence, limits, proposal ID, and file changes. Never confirm or write a proposal unless I explicitly ask you to apply it. If the attachment cannot be read or the headers do not match a supported export, stop and explain what format or columns are needed.',
       },
       zh: {
         panelTitle: '见字内容工作台',
@@ -265,7 +265,7 @@ window.__ModuleLoader__.load({
         promptArticle: '加载 jianzi-topic-to-article 技能，执行文章阶段。先抓取候选原文，读取候选、账号画像和文章字数设置，把编辑角度给我确认；确认后保存 draft 并回读。未经我确认不要保存 final，也不要开始排版。',
         promptTypeset: '加载 jianzi-typeset-cover 技能，执行排版与封面。先读取文章文档，只有存在我确认过的 final 才继续；只有 draft 就停下来说明。生成公众号 HTML 并提交排版，再生成封面，返回两个预览入口。不要发布到公众号，也不要调用见字内部模型排版工具。',
         promptSocial: '加载 jianzi-social-cards 技能，执行图文阶段。先读图文榜单，选择仓库或事件候选；素材类型不明确时先问我。然后制定故事板、等我确认后锁定、生成并提交图文产物。自选主题不要伪装成热点候选，走自定义图文项目。',
-        promptFeedback: '调用内容反哺 MCP 工具读取最新反馈、策略和现有草案，再按我的要求生成一条文章或图文调整草案；未指定范围时默认文章，有明确图文要求时使用图文范围。说明证据与限制，并给出草案 ID 和文件改动。生成后必须保持待确认；除非我明确要求应用这条草案，否则绝不调用确认工具或写入修改。',
+        promptFeedback: '如果我附了公众号导出表格，先按表头判断导入类型，再用内容反哺导入 MCP 工具导入完整数据（传准确的 Base64 文件字节，或完整提取的 CSV/TSV 文本；不得汇总、编造行或改动数值）。工具会索引本地文章、匹配指标并刷新反馈快照和策略。随后读取刷新后的反馈与策略。如果我要求调整，再按指定范围生成一条待确认草案（默认文章；图文调整用 social），说明证据、限制、草案 ID 和文件改动。除非我明确要求应用草案，否则绝不确认或写入。如果附件无法读取或表头不符合支持的导出格式，停止并说明所需格式/列。',
       },
     };
 

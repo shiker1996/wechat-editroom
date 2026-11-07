@@ -1195,3 +1195,5 @@ MCP `jianzi_integration_configuration_catalog/get/save/test` 仅开放采集器�
 ### POST /api/wechat/import
 
 导入一份后台导出文件并与历史数据合并。导入后会先自动建立本地文章索引，再执行公众号文章匹配，无需先手动进入发布中心建立索引。请求体为 `{ fileName, importType, data }`，其中 `data` 是文件 Base64；`importType` 支持 `user_growth`、`notified_articles`、`unnotified_articles`、`content_trends`、`regular_readers`。支持 HTML 表格伪 `.xls`、BIFF `.xls`、CSV/TSV。
+
+MCP 工具 `jianzi_content_feedback_import` 在调用本接口后会继续执行 `POST /api/wechat/feedback/rebuild` 和 `GET /api/wechat/strategy`，返回导入行数、文章匹配统计、反馈快照和策略建议。它不生成 AI 调整草案；需要草案时再调用 `jianzi_content_feedback_adjustment_generate`。MCP 接受 Base64 原始文件或完整 CSV/TSV 文本；`.xlsx` 二进制不支持。
