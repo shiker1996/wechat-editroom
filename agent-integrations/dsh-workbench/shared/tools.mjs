@@ -321,25 +321,42 @@ export async function executeJianziTool(client, name, input = {}, context = {}) 
         data: hasData ? input.data.trim() : Buffer.from(input.csvText, 'utf8').toString('base64'),
       });
       const rebuilt = await client.post('/api/wechat/feedback/rebuild', {});
-      const [strategy, currentFeedback] = await Promise.all([
+      const [strategy, currentFeedback, review] = await Promise.all([
         client.get('/api/wechat/strategy'),
         client.get('/api/wechat/feedback'),
+        client.get('/api/wechat/review'),
       ]);
+      const articleEvidenceCount = Number(rebuilt.extracted || 0);
+      const socialEvidenceCount = Number(review.review_tracks?.social?.content_feedback?.linked_social_count || 0);
+      const hasFeedbackEvidence = articleEvidenceCount > 0 || socialEvidenceCount > 0;
       return {
         imported: { id: imported.id, file_name: imported.file_name, import_type: imported.import_type, format: imported.format, row_count: imported.row_count },
         index: imported.index,
         matches: imported.matches,
         feedback: { ...rebuilt.feedback, extracted_count: rebuilt.extracted, article_analysis_count: currentFeedback.stats?.linked_articles || 0, feature_count: currentFeedback.stats?.features || 0 },
         strategy,
-        next_step: '如需 AI 调整草案，再调用 jianzi_content_feedback_adjustment_generate；草案保持待确认，需用户明确要求后才可应用。',
+        next_action: hasFeedbackEvidence
+          ? { type: 'generate_adjustment_draft', tool: 'jianzi_content_feedback_adjustment_generate', available_scopes: { article: articleEvidenceCount > 0, social: socialEvidenceCount > 0 }, default_scope: articleEvidenceCount > 0 ? 'article' : 'social', when: 'If the user asked to generate an adjustment proposal, call this tool in the same turn using the requested scope; otherwise present it as the recommended next step.', writes_files: false }
+          : { type: 'resolve_article_matches', message: 'No linked article bodies were available for extraction in this refresh. Review article matching and linked content before treating the snapshot as evidence for a draft.', writes_files: false },
+        next_step: hasFeedbackEvidence
+          ? `下一步：${articleEvidenceCount > 0 ? `文章有 ${articleEvidenceCount} 条可分析正文` : ''}${articleEvidenceCount > 0 && socialEvidenceCount > 0 ? '；' : ''}${socialEvidenceCount > 0 ? `图文有 ${socialEvidenceCount} 条匹配样本` : ''}。如用户本轮要求生成草案，按其范围继续调用 jianzi_content_feedback_adjustment_generate；否则建议选择文章或图文范围。`
+          : '下一步：先检查公众号文章/图文匹配和已关联正文；当前没有可用于草案的关联内容证据。',
       };
     }
     case 'jianzi_content_feedback_adjustments_list': return client.get(`/api/wechat/feedback/adjustments?limit=${Math.min(100, Math.max(1, Number(input.limit) || 20))}`);
-    case 'jianzi_content_feedback_adjustment_generate': return client.post('/api/wechat/feedback/adjustments/generate', {
-      scope: input.scope === 'social' ? 'social' : 'article',
-      ...(Number.isInteger(input.feedbackSnapshotId) && input.feedbackSnapshotId > 0 ? { feedbackSnapshotId: input.feedbackSnapshotId } : {}),
-      ...(typeof input.provider === 'string' && input.provider.trim() ? { provider: input.provider.trim() } : {}),
-    });
+    case 'jianzi_content_feedback_adjustment_generate': {
+      const draft = await client.post('/api/wechat/feedback/adjustments/generate', {
+        scope: input.scope === 'social' ? 'social' : 'article',
+        ...(Number.isInteger(input.feedbackSnapshotId) && input.feedbackSnapshotId > 0 ? { feedbackSnapshotId: input.feedbackSnapshotId } : {}),
+        ...(typeof input.provider === 'string' && input.provider.trim() ? { provider: input.provider.trim() } : {}),
+      });
+      return {
+        ...draft,
+        next_action: draft.status === 'pending'
+          ? { type: 'review_adjustment_draft', label: `检查草案 ${draft.id} 的 diff`, after_review: `只有明确要求应用草案 ${draft.id} 时才调用 jianzi_content_feedback_adjustment_confirm。`, writes_files: false }
+          : { type: 'report_no_change', label: '说明当前没有可安全应用的规则改动，并指出证据或门槛限制。', writes_files: false },
+      };
+    }
     case 'jianzi_content_feedback_adjustment_confirm': return client.post(`/api/wechat/feedback/adjustments/${positiveId(input.adjustmentId, 'adjustmentId')}/confirm`, {});
     case 'jianzi_content_feedback_adjustment_reject': return client.post(`/api/wechat/feedback/adjustments/${positiveId(input.adjustmentId, 'adjustmentId')}/reject`, {});
     case 'jianzi_settings_summary': {
