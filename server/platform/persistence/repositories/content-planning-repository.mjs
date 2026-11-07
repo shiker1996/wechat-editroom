@@ -503,7 +503,7 @@ export class ContentPlanningRepository {
   }
   listArticleContentLinks({ limit = 200 } = {}) {
     const rows = this.db.prepare(`SELECT mm.id AS match_id,mm.status AS match_status,mm.confidence,mm.match_method,
-      wm.id AS metric_id,wm.notified,wm.title AS metric_title,wm.published_date,wm.reads,wm.shares,wm.follows_after_read,wm.content_url,
+      wm.id AS metric_id,wm.import_batch_id,wm.notified,wm.title AS metric_title,wm.published_date,wm.reads,wm.shares,wm.follows_after_read,wm.content_url,
       aa.id AS article_artifact_id,aa.title AS artifact_title,aa.article_date,aa.version_label,aa.artifact_type,aa.file_path,
       s.id AS snapshot_id,s.source_kind,s.source_path,s.source_url,s.final_url,s.title AS snapshot_title,s.content_chars,s.status AS content_status,s.error AS content_error,s.fetched_at
       FROM wechat_article_metric_matches mm JOIN wechat_article_metrics wm ON wm.id=mm.metric_id

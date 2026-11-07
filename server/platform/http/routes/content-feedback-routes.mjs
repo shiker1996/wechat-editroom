@@ -60,8 +60,14 @@ export async function handleContentFeedbackRoutes(context) {
     json(response, 200, { items }); return true;
   }
   if (request.method === 'POST' && pathname === '/api/wechat/content-links/relink') {
-    const index = indexArticleArtifacts(store, artifactRoots);
-    json(response, 200, { ...linkWechatArticlesContent(store, { root, artifactRoots }), index }); return true;
+    const input = await body(request);
+    const importBatchId = input.importBatchId == null ? null : Number(input.importBatchId);
+    if (importBatchId != null && (!Number.isSafeInteger(importBatchId) || importBatchId <= 0)) {
+      json(response, 400, { error: 'importBatchId 必须是正整数' }); return true;
+    }
+    const index = importBatchId == null ? indexArticleArtifacts(store, artifactRoots) : null;
+    const linked = linkWechatArticlesContent(store, { root, artifactRoots, importBatchId });
+    json(response, 200, { ...linked, ...(index ? { index } : {}) }); return true;
   }
   if (request.method === 'GET' && pathname === '/api/wechat/feedback') {
     const feedback = store.getLatestContentFeedbackSnapshot();

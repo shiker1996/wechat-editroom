@@ -24,7 +24,7 @@
 | 03 文章生产 | 用户选定的候选与补充要求 | 如有必要先加入文章候选；抓取来源、读取账号和材料，确认编辑角度，保存并回读文章草稿 | `jianzi_candidate_add`、`jianzi_candidate_source_fetch`、`jianzi_candidate_get`、`jianzi_article_document_save` |
 | 04 排版交付 | 用户确认的文章终稿 | 生成 HTML 并提交确定性排版，生成封面；返回排版与封面入口，不发布 | `jianzi_article_documents`、`jianzi_article_typeset_submit`、`jianzi_cover_submit` |
 | 05 图文 | 可选批次/候选与补充要求 | 从图文榜单选工具或事件候选，故事板确认后锁定、生成并提交图文产物 | `jianzi_batch_social_ranking`、`jianzi_candidate_add`、`jianzi_card_editorial_*`、`jianzi_card_lock`、`jianzi_card_visual_submit` |
-| 06 内容反哺 | 必须有本轮上传的公众号导出表格 | 无附件时请用户上传并停止，不读取本地反馈/策略或现有草案；有附件时先导入并刷新反馈，再按用户要求生成待确认草案 | `jianzi_content_feedback_import`、`jianzi_content_feedback_adjustment_generate` |
+| 06 内容反哺 | 必须有本轮上传的公众号导出表格 | 无附件时请用户上传并停止，不读取本地反馈/策略或现有草案；有附件时导入、匹配并关联该批次的本地正文/图文文案，再刷新快照；关联失败时停下说明，不生成旧数据草案 | `jianzi_content_feedback_import`、`jianzi_content_feedback_adjustment_generate` |
 
 文章生产阶段仅保存 `draft`。用户确认已经生成的文章之后，Agent 才能保存 `final`；排版阶段检查到没有用户确认的终稿时必须停止。上述用户确认由 DSH 会话中的交互完成。
 

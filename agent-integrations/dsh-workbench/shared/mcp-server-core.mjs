@@ -2,9 +2,8 @@ import readline from 'node:readline';
 
 const protocolVersion = '2025-03-26';
 const supportedProtocolVersions = new Set([protocolVersion, '2024-11-05']);
-
 /** Start the shared stdio MCP transport for Jianzi tool implementations. */
-export function startJianziMcpServer({ executeTool, tools, input = process.stdin, output = process.stdout }) {
+export function startJianziMcpServer({ executeTool, tools, instructions, input = process.stdin, output = process.stdout }) {
   const send = (message) => output.write(`${JSON.stringify(message)}\n`);
   const result = (id, value) => send({ jsonrpc: '2.0', id, result: value });
   const rpcError = (id, code, message) => send({ jsonrpc: '2.0', id, error: { code, message } });
@@ -14,7 +13,7 @@ export function startJianziMcpServer({ executeTool, tools, input = process.stdin
     if (method === 'notifications/initialized' || method === 'notifications/cancelled') return;
     if (method === 'initialize') {
       const negotiated = supportedProtocolVersions.has(params.protocolVersion) ? params.protocolVersion : protocolVersion;
-      result(id, { protocolVersion: negotiated, capabilities: { tools: {} }, serverInfo: { name: 'jianzi-workbench', version: '1.0.0' } });
+      result(id, { protocolVersion: negotiated, capabilities: { tools: {} }, serverInfo: { name: 'jianzi-workbench', version: '1.0.0' }, ...(instructions ? { instructions } : {}) });
       return;
     }
     if (method === 'ping') { result(id, {}); return; }

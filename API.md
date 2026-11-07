@@ -1111,7 +1111,7 @@ MCP `jianzi_integration_configuration_catalog/get/save/test` 仅开放采集器�
 
 ### POST /api/wechat/content-links/relink
 
-只使用本地文章索引重新关联已确认文章的正文，并按文件名和目录识别截图、日志、代码差异、图表、失败及结果证据；不会访问外部 URL。
+只使用本地文章索引重新关联已确认文章的正文，并按文件名和目录识别截图、日志、代码差异、图表、失败及结果证据；不会访问外部 URL。可选请求体 `{ importBatchId }` 只关联指定导入批次的已确认文章/图文匹配；指定批次时不重复索引文章产物。
 → 公众号复盘
 
 ### POST /api/wechat/content-links/:id/fetch
@@ -1196,4 +1196,4 @@ MCP `jianzi_integration_configuration_catalog/get/save/test` 仅开放采集器�
 
 导入一份后台导出文件并与历史数据合并。导入后会先自动建立本地文章索引，再执行公众号文章匹配，无需先手动进入发布中心建立索引。请求体为 `{ fileName, importType, data }`，其中 `data` 是文件 Base64；`importType` 支持 `user_growth`、`notified_articles`、`unnotified_articles`、`content_trends`、`regular_readers`。支持 HTML 表格伪 `.xls`、BIFF `.xls`、CSV/TSV。
 
-MCP 工具 `jianzi_content_feedback_import` 在调用本接口后会继续执行 `POST /api/wechat/feedback/rebuild` 和 `GET /api/wechat/strategy`，返回导入行数、文章匹配统计、反馈快照和策略建议。它不生成 AI 调整草案；需要草案时再调用 `jianzi_content_feedback_adjustment_generate`。MCP 接受 Base64 原始文件或完整 CSV/TSV 文本；`.xlsx` 二进制不支持。
+MCP 工具 `jianzi_content_feedback_import` 在调用本接口后会按新导入批次执行本地正文/图文文案关联，再调用 `POST /api/wechat/feedback/rebuild` 和 `GET /api/wechat/strategy`，返回导入行数、指标匹配、正文关联、反馈快照和策略建议。若本批次关联失败或缺少本地产物，工具会要求先解决关联问题，不建议直接按旧快照生成草案。它不生成 AI 调整草案；需要草案时再调用 `jianzi_content_feedback_adjustment_generate`。MCP 接受 Base64 原始文件或完整 CSV/TSV 文本；`.xlsx` 二进制不支持。

@@ -181,7 +181,7 @@ npm run jianzi -- account update --file .\account-context.json
 
 ### 内容反馈与反哺草案
 
-MCP Agent 可用 `jianzi_content_feedback_import` 导入你明确上传的公众号后台表格。它先合并导入、自动索引本地文章并匹配指标，再刷新内容反馈快照和策略建议；文章关联/匹配不足时会在返回结果中体现，不能据不匹配数据推断正文表现。支持 CSV/TSV、旧版 XLS 原始字节，或 Agent 从附件准确提取的完整 CSV/TSV 文本；XLSX 二进制需先转换，表头必须符合所选导入类型。导入和快照刷新不会改写账号配置、技能或 Prompt。导入工具会返回结构化 `next_action`；若用户本轮同时要求生成草案，Agent 应直接继续调用生成工具，不必再问用户是否继续。
+MCP Agent 可用 `jianzi_content_feedback_import` 导入你明确上传的公众号后台表格。它先合并导入、自动索引并匹配指标，再关联本批次已确认的本地正文/图文文案，之后才刷新内容反馈快照和策略建议。返回值包含 `content_links` 的成功、缺少本地文件和失败计数；如果本批次正文关联不完整，先处理关联问题，不要拿旧快照代替新导入内容生成草案。支持 CSV/TSV、旧版 XLS 原始字节，或 Agent 从附件准确提取的完整 CSV/TSV 文本；XLSX 二进制需先转换，表头必须符合所选导入类型。导入、正文关联和快照刷新不会改写账号配置、技能或 Prompt。导入工具会返回结构化 `next_action`；若用户本轮同时要求生成草案，关联完成且证据范围可用时，Agent 应直接继续调用生成工具，不必再问用户是否继续。
 
 需要 AI 调整时，再调用 `jianzi_content_feedback_adjustment_generate` 生成文章或图文草案，并用 `jianzi_content_feedback_adjustments_list` 查看。草案只保存为待确认记录。查看 diff 后，只有你明确要求应用时，Agent 才能调用 `jianzi_content_feedback_adjustment_confirm`；也可用 `jianzi_content_feedback_adjustment_reject` 拒绝草案。其他常用工具：`jianzi_content_feedback_get`、`jianzi_content_feedback_strategy`。
 

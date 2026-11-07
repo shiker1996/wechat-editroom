@@ -98,8 +98,11 @@ export function linkWechatArticleContent(store, { matchId, root, artifactRoots =
   }
 }
 
-export function linkWechatArticlesContent(store, { root, artifactRoots = [] } = {}) {
-  const matches = store.listArticleContentLinks({ limit: 1000 });
+export function linkWechatArticlesContent(store, { root, artifactRoots = [], importBatchId = null } = {}) {
+  const allMatches = store.listArticleContentLinks({ limit: 1000 });
+  const matches = importBatchId == null
+    ? allMatches
+    : allMatches.filter((item) => Number(item.import_batch_id) === Number(importBatchId));
   let linked = 0; let socialCopy = 0; let needsExternal = 0; let failed = 0;
   const failures = [];
   for (const match of matches) {
