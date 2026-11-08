@@ -567,12 +567,6 @@ window.__ModuleLoader__.load({
       }, []);
 
       React.useEffect(() => {
-        if (health) return undefined;
-        const timer = window.setInterval(() => { void loadStatus(); }, 2500);
-        return () => window.clearInterval(timer);
-      }, [health]);
-
-      React.useEffect(() => {
         let alive = true;
         setLoadingCalendar(true);
         void (async () => {
