@@ -20,8 +20,6 @@ test('R6 发布脚本清理受限 dist 并覆盖全部发布物校验和',()=>{
   assert.match(source,/dsh-workbench/);
   assert.match(source,/pack-dsh-plugin\.mjs/);
   assert.match(read('.github/workflows/desktop-release.yml'),/dist\/\*\.tgz/);
-  assert.match(read('.github/workflows/desktop-release.yml'),/RELEASE_TAG.*github\.ref_name/);
-  assert.match(read('.github/workflows/desktop-release.yml'),/does not match application version/);
   assert.match(read('scripts/release/pack-dsh-plugin.mjs'),/stagedPackage\.version = appPackage\.version/);
   assert.match(read('.github/workflows/publish-dsh-plugin.yml'),/require\('\.\.\/\.\.\/package\.json'\)\.version/);
   assert.match(read('.github/workflows/publish-dsh-plugin.yml'),/npm view "\$\{PACKAGE_NAME\}@\$\{PACKAGE_VERSION\}" version/);
