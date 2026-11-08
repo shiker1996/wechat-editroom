@@ -9,14 +9,14 @@
 3. 修改 `package.json` 的 `version` 为新版本号（只改这一处，技能 / 插件的 `compatibleApp` 判定会自动跟随）。
 4. 提交并打 tag：`git tag <version>`（如 `0.2.0`，与 `version` 字段完全一致，不加 `v` 前缀）。
 5. 推送：`git push origin master --tags`。
-6. 生成发布包与校验和：
+6. 生成统一发布包与校验和：
 
    ```powershell
    node scripts/release/release.mjs
    ```
 
-   产物在 `dist/`：`<name>-<version>.zip`（`git archive HEAD` 生成）与 `SHA256SUMS.txt`。脚本会先精确清空项目根目录下的旧 `dist/` 内容，拒绝工作区与 HEAD 版本号不一致，并为本次目录中的全部发布物生成 SHA-256；工作区有其他未提交改动时仍会明确警告，因为归档只包含 HEAD。
-7. tag 推送后，GitHub Actions 会自动构建 Windows 安装包并创建 GitHub Release；等待工作流完成后，把 zip 与 `SHA256SUMS.txt` 上传到同一个 Release。正文由 Actions 根据本次 tag 范围内已合并的 PR 自动生成，不要用 CHANGELOG 段落覆盖。
+   产物在 `dist/`：源码 `<name>-<version>.zip`、独立 DSH 插件 `<plugin-name>-<version>.tgz` 与 `SHA256SUMS.txt`。两种包统一使用根目录 `package.json` 的版本。脚本要求工作区干净且版本与 HEAD 一致，随后构建插件共享 MCP 文件、在临时目录将插件包版本戳记为当前应用版本，再用 `npm pack` 打包并为全部文件生成 SHA-256。插件源目录的 `package.json` 不需要随每次应用发版手工改版本。
+7. tag 推送后，GitHub Actions 会构建 Windows 安装包，并把安装包、源码 ZIP、DSH 插件 `.tgz` 与校验和一起发布到 GitHub Release。正文由 Actions 根据本次 tag 范围内已合并的 PR 自动生成，不要用 CHANGELOG 段落覆盖。需要把该版插件发布到 npm 时，推送 `dsh-plugin-v<应用版本>` 标签；工作流会先检查 npm registry 中不存在该包版本，重复则失败，再按根目录版本生成并发布。
 8. 用户侧校验下载完整性：`certutil -hashfile <zip> SHA256`（Windows）或 `shasum -a 256 <zip>`，与 `SHA256SUMS.txt` 比对。
 
 ## Release 正文规范

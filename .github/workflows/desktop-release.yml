@@ -68,6 +68,9 @@ jobs:
       - name: Install screenshot skill dependencies
         run: npm install --prefix skills/html-pages-to-images --ignore-scripts --no-audit --no-fund --package-lock=false
 
+      - name: Build source and DSH plugin release packages
+        run: npm run release
+
       - name: Prepare bundled Node.js runtime
         shell: pwsh
         run: |
@@ -132,3 +135,6 @@ jobs:
           files: |
             dist/*.exe
             dist/*.blockmap
+            dist/*.zip
+            dist/*.tgz
+            dist/SHA256SUMS.txt

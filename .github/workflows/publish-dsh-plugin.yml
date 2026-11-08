@@ -34,23 +34,30 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          PACKAGE_VERSION="$(node -p "require('../../package.json').version")"
           EXPECTED_TAG="dsh-plugin-v${PACKAGE_VERSION}"
           if [ "$RELEASE_TAG" != "$EXPECTED_TAG" ]; then
             echo "Tag $RELEASE_TAG does not match package version $PACKAGE_VERSION (expected $EXPECTED_TAG)." >&2
             exit 1
           fi
 
+      - name: Reject an already published package version
+        run: |
+          PACKAGE_NAME="$(node -p "require('./package.json').name")"
+          PACKAGE_VERSION="$(node -p "require('../../package.json').version")"
+          if npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version >/dev/null 2>&1; then
+            echo "${PACKAGE_NAME}@${PACKAGE_VERSION} is already published; bump the application version before packaging." >&2
+            exit 1
+          fi
+
       - name: Build plugin bundle
         run: npm run build
 
-      - name: Validate npm package contents
-        run: npm pack --dry-run
+      - name: Create versioned npm package tarball
+        run: node ../../scripts/release/pack-dsh-plugin.mjs ./artifacts
 
-      - name: Create npm package tarball
-        run: |
-          mkdir -p artifacts
-          npm pack --pack-destination ./artifacts
+      - name: Validate npm package contents
+        run: npm pack ./artifacts/*.tgz --dry-run
 
       - name: Upload package tarball
         uses: actions/upload-artifact@v4

@@ -11,7 +11,7 @@ const headPkg=JSON.parse(execFileSync('git',['show','HEAD:package.json'],{encodi
 if(headPkg.version!==pkg.version)throw new Error(`工作区版本 ${pkg.version} 与 HEAD 版本 ${headPkg.version} 不一致，拒绝发布`);
 
 const dirty = execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim();
-if (dirty) console.warn('警告：工作区有未提交改动，发布包将基于 HEAD 而非工作区。');
+if (dirty) throw new Error('工作区存在未提交改动；源码归档基于 HEAD，而插件包基于工作区，拒绝生成不一致的发布包。');
 
 const distDir = path.resolve(root,'dist');
 if(path.dirname(distDir)!==root)throw new Error('dist 路径越界');
@@ -21,6 +21,11 @@ else fs.mkdirSync(distDir, { recursive: true });
 const base = `${pkg.name}-${pkg.version}`;
 const zipPath = path.join(distDir, `${base}.zip`);
 execFileSync('git', ['archive', '--format=zip', '-o', zipPath, 'HEAD'], { stdio: 'inherit' });
+
+const dshPluginDir = path.join(root, 'agent-integrations', 'dsh-workbench');
+const node = process.execPath;
+execFileSync(node, [path.join(dshPluginDir, 'build.mjs')], { stdio: 'inherit', cwd: root });
+execFileSync(node, [path.join(root, 'scripts', 'release', 'pack-dsh-plugin.mjs'), distDir], { stdio: 'inherit', cwd: root });
 
 const sum = crypto.createHash('sha256').update(fs.readFileSync(zipPath)).digest('hex');
 const artifacts=fs.readdirSync(distDir).filter((name)=>name!=='SHA256SUMS.txt'&&fs.statSync(path.join(distDir,name)).isFile()).sort();
