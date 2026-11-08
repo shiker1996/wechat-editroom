@@ -149,12 +149,26 @@ jobs:
             dist/*.tgz
             dist/SHA256SUMS.txt
 
-      - name: Create release automation token
+      - name: Check release PR automation configuration
         if: startsWith(github.ref, 'refs/tags/')
+        id: release-pr-config
+        shell: pwsh
+        env:
+          RELEASE_APP_ID: ${{ vars.RELEASE_APP_ID }}
+          RELEASE_APP_PRIVATE_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+        run: |
+          $configured = -not [string]::IsNullOrWhiteSpace($env:RELEASE_APP_ID) -and -not [string]::IsNullOrWhiteSpace($env:RELEASE_APP_PRIVATE_KEY)
+          "configured=$($configured.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          if (-not $configured) {
+            Write-Host "::warning title=Release version sync skipped::Configure the RELEASE_APP_ID Actions variable and RELEASE_APP_PRIVATE_KEY Actions secret to enable the automatic version-sync PR."
+          }
+
+      - name: Create release automation token
+        if: startsWith(github.ref, 'refs/tags/') && steps.release-pr-config.outputs.configured == 'true'
         id: release-app-token
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ vars.RELEASE_APP_ID }}
+          client-id: ${{ vars.RELEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: ${{ github.event.repository.name }}
@@ -162,7 +176,7 @@ jobs:
           permission-pull-requests: write
 
       - name: Create pull request to sync release versions
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') && steps.release-pr-config.outputs.configured == 'true'
         id: version-sync-pr
         uses: peter-evans/create-pull-request@v7
         with:
@@ -181,7 +195,7 @@ jobs:
             Updates the application manifest, lockfile, and DSH plugin manifest to the released version.
 
       - name: Enable auto-merge after PR checks pass
-        if: startsWith(github.ref, 'refs/tags/') && steps.version-sync-pr.outputs.pull-request-number != ''
+        if: startsWith(github.ref, 'refs/tags/') && steps.release-pr-config.outputs.configured == 'true' && steps.version-sync-pr.outputs.pull-request-number != ''
         env:
           GH_TOKEN: ${{ steps.release-app-token.outputs.token }}
           PR_NUMBER: ${{ steps.version-sync-pr.outputs.pull-request-number }}

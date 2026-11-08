@@ -17,7 +17,7 @@
 
    产物在 `dist/`：源码 `<name>-<version>.zip`、独立 DSH 插件 `<plugin-name>-<version>.tgz` 与 `SHA256SUMS.txt`。tag 是构建版本的唯一来源；workflow 先同步更新临时工作区的项目与插件版本，再构建 Windows 安装包和插件包，源码 ZIP 也包含相同版本。插件源目录的 `package.json` 不需要手工改版本。
 7. 数字版本 tag 推送后，桌面 Release 和 DSH npm 发布 workflow 会并行启动：前者构建 Windows 安装包并发布源码 ZIP、插件 `.tgz` 和校验和；后者从同一 tag 戳记版本、检查 npm 上没有同版本后发布插件。桌面 Release 完成后会创建 PR，将根项目、lockfile 和 DSH 插件 manifest 的版本同步到 master。`dsh-plugin-v<版本>` 旧式 tag 仍可单独触发插件发布。Release 正文由 Actions 根据本次 tag 范围内已合并的 PR 自动生成，不要用 CHANGELOG 段落覆盖。
-   版本同步 PR 使用 GitHub App token，以便 PR CI 自动启动；检查通过后由 GitHub Auto-merge 自动合并，不需要人工处理。仓库需启用 Auto-merge，并配置 Actions variable `RELEASE_APP_ID` 与 secret `RELEASE_APP_PRIVATE_KEY`。该 GitHub App 安装到本仓库，并授予 `Contents: Read and write`、`Pull requests: Read and write` 权限。
+   版本同步 PR 使用 GitHub App token，以便 PR CI 自动启动；检查通过后由 GitHub Auto-merge 自动合并，不需要人工处理。仓库需启用 Auto-merge，并配置 Actions variable `RELEASE_APP_ID` 与 secret `RELEASE_APP_PRIVATE_KEY`。该 GitHub App 安装到本仓库，并授予 `Contents: Read and write`、`Pull requests: Read and write` 权限。若凭据未配置，发布流程会给出 warning 并跳过版本同步 PR，桌面安装包和 Release 产物仍会正常生成与发布。
 8. 用户侧校验下载完整性：`certutil -hashfile <zip> SHA256`（Windows）或 `shasum -a 256 <zip>`，与 `SHA256SUMS.txt` 比对。
 
 ## Release 正文规范
