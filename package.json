@@ -1,6 +1,6 @@
 {
     "name": "wechat-newsroom-workbench",
-    "version": "1.0.7",
+    "version": "1.0.8",
     "main": "desktop/main.mjs",
     "private": true,
     "license": "MIT",

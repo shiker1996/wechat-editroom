@@ -1,6 +1,6 @@
 {
   "name": "jianzi-content-workbench",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "icon": "./icon.svg",
   "description": "DSH content workbench panel that starts native Agent sessions backed by Jianzi MCP tools.",
   "repository": {
