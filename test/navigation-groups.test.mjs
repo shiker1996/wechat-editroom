@@ -46,7 +46,7 @@ test('侧栏按六个工作区组织并自动展开当前工作区', () => {
   assert.match(html, /选题 · 标题 · 正文/);
   assert.doesNotMatch(html, /content-feedback-targets/);
   const feedback = fs.readFileSync(new URL('../public/src/views/content-feedback.js', import.meta.url), 'utf8');
-  assert.match(feedback, /作为 AI 调整账号策略与技能文件的参考/);
+  assert.match(feedback, /作为 AI 调整账号策略、标题技能和正文 Prompt 的参考/);
   assert.doesNotMatch(feedback, /renderTargets|content-feedback-targets/);
   assert.doesNotMatch(feedback, /data-feedback-handoff-target/);
   assert.doesNotMatch(fs.readFileSync(new URL('../public/src/views/editor.js', import.meta.url), 'utf8'), /takeFeedbackHandoff/);
