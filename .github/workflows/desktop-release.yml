@@ -173,8 +173,8 @@ jobs:
             package.json
             package-lock.json
             agent-integrations/dsh-workbench/package.json
-          commit-message: chore(release): sync package versions to ${{ github.ref_name }}
-          title: chore(release): sync package versions to ${{ github.ref_name }}
+          commit-message: "chore(release): sync package versions to ${{ github.ref_name }}"
+          title: "chore(release): sync package versions to ${{ github.ref_name }}"
           body: |
             Automated version sync after release tag `${{ github.ref_name }}`.
 
