@@ -14,9 +14,14 @@ const json = (payload, status = 200) => new Response(JSON.stringify(payload), {
 
 const failed = (error) => {
   console.error('Jianzi workbench route failure', error);
+  const compatibilityError = error?.code === 'WORKBENCH_VERSION_MISMATCH';
   return {
     ok: false,
-    error: { code: error?.code || 'JIANZI_READ_FAILED', message: 'Request failed' },
+    error: {
+      code: error?.code || 'JIANZI_READ_FAILED',
+      message: compatibilityError ? error.message : 'Request failed',
+      ...(compatibilityError && error.details ? { details: error.details } : {}),
+    },
   };
 };
 

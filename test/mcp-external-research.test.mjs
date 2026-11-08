@@ -7,6 +7,7 @@ import http from 'node:http';
 import readline from 'node:readline';
 import { spawn } from 'node:child_process';
 import { Store } from '../server/platform/core/store.mjs';
+import { APP_VERSION } from '../server/platform/version.mjs';
 import { batchTopicsDir } from '../server/platform/core/workspace-paths.mjs';
 import { resolveStableBatchEvents } from '../server/features/research/application/stable-event-service.mjs';
 import { handleTaskRoutes } from '../server/platform/http/routes/task-routes.mjs';
@@ -32,6 +33,9 @@ test('独立 MCP 进程通过 HTTP 领取真实研判阶段', { timeout: 30000 }
     const chunks = [];
     for await (const chunk of req) chunks.push(chunk);
     const input = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+    if (req.method === 'GET' && new URL(req.url, 'http://localhost').pathname === '/api/system/health') {
+      return json(res, 200, { appVersion: APP_VERSION });
+    }
     try {
       const handled = await handleTaskRoutes({ request: req, response: res, pathname: new URL(req.url, 'http://localhost').pathname,
         store, config: { workspaceRoot: root }, batchMaxAgeHours: () => 168, body: async () => input, json });

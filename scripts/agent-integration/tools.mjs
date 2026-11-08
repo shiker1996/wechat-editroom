@@ -11,6 +11,15 @@ const positiveId = (value, field) => {
   return parsed;
 };
 const sensitiveField = /^(?:api[_-]?key|token|secret|password|authorization|cookie|credential|credentials)$/i;
+const MCP_PACKAGE_VERSION = (() => {
+  const candidates = [new URL('../../package.json', import.meta.url), new URL('../package.json', import.meta.url)];
+  for (const url of candidates) {
+    if (!fs.existsSync(url)) continue;
+    const version = JSON.parse(fs.readFileSync(url, 'utf8')).version;
+    if (typeof version === 'string' && version.trim()) return version.trim();
+  }
+  throw new Error('无法读取 MCP 所属 package.json 版本');
+})();
 
 function redactSensitive(value, key = '') {
   if (Array.isArray(value)) return value.map((item) => redactSensitive(item));
@@ -49,7 +58,7 @@ function safeImageResult(result) {
 }
 
 export const JIANZI_TOOLS = [
-  { name: 'jianzi_doctor', description: '检查见字工作台连接、Node 运行时和核心功能是否可用。', inputSchema: { type: 'object', properties: {} }, readOnlyHint: true },
+  { name: 'jianzi_doctor', description: '检查见字工作台连接、项目版本与 MCP/插件兼容性、Node 运行时和核心功能是否可用。若版本不兼容，先按返回提示更新项目并重启，再继续业务工具。', inputSchema: { type: 'object', properties: {} }, readOnlyHint: true },
   { name: 'jianzi_workbench_start', description: '当用户要求启动已停止的本机见字工作台，或 jianzi_doctor 报告服务未运行时，调用项目官方启动脚本并等待服务 ready，再执行健康检查。不会打开浏览器或修改业务数据。源码 MCP 默认使用当前项目根目录；打包/独立 MCP 可传项目绝对路径 projectRoot，或设置 JIANZI_PROJECT_ROOT。', inputSchema: { type: 'object', properties: { projectRoot: string('见字项目的本机绝对路径。源码集成可省略；DSH/npm 包未配置 JIANZI_PROJECT_ROOT 时必须提供。') } }, readOnlyHint: false },
   { name: 'jianzi_account_profile', description: '读取账号画像，用于选题定位、语气和受众判断。', inputSchema: { type: 'object', properties: {} }, readOnlyHint: true },
   { name: 'jianzi_account_profile_update', description: '保存用户确认过的账号画像。至少包含公众号名称、简介、核心读者和一个内容支柱。', inputSchema: { type: 'object', properties: { context: { type: 'object', description: '符合 account-context.json 格式的账号画像字段。' } }, required: ['context'] }, readOnlyHint: false },
@@ -247,6 +256,42 @@ function unavailableWorkbenchError(error, address) {
   return unavailable;
 }
 
+function versionParts(value) {
+  const match = String(value || '').trim().match(/^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/);
+  return match ? match.slice(1, 4).map(Number) : null;
+}
+
+function isVersionBelow(current, required) {
+  const actualParts = versionParts(current);
+  const requiredParts = versionParts(required);
+  if (!actualParts || !requiredParts) return true;
+  for (let index = 0; index < 3; index += 1) {
+    if (actualParts[index] < requiredParts[index]) return true;
+    if (actualParts[index] > requiredParts[index]) return false;
+  }
+  return false;
+}
+
+function outdatedWorkbenchError(currentVersion) {
+  const current = String(currentVersion || '').trim() || '未知';
+  const error = new Error(`本地见字项目版本为 ${current}，当前 MCP/插件需要 ${MCP_PACKAGE_VERSION} 或更高版本。请在项目根目录执行 git pull，按项目升级说明更新依赖并重新构建，然后重启工作台和 MCP 连接，再重试。`);
+  error.code = 'WORKBENCH_VERSION_MISMATCH';
+  error.details = { currentVersion: currentVersion || null, requiredVersion: MCP_PACKAGE_VERSION, action: 'git pull, update dependencies/build if required, restart workbench and MCP' };
+  return error;
+}
+
+async function assertWorkbenchVersion(client) {
+  let result;
+  try {
+    result = await client.get('/api/system/health?target=version');
+  } catch (error) {
+    if (['HTTP_400', 'HTTP_404'].includes(error?.code)) throw outdatedWorkbenchError(null);
+    throw unavailableWorkbenchError(error, client.baseUrl);
+  }
+  if (isVersionBelow(result?.appVersion, MCP_PACKAGE_VERSION)) throw outdatedWorkbenchError(result?.appVersion);
+  return result;
+}
+
 async function withArtifactEntry(client, result, type, candidateId = null) {
   const entries = {
     articlePreview: { label: '文章预览', path: '/#preview' },
@@ -279,11 +324,13 @@ function artifactTypeForJob(job) {
 export async function executeJianziTool(client, name, input = {}, context = {}) {
   const batch = encodeURIComponent(String(input.batchId || ''));
   const candidate = encodeURIComponent(String(input.candidateId || ''));
+  if (!['jianzi_doctor', 'jianzi_workbench_start'].includes(name)) await assertWorkbenchVersion(client);
   switch (name) {
     case 'jianzi_doctor': {
       try {
         const [health, batches] = await Promise.all([client.get('/api/system/health'), client.get('/api/batches?limit=1')]);
-        return { connected: true, node: health.node, health, sampleBatchCount: Array.isArray(batches) ? batches.length : 0 };
+        if (isVersionBelow(health?.appVersion, MCP_PACKAGE_VERSION)) throw outdatedWorkbenchError(health?.appVersion);
+        return { connected: true, node: health.node, integrationVersion: MCP_PACKAGE_VERSION, health, sampleBatchCount: Array.isArray(batches) ? batches.length : 0 };
       } catch (error) {
         throw unavailableWorkbenchError(error, client.baseUrl);
       }
