@@ -3,6 +3,7 @@ name: Publish DSH plugin to npm
 on:
   push:
     tags:
+      - "[0-9]*"
       - "dsh-plugin-v*"
 
 permissions:
