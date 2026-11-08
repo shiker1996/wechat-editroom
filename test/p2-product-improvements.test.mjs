@@ -24,7 +24,7 @@ test("采集连通性测试从运行配置页收回采集源页面",()=>{
   assert.doesNotMatch(html,/data-runtime-service=/);
   assert.doesNotMatch(system,/async function loadSystem\(/);
   assert.doesNotMatch(system,/function controlRuntime\(/);
-  assert.match(systemRoutes,/\['all', 'reddit', 'rsshub', 'github'\]\.includes\(target\)/);
+  assert.match(systemRoutes,/\['all', 'reddit', 'rsshub', 'github', 'version'\]\.includes\(target\)/);
   assert.match(systemRoutes,/target === 'all' \|\| target === 'reddit'/);
 });
 
