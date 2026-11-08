@@ -28,6 +28,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Verify release tag matches application version
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          $packageVersion = node -p "require('./package.json').version"
+          if ($env:RELEASE_TAG -ne $packageVersion) {
+            throw "Tag $env:RELEASE_TAG does not match application version $packageVersion."
+          }
+
       - name: Build release changelog
         id: changelog
         if: startsWith(github.ref, 'refs/tags/')
