@@ -7,6 +7,15 @@ const TOPIC_RATIO_ALIASES = {
   '行业动态': ['平台', '事件', '科技', '商业'],
 };
 
+const TOPIC_PILLAR_ALIASES = {
+  'AI 工具': ['开源与工程实践', 'AI 行业热点'],
+  '开发者工具': ['开源与工程实践'],
+  '开源项目': ['开源与工程实践'],
+  '效率与方法': ['开源与工程实践'],
+  '职场观察': ['程序员工作与切身利益'],
+  '行业动态': ['大厂战略', 'AI 行业热点', '技术认知'],
+};
+
 function number(value) {
   const parsed = Number(String(value ?? '').replace(/[,，%％]/g, ''));
   return Number.isFinite(parsed) ? parsed : 0;
@@ -49,6 +58,36 @@ function ratioKeyForTopic(topic, ratio) {
   return Object.keys(ratio).find((key) => aliases.some((alias) => key.includes(alias))) || null;
 }
 
+function pillarForTopic(topic, pillars = []) {
+  const aliases = TOPIC_PILLAR_ALIASES[topic] || [];
+  return (Array.isArray(pillars) ? pillars : []).find((pillar) => aliases.some((alias) => String(pillar || '').includes(alias))) || '';
+}
+
+function accountFieldCandidates(topicSignals, accountContext = {}) {
+  const currentPillars = Array.isArray(accountContext?.contentPillars) ? [...accountContext.contentPillars] : [];
+  const topicMappings = topicSignals
+    .filter((item) => Number(item.sample_count || 0) >= 3 && item.confidence !== 'low')
+    .map((item) => ({
+      topic: item.label,
+      sample_count: Number(item.sample_count || 0),
+      avg_reads: Number(item.avg_reads || 0),
+      follows_per_thousand_reads: Number(item.follows_per_thousand_reads || 0),
+      confidence: item.confidence || 'low',
+      pillar: pillarForTopic(item.label, currentPillars),
+      ratio_key: ratioKeyForTopic(item.label, accountContext?.contentRatio || {}),
+    }));
+  const mappedPillars = [...new Set(topicMappings.map((item) => item.pillar).filter(Boolean))];
+  const proposedPillars = [...mappedPillars, ...currentPillars.filter((item) => !mappedPillars.includes(item))];
+  const currentRatio = accountContext?.contentRatio && typeof accountContext.contentRatio === 'object' ? accountContext.contentRatio : {};
+  const topMappedTopic = topicMappings.find((item) => item.pillar || item.ratio_key) || null;
+  const ratio = topMappedTopic ? proposeRatio(accountContext, topMappedTopic.topic) : { current: currentRatio, proposed: currentRatio, changed: false };
+  return {
+    topics: topicMappings,
+    contentPillars: { current: currentPillars, proposed: proposedPillars, changed: proposedPillars.some((item, index) => item !== currentPillars[index]), topics: topicMappings.filter((item) => item.pillar) },
+    contentRatio: { current: ratio.current, proposed: ratio.proposed, changed: Boolean(ratio.changed), topic: topMappedTopic?.topic || '', ratio_key: topMappedTopic?.ratio_key || '' },
+  };
+}
+
 function proposeRatio(accountContext, topic) {
   const current = accountContext?.contentRatio && typeof accountContext.contentRatio === 'object' ? { ...accountContext.contentRatio } : {
     '开源项目、工具与工程实践': '60%',
@@ -59,9 +98,9 @@ function proposeRatio(accountContext, topic) {
   const key = ratioKeyForTopic(topic, current);
   if (!key) return { current, proposed: current, changed: false, note: `历史信号集中在“${topic}”，但现有 contentRatio 没有可直接映射的栏目，建议先人工决定是否新增映射。` };
   const values = Object.fromEntries(Object.entries(current).map(([name, value]) => [name, percent(value)]));
-  const donor = Object.keys(values).filter((name) => name !== key).sort((left, right) => values[left] - values[right])[0];
-  if (!donor || values[donor] < 5) return { current, proposed: current, changed: false, note: `历史信号集中在“${topic}”，但现有比例没有足够的可调空间。` };
-  const shift = Math.min(5, values[donor]);
+  const donor = Object.keys(values).filter((name) => name !== key && values[name] > 5).sort((left, right) => values[left] - values[right])[0];
+  if (!donor) return { current, proposed: current, changed: false, note: `历史信号集中在“${topic}”，但现有比例没有超过 5% 的可调空间。` };
+  const shift = Math.min(5, values[donor] - 5);
   values[key] += shift; values[donor] -= shift;
   const proposed = Object.fromEntries(Object.entries(values).map(([name, value]) => [name, `${Math.round(value)}%`]));
   return { current, proposed, changed: true, note: `建议把“${key}”提高约 ${Math.round(shift)} 个百分点，并从“${donor}”中让出相同比例；这是下一周期实验，不是自动改配置。` };
@@ -90,17 +129,18 @@ export function buildWechatStrategyRecommendations({ snapshots = [], review = {}
   if (cycles.length < 2) return { ready: false, required_cycles: 2, cycle_count: cycles.length, cycles, suggestions: [], caveats: ['至少需要两个不同指标周期，且每个周期至少关联 3 篇正文，才生成账号级建议。', '同一指标周期重复生成反馈快照不会被当作新的内容周期。'] };
   const topicSignals = signalFromCycles(cycles.slice(0, 2), 'topic_signals');
   const titleSignals = signalFromCycles(cycles.slice(0, 2), 'title_signals');
-  const strongestTopic = topicSignals[0]?.label || '当前高表现题材';
+  const fieldCandidates = accountFieldCandidates(topicSignals, accountContext);
+  const strongestTopic = fieldCandidates.topics.find((item) => item.pillar || item.ratio_key)?.topic || topicSignals[0]?.label || '当前高表现题材';
   const ratio = proposeRatio(accountContext, strongestTopic);
   const suggestions = [{
-    id: 'content-ratio', type: 'contentRatio', title: '内容配比建议', level: ratio.changed ? 'medium' : 'low', current: ratio.current, proposed: ratio.proposed, reason: ratio.note, evidence: `${cycles[0].metric_window_start}—${cycles[0].metric_window_end} 与 ${cycles[1].metric_window_start}—${cycles[1].metric_window_end} 两个周期；主要信号：${strongestTopic}`,
+    id: 'content-ratio', type: 'contentRatio', title: '内容配比建议', level: ratio.changed ? 'medium' : 'low', current: ratio.current, proposed: ratio.proposed, changed: ratio.changed, topic: strongestTopic, reason: ratio.note, evidence: `${cycles[0].metric_window_start}—${cycles[0].metric_window_end} 与 ${cycles[1].metric_window_start}—${cycles[1].metric_window_end} 两个周期；主要信号：${strongestTopic}`,
   }];
   const distribution = distributionSuggestion(review);
   suggestions.push({ id: 'distribution-ratio', type: 'distributionRatio', title: '推荐 / 通知 / 实验比例建议', level: distribution.confidence, proposed: distribution.proposed, reason: distribution.reason, evidence: '文章级通知与非通知样本' });
   const bestFollow = [...topicSignals].sort((left, right) => number(right.follows_per_thousand_reads) - number(left.follows_per_thousand_reads))[0];
   const bestTitle = titleSignals[0];
   suggestions.push({ id: 'packaging', type: 'packaging', title: '账号包装与关注理由建议', level: bestFollow?.sample_count >= 3 ? 'medium' : 'low', proposed: { followReason: `关注我，可以持续看到${bestFollow?.label || strongestTopic}相关的真实实践和判断；标题先尝试${bestTitle?.label || '具体问题 + 结果'}，再根据实际数据复盘。` }, reason: '把历史表现较好的题材和标题结构转译成关注理由草案，仍需作者确认语气和长期承诺。', evidence: `${topicSignals.length} 个题材信号 · ${titleSignals.length} 个标题结构信号` });
-  return { ready: true, required_cycles: 2, cycle_count: cycles.length, cycles: cycles.slice(0, 4).map((item) => ({ id: item.id, metric_window_start: item.metric_window_start, metric_window_end: item.metric_window_end, linked_article_count: item.linked_article_count, confidence: item.confidence })), suggestions, caveats: ['以上建议只用于下一轮策略讨论，不会自动写入 account-context.json。', '公众号导出数据无法证明题材、标题或分发方式之间的因果关系；执行后仍需继续记录结果。'] };
+  return { ready: true, required_cycles: 2, cycle_count: cycles.length, cycles: cycles.slice(0, 4).map((item) => ({ id: item.id, metric_window_start: item.metric_window_start, metric_window_end: item.metric_window_end, linked_article_count: item.linked_article_count, confidence: item.confidence })), account_field_candidates: fieldCandidates, suggestions, caveats: ['以上建议只用于下一轮策略讨论，不会自动写入 account-context.json。', '公众号导出数据无法证明题材、标题或分发方式之间的因果关系；执行后仍需继续记录结果。'] };
 }
 
 

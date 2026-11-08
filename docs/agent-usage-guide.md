@@ -29,6 +29,12 @@
 
 外部 Agent 使用当前会话模型完成分析和生成。MCP 的校验职责按产物类型区分：文章保存接口负责保存文档；`jianzi_article_local_audit` 可选地提醒 Markdown 结构、长度和标题风险，不替代事实核验或审稿，也不会因这些提醒阻止保存。排版、封面和图文提交则由工作台执行各自的结构/内容门禁；图文生成可使用浏览器审计，提交后截图并归档。因此默认外部 Agent 流程不要求配置见字内部模型。账号画像、采集源配置和批次数据仍由工作台保存和管理。
 
+### 外部 Agent 的流程续接
+
+见字 MCP 初始化时会提供通用流程指引；Codex、WorkBuddy 安装的 Skills 也包含相同规则。Agent 应把 `next_action`、`next_step`、任务状态和待确认草案等结果作为下一步依据：用户明确要求完成整条流程且后续动作不越过选择/确认门禁时，继续调用后续工具；需要用户选择、审阅、确认或补充输入时，停在门禁并具体指出要操作的对象与 ID。每轮回复应给出一个和当前状态相符的下一步，例如“请从候选 12/15 中选一个”或“请审阅草稿 42 后确认”，不要只报告中间结果或用泛化的“还需要什么吗”。
+
+MCP `instructions` 是宿主可选采用的提示；其他 MCP 客户端可能不把它传给模型。Codex/WorkBuddy 项目 Skills 是对应客户端的补充规则；手动接入且不加载 Skills 的客户端仍需在 Agent 的自定义指令中加入上述续接约定。
+
 ### DeepSeek Harness 桌面端：在原生面板中使用见字 MCP
 
 官方 DeepSeek Harness 桌面应用（[deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)）可安装见字内容工作台插件。插件在 DSH 原生面板展示工作流入口、批次与选题、内容日历和产物抽屉；按钮只把任务草稿放入原生会话，用户发送后，DSH Agent 通过插件附带的 `jianzi_*` MCP 工具操作见字本机服务。面板不会嵌入见字网页；写作和内容生成使用当前 DSH 会话模型，默认不需要配置见字内部模型。
@@ -172,6 +178,12 @@ npm run jianzi -- account update --file .\account-context.json
 ```
 
 字段结构可参考仓库根目录的 [`account-context.example.json`](../account-context.example.json)。该文件用于编辑画像，不应存放模型密钥、采集器密钥或账号密码。
+
+### 内容反馈与反哺草案
+
+MCP Agent 可用 `jianzi_content_feedback_import` 导入你明确上传的公众号后台表格。它先合并导入、自动索引并匹配指标，再关联本批次已确认的本地正文/图文文案，之后才刷新内容反馈快照和策略建议。返回值包含 `content_links` 的成功、缺少本地文件和失败计数；如果本批次正文关联不完整，先处理关联问题，不要拿旧快照代替新导入内容生成草案。支持 CSV/TSV、旧版 XLS 原始字节，或 Agent 从附件准确提取的完整 CSV/TSV 文本；XLSX 二进制需先转换，表头必须符合所选导入类型。导入、正文关联和快照刷新不会改写账号配置、技能或 Prompt。导入工具会返回结构化 `next_action`；若用户本轮同时要求生成草案，关联完成且证据范围可用时，Agent 应直接继续调用生成工具，不必再问用户是否继续。
+
+需要 AI 调整时，再调用 `jianzi_content_feedback_adjustment_generate` 生成文章或图文草案，并用 `jianzi_content_feedback_adjustments_list` 查看。草案只保存为待确认记录。查看 diff 后，只有你明确要求应用时，Agent 才能调用 `jianzi_content_feedback_adjustment_confirm`；也可用 `jianzi_content_feedback_adjustment_reject` 拒绝草案。其他常用工具：`jianzi_content_feedback_get`、`jianzi_content_feedback_strategy`。
 
 ## 5. 配置采集器和采集源
 

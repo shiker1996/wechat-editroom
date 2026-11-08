@@ -11,7 +11,7 @@ const fmt = (value) => new Intl.NumberFormat("zh-CN").format(Number(value || 0))
 const levelLabel = (value) => ({ high: "高", medium: "中", low: "低" }[value] || "低");
 
 async function generateAdjustmentWithProgress(onProgress, scope = feedbackMode) {
-  const headers = { ...(await securityHeaders()), "content-type": "application/json" };
+  const headers = { ...(await securityHeaders()), accept: "application/x-ndjson", "content-type": "application/json" };
   const response = await fetch("/api/wechat/feedback/adjustments/generate", { method: "POST", credentials: "same-origin", headers, body: JSON.stringify({ scope }) });
   if (!response.ok) {
     let data = {};
@@ -65,7 +65,7 @@ function socialArtifactSignal(signal) {
 }
 
 function renderRecommendation(item) {
-  const flow = item.type === "topic" ? "选题池评分" : item.type === "title" ? "标题生成技能" : item.type === "body" ? "写作技能" : item.type === "copy" ? "图文文案生成技能" : item.type === "storyboard" ? "图文故事板技能" : "内容规划流程";
+  const flow = item.type === "topic" ? "选题池评分" : item.type === "title" ? "标题生成技能" : item.type === "body" ? "正文生成 Prompt" : item.type === "copy" ? "图文文案生成技能" : item.type === "storyboard" ? "图文故事板技能" : "内容规划流程";
   return `<div><span>${escapeHtml(item.target || "提示")}</span><p>${escapeHtml(item.text || "")}</p><em>${escapeHtml(item.basis || "")} · ${levelLabel(item.confidence)}置信 · 参考方向：${flow}</em></div>`;
 }
 
@@ -74,8 +74,10 @@ function renderArticleFeedback(feedback) {
   const content = document.getElementById("content-feedback-content");
   const rebuild = document.getElementById("content-feedback-rebuild");
   const socialRebuild = document.getElementById("content-feedback-social-rebuild");
+  const projectRebuild = document.getElementById("content-feedback-project-rebuild");
   if (rebuild) rebuild.hidden = false;
   if (socialRebuild) socialRebuild.hidden = true;
+  if (projectRebuild) projectRebuild.hidden = true;
   if (!feedback) {
     if (summary) summary.textContent = "尚未生成";
     if (content) content.innerHTML = '<div class="empty-state">先到“复盘数据台”关联文章正文，再生成文章反馈快照。</div>';
@@ -87,7 +89,7 @@ function renderArticleFeedback(feedback) {
   const bodySignals = feedback.body_signals || [];
   const recommendations = feedback.recommendations || [];
   const unresolved = feedback.unresolved_questions || [];
-  if (content) content.innerHTML = `<div class="wechat-feedback-meta"><span>样本范围：${escapeHtml(feedback.metric_window_start || "-")} — ${escapeHtml(feedback.metric_window_end || "-")}</span><span>正文特征：${fmt(feedback.feature_count)} 条</span><span>供 AI 调整账号策略与技能文件参考</span></div><div class="wechat-feedback-grid"><section><header><b>选题表现</b><small>选题池评分依据</small></header>${topicSignals.length ? topicSignals.slice(0, 5).map((item) => feedbackSignal(item)).join("") : '<div class="empty-state">暂无题材样本</div>'}</section><section><header><b>标题结构</b><small>标题生成技能依据</small></header>${titleSignals.length ? titleSignals.slice(0, 5).map((item) => feedbackSignal(item)).join("") : '<div class="empty-state">暂无标题样本</div>'}</section><section><header><b>正文结构</b><small>写作技能依据</small></header>${bodySignals.length ? bodySignals.slice(0, 5).map((item) => feedbackSignal(item)).join("") : '<div class="empty-state">暂无正文特征</div>'}</section></div><div class="wechat-feedback-recommendations"><header><b>下一轮可带走的提示</b><small>作为 AI 调整账号策略与技能文件的参考，不自动改写</small></header>${recommendations.length ? recommendations.map(renderRecommendation).join("") : '<div class="empty-state">样本不足，暂不生成推荐。</div>'}</div><details class="wechat-feedback-questions"><summary>待确认问题（${unresolved.length}）</summary><ul>${unresolved.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></details>`;
+  if (content) content.innerHTML = `<div class="wechat-feedback-meta"><span>样本范围：${escapeHtml(feedback.metric_window_start || "-")} — ${escapeHtml(feedback.metric_window_end || "-")}</span><span>正文特征：${fmt(feedback.feature_count)} 条</span><span>供 AI 调整账号策略、标题技能和正文 Prompt 参考</span></div><div class="wechat-feedback-grid"><section><header><b>选题表现</b><small>选题池评分依据</small></header>${topicSignals.length ? topicSignals.slice(0, 5).map((item) => feedbackSignal(item)).join("") : '<div class="empty-state">暂无题材样本</div>'}</section><section><header><b>标题结构</b><small>标题生成技能依据</small></header>${titleSignals.length ? titleSignals.slice(0, 5).map((item) => feedbackSignal(item)).join("") : '<div class="empty-state">暂无标题样本</div>'}</section><section><header><b>正文结构</b><small>正文 Prompt 依据</small></header>${bodySignals.length ? bodySignals.slice(0, 5).map((item) => feedbackSignal(item)).join("") : '<div class="empty-state">暂无正文特征</div>'}</section></div><div class="wechat-feedback-recommendations"><header><b>下一轮可带走的提示</b><small>作为 AI 调整账号策略、标题技能和正文 Prompt 的参考，不自动改写</small></header>${recommendations.length ? recommendations.map(renderRecommendation).join("") : '<div class="empty-state">样本不足，暂不生成推荐。</div>'}</div><details class="wechat-feedback-questions"><summary>待确认问题（${unresolved.length}）</summary><ul>${unresolved.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></details>`;
 }
 
 function renderSocialFeedback(track) {
@@ -95,8 +97,10 @@ function renderSocialFeedback(track) {
   const content = document.getElementById("content-feedback-content");
   const rebuild = document.getElementById("content-feedback-rebuild");
   const socialRebuild = document.getElementById("content-feedback-social-rebuild");
+  const projectRebuild = document.getElementById("content-feedback-project-rebuild");
   if (rebuild) rebuild.hidden = true;
   if (socialRebuild) socialRebuild.hidden = false;
+  if (projectRebuild) projectRebuild.hidden = true;
   if (!track?.count) {
     if (summary) summary.textContent = "暂无图文样本";
     if (content) content.innerHTML = '<div class="empty-state">暂无已确认的图文复盘样本。请先到“复盘数据台”确认图文发布文案与公众号数据的关联。</div>';
@@ -224,22 +228,23 @@ function adjustmentSelection(draft, skillLabels) {
     const targets = (draft.source?.targets || []).map((item) => `${item.role === 'storyboard' ? '故事板' : '文案'}：${item.skill_id}`);
     return { scope, label: 'AI 判定的图文技能', value: targets.join('、') || '图文故事板与文案技能', reason: '故事板负责页面结构与节奏，文案技能负责标题、逐页文案和发布文案。' };
   }
-  const writerSkillId = draft.source?.writer_skill_id || '';
-  const writerSkillLabel = skillLabels[writerSkillId] || writerSkillId || '本次不修改正文技能';
-  const writerSkillMode = draft.source?.writer_skill_selection_source === 'ai_inference' ? '（AI 推断）' : '';
-  return { scope, label: 'AI 判定的正文写作技能', value: writerSkillLabel + writerSkillMode, reason: draft.source?.writer_skill_reason || '正文样本没有足够的题材与正文结构信号，暂不修改正文技能。' };
+  const promptId = draft.source?.article_prompt_id || '';
+  const promptLabel = skillLabels[promptId] || promptId || '本次不修改正文 Prompt';
+  const promptMode = draft.source?.article_prompt_selection_source === 'ai_inference' ? '（AI 推断）' : '';
+  return { scope, label: 'AI 判定的正文生成 Prompt', value: promptLabel + promptMode, reason: draft.source?.article_prompt_reason || '正文样本没有足够的文章类型映射或结构信号，暂不修改正文 Prompt。' };
 }
 
 function renderAdjustments(data = {}) {
   const skillLabels = Object.fromEntries((data.writerSkills || []).map((item) => [item.id || item, item.label || item.id || item]));
-  const version = data.version || 'v6';
+  const promptLabels = Object.fromEntries((data.articlePrompts || []).map((item) => [item.id || item, item.label || item.id || item]));
+  const version = data.version || 'v14';
   const list = document.getElementById('content-feedback-adjustment-list');
   if (!list) return;
   editableDiffSources.clear();
   const items = data.items || [];
   if (!items.length) { list.innerHTML = '<div class="empty-state">还没有调整草案。生成后会先在这里展示 diff，不会立即修改文件。</div>'; return; }
   list.innerHTML = items.slice(0, 5).map((draft) => {
-    const selection = adjustmentSelection(draft, skillLabels);
+    const selection = adjustmentSelection(draft, draft.source?.scope === 'social' ? skillLabels : promptLabels);
     const stale = draft.status === 'pending' && draft.source?.adjustment_version !== version;
     const status = stale ? '已过期' : draft.status === 'pending' ? '待确认' : draft.status === 'confirmed' ? '已写入' : '已跳过';
     const editable = !stale && draft.status === 'pending';
@@ -348,7 +353,7 @@ function render(data) {
   const socialMode = feedbackMode === 'social';
   const projectMode = feedbackMode === 'project';
   if (fixedTargets) fixedTargets.innerHTML = socialMode ? '<b>图文反哺目标</b><span>故事板技能</span><span>文案生成技能</span>' : '<b>固定检查目标</b><span>账号策略与选题评分</span><span>标题生成技能</span>';
-  if (autoTarget) autoTarget.innerHTML = socialMode ? '<b>技能定位方式</b><strong>按实际执行记录自动判定</strong><small>第一阶段识别真实使用的故事板与文案技能，第二阶段只融合到对应技能原有章节。</small>' : '<b>正文写作技能</b><strong>由 AI 自动判定落点</strong><small>第一阶段选择最匹配的正文技能，第二阶段只修改该技能原有章节，不新增复盘章节。</small>';
+  if (autoTarget) autoTarget.innerHTML = socialMode ? '<b>技能定位方式</b><strong>按实际执行记录自动判定</strong><small>第一阶段识别真实使用的故事板与文案技能，第二阶段只融合到对应技能原有章节。</small>' : '<b>正文生成 Prompt</b><strong>按文章类型与反馈证据自动判定</strong><small>正文由简化 Prompt 驱动；第一阶段选择通用或文章类型 Prompt，第二阶段只修改对应 Prompt 的原有规则。</small>';
   const strategyPanel = document.getElementById('content-strategy-panel');
   if (strategyPanel) strategyPanel.hidden = socialMode || projectMode;
   const adjustmentPanel = document.querySelector('.content-feedback-adjustments');

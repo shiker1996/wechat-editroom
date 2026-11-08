@@ -211,7 +211,7 @@ test('反哺使用当前有效的内置标题技能，不被历史第三方标�
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
-test('反哺识别当前默认的外部写作技能并优先生成对应草案', () => {
+test('反哺不把外部写作技能作为正文 Prompt 修改目标', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'content-feedback-writer-current-default-'));
   try {
     const skillId = 'wechat-mp-human-writing';
@@ -238,13 +238,13 @@ test('反哺识别当前默认的外部写作技能并优先生成对应草案',
         ] },
       },
     });
-    assert.equal(draft.source.writer_skill_id, skillId);
-    assert.equal(draft.source.writer_skill_selection_source, 'workspace-default');
-    assert.deepEqual(draft.changes.map((item) => item.id), [skillId]);
+    assert.equal(draft.source.writer_skill_id, undefined);
+    assert.equal(draft.source.article_prompt_id, null);
+    assert.deepEqual(draft.changes, []);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
-test('复盘反馈生成最小配置与技能草案，确认前不写文件，确认后运行时读取覆盖技能', () => {
+test('复盘反馈只生成账号与标题技能草案，不修改正文写作技能', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'content-feedback-adjustment-'));
   try {
     fs.mkdirSync(path.join(root, 'skills', 'title-generator'), { recursive: true });
@@ -258,25 +258,24 @@ test('复盘反馈生成最小配置与技能草案，确认前不写文件，�
       planning: { summary: '强化结果型标题和正文边界', selected_writer_skill_id: 'wechat-mp-tech-hotspot', writer_skill_reason: '正文反馈集中在热点判断和证据表达。', warnings: ['样本仍需继续积累'] },
       patch: { account_patch: { scoring: { categoryPreference: { '🤖 AI/技术动态': 6 }, topicWeights: { '开源项目': 1.2 } }, contentRatio: { note: '不应写入' }, distributionStrategy: { preference: '不应写入' }, followReason: '不应自动改长期承诺', name: '不应被修改' }, skill_edits: [{ skill_id: 'title-generator', edits: [{ section: '生成', old_text: '原规则。', new_text: '优先突出已经核验的结果和读者收益。', reason: '标题信号显示需要加强结果兑现。' }] }, { skill_id: 'wechat-mp-tech-hotspot', edits: [{ section: '写作规则', old_text: '原规则。', new_text: '补充热点判断和证据表达。', reason: '正文反馈集中在热点判断和证据表达。' }] }] },
     } });
-    assert.equal(draft.changes.length, 3);
+    assert.equal(draft.changes.length, 1);
     assert.ok(!fs.existsSync(path.join(root, 'writing-skills')));
-    assert.match(draft.changes.find((item) => item.id === 'account-context').new_content, /AI\/技术动态/);
-    assert.doesNotMatch(draft.changes.find((item) => item.id === 'account-context').new_content, /不应写入|不应自动改长期承诺|topicWeights/);
-    assert.match(draft.changes.find((item) => item.id === 'title-generator').new_content, /优先突出已经核验的结果和读者收益/);
-    assert.doesNotMatch(draft.changes.find((item) => item.id === 'title-generator').new_content, /标题信号|样本|非因果|根据反馈/);
-    assert.equal(draft.source.writer_skill_id, 'wechat-mp-tech-hotspot');
-    assert.match(draft.source.writer_skill_reason, /热点判断/);
+    assert.equal(draft.changes[0].id, 'title-generator');
+    assert.match(draft.changes[0].new_content, /优先突出已经核验的结果和读者收益/);
+    assert.doesNotMatch(draft.changes[0].new_content, /标题信号|样本|非因果|根据反馈/);
+    assert.equal(draft.source.writer_skill_id, undefined);
+    assert.equal(draft.source.article_prompt_id, null);
     const result = confirmAdjustmentDraft({ workspaceRoot: root, draft });
-    assert.equal(result.written.length, 3);
+    assert.equal(result.written.length, 1);
     assert.ok(fs.existsSync(path.join(root, 'writing-skills', 'title-generator', 'SKILL.md')));
-    assert.ok(fs.existsSync(path.join(root, 'writing-skills', 'wechat-mp-tech-hotspot', 'SKILL.md')));
+    assert.equal(fs.existsSync(path.join(root, 'writing-skills', 'wechat-mp-tech-hotspot', 'SKILL.md')), false);
     assert.match(loadSkillBundle({ workspaceRoot: root, skillName: 'title-generator' }).prompt, /优先突出已经核验的结果/);
     assert.equal(JSON.parse(fs.readFileSync(path.join(root, 'account-context.json'), 'utf8')).name, '测试账号');
     assert.equal(draft.changes.find((item) => item.id === 'title-generator').old_content, '# 标题技能\n\n原规则。\n');
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
-test('没有显式写作技能映射时，只允许 AI 在当前技能目录中推断写作技能', () => {
+test('即使 AI 推断写作技能，也不据此修改正文 Prompt', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'content-feedback-adjustment-inference-'));
   try {
     fs.mkdirSync(path.join(root, 'skills', 'title-generator'), { recursive: true });
@@ -293,10 +292,9 @@ test('没有显式写作技能映射时，只允许 AI 在当前技能目录中�
         patch: { skill_edits: [{ skill_id: 'wechat-mp-tech-hotspot', edits: [{ old_text: '原有正文规则。', new_text: '正文先给出热点判断，再补充可复核的证据和适用边界。', reason: '基于题材与正文结构的 AI 推断。' }] }] },
       },
     });
-    assert.equal(draft.source.writer_skill_id, 'wechat-mp-tech-hotspot');
-    assert.equal(draft.source.writer_skill_selection_source, 'ai_inference');
-    assert.equal(draft.changes.length, 1);
-    assert.equal(draft.changes[0].id, 'wechat-mp-tech-hotspot');
+    assert.equal(draft.source.writer_skill_id, undefined);
+    assert.equal(draft.source.article_prompt_id, null);
+    assert.deepEqual(draft.changes, []);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -329,12 +327,13 @@ test('反馈调整草案可以只保存单个文件的手动修改，且不提�
 
 test('反馈调整 Prompt 不强制猜测正文技能，且旧版本草案不能确认', () => {
   const messages = buildFeedbackAdjustmentMessages({ feedback: { writer_skill_evidence: [] }, accountContext: {}, strategy: {}, writerSkillCatalog: [] });
-    assert.match(messages.system, /才必须把 selected_writer_skill_id 填 null/);
+    assert.match(messages.system, /selected_article_prompt_id/);
+    assert.match(messages.system, /不得输出 selected_writer_skill_id/);
     assert.match(messages.system, /target_intents/);
   const patchMessages = buildFeedbackAdjustmentPatchMessages({ feedback: {}, strategy: {}, accountContext: {}, plan: {}, titleSkill: '# 标题技能' });
   assert.match(patchMessages.system, /old_text/);
-  assert.match(patchMessages.system, /不得新增/);
-  assert.match(messages.system, /不得修改 followReason/);
+  assert.match(patchMessages.system, /不得追加新章节/);
+  assert.match(messages.system, /followReason/);
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'content-feedback-stale-'));
   try {
     const draft = { status: 'pending', source: { adjustment_version: 'v1' }, changes: [] };
@@ -358,7 +357,7 @@ test('复盘调整接口调用模型生成草案，但生成阶段不写入技�
     const handled = await handleContentFeedbackRoutes({ request: { method: 'POST' }, response: {}, pathname: '/api/wechat/feedback/adjustments/generate', searchParams: new URLSearchParams(), store, artifactRoots: [], mime: {}, root, body: async () => ({}), models: { complete: async ({ purpose, thinking }) => { calls.push({ purpose, thinking }); return purpose === 'content-feedback-adjustment-plan' ? ({ provider: 'fake', model: 'fake-plan', content: JSON.stringify({ summary: '标题和正文校准', selected_writer_skill_id: 'wechat-mp-tech-deep', writer_skill_reason: '正文反馈是原理和证据拆解。', target_intents: [{ skill_id: 'title-generator', intent: '强化结果兑现', evidence_summary: '标题需要强化结果兑现。' }, { skill_id: 'wechat-mp-tech-deep', intent: '强化原理与证据拆解', evidence_summary: '正文反馈是原理和证据拆解。' }], account_intent: { action: 'no_change' }, warnings: [] }) }) : ({ provider: 'fake', model: 'fake-patch', content: JSON.stringify({ account_patch: {}, skill_edits: [{ skill_id: 'title-generator', edits: [{ section: '标题', old_text: '# 标题技能', new_text: '# 标题技能\n\n强化结果兑现。', reason: '标题需要强化结果兑现。' }] }, { skill_id: 'wechat-mp-tech-deep', edits: [{ section: '正文', old_text: '# 技术深解', new_text: '# 技术深解\n\n强化原理与证据拆解。', reason: '正文反馈是原理和证据拆解。' }] }], warnings: [] }) }); } }, json: (_response, status, value) => { responseStatus = status; responseBody = value; } });
     assert.equal(handled, true); assert.equal(responseStatus, 201); assert.equal(responseBody.status, 'pending'); assert.equal(responseBody.changes.length, 1);
     assert.deepEqual(calls.map((item) => item.purpose), ['content-feedback-adjustment-plan', 'content-feedback-adjustment-patch']); assert.ok(calls.every((item) => item.thinking === true));
-    assert.equal(responseBody.source.writer_skill_id, null);
+    assert.equal(responseBody.source.writer_skill_id, undefined);
     assert.equal(fs.existsSync(path.join(root, 'writing-skills', 'title-generator', 'SKILL.md')), false);
   } finally { store.close(); fs.rmSync(root, { recursive: true, force: true }); }
 });

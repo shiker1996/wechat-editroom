@@ -129,7 +129,7 @@
     },
     {
       "id": "articles.type-composite",
-      "version": 1,
+      "version": 2,
       "file": "articles/type-composite.md",
       "purpose": "article-type-guidance",
       "variables": [],
@@ -288,7 +288,9 @@
       "version": 1,
       "file": "social-cards/copy.md",
       "purpose": "social-card-publish-copy",
-      "variables": ["titleLabel"],
+      "variables": [
+        "titleLabel"
+      ],
       "components": [
         "social-cards.copy-channel-xiaohongshu",
         "social-cards.copy-channel-wechat",
@@ -296,52 +298,74 @@
         "social-cards.copy-content-event",
         "social-cards.copy-content-custom"
       ],
-      "output": { "format": "text" }
+      "output": {
+        "format": "text"
+      }
     },
     {
       "id": "social-cards.copy-channel-xiaohongshu",
       "version": 1,
       "file": "social-cards/copy-channel-xiaohongshu.md",
       "purpose": "social-card-publish-channel-rules",
-      "variables": ["titleLabel"],
+      "variables": [
+        "titleLabel"
+      ],
       "components": [],
-      "output": { "format": "text" }
+      "output": {
+        "format": "text"
+      }
     },
     {
       "id": "social-cards.copy-channel-wechat",
       "version": 1,
       "file": "social-cards/copy-channel-wechat.md",
       "purpose": "social-card-publish-channel-rules",
-      "variables": ["titleLabel"],
+      "variables": [
+        "titleLabel"
+      ],
       "components": [],
-      "output": { "format": "text" }
+      "output": {
+        "format": "text"
+      }
     },
     {
       "id": "social-cards.copy-content-repository",
       "version": 1,
       "file": "social-cards/copy-content-repository.md",
       "purpose": "social-card-publish-content-rules",
-      "variables": ["titleLabel"],
+      "variables": [
+        "titleLabel"
+      ],
       "components": [],
-      "output": { "format": "text" }
+      "output": {
+        "format": "text"
+      }
     },
     {
       "id": "social-cards.copy-content-event",
       "version": 1,
       "file": "social-cards/copy-content-event.md",
       "purpose": "social-card-publish-content-rules",
-      "variables": ["titleLabel"],
+      "variables": [
+        "titleLabel"
+      ],
       "components": [],
-      "output": { "format": "text" }
+      "output": {
+        "format": "text"
+      }
     },
     {
       "id": "social-cards.copy-content-custom",
       "version": 1,
       "file": "social-cards/copy-content-custom.md",
       "purpose": "social-card-publish-content-rules",
-      "variables": ["titleLabel"],
+      "variables": [
+        "titleLabel"
+      ],
       "components": [],
-      "output": { "format": "text" }
+      "output": {
+        "format": "text"
+      }
     },
     {
       "id": "social-cards.cover-title-wrap",
@@ -403,7 +427,7 @@
     },
     {
       "id": "feedback.article-patching",
-      "version": 1,
+      "version": 4,
       "file": "feedback/article-patching.md",
       "purpose": "article-feedback-adjustment-patch",
       "variables": [
@@ -416,7 +440,7 @@
     },
     {
       "id": "feedback.article-planning",
-      "version": 1,
+      "version": 4,
       "file": "feedback/article-planning.md",
       "purpose": "article-feedback-adjustment-planning",
       "variables": [
@@ -478,7 +502,9 @@
       "purpose": "tutorial-article-seo-output-contract",
       "variables": [],
       "components": [],
-      "output": { "format": "markdown" }
+      "output": {
+        "format": "markdown"
+      }
     },
     {
       "id": "articles.json-retry-no-body",
@@ -487,7 +513,9 @@
       "purpose": "article-json-retry-only-instruction",
       "variables": [],
       "components": [],
-      "output": { "format": "json" }
+      "output": {
+        "format": "json"
+      }
     },
     {
       "id": "social-cards.browser-audit-plan-adjustment",
@@ -496,7 +524,9 @@
       "purpose": "social-card-post-browser-audit-planning-stage",
       "variables": [],
       "components": [],
-      "output": { "format": "json" }
+      "output": {
+        "format": "json"
+      }
     },
     {
       "id": "social-cards.browser-audit-plan-adjustment-user",
@@ -505,7 +535,9 @@
       "purpose": "social-card-post-browser-audit-user-task",
       "variables": [],
       "components": [],
-      "output": { "format": "json" }
+      "output": {
+        "format": "json"
+      }
     }
   ]
 }

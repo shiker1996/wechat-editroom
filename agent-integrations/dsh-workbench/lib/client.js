@@ -28,7 +28,7 @@ window.__ModuleLoader__.load({
         startProject: 'Prepare start task',
         startingProject: 'Preparing DSH conversation…',
         projectReady: 'Startup task added to a native DSH conversation. Review it and press Send.',
-        promptStartProject: 'Start the Jianzi workbench for the currently selected DSH workspace. Determine the absolute path of this conversation\'s selected workspace and pass it as projectRoot to the MCP tool jianzi_workbench_start. Do not use the DSH profile/plugin directory as the project path. Wait for the tool to confirm the service is ready and the workspace fingerprint matches. If the workspace path is unavailable, ask me for it instead of guessing. If startup fails, report the returned error and stop; do not retry or run setup/configuration tasks. After success, report the project path and service address. Do not perform any other work.',
+        promptStartProject: 'Start the Jianzi workbench for the currently selected DSH workspace. Determine the absolute path of this conversation\'s selected workspace and pass it as projectRoot to the MCP tool jianzi_workbench_start. Do not use the DSH profile/plugin directory as the project path. Wait for the tool to confirm the service is ready and the workspace fingerprint matches. If the workspace path is unavailable, ask me for it instead of guessing. If startup fails, report the returned error and stop; do not retry or run setup/configuration tasks. After success, report the project path and service address, then end with one specific Next step recommending the environment-check card. If blocked, state the one correction needed. Do not perform any other work.',
         recentBatches: 'Recent batches (click to fill)',
         noBatches: 'No batches yet',
         pickBatch: 'Fill',
@@ -92,7 +92,19 @@ window.__ModuleLoader__.load({
         stage5Detail: 'Turn a repository or news candidate into a social card set: storyboard, lock, visual submission.',
         stage5Action: 'Prepare card set',
         stage5Gate: 'Needs a card candidate and a locked storyboard',
-        note: 'Each button opens a native DSH conversation with a task draft. Review it, press Send, and the Agent runs the matching project skill.',
+        stage6: '06 / FEEDBACK',
+        stage6Title: 'Review content feedback',
+        stage6Detail: 'Upload a WeChat export table first; import it, link matched local content, then refresh signals and prepare a reviewable proposal.',
+        stage6Action: 'Prepare feedback proposal',
+        stage6Gate: 'Needs an attached WeChat export table; without one, ask for upload and stop',
+        nextStepContract: 'At the end, include a short "Next step" with one concrete action I can take now and the exact reply or ID to use. Never end with a generic "anything else?". If the next action needs my choice or approval, say so and wait; do not cross that gate.',
+        nextStep1: 'If setup checks pass, recommend starting topic research with stage 02. If blocked, name the single highest-priority correction and how I can unblock it.',
+        nextStep2: 'Show the candidate IDs and recommend one with a brief evidence-based reason. Ask me to reply with that ID; do not add a candidate or draft before I choose.',
+        nextStep3: 'After presenting the draft, recommend that I review it and reply with edits or explicit approval. Do not save a final or start typesetting before approval.',
+        nextStep4: 'After returning both preview links, recommend reviewing the article and cover. If there is no confirmed final, point back to stage 03. Never publish.',
+        nextStep5: 'After returning the card artifact, recommend reviewing the pages and copy and tell me how to request a specific revision. Never publish or replace a delivered artifact without my confirmation.',
+        nextStep6: 'After generation, identify the pending proposal by ID and recommend reviewing its diff. Only apply it if I explicitly ask; otherwise leave it pending.',
+        note: 'Each button opens a native DSH conversation with a task draft. Review and send it; after the task, the Agent gives one concrete next step.',
         working: 'Preparing DSH conversation…',
         failure: 'Could not prepare a DSH conversation. Check that this DSH profile provides the uiWorkspace client service.',
         sent: 'Task draft prepared in the native DSH conversation. Review it and press Send.',
@@ -131,6 +143,7 @@ window.__ModuleLoader__.load({
         promptArticle: 'Load the jianzi-topic-to-article skill and run its article stage. Fetch the candidate source first, read the candidate, account profile, and article-length settings, and show me the editorial angle for confirmation. Then save a draft and read it back. Do not save a final and do not start typesetting until I confirm the generated article.',
         promptTypeset: 'Load the jianzi-typeset-cover skill and run typesetting and cover generation. Read the article documents first: continue only when a user-confirmed final exists. If only a draft exists, stop and explain. Generate the WeChat HTML, submit it for typesetting, generate the cover, and return both preview links. Do not publish to WeChat and do not call Jianzi internal-model typesetting tools.',
         promptSocial: 'Load the jianzi-social-cards skill and run its card stage. Read the social ranking, pick a repository or event candidate, and confirm the material type with me if unclear. Then build the storyboard, let me approve it, lock it, and generate and submit the card visuals. Do not fake a hotspot candidate for a custom topic; use the custom social project flow instead.',
+        promptFeedback: 'This card requests a feedback review and adjustment proposal. First check whether this turn includes an attached WeChat export table. If there is no attachment, ask me to upload the table (CSV/TSV or legacy XLS; convert XLSX to CSV/TSV first) and stop. Do not call any content-feedback MCP tools: do not read local feedback or strategy, list or inspect existing proposals, or generate a proposal. Once I provide an attachment, identify its import type from the headers and import the complete data with the content-feedback import MCP tool (use exact Base64 bytes or faithfully extracted CSV/TSV text; never summarize, invent rows, or change values). The import tool also links confirmed matches from this batch to local article bodies/social copy before rebuilding the snapshot. If I attached multiple tables, import all of them before generating a proposal. Check the returned content_links counts and next_action; for article-metric imports, if linking failed or no matching local body/content was linked, stop and report that instead of generating from an older snapshot. An empty content_links result is expected for aggregate-only tables such as user growth or content trends. Only when the requested scope has usable evidence (article body evidence for article; matched social samples for social), read the refreshed feedback and strategy, then call the adjustment-generation MCP tool in this same turn. End with a concise status, evidence limits, proposal ID, and one specific next action. If the proposal is pending, invite me to review its diff or explicitly ask to apply it; never confirm or write it yourself. If headers are unsupported, stop and explain the single best correction. If I explicitly asked only to import without generating a proposal, finish after import and state the recommended generation tool and scope.',
       },
       zh: {
         panelTitle: '见字内容工作台',
@@ -151,7 +164,7 @@ window.__ModuleLoader__.load({
         startProject: '准备启动任务',
         startingProject: '正在准备 DSH 会话…',
         projectReady: '启动任务已放入 DSH 原生会话，检查后按发送即可执行。',
-        promptStartProject: '启动当前 DSH 会话所选工作空间对应的见字工作台。先确定本会话当前选中工作空间的本机绝对路径，并将该路径作为 projectRoot 参数传给见字 MCP 工具 jianzi_workbench_start。不要把 DSH profile 或插件目录当成项目路径。等待工具确认服务就绪且工作区指纹匹配；如果无法读取当前工作空间路径，先向我询问，不要猜路径。若启动失败，说明工具返回的具体错误并停止，不要重试，也不要继续做环境配置。成功后汇报项目路径和服务地址。除此之外不要执行其他操作。',
+        promptStartProject: '启动当前 DSH 会话所选工作空间对应的见字工作台。先确定本会话当前选中工作空间的本机绝对路径，并将该路径作为 projectRoot 参数传给见字 MCP 工具 jianzi_workbench_start。不要把 DSH profile 或插件目录当成项目路径。等待工具确认服务就绪且工作区指纹匹配；如果无法读取当前工作空间路径，先向我询问，不要猜路径。若启动失败，说明具体错误并停止，不要重试或继续配置。成功后汇报项目路径和服务地址，最后给出一个明确的「下一步」建议：先点「检查环境」；若仍有阻塞，只说最优先的一项修复。除此之外不要执行其他操作。',
         recentBatches: '最近批次（点击填入）',
         noBatches: '还没有批次',
         pickBatch: '填入',
@@ -215,7 +228,19 @@ window.__ModuleLoader__.load({
         stage5Detail: '把仓库或资讯候选做成一套图文：故事板、锁定、视觉提交。',
         stage5Action: '准备图文',
         stage5Gate: '需要有图文候选并锁定故事板',
-        note: '按钮会在 DSH 原生会话中准备任务草稿，不会自动发送。检查后按发送，Agent 会加载对应技能开始执行。',
+        stage6: '06 / 复盘',
+        stage6Title: '内容反馈与策略调整',
+        stage6Detail: '先上传公众号导出表格；导入并关联本地产物后，再刷新快照和生成可审阅草案。',
+        stage6Action: '生成反馈草案',
+        stage6Gate: '必须先附上公众号导出表格；没有附件时先请我上传并停止',
+        nextStepContract: '结尾必须单独给出「下一步」：只推荐一个现在可执行的动作，并写明我可以直接回复的内容或候选 ID。不要用「还需要什么帮助吗」之类泛泛收尾。若下一步需要我选择或确认，就明确停下等待；不要越过门禁。',
+        nextStep1: '环境检查通过时，建议我接着点 02「准备选题研判」；若未通过，只指出优先级最高的一项修复和解法。',
+        nextStep2: '列出候选 ID，并基于证据推荐一个。请我直接回复该 ID；我选择前不要加候选或写文章。',
+        nextStep3: '展示草稿后，建议我审阅并回复修改意见或明确确认。未经确认不要保存终稿或开始排版。',
+        nextStep4: '给出正文和封面预览链接后，建议我检查两项产物；若没有已确认终稿，明确引导回到 03「推进文章成稿」。绝不发布。',
+        nextStep5: '给出图文产物入口后，建议我检查分页与配套文案，并说明如何提出具体修改。未经确认不要发布或替换已有产物。',
+        nextStep6: '生成后给出待确认草案 ID，并建议我先查看 diff。只有我明确要求应用时才执行；否则保持待确认。',
+        note: '按钮会在 DSH 原生会话中准备任务草稿，不会自动发送。检查后发送；任务完成后 Agent 会给出一个具体的下一步建议。',
         working: '正在准备 DSH 会话…',
         failure: '无法准备 DSH 会话。请确认当前 DSH profile 提供 uiWorkspace 客户端服务。',
         sent: '任务草稿已放入 DSH 原生会话，检查后按发送即可开始。',
@@ -254,6 +279,7 @@ window.__ModuleLoader__.load({
         promptArticle: '加载 jianzi-topic-to-article 技能，执行文章阶段。先抓取候选原文，读取候选、账号画像和文章字数设置，把编辑角度给我确认；确认后保存 draft 并回读。未经我确认不要保存 final，也不要开始排版。',
         promptTypeset: '加载 jianzi-typeset-cover 技能，执行排版与封面。先读取文章文档，只有存在我确认过的 final 才继续；只有 draft 就停下来说明。生成公众号 HTML 并提交排版，再生成封面，返回两个预览入口。不要发布到公众号，也不要调用见字内部模型排版工具。',
         promptSocial: '加载 jianzi-social-cards 技能，执行图文阶段。先读图文榜单，选择仓库或事件候选；素材类型不明确时先问我。然后制定故事板、等我确认后锁定、生成并提交图文产物。自选主题不要伪装成热点候选，走自定义图文项目。',
+        promptFeedback: '这张卡片表示要复盘并生成调整草案。第一步先检查本轮是否附有公众号导出表格。没有附件时，只回复请我先上传表格（CSV/TSV 或旧版 XLS；XLSX 请先转成 CSV/TSV），然后停止；不要调用任何内容反哺 MCP 工具，不读取本地反馈或策略，不列出/查看已有草案，也不生成草案。收到附件后，先按表头判断导入类型，再用内容反哺导入 MCP 工具导入完整数据（传准确的 Base64 文件字节，或完整提取的 CSV/TSV 文本；不得汇总、编造行或改动数值）。导入工具会把本批次已确认的匹配关联到本地文章正文/图文文案，再刷新快照。如果附有多张表，先全部导入再考虑生成草案。检查返回的 content_links 和 next_action；对于文章表现表，如果有关联失败或没有匹配到本地正文/图文文案，停止并说明具体情况，不得拿旧快照生成草案。用户增长、内容趋势等汇总表没有 content_links 是正常的。所选范围有相应证据时（文章需有已关联正文；图文需有已匹配图文样本），读取刷新后的反馈和策略，然后在同一轮继续调用草案生成 MCP 工具。结尾明确当前状态、证据限制、草案 ID 和一个具体下一步。草案待确认时，提示我查看 diff 或明确要求应用；绝不自行确认或写入。如果表头不受支持，停止并给出最关键的修正建议。如果我明确只要求导入、不要求生成草案，则导入结束后告诉我建议调用的生成工具和范围。',
       },
     };
 
@@ -290,6 +316,7 @@ window.__ModuleLoader__.load({
       { id: 'article', key: '3', promptKey: 'promptArticle', fields: ['candidate', 'brief'] },
       { id: 'typeset', key: '4', promptKey: 'promptTypeset', fields: ['candidate', 'brief'] },
       { id: 'social', key: '5', promptKey: 'promptSocial', fields: ['batch', 'candidate', 'brief'] },
+      { id: 'feedback', key: '6', promptKey: 'promptFeedback', fields: [] },
     ];
 
     const styles = `
@@ -329,7 +356,7 @@ window.__ModuleLoader__.load({
       .jianzi-desk__selection-item{display:inline-flex;align-items:center;gap:6px;min-height:26px;padding:4px 9px;border-radius:7px;border:1px solid rgba(215,166,111,.22);background:rgba(215,166,111,.07);color:var(--desk-copy)}
       .jianzi-desk__clear{border:0;background:transparent;color:var(--desk-muted);font:600 12px/1.3 'Noto Sans SC','Microsoft YaHei',sans-serif;cursor:pointer;padding:4px}
       .jianzi-desk__clear:hover{color:var(--desk-accent)}.jianzi-desk__clear:disabled{opacity:.3;cursor:default}
-      .jianzi-desk__flows{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:13px;margin-top:21px}
+      .jianzi-desk__flows{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px;margin-top:21px}
       .jianzi-desk__flow{position:relative;display:flex;min-width:0;min-height:246px;flex-direction:column;padding:18px;border:1px solid var(--desk-line);border-radius:13px;background:linear-gradient(155deg,rgba(255,255,255,.055),rgba(255,255,255,.018) 72%);box-shadow:0 8px 20px rgba(0,0,0,.10);transition:transform .18s ease,border-color .18s ease,background .18s ease,box-shadow .18s ease}
       .jianzi-desk__flow:hover{transform:translateY(-2px);border-color:rgba(215,166,111,.48);background:linear-gradient(155deg,rgba(215,166,111,.09),rgba(255,255,255,.022) 72%);box-shadow:0 14px 28px rgba(0,0,0,.17)}
       .jianzi-desk__number{display:flex;align-items:center;gap:8px;color:var(--desk-accent);font-size:11px;font-weight:750;letter-spacing:.1em}
@@ -463,7 +490,7 @@ window.__ModuleLoader__.load({
       if (stage.fields.includes('batch') && values.batch.trim()) extra.push(`${tr('batchLead')}${values.batch.trim()}`);
       if (stage.fields.includes('candidate') && values.candidate.trim()) extra.push(`${tr('candidateLead')}${values.candidate.trim()}`);
       if (values.context) extra.push(values.context);
-      return [base, ...extra].join('\n\n');
+      return [base, ...extra, tr('nextStepContract'), tr(`nextStep${stage.key}`)].join('\n\n');
     }
 
     function Panel({ tr, startTask }) {

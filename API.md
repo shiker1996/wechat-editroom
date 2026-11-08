@@ -698,7 +698,7 @@ AI 规划配图占位
 返回文章、图文和主动写作计划合并后的内容日历数据；主动写作计划会附带复盘软推荐 `planning_recommendation`，包括建议目标、题材、标题结构和验证问题。
 
 ### GET /api/wechat/strategy
-读取账号策略建议草案。至少有两个不同指标周期且每个周期至少关联 3 篇正文时才返回建议；建议只读，不自动写入 `account-context.json`。
+读取账号策略建议草案。至少有两个不同指标周期且每个周期至少关联 3 篇正文时才返回建议；建议只读，不自动写入 `account-context.json`。就绪结果包含 `account_field_candidates`：把跨周期题材映射到现有 `contentPillars` 与 `contentRatio`，未分类题材跳过，候选只用于生成待确认草案。
 
 ### GET /api/documents/:id/content
 文档正文（返回 text/plain）
@@ -1111,7 +1111,7 @@ MCP `jianzi_integration_configuration_catalog/get/save/test` 仅开放采集器�
 
 ### POST /api/wechat/content-links/relink
 
-只使用本地文章索引重新关联已确认文章的正文，并按文件名和目录识别截图、日志、代码差异、图表、失败及结果证据；不会访问外部 URL。
+只使用本地文章索引重新关联已确认文章的正文，并按文件名和目录识别截图、日志、代码差异、图表、失败及结果证据；不会访问外部 URL。可选请求体 `{ importBatchId }` 只关联指定导入批次的已确认文章/图文匹配；指定批次时不重复索引文章产物。
 → 公众号复盘
 
 ### POST /api/wechat/content-links/:id/fetch
@@ -1156,32 +1156,32 @@ MCP `jianzi_integration_configuration_catalog/get/save/test` 仅开放采集器�
 
 ### GET /api/wechat/feedback/adjustments
 
-读取最近生成的公众号反馈调整草案。草案包含账号配置、标题技能和 AI 根据题材、正文结构及已映射样本自动判定的写作技能原文与新版本 diff；无映射但有足够正文信号时会标记为 AI 推断。旧版本待确认草案会标记为过期，不能写入。
+读取最近生成的公众号反馈调整草案。草案包含账号配置、标题技能，以及 AI 根据文章类型和正文结构判定的简化正文 Prompt 原文与新版本 diff。旧版本待确认草案会标记为过期，不能写入。
 → 内容反哺
 
 ### POST /api/wechat/feedback/adjustments/generate
 
-根据最近一次反馈快照调用模型生成最小调整草案。模型以 thinking 开启的两阶段调用完成：第一阶段判断调整目标和正文技能，第二阶段读取被选中目标的完整文件并生成针对原有规则的 `old_text -> new_text` 精确编辑。正文技能优先使用至少 3 个已映射样本；没有映射但有至少 3 篇正文和正文结构信号时允许低置信度 AI 推断；请求体可传 `{ provider, feedbackSnapshotId }`，旧版传入 `writerSkillId` 仅作为兼容提示，不会绕过正文信号门槛；传入 `{ scope: "social" }` 时改走图文反哺，按图文产物的阶段执行记录识别故事板技能与文案生成技能，并只生成这两个技能的精确修改草案；如果没有任何可安全应用的文件变化，返回 `status: "no_change"` 且不创建草案；生成结果只入库，不直接写文件。接口默认以 NDJSON 流式返回阶段进度，最后返回草案结果。
+根据最近一次反馈快照调用模型生成最小调整草案。模型以 thinking 开启的两阶段调用完成：第一阶段判断账号/标题目标和文章正文 Prompt 目标；第二阶段读取被选中 Prompt 的完整文件并生成针对原有规则的 `old_text -> new_text` 精确编辑。正文类型至少有 3 个映射样本时可优先选择对应文章类型 Prompt；没有映射但至少有 3 篇正文和正文结构信号时允许低置信度 AI 推断。文章正文由简化 Prompt 驱动，不使用 writer skill 作为正文修改目标。请求体可传 `{ provider, feedbackSnapshotId }`，传入 `{ scope: "social" }` 时改走图文反哺，按图文产物的阶段执行记录识别故事板技能与文案生成技能，并只生成这两个技能的精确修改草案；如果没有任何可安全应用的文件变化，返回 `status: "no_change"` 且不创建草案；生成结果只入库，不直接写文件。网页请求使用 `Accept: application/x-ndjson` 获取阶段进度流；默认 JSON 请求（包括 MCP）返回最终草案 JSON。
 → 内容反哺
 
 ### POST /api/wechat/feedback/adjustments/:id/confirm
 
-确认调整草案。服务端会校验草案生成时的文件哈希，成功后原子写入 `account-context.json` 和 `writing-skills/<skillId>/SKILL.md` 覆盖文件；文件已被修改时返回冲突，不覆盖当前内容。
+确认调整草案。服务端会校验草案生成时的文件哈希，成功后写入 `account-context.json`、标题技能覆盖文件和正文 Prompt 文件；正文 Prompt 登记版本会同步递增。文件或 Prompt 版本已变化时返回冲突，不覆盖当前内容。
 → 内容反哺
 
 ### POST /api/wechat/feedback/adjustments/:id/reject
 
-跳过一份待确认的反馈调整草案，不写入配置或技能文件。
+跳过一份待确认的反馈调整草案，不写入配置、技能或 Prompt 文件。
 → 内容反哺
 
 ### POST /api/wechat/feedback/adjustments/:id/delete
 
-删除一份已经跳过（`rejected`）的反馈调整草案记录。待确认或已写入草案不能删除，不影响任何配置、技能覆盖文件或已写入结果。
+删除一份已经跳过（`rejected`）的反馈调整草案记录。待确认或已写入草案不能删除，不影响任何配置、技能覆盖文件、Prompt 文件或已写入结果。
 → 内容反哺
 
 ### POST /api/wechat/feedback/adjustments/:id/change/:index/save
 
-手动保存反馈调整草案中指定文件变更的内容，只更新草案记录，不直接写入正式配置或技能文件。
+手动保存反馈调整草案中指定文件变更的内容，只更新草案记录，不直接写入正式配置、技能或 Prompt 文件。
 → 内容反哺
 
 ### GET /api/wechat/review
@@ -1195,3 +1195,5 @@ MCP `jianzi_integration_configuration_catalog/get/save/test` 仅开放采集器�
 ### POST /api/wechat/import
 
 导入一份后台导出文件并与历史数据合并。导入后会先自动建立本地文章索引，再执行公众号文章匹配，无需先手动进入发布中心建立索引。请求体为 `{ fileName, importType, data }`，其中 `data` 是文件 Base64；`importType` 支持 `user_growth`、`notified_articles`、`unnotified_articles`、`content_trends`、`regular_readers`。支持 HTML 表格伪 `.xls`、BIFF `.xls`、CSV/TSV。
+
+MCP 工具 `jianzi_content_feedback_import` 在调用本接口后会按新导入批次执行本地正文/图文文案关联，再调用 `POST /api/wechat/feedback/rebuild` 和 `GET /api/wechat/strategy`，返回导入行数、指标匹配、正文关联、反馈快照和策略建议。若本批次关联失败或缺少本地产物，工具会要求先解决关联问题，不建议直接按旧快照生成草案。它不生成 AI 调整草案；需要草案时再调用 `jianzi_content_feedback_adjustment_generate`。MCP 接受 Base64 原始文件或完整 CSV/TSV 文本；`.xlsx` 二进制不支持。

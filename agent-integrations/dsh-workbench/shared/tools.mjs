@@ -5,6 +5,11 @@ import { spawn } from 'node:child_process';
 
 const id = (description, required = true) => ({ type: 'integer', ...(required ? { minimum: 1 } : {}), description });
 const string = (description, extra = {}) => ({ type: 'string', description, ...extra });
+const positiveId = (value, field) => {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1) throw Object.assign(new Error(`${field} 必须是正整数`), { code: 'INVALID_ARGUMENT' });
+  return parsed;
+};
 const sensitiveField = /^(?:api[_-]?key|token|secret|password|authorization|cookie|credential|credentials)$/i;
 
 function redactSensitive(value, key = '') {
@@ -48,6 +53,13 @@ export const JIANZI_TOOLS = [
   { name: 'jianzi_workbench_start', description: '当用户要求启动已停止的本机见字工作台，或 jianzi_doctor 报告服务未运行时，调用项目官方启动脚本并等待服务 ready，再执行健康检查。不会打开浏览器或修改业务数据。源码 MCP 默认使用当前项目根目录；打包/独立 MCP 可传项目绝对路径 projectRoot，或设置 JIANZI_PROJECT_ROOT。', inputSchema: { type: 'object', properties: { projectRoot: string('见字项目的本机绝对路径。源码集成可省略；DSH/npm 包未配置 JIANZI_PROJECT_ROOT 时必须提供。') } }, readOnlyHint: false },
   { name: 'jianzi_account_profile', description: '读取账号画像，用于选题定位、语气和受众判断。', inputSchema: { type: 'object', properties: {} }, readOnlyHint: true },
   { name: 'jianzi_account_profile_update', description: '保存用户确认过的账号画像。至少包含公众号名称、简介、核心读者和一个内容支柱。', inputSchema: { type: 'object', properties: { context: { type: 'object', description: '符合 account-context.json 格式的账号画像字段。' } }, required: ['context'] }, readOnlyHint: false },
+  { name: 'jianzi_content_feedback_get', description: '读取最新公众号内容反馈快照与正文分析计数；用于解释历史题材、标题和正文结构信号。', inputSchema: { type: 'object', properties: {} }, readOnlyHint: true },
+  { name: 'jianzi_content_feedback_strategy', description: '读取跨周期策略状态、账号定位字段映射候选和渠道数据限制。只读，不写入账号配置。', inputSchema: { type: 'object', properties: {} }, readOnlyHint: true },
+  { name: 'jianzi_content_feedback_import', description: '导入用户明确提供的公众号后台表格；自动合并数据、索引本地文章并匹配，再将本次批次已确认的匹配关联到本地正文/图文文案，之后才刷新内容反馈快照和策略。返回正文关联成功、失败与缺少本地产物的数量；未关联的内容不会被当作正文证据。只产生数据快照与建议，不生成或应用配置/Prompt 草案。支持 CSV/TSV、旧版 XLS 或从附件准确提取的 CSV/TSV 文本；不支持直接解析 XLSX 二进制。', inputSchema: { type: 'object', properties: { fileName: { type: 'string', minLength: 1, maxLength: 255, description: '上传文件名。CSV 文本转换自 XLSX 时可保留原文件名；csvText 会作为文本解析。' }, importType: { type: 'string', enum: ['user_growth', 'notified_articles', 'unnotified_articles', 'content_trends', 'regular_readers'], description: '公众号导出类别；根据表头选择。文章表现表使用 notified_articles 或 unnotified_articles。' }, data: { type: 'string', maxLength: 8000000, description: '文件原始字节的 Base64，适用于 CSV/TSV 和旧版 XLS；与 csvText 二选一。' }, csvText: { type: 'string', maxLength: 8000000, description: '从上传附件准确提取的完整 CSV/TSV 文本；保留所有行与数字，不做汇总或推算。与 data 二选一。' } }, required: ['fileName', 'importType'] }, readOnlyHint: false },
+  { name: 'jianzi_content_feedback_adjustments_list', description: '列出内容反哺调整草案及可编辑正文 Prompt。', inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 100, description: '返回数量，默认 20。' } } }, readOnlyHint: true },
+  { name: 'jianzi_content_feedback_adjustment_generate', description: '调用工作台两阶段模型生成文章或图文内容反哺草案。草案只保存为待确认记录，不会自动写入账号配置、标题技能、正文 Prompt 或图文技能。', inputSchema: { type: 'object', properties: { scope: { type: 'string', enum: ['article', 'social'], description: '反馈范围，默认 article；social 用于图文故事板和文案技能。' }, feedbackSnapshotId: { type: 'integer', minimum: 1, description: '可选反馈快照 ID；省略时使用最新快照。' }, provider: string('可选的工作台模型服务商 ID。') } }, readOnlyHint: false },
+  { name: 'jianzi_content_feedback_adjustment_confirm', description: '将待确认内容反哺草案写入本地账号配置、标题技能、文章 Prompt 或图文技能。仅在用户明确要求应用该草案后调用。', inputSchema: { type: 'object', properties: { adjustmentId: id('待确认调整草案 ID。') }, required: ['adjustmentId'] }, readOnlyHint: false },
+  { name: 'jianzi_content_feedback_adjustment_reject', description: '拒绝一条待确认内容反哺草案，不修改配置或技能文件。', inputSchema: { type: 'object', properties: { adjustmentId: id('待确认调整草案 ID。') }, required: ['adjustmentId'] }, readOnlyHint: false },
   { name: 'jianzi_settings_summary', description: '读取非敏感设置与模型配置状态；不会返回 API Key、API 地址或调用日志。', inputSchema: { type: 'object', properties: {} }, readOnlyHint: true },
   { name: 'jianzi_collectors_list', description: '列出可用采集器及其配置状态；秘密字段只返回是否已配置。', inputSchema: { type: 'object', properties: {} }, readOnlyHint: true },
   { name: 'jianzi_collection_capabilities', description: '读取采集能力状态，包含各来源组就绪情况和 RSSHub 状态。', inputSchema: { type: 'object', properties: {} }, readOnlyHint: true },
@@ -296,6 +308,73 @@ export async function executeJianziTool(client, name, input = {}, context = {}) 
     }
     case 'jianzi_account_profile': return client.get('/api/system/account-context');
     case 'jianzi_account_profile_update': return client.put('/api/system/account-context', input.context || {});
+    case 'jianzi_content_feedback_get': return client.get('/api/wechat/feedback');
+    case 'jianzi_content_feedback_strategy': return client.get('/api/wechat/strategy');
+    case 'jianzi_content_feedback_import': {
+      const hasData = typeof input.data === 'string' && input.data.trim();
+      const hasCsvText = typeof input.csvText === 'string' && input.csvText.trim();
+      if (Boolean(hasData) === Boolean(hasCsvText)) throw Object.assign(new Error('请在 data（Base64 文件）和 csvText（CSV/TSV 文本）中恰好提供一种'), { code: 'INVALID_ARGUMENT' });
+      if (hasData && /\.xlsx?$/i.test(input.fileName || '') && !/\.xls$/i.test(input.fileName || '')) throw Object.assign(new Error('当前导入器支持旧版 .xls，不支持 XLSX 二进制；请在外部 Agent 中将附件准确提取为 csvText 后重试'), { code: 'UNSUPPORTED_FILE_FORMAT' });
+      const imported = await client.post('/api/wechat/import', {
+        fileName: String(input.fileName || '').trim(),
+        importType: input.importType,
+        data: hasData ? input.data.trim() : Buffer.from(input.csvText, 'utf8').toString('base64'),
+      });
+      const contentLinks = await client.post('/api/wechat/content-links/relink', { importBatchId: imported.id });
+      const rebuilt = await client.post('/api/wechat/feedback/rebuild', {});
+      const [strategy, currentFeedback, review] = await Promise.all([
+        client.get('/api/wechat/strategy'),
+        client.get('/api/wechat/feedback'),
+        client.get('/api/wechat/review'),
+      ]);
+      const articleEvidenceCount = Number(rebuilt.extracted || 0);
+      const socialEvidenceCount = Number(review.review_tracks?.social?.content_feedback?.linked_social_count || 0);
+      const isArticleMetricsImport = ['notified_articles', 'unnotified_articles'].includes(input.importType);
+      const importedArticleEvidenceCount = Number(contentLinks.linked || 0);
+      const importedSocialEvidenceCount = Number(contentLinks.social_copy || 0);
+      const contentLinkBlocked = isArticleMetricsImport && (
+        (Number(imported.row_count || 0) > 0 && Number(contentLinks.total || 0) === 0)
+        || Number(contentLinks.needs_external || 0) > 0
+        || Number(contentLinks.failed || 0) > 0
+      );
+      const availableScopes = {
+        article: articleEvidenceCount > 0 && (!isArticleMetricsImport || importedArticleEvidenceCount > 0),
+        social: socialEvidenceCount > 0 && (!isArticleMetricsImport || importedSocialEvidenceCount > 0),
+      };
+      const hasFeedbackEvidence = !contentLinkBlocked && (availableScopes.article || availableScopes.social);
+      return {
+        imported: { id: imported.id, file_name: imported.file_name, import_type: imported.import_type, format: imported.format, row_count: imported.row_count },
+        index: imported.index,
+        matches: imported.matches,
+        content_links: { total: contentLinks.total, linked: contentLinks.linked, social_copy: contentLinks.social_copy, needs_external: contentLinks.needs_external, failed: contentLinks.failed, failures: contentLinks.failures || [] },
+        feedback: { ...rebuilt.feedback, extracted_count: rebuilt.extracted, article_analysis_count: currentFeedback.stats?.linked_articles || 0, feature_count: currentFeedback.stats?.features || 0 },
+        strategy,
+        next_action: hasFeedbackEvidence
+          ? { type: 'generate_adjustment_draft', tool: 'jianzi_content_feedback_adjustment_generate', available_scopes: availableScopes, default_scope: availableScopes.article ? 'article' : 'social', when: 'If the user asked to generate an adjustment proposal, call this tool in the same turn using the requested scope; otherwise present it as the recommended next step.', writes_files: false }
+          : { type: 'resolve_article_matches', message: contentLinkBlocked ? 'This article-metric import has unmatched or unlinked local content. Resolve its matching/content-link failures before generating a proposal from this import.' : 'No linked article bodies or matched social samples were available for extraction. Review article matching and linked content before treating the snapshot as evidence for a draft.', writes_files: false },
+        next_step: hasFeedbackEvidence
+          ? `下一步：${availableScopes.article ? `文章有 ${articleEvidenceCount} 条可分析正文，本批次新关联 ${importedArticleEvidenceCount} 条` : ''}${availableScopes.article && availableScopes.social ? '；' : ''}${availableScopes.social ? `图文有 ${socialEvidenceCount} 条匹配样本，本批次新关联 ${importedSocialEvidenceCount} 条` : ''}。如用户本轮要求生成草案，按其范围继续调用 jianzi_content_feedback_adjustment_generate；否则建议选择文章或图文范围。`
+          : contentLinkBlocked
+            ? `下一步：先处理本批次正文关联。匹配产物 ${contentLinks.total} 条，成功关联正文 ${contentLinks.linked} 条、图文文案 ${contentLinks.social_copy} 条，缺少本地文件 ${contentLinks.needs_external} 条，关联失败 ${contentLinks.failed} 条。处理后刷新快照，再生成草案。`
+            : '下一步：先检查公众号文章/图文匹配和已关联正文；当前没有可用于草案的关联内容证据。',
+      };
+    }
+    case 'jianzi_content_feedback_adjustments_list': return client.get(`/api/wechat/feedback/adjustments?limit=${Math.min(100, Math.max(1, Number(input.limit) || 20))}`);
+    case 'jianzi_content_feedback_adjustment_generate': {
+      const draft = await client.post('/api/wechat/feedback/adjustments/generate', {
+        scope: input.scope === 'social' ? 'social' : 'article',
+        ...(Number.isInteger(input.feedbackSnapshotId) && input.feedbackSnapshotId > 0 ? { feedbackSnapshotId: input.feedbackSnapshotId } : {}),
+        ...(typeof input.provider === 'string' && input.provider.trim() ? { provider: input.provider.trim() } : {}),
+      });
+      return {
+        ...draft,
+        next_action: draft.status === 'pending'
+          ? { type: 'review_adjustment_draft', label: `检查草案 ${draft.id} 的 diff`, after_review: `只有明确要求应用草案 ${draft.id} 时才调用 jianzi_content_feedback_adjustment_confirm。`, writes_files: false }
+          : { type: 'report_no_change', label: '说明当前没有可安全应用的规则改动，并指出证据或门槛限制。', writes_files: false },
+      };
+    }
+    case 'jianzi_content_feedback_adjustment_confirm': return client.post(`/api/wechat/feedback/adjustments/${positiveId(input.adjustmentId, 'adjustmentId')}/confirm`, {});
+    case 'jianzi_content_feedback_adjustment_reject': return client.post(`/api/wechat/feedback/adjustments/${positiveId(input.adjustmentId, 'adjustmentId')}/reject`, {});
     case 'jianzi_settings_summary': {
       const [settings, models] = await Promise.all([client.get('/api/system/settings'), client.get('/api/models')]);
       return {
