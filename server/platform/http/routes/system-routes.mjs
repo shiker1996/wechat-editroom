@@ -49,6 +49,7 @@ import { ExtensionConfigurationService, LEGACY_CONFIGURATION_FALLBACK_REMOVAL_VE
 import { writeCollectorToolSetting } from '../../collectors/settings.mjs';
 import { buildConfigurationCatalog, findConfigurationResource } from '../../extensions/configuration-catalog.mjs';
 import { createBuiltinCollectorRegistry } from '../../collectors/builtin-registry.mjs';
+import { APP_VERSION } from '../../version.mjs';
 import { CollectionSourceService, sourceInputForPlugin, assistStaticPage, normalizeExternalIngest } from '../../../features/collection/index.mjs';
 import { describeBatchSourceGroups } from '../../../features/collection/application/batch-source-selection.mjs';
 import { createCollectorRuntime, listCollectorPluginStates } from '../../collectors/runtime-registry.mjs';
@@ -286,7 +287,7 @@ export async function handleSystemRoutes(context) {
 
   if (request.method === 'GET' && pathname === '/api/system/health') {
     const target = searchParams.get('target') || 'all';
-    if (!['all', 'reddit', 'rsshub', 'github'].includes(target)) {
+    if (!['all', 'reddit', 'rsshub', 'github', 'version'].includes(target)) {
       json(response, 400, { error: '未知的检查目标' });
       return true;
     }
@@ -303,6 +304,7 @@ export async function handleSystemRoutes(context) {
       rsshub,
       github: githubHealth,
       node: process.version,
+      appVersion: APP_VERSION,
       workspaceId: workspaceFingerprint,
       now: new Date().toISOString(),
       target,

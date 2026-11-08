@@ -1,11 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { executeJianziTool, findJianziTool } from '../scripts/agent-integration/tools.mjs';
+import { APP_VERSION } from '../server/platform/version.mjs';
 
 function clientStub() {
   const calls = [];
   return {
     calls,
+    async get(path) {
+      assert.equal(path, '/api/system/health?target=version');
+      return { appVersion: APP_VERSION };
+    },
     async post(path, body) { calls.push({ method: 'POST', path, body }); return { ok: true }; },
   };
 }

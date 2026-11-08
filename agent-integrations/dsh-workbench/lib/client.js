@@ -20,6 +20,8 @@ window.__ModuleLoader__.load({
         statusLoading: 'Checking…',
         statusOnline: 'Online',
         statusOffline: 'Unavailable',
+        statusUpdateRequired: 'Project update required',
+        statusUpgradeRequired: 'Installed MCP/plugin requires project version {required}; this project is {current}. Run git pull in the project root, update/rebuild as instructed, then restart the workbench and MCP connection.',
         statusRsshub: 'RSSHub',
         statusGithub: 'GitHub',
         statusOk: 'ok',
@@ -138,7 +140,7 @@ window.__ModuleLoader__.load({
         hotspotIdLabel: 'Hotspot ID: ',
         yes: 'yes',
         no: 'no',
-        promptSetup: 'Load the jianzi-workbench-setup skill if available; otherwise follow these instructions. Call jianzi_doctor first and use this DSH session’s workspace as projectRoot; never use the DSH profile/plugin directory. If offline and the project contains server.mjs plus scripts/runtime/start-workbench.ps1 or .sh, call jianzi_workbench_start and wait for ready plus a matching fingerprint. If no project exists, stop and ask whether to clone https://github.com/shiker1996/wechat-editroom.git into an empty directory; clone only after confirmation, never overwrite files, then run setup-workbench.cmd or ./setup-workbench.sh with my choices. Do not use --yes or install RSSHub unless I choose it. Once ready, verify RSSHub, sources, account profile, and collectors. Never read or output .env/secrets. If workspace or terminal tools are unavailable, give manual steps. Report each check in one line.',
+        promptSetup: 'Load the jianzi-workbench-setup skill if available; otherwise follow these instructions. Call jianzi_doctor first and use this DSH session’s workspace as projectRoot; never use the DSH profile/plugin directory. If it returns WORKBENCH_VERSION_MISMATCH, stop business tool calls and tell me to git pull in the project root, update/rebuild as instructed, then restart the workbench and MCP before retrying doctor. If offline and the project contains server.mjs plus scripts/runtime/start-workbench.ps1 or .sh, call jianzi_workbench_start and wait for ready plus a matching fingerprint. If no project exists, stop and ask whether to clone https://github.com/shiker1996/wechat-editroom.git into an empty directory; clone only after confirmation, never overwrite files, then run setup-workbench.cmd or ./setup-workbench.sh with my choices. Do not use --yes or install RSSHub unless I choose it. Once ready, verify RSSHub, sources, account profile, and collectors. Never read or output .env/secrets. If workspace or terminal tools are unavailable, give manual steps. Report each check in one line.',
         promptTopics: 'Load the jianzi-topic-to-article skill and run its topic-discovery stage. Follow the skill order strictly: create or reuse a batch, collect and wait for the job, submit tags, build events and fact cards, run the research stages, then read the rankings. Do not call any Jianzi internal-model tool. Finish with a ranked shortlist that includes batch ID, candidate/hotspot IDs, rationale, risks, and source links. Stop for my topic choice before adding a candidate or drafting an article.',
         promptArticle: 'Load the jianzi-topic-to-article skill and run its article stage. Fetch the candidate source first, read the candidate, account profile, and article-length settings, and show me the editorial angle for confirmation. Then save a draft and read it back. Do not save a final and do not start typesetting until I confirm the generated article.',
         promptTypeset: 'Load the jianzi-typeset-cover skill and run typesetting and cover generation. Read the article documents first: continue only when a user-confirmed final exists. If only a draft exists, stop and explain. Generate the WeChat HTML, submit it for typesetting, generate the cover, and return both preview links. Do not publish to WeChat and do not call Jianzi internal-model typesetting tools.',
@@ -156,6 +158,8 @@ window.__ModuleLoader__.load({
         statusLoading: '检查中…',
         statusOnline: '已连接',
         statusOffline: '未连接',
+        statusUpdateRequired: '需要更新项目',
+        statusUpgradeRequired: '当前 MCP/插件需要项目版本 {required}，本地项目为 {current}。请在项目根目录执行 git pull，按升级说明更新依赖并重新构建，然后重启工作台和 MCP 连接。',
         statusRsshub: 'RSSHub',
         statusGithub: 'GitHub',
         statusOk: '正常',
@@ -274,7 +278,7 @@ window.__ModuleLoader__.load({
         hotspotIdLabel: '热点 ID：',
         yes: '是',
         no: '否',
-        promptSetup: '如可用，加载 jianzi-workbench-setup 技能；否则按本提示执行。先调用 jianzi_doctor，并使用当前 DSH 会话工作空间作为 projectRoot；不要用 DSH profile/插件目录。服务未连接且目录含 server.mjs 与 scripts/runtime/start-workbench.ps1 或 .sh 时，调用 jianzi_workbench_start，等待 ready 和 workspaceId 指纹匹配。若没有项目，停止启动并询问是否克隆 https://github.com/shiker1996/wechat-editroom.git 到空目录；确认后才克隆，不覆盖文件，再运行 setup-workbench.cmd 或 ./setup-workbench.sh 并逐项让我选择。不要用 --yes；未经我选择不要安装 RSSHub。就绪后检查 RSSHub、采集源、账号画像和采集器。不要读取或输出 .env/密钥。若无工作区或终端工具，提供手动步骤。每项检查用一句话汇报。',
+        promptSetup: '如可用，加载 jianzi-workbench-setup 技能；否则按本提示执行。先调用 jianzi_doctor，并使用当前 DSH 会话工作空间作为 projectRoot；不要用 DSH profile/插件目录。若返回 WORKBENCH_VERSION_MISMATCH，停止业务工具调用，说明本地项目版本与插件/MCP 所需版本，并让我在项目根目录执行 git pull，按升级说明更新依赖并重建，再重启工作台和 MCP；完成后重调 doctor。服务未连接且目录含 server.mjs 与 scripts/runtime/start-workbench.ps1 或 .sh 时，调用 jianzi_workbench_start，等待 ready 和 workspaceId 指纹匹配。若没有项目，停止启动并询问是否克隆 https://github.com/shiker1996/wechat-editroom.git 到空目录；确认后才克隆，不覆盖文件，再运行 setup-workbench.cmd 或 ./setup-workbench.sh 并逐项让我选择。不要用 --yes；未经我选择不要安装 RSSHub。就绪后检查 RSSHub、采集源、账号画像和采集器。不要读取或输出 .env/密钥。若无工作区或终端工具，提供手动步骤。每项检查用一句话汇报。',
         promptTopics: '加载 jianzi-topic-to-article 技能，执行选题阶段。严格按技能顺序：创建或复用批次 → 采集并等待任务完成 → 提交打标 → 生成事件与事实卡 → 运行研判阶段 → 读取榜单。不要调用见字内部模型工具。最后给我一份排序清单，包含批次 ID、候选/热点 ID、理由、风险和来源链接；等我选题后再加入候选或写文章。',
         promptArticle: '加载 jianzi-topic-to-article 技能，执行文章阶段。先抓取候选原文，读取候选、账号画像和文章字数设置，把编辑角度给我确认；确认后保存 draft 并回读。未经我确认不要保存 final，也不要开始排版。',
         promptTypeset: '加载 jianzi-typeset-cover 技能，执行排版与封面。先读取文章文档，只有存在我确认过的 final 才继续；只有 draft 就停下来说明。生成公众号 HTML 并提交排版，再生成封面，返回两个预览入口。不要发布到公众号，也不要调用见字内部模型排版工具。',
@@ -500,6 +504,7 @@ window.__ModuleLoader__.load({
       const [pending, setPending] = React.useState('');
       const [status, setStatus] = React.useState(null);
       const [health, setHealth] = React.useState(null);
+      const [healthError, setHealthError] = React.useState(null);
       const [batches, setBatches] = React.useState([]);
       const [candidates, setCandidates] = React.useState([]);
       const [social, setSocial] = React.useState([]);
@@ -537,13 +542,23 @@ window.__ModuleLoader__.load({
         }
       };
 
+      const readEnvelope = async (url) => {
+        try {
+          const response = await fetch(url, { headers: { accept: 'application/json' } });
+          return await response.json();
+        } catch {
+          return null;
+        }
+      };
+
       const loadStatus = async () => {
         setLoadingStatus(true);
         const [doctor, list] = await Promise.all([
-          readJson('/jianzi/status'),
+          readEnvelope('/jianzi/status'),
           readJson('/jianzi/batches?limit=8'),
         ]);
-        setHealth(doctor || null);
+        setHealth(doctor?.ok ? doctor.data : null);
+        setHealthError(doctor?.ok ? null : doctor?.error || null);
         setBatches(Array.isArray(list) ? list : []);
         setLoadingStatus(false);
       };
@@ -763,6 +778,12 @@ window.__ModuleLoader__.load({
         `${tr('hotspotsLabel')} ${currentBatch.hotspot_count ?? 0}`,
         `${tr('artifactsLabel')} ${currentBatch.artifact_count ?? 0}`,
       ].filter(Boolean).join(' · ') : '';
+      const statusUpdateRequired = healthError?.code === 'WORKBENCH_VERSION_MISMATCH';
+      const versionHint = statusUpdateRequired
+        ? tr('statusUpgradeRequired')
+          .replace('{required}', String(healthError?.details?.requiredVersion || '未知'))
+          .replace('{current}', String(healthError?.details?.currentVersion || '未知'))
+        : '';
 
       return h(React.Fragment, null,
         h('style', null, styles),
@@ -786,12 +807,13 @@ window.__ModuleLoader__.load({
                 ),
                 h('div', { className: 'jianzi-desk__status-line' },
                   h('span', { className: health ? 'jianzi-desk__status-dot jianzi-desk__status-dot--online' : 'jianzi-desk__status-dot', 'aria-hidden': true }),
-                  h('span', null, health ? tr('statusOnline') : tr('statusOffline')),
+                  h('span', null, statusUpdateRequired ? tr('statusUpdateRequired') : health ? tr('statusOnline') : tr('statusOffline')),
                 ),
                 h('div', { className: 'jianzi-desk__status-details' },
                   [['RSSHub', Boolean(health && health.health && health.health.rsshub && health.health.rsshub.ok)], ['GitHub', Boolean(health && health.health && health.health.github && health.health.github.authenticated)]].map(([name, ready]) => h('span', { className: 'jianzi-desk__status-pill', key: name }, name, h('b', null, health ? (ready ? tr('statusOk') : tr('statusBad')) : '—'))),
                 ),
-                !health && !loadingStatus ? h('div', { className: 'jianzi-desk__start' },
+                statusUpdateRequired ? h('p', { className: 'jianzi-desk__start-message jianzi-desk__start-message--error', role: 'alert' }, versionHint) : null,
+                !health && !loadingStatus && !statusUpdateRequired ? h('div', { className: 'jianzi-desk__start' },
                   h('button', { type: 'button', onClick: () => void startProject(), disabled: startingProject }, startingProject ? tr('startingProject') : tr('startProject')),
                   startupMessage ? h('p', { className: `jianzi-desk__start-message jianzi-desk__start-message--${startupMessage.kind}`, role: 'status' }, startupMessage.text) : null,
                 ) : null,

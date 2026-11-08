@@ -22,7 +22,7 @@ description: 安装、诊断和配置见字工作台与 Codex/WorkBuddy 集成�
 3. 配置当前 Agent：执行 `node scripts/agent-integration/cli.mjs install --agent codex`、`--agent workbuddy` 或 `--agent both`。
 4. Codex 使用项目级 `.codex/config.toml` 和 `.agents/skills/`；首次使用时需要信任该项目并重启/刷新 MCP。
 5. WorkBuddy 使用项目级 `.mcp.json` 与 `.codebuddy/skills/`。若该 WorkBuddy 客户端不加载项目配置，引导用户在连接器设置中导入 `agent-integrations/workbuddy` 并检查本机 MCP 进程权限。
-6. 再次调用 `jianzi_doctor`。若服务未运行，调用 `jianzi_workbench_start` 自动拉起并等待 ready；工具会核对 `workspaceId`，避免连到另一项目。若启动工具报端口占用、环境检查失败、项目指纹不匹配或超时，按返回信息排障，不要盲目重复启动。服务 ready 但 MCP 仍连不上时，再重启 MCP 连接。DSH/npm 包没有源码项目上下文，需给启动工具传本机绝对路径 `projectRoot`，或给 MCP 进程配置 `JIANZI_PROJECT_ROOT`。
+6. 再次调用 `jianzi_doctor`。若服务未运行，调用 `jianzi_workbench_start` 自动拉起并等待 ready；工具会核对 `workspaceId`，避免连到另一项目。若返回 `WORKBENCH_VERSION_MISMATCH`，停止后续业务工具调用，在目标项目根目录执行 `git pull`，按项目升级说明更新依赖并重新构建，然后重启工作台和 MCP 连接，再调用 doctor 确认兼容。若启动工具报端口占用、环境检查失败、项目指纹不匹配或超时，按返回信息排障，不要盲目重复启动。服务 ready 但 MCP 仍连不上时，再重启 MCP 连接。DSH/npm 包没有源码项目上下文，需给启动工具传本机绝对路径 `projectRoot`，或给 MCP 进程配置 `JIANZI_PROJECT_ROOT`。
 
 新项目或隔离测试项目必须使用自己的 `config.local.json`、数据库、数据目录和可选 RSSHub checkout。不要把配置中的 RSSHub 地址改为另一个项目正在运行的服务，也不要复用其他项目的数据，除非用户明确要求迁移或共享。
 

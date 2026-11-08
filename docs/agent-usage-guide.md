@@ -85,7 +85,7 @@ npm run jianzi -- install --agent codex
 npm run jianzi -- doctor --json
 ```
 
-安装会创建项目级 `.codex/config.toml` 和 `.agents/skills/`。随后在 Codex 中信任该项目目录，并重载或重启 MCP 连接。确认 Codex 工具列表中出现 `jianzi_*` 工具，再调用 MCP 工具 `jianzi_doctor` 验证连通；CLI `doctor` 只验证工作台 API，不代替客户端 MCP 握手。MCP 子进程与工作台都运行在本机，连接默认 loopback 地址。
+安装会创建项目级 `.codex/config.toml` 和 `.agents/skills/`。随后在 Codex 中信任该项目目录，并重载或重启 MCP 连接。确认 Codex 工具列表中出现 `jianzi_*` 工具，再调用 MCP 工具 `jianzi_doctor` 验证连通与项目版本兼容；CLI `doctor` 只验证工作台 API，不代替客户端 MCP 握手。若返回 `WORKBENCH_VERSION_MISMATCH`，先在项目根目录 `git pull`，按升级说明更新依赖并重新构建，再重启工作台和 MCP 后重试。MCP 子进程与工作台都运行在本机，连接默认 loopback 地址。
 
 默认外部 Agent 工作流不需要在“运行与配置”中添加模型服务商。只有明确要调用 `jianzi_*_generate` 或 `jianzi_batch_auto_research` 等见字内部 AI 工具时，才配置并测试工作台模型。
 
@@ -121,7 +121,7 @@ npm run jianzi -- install --agent workbuddy
 npm run jianzi -- doctor --json
 ```
 
-安装命令会生成项目级 `.mcp.json`，并将业务 Skills 复制到 `.codebuddy/skills/`。在 WorkBuddy 中打开并信任该项目，启用项目 MCP 后刷新或重启连接，再让它调用 `jianzi_doctor` 确认工作台连通。
+安装命令会生成项目级 `.mcp.json`，并将业务 Skills 复制到 `.codebuddy/skills/`。在 WorkBuddy 中打开并信任该项目，启用项目 MCP 后刷新或重启连接，再让它调用 `jianzi_doctor` 确认工作台连通与项目版本兼容。若返回 `WORKBENCH_VERSION_MISMATCH`，先在项目根目录 `git pull`，按升级说明更新依赖并重新构建，再重启工作台和 MCP 后重试。
 
 如果当前 WorkBuddy 客户端不读取项目级 `.mcp.json`，在 MCP 设置中添加本机 stdio 服务：
 
@@ -289,6 +289,10 @@ npm run jianzi -- job get --job <任务ID>
 ### `doctor` 显示未连接
 
 先调用 MCP 工具 `jianzi_workbench_start`。源码版 MCP 会自动使用当前项目根目录，调用官方启动脚本并等待服务 ready 后再做健康检查，同时核对项目指纹；也可以在项目根目录运行 `npm run jianzi -- workbench-start --json`。默认端口为 `4317`；自定义端口需通过 `JIANZI_WORKBENCH_URL` 指定，启动与就绪检查会使用同一端口。DSH/npm 插件没有源码项目上下文，需给工具传 `projectRoot` 本机绝对路径，或为 MCP 进程设置 `JIANZI_PROJECT_ROOT`。若端口被占用、指纹不匹配、环境检查失败或等待超时，按错误信息排障，不要重复拉起或终止未知进程。
+
+### `WORKBENCH_VERSION_MISMATCH`
+
+已安装的插件/MCP 比本地工作台项目新。先在目标项目根目录运行 `git pull`，按项目升级说明更新依赖并重新构建，然后重启工作台与 MCP 连接；再次调用 `jianzi_doctor` 确认版本兼容后再继续业务流程。
 
 ### 采集器或来源测试失败
 

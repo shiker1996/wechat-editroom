@@ -5,7 +5,7 @@ description: 使用见字工作台完成热点采集、选题研判、文章简�
 
 # 采集、研判与文章成稿
 
-开始业务流程前先调用 `jianzi_doctor`。若工作台未连接，调用 `jianzi_workbench_start`，等待其返回 ready 且项目指纹匹配后再继续；DSH/npm 包需传本机项目绝对路径 `projectRoot` 或配置 `JIANZI_PROJECT_ROOT`。启动失败、指纹不匹配或超时后停止业务操作并报告诊断，不要重复启动。
+开始业务流程前先调用 `jianzi_doctor`。若返回 `WORKBENCH_VERSION_MISMATCH`，停止业务工具调用，在目标项目根目录执行 `git pull`，按升级说明更新依赖并重新构建，重启工作台和 MCP 连接后再调用 doctor。若工作台未连接，调用 `jianzi_workbench_start`，等待其返回 ready 且项目指纹匹配后再继续；DSH/npm 包需传本机项目绝对路径 `projectRoot` 或配置 `JIANZI_PROJECT_ROOT`。启动失败、指纹不匹配或超时后停止业务操作并报告诊断，不要重复启动。
 
 ## 流程续接与下一步提示
 

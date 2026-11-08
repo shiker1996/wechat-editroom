@@ -34,7 +34,7 @@
 
 面板按钮只负责生成任务提示并打开 DSH 原生会话。用户检查并发送草稿后，DSH Agent 使用 `mcp__jianzi_workbench__jianzi_*` 工具调用 MCP 服务。官方 MCP client 管理 stdio 子进程并将发现的工具注册给 DSH；本地 MCP 服务调用共用的 `executeJianziTool` 和 `JianziApiClient`，默认访问 `http://127.0.0.1:4317`（可由 `JIANZI_WORKBENCH_URL` 覆盖）。
 
-当工作台服务未运行时，DSH Agent 可调用 `jianzi_workbench_start`；DSH 面板状态卡的「准备启动任务」按钮会把启动提示词放入 DSH 原生会话，由 Agent 在用户发送后调用该 MCP 工具。提示词要求 Agent 从当前会话选中的 DSH 工作空间取得本机绝对路径并作为 `projectRoot` 传入，用户不必在面板重复输入；若 Agent 无法获取工作空间路径，应先询问用户，不得把 DSH profile/插件目录当作项目路径。工具复用 `scripts/runtime/start-workbench.ps1` 或 `.sh`，无浏览器启动，并异步轮询 `/api/overview`；就绪接口返回有效 JSON 后立即执行核心健康检查和 `workspaceId` 指纹比对，最长等待 90 秒。DSH MCP 单次工具调用 timeout 为 120 秒。端口被占用、环境错误或 90 秒内未就绪时，Agent 应报告具体原因并停止重试；发现指纹不匹配或服务版本不支持指纹时，不得继续业务读写。
+DSH Agent 每次业务工具调用前检查工作台 `appVersion` 是否不低于已安装插件/MCP 包版本；版本不足或旧项目不支持该字段时返回 `WORKBENCH_VERSION_MISMATCH`，阻止业务读写，并指导用户在项目目录 `git pull`、按升级说明更新/构建、重启工作台和 MCP。状态卡会显示版本号及更新步骤，并隐藏“准备启动任务”，避免把代码过旧误报为服务未连接。当工作台服务未运行时，DSH Agent 可调用 `jianzi_workbench_start`；DSH 面板状态卡的「准备启动任务」按钮会把启动提示词放入 DSH 原生会话，由 Agent 在用户发送后调用该 MCP 工具。提示词要求 Agent 从当前会话选中的 DSH 工作空间取得本机绝对路径并作为 `projectRoot` 传入，用户不必在面板重复输入；若 Agent 无法获取工作空间路径，应先询问用户，不得把 DSH profile/插件目录当作项目路径。工具复用 `scripts/runtime/start-workbench.ps1` 或 `.sh`，无浏览器启动，并异步轮询 `/api/overview`；就绪接口返回有效 JSON 后立即执行核心健康检查和 `workspaceId` 指纹比对，最长等待 90 秒。DSH MCP 单次工具调用 timeout 为 120 秒。端口被占用、环境错误或 90 秒内未就绪时，Agent 应报告具体原因并停止重试；发现指纹不匹配或服务版本不支持指纹时，不得继续业务读写。
 
 「检查环境」任务先检查当前工作空间是否为有效见字项目。若目录不存在或缺少启动入口，启动工具不会尝试安装；Agent 会先说明需要克隆项目，并征求是否克隆到空目录的确认。克隆后按项目向导逐项配置，不自动安装 RSSHub 或覆盖现有文件。
 
