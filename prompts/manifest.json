@@ -30,7 +30,7 @@
     },
     {
       "id": "articles.review",
-      "version": 7,
+      "version": 8,
       "file": "articles/review.md",
       "purpose": "article-review",
       "variables": [],
@@ -41,7 +41,7 @@
     },
     {
       "id": "articles.repair",
-      "version": 4,
+      "version": 5,
       "file": "articles/repair.md",
       "purpose": "article-repair",
       "variables": [],
