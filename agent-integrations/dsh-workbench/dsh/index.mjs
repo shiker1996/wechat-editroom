@@ -2,6 +2,10 @@ import { createJianziClient } from '../shared/client.mjs';
 import { executeJianziTool } from '../shared/tools.mjs';
 
 export const name = 'jianzi-content-workbench';
+// Profile entries load concurrently, so resolving the Host HTTP carrier with
+// ctx.get() at apply time can miss it and silently drop every panel route.
+// Declaring the dependency lets cordis re-apply once webServer is active.
+export const inject = ['webServer'];
 
 const json = (payload, status = 200) => new Response(JSON.stringify(payload), {
   status,
@@ -20,13 +24,7 @@ const failed = (error) => {
 // registry. It reads Jianzi data through read-only Host routes. Startup actions
 // are prepared as native DSH prompts so the Agent invokes the MCP tool.
 export function apply(ctx) {
-  let server;
-  try {
-    server = typeof ctx.get === 'function' ? ctx.get('webServer') : undefined;
-  } catch {
-    server = undefined;
-  }
-  if (!server || typeof server.register !== 'function') return;
+  const server = ctx.webServer;
 
   const client = createJianziClient();
   const read = async (tool, args) => {
