@@ -127,7 +127,7 @@ test('必要修订只携带当前正文、问题和对应证据', () => {
   assert.deepEqual(input.issues, issues);
   assert.equal(input.evidence.claims[0].id, 'F1');
   assert.doesNotMatch(prompt, /旧大纲|05-humanized|publicationRule/);
-  assert.match(ARTICLE_PROMPTS.repair, /只处理确有事实错误/);
+  assert.match(ARTICLE_PROMPTS.repair, /只根据审稿 `issues` 定点修订/);
 });
 
 test('合规修订提示词要求 AI 直接修订标题、归因和来源展示', () => {
@@ -165,9 +165,9 @@ test('综合候选汇总全部已抓取来源，写作简报移除来源原文',
 });
 
 test('审稿提示词检查证据和推理，允许明确的作者评价', () => {
-  assert.match(ARTICLE_PROMPTS.review, /关键事实前提被已核实事实直接反驳/);
-  assert.match(ARTICLE_PROMPTS.review, /不因语气鲜明而要求弱化/);
-  assert.match(ARTICLE_PROMPTS.review, /不要求用免责声明代替修正/);
+  assert.match(ARTICLE_PROMPTS.review, /关键前提被已核实证据反驳时才要求弱化/);
+  assert.match(ARTICLE_PROMPTS.review, /不要用免责声明代替修正/);
+  assert.match(ARTICLE_PROMPTS.review, /不要要求正文标注“客观事实\/作者观点”/);
   assert.match(ARTICLE_PROMPTS.drafting, /事实准确、观点清晰/);
   assert.match(ARTICLE_PROMPTS.fullEdit, /删除重复的限定和解释段落/);
   assert.match(ARTICLE_PROMPTS.humanize, /去掉生硬、模板化的 AI 表达/);
@@ -265,7 +265,7 @@ test('成稿总契约技能从项目内加载并记录哈希', () => {
 test('直写流程使用单阶段提示词，兼容旧技能组合器', () => {
   assert.deepEqual(ARTICLE_STAGE_CONTRACT.map(({ id }) => id), ['fact-base', 'drafting', 'review', 'length-adjustment', 'title-lock']);
   const manifest = articlePromptManifest('wechat-mp-tech-deep');
-  assert.equal(manifest.version, 'direct-brief-v22');
+  assert.equal(manifest.version, 'direct-brief-v23');
   assert.match(manifest.prompts.drafting.prompt, /技术深解需要解释机制/);
   assert.doesNotMatch(manifest.prompts.review.prompt, /## SKILL:|全流程|风格门禁/);
   assert.match(manifest.prompts.review.hash, /^sha256:[a-f0-9]{64}$/);
