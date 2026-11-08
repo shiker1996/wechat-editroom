@@ -84,6 +84,6 @@ MCP 服务入口路径在 patch 中按 profile 写死（当前 `profiles/desktop
 
 ## npm 正式发布
 
-GitHub Release 会附带统一版本的 DSH 插件 `.tgz`，但不会自动发布到 npm。正式发布仍由仓库的 `Publish DSH plugin to npm` GitHub Actions 工作流执行：推送 `dsh-plugin-v<版本>` 标签即可。工作流从标签提取版本，先在临时工作区戳记项目与插件包版本，并查询 npm registry；如果该版本已发布，CI 会失败。无需手动修改项目或插件 `package.json` 的版本，也不要用普通 CI 提交触发发布。
+推送数字版本 tag（如 `1.0.7`）会同时触发 GitHub Release 打包和 DSH npm 发布。npm 工作流从 tag 提取版本，在临时工作区戳记项目与插件包版本，并查询 npm registry；如果该版本已发布，CI 会失败。旧式 `dsh-plugin-v<版本>` 标签仍可单独触发插件发布。无需手动修改项目或插件 `package.json` 的版本，也不要用普通 CI 提交触发发布。
 
 首次版本已发布到 npm Registry，GitHub Actions 已配置 **Trusted Publisher**：用户 `shiker1996`、仓库 `wechat-editroom`、工作流文件名 `publish-dsh-plugin.yml`，并允许直接发布。后续推送匹配包版本的标签时，工作流会通过 OIDC 发布，无需长期 npm 发布令牌。
