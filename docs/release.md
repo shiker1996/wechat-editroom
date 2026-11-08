@@ -6,8 +6,8 @@
 
 1. 确认 `master` 全绿：`npm run build && npm test`（CI 也必须通过）。
 2. 更新 `CHANGELOG.md`：把 `[Unreleased]` 内容归入新版本号并写日期，同步更新文件底部的比较链接。
-3. 修改 `package.json` 的 `version` 为新版本号（只改这一处，技能 / 插件的 `compatibleApp` 判定会自动跟随）。
-4. 提交并打 tag：`git tag <version>`（如 `0.2.0`，与 `version` 字段完全一致，不加 `v` 前缀）。
+3. 确认 `[Unreleased]` 内容、版本 tag 与发布范围一致；无需手工修改项目或插件清单版本。
+4. 提交并打 tag：`git tag <version>`（如 `1.0.7`，不加 `v` 前缀）；workflow 会把该 tag 用作本次构建版本。
 5. 推送：`git push origin master --tags`。
 6. 生成统一发布包与校验和：
 
@@ -15,8 +15,8 @@
    node scripts/release/release.mjs
    ```
 
-   产物在 `dist/`：源码 `<name>-<version>.zip`、独立 DSH 插件 `<plugin-name>-<version>.tgz` 与 `SHA256SUMS.txt`。两种包统一使用根目录 `package.json` 的版本。脚本要求工作区干净且版本与 HEAD 一致，随后构建插件共享 MCP 文件、在临时目录将插件包版本戳记为当前应用版本，再用 `npm pack` 打包并为全部文件生成 SHA-256。插件源目录的 `package.json` 不需要随每次应用发版手工改版本。
-7. tag 推送后，GitHub Actions 会构建 Windows 安装包，并把安装包、源码 ZIP、DSH 插件 `.tgz` 与校验和一起发布到 GitHub Release。正文由 Actions 根据本次 tag 范围内已合并的 PR 自动生成，不要用 CHANGELOG 段落覆盖。需要把该版插件发布到 npm 时，推送 `dsh-plugin-v<应用版本>` 标签；工作流会先检查 npm registry 中不存在该包版本，重复则失败，再按根目录版本生成并发布。
+   产物在 `dist/`：源码 `<name>-<version>.zip`、独立 DSH 插件 `<plugin-name>-<version>.tgz` 与 `SHA256SUMS.txt`。tag 是构建版本的唯一来源；workflow 先同步更新临时工作区的项目与插件版本，再构建 Windows 安装包和插件包，源码 ZIP 也包含相同版本。插件源目录的 `package.json` 不需要手工改版本。
+7. tag 推送后，GitHub Actions 会从 tag 戳记版本、构建 Windows 安装包，并把安装包、源码 ZIP、DSH 插件 `.tgz` 与校验和一起发布到 GitHub Release。正文由 Actions 根据本次 tag 范围内已合并的 PR 自动生成，不要用 CHANGELOG 段落覆盖。需要把该版插件发布到 npm 时，推送 `dsh-plugin-v<版本>` 标签；工作流会从标签提取版本，并先检查 npm registry 中不存在该包版本，重复则失败，再打包发布。
 8. 用户侧校验下载完整性：`certutil -hashfile <zip> SHA256`（Windows）或 `shasum -a 256 <zip>`，与 `SHA256SUMS.txt` 比对。
 
 ## Release 正文规范

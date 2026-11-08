@@ -62,6 +62,12 @@ jobs:
           node-version: 24
           cache: npm
 
+      - name: Stamp project and DSH plugin versions from release tag
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: node scripts/release/prepare-release-version.mjs "$env:RELEASE_TAG"
+
       - name: Install production and build dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
 
@@ -69,6 +75,8 @@ jobs:
         run: npm install --prefix skills/html-pages-to-images --ignore-scripts --no-audit --no-fund --package-lock=false
 
       - name: Build source and DSH plugin release packages
+        env:
+          RELEASE_VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
         run: npm run release
 
       - name: Prepare bundled Node.js runtime
