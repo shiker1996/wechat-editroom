@@ -11,10 +11,15 @@ if (!version || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test
 
 function updatePackage(file, { lockfile = false } = {}) {
   const absolutePath = path.join(root, file);
-  const value = JSON.parse(fs.readFileSync(absolutePath, 'utf8'));
-  value.version = version;
-  if (lockfile && value.packages?.['']) value.packages[''].version = version;
-  fs.writeFileSync(absolutePath, `${JSON.stringify(value, null, 2)}\n`);
+  let source = fs.readFileSync(absolutePath, 'utf8');
+  const setFirstVersion = (text) => text.replace(/("version"\s*:\s*")[^"]+("\s*[,}])/, (_match, prefix, suffix) => `${prefix}${version}${suffix}`);
+  source = setFirstVersion(source);
+  if (lockfile) {
+    const rootPackage = /("packages"\s*:\s*\{\s*""\s*:\s*\{[\s\S]*?)("version"\s*:\s*")[^"]+("\s*[,}])/;
+    source = source.replace(rootPackage, (_match, prefix, versionPrefix, suffix) => `${prefix}${versionPrefix}${version}${suffix}`);
+  }
+  JSON.parse(source);
+  fs.writeFileSync(absolutePath, source);
 }
 
 updatePackage('package.json');

@@ -8,7 +8,7 @@ on:
 
 permissions:
   contents: write
-  pull-requests: read
+  pull-requests: write
 
 concurrency:
   group: desktop-release-${{ github.ref }}
@@ -149,8 +149,20 @@ jobs:
             dist/*.tgz
             dist/SHA256SUMS.txt
 
-      - name: Sync release versions to master
+      - name: Create pull request to sync release versions
         if: startsWith(github.ref, 'refs/tags/')
-        env:
-          RELEASE_VERSION: ${{ github.ref_name }}
-        run: node scripts/release/sync-release-version-to-master.mjs "$env:RELEASE_VERSION"
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ github.token }}
+          base: master
+          branch: codex/release-version-${{ github.ref_name }}
+          add-paths: |
+            package.json
+            package-lock.json
+            agent-integrations/dsh-workbench/package.json
+          commit-message: chore(release): sync package versions to ${{ github.ref_name }}
+          title: chore(release): sync package versions to ${{ github.ref_name }}
+          body: |
+            Automated version sync after release tag `${{ github.ref_name }}`.
+
+            Updates the application manifest, lockfile, and DSH plugin manifest to the released version.
