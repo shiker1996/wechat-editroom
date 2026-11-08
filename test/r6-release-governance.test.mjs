@@ -20,7 +20,11 @@ test('R6 发布脚本清理受限 dist 并覆盖全部发布物校验和',()=>{
   assert.match(source,/dsh-workbench/);
   assert.match(source,/pack-dsh-plugin\.mjs/);
   assert.match(read('.github/workflows/desktop-release.yml'),/dist\/\*\.tgz/);
-  assert.match(read('.github/workflows/desktop-release.yml'),/sync-release-version-to-master\.mjs/);
+  assert.match(read('.github/workflows/desktop-release.yml'),/peter-evans\/create-pull-request@v7/);
+  assert.match(read('.github/workflows/desktop-release.yml'),/actions\/create-github-app-token@v3/);
+  assert.match(read('.github/workflows/desktop-release.yml'),/gh pr merge .*--auto --squash/);
+  assert.match(read('.github/workflows/desktop-release.yml'),/add-paths:/);
+  assert.match(read('scripts/release/prepare-release-version.mjs'),/JSON\.parse\(source\)/);
   assert.match(read('scripts/release/pack-dsh-plugin.mjs'),/stagedPackage\.version = appPackage\.version/);
   assert.match(read('.github/workflows/publish-dsh-plugin.yml'),/prepare-release-version\.mjs/);
   assert.match(read('.github/workflows/publish-dsh-plugin.yml'),/"\[0-9\]\*"/);

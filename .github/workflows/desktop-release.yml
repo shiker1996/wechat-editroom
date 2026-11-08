@@ -8,7 +8,7 @@ on:
 
 permissions:
   contents: write
-  pull-requests: read
+  pull-requests: write
 
 concurrency:
   group: desktop-release-${{ github.ref }}
@@ -149,8 +149,40 @@ jobs:
             dist/*.tgz
             dist/SHA256SUMS.txt
 
-      - name: Sync release versions to master
+      - name: Create release automation token
         if: startsWith(github.ref, 'refs/tags/')
+        id: release-app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Create pull request to sync release versions
+        if: startsWith(github.ref, 'refs/tags/')
+        id: version-sync-pr
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ steps.release-app-token.outputs.token }}
+          base: master
+          branch: codex/release-version-${{ github.ref_name }}
+          add-paths: |
+            package.json
+            package-lock.json
+            agent-integrations/dsh-workbench/package.json
+          commit-message: chore(release): sync package versions to ${{ github.ref_name }}
+          title: chore(release): sync package versions to ${{ github.ref_name }}
+          body: |
+            Automated version sync after release tag `${{ github.ref_name }}`.
+
+            Updates the application manifest, lockfile, and DSH plugin manifest to the released version.
+
+      - name: Enable auto-merge after PR checks pass
+        if: startsWith(github.ref, 'refs/tags/') && steps.version-sync-pr.outputs.pull-request-number != ''
         env:
-          RELEASE_VERSION: ${{ github.ref_name }}
-        run: node scripts/release/sync-release-version-to-master.mjs "$env:RELEASE_VERSION"
+          GH_TOKEN: ${{ steps.release-app-token.outputs.token }}
+          PR_NUMBER: ${{ steps.version-sync-pr.outputs.pull-request-number }}
+        run: gh pr merge "$env:PR_NUMBER" --auto --squash
