@@ -73,10 +73,10 @@ Host 插件（`dsh/index.mjs`）通过官方 `ctx.webServer.register` 注册读�
 从仓库根目录运行：
 
 ```sh
-node agent-integrations/dsh-workbench/build.mjs
-cd agent-integrations/dsh-workbench
-pnpm pack
+npm run release
 ```
+
+统一发布目录 `dist/` 会包含源码 ZIP、单独的 DSH 插件 `.tgz` 和校验和；Release workflow 会将 tag 作为版本号，同时戳记项目与插件包。只调试插件包时，可运行 `npm run build --prefix agent-integrations/dsh-workbench`，再从仓库根目录执行 `node scripts/release/pack-dsh-plugin.mjs ./dist`。
 
 本地 `.tgz` 安装适用于开发和调试；普通用户直接在插件管理器中输入 npm 包名即可。DSH 插件索引是另一种分发方式，目前未单独发布。详见官方[插件打包与发布说明](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/develop/basic/publish.md)及[插件索引说明](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/guide/plugin-market.md)。
 
@@ -84,6 +84,6 @@ MCP 服务入口路径在 patch 中按 profile 写死（当前 `profiles/desktop
 
 ## npm 正式发布
 
-正式发布由仓库的 `Publish DSH plugin to npm` GitHub Actions 工作流执行。将插件 `package.json` 的版本更新并合入主分支后，推送对应标签 `dsh-plugin-v<版本号>`（例如 `dsh-plugin-v0.2.30`）。工作流会核对标签和包版本、构建、生成 `.tgz`、上传 GitHub Actions 产物，并将同一个 `.tgz` 发布到 npm。不要用普通 CI 提交触发发布。
+GitHub Release 会附带统一版本的 DSH 插件 `.tgz`，但不会自动发布到 npm。正式发布仍由仓库的 `Publish DSH plugin to npm` GitHub Actions 工作流执行：推送 `dsh-plugin-v<版本>` 标签即可。工作流从标签提取版本，先在临时工作区戳记项目与插件包版本，并查询 npm registry；如果该版本已发布，CI 会失败。无需手动修改项目或插件 `package.json` 的版本，也不要用普通 CI 提交触发发布。
 
 首次版本已发布到 npm Registry，GitHub Actions 已配置 **Trusted Publisher**：用户 `shiker1996`、仓库 `wechat-editroom`、工作流文件名 `publish-dsh-plugin.yml`，并允许直接发布。后续推送匹配包版本的标签时，工作流会通过 OIDC 发布，无需长期 npm 发布令牌。

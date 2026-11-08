@@ -14,8 +14,17 @@ test('R6 发布脚本清理受限 dist 并覆盖全部发布物校验和',()=>{
   const source=read('scripts/release/release.mjs');
   assert.match(source,/path\.resolve\(root,'dist'\)/);
   assert.match(source,/path\.dirname\(distDir\)!==root/);
-  assert.match(source,/HEAD:package\.json/);
+  assert.match(source,/GIT_INDEX_FILE/);
+  assert.match(source,/if \(dirty && !process\.env\.RELEASE_VERSION\)/);
   assert.match(source,/const artifacts=fs\.readdirSync\(distDir\)/);
+  assert.match(source,/dsh-workbench/);
+  assert.match(source,/pack-dsh-plugin\.mjs/);
+  assert.match(read('.github/workflows/desktop-release.yml'),/dist\/\*\.tgz/);
+  assert.match(read('scripts/release/pack-dsh-plugin.mjs'),/stagedPackage\.version = appPackage\.version/);
+  assert.match(read('.github/workflows/publish-dsh-plugin.yml'),/prepare-release-version\.mjs/);
+  assert.match(read('.github/workflows/publish-dsh-plugin.yml'),/npm view "\$\{PACKAGE_NAME\}@\$\{PACKAGE_VERSION\}" version/);
+  assert.match(read('scripts/release/prepare-release-version.mjs'),/updatePackage\('package\.json'\)/);
+  assert.match(read('scripts/release/prepare-release-version.mjs'),/updatePackage\('package-lock\.json', \{ lockfile: true \}\)/);
 });
 
 test('R6 安全支持版本、所有权和威胁模型路径已更新',()=>{

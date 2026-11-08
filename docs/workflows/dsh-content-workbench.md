@@ -48,8 +48,9 @@ MCP 工具定义与执行器以 `scripts/agent-integration/tools.mjs` 和 `scrip
 
 ## 打包与交付
 
-- 插件目录：`agent-integrations/dsh-workbench/`；插件清单图标复用 `build/brand-seal.svg`（exe 图标的矢量源）；普通用户在 DSH 插件管理器中输入 npm 包名 `jianzi-content-workbench` 安装；开发者构建后可通过 `pnpm pack` 生成 `.tgz` 本地调试。
+- 插件目录：`agent-integrations/dsh-workbench/`；插件清单图标复用 `build/brand-seal.svg`（exe 图标的矢量源）；普通用户在 DSH 插件管理器中输入 npm 包名 `jianzi-content-workbench` 安装；开发者可用统一 release 命令或单独 `npm pack` 生成 `.tgz` 本地调试。
 - DSH 运行依赖：官方 `@deepseek-ai/dsh-mcp-client`，由 Harness 安装提供并在 `package.json` 中声明为 peer；Cordis patch 配置 stdio transport 和插件包内 MCP 服务入口。
 - MCP 服务入口路径在 patch 中按 profile 定位（当前写死 `profiles/desktop`，与 DeepSeek Harness 桌面端的活动 profile 一致）；在其他 profile 安装时需同步修改该路径。
-- 构建命令：`node agent-integrations/dsh-workbench/build.mjs`；打包命令：在插件目录运行 `pnpm pack`。
+- 统一发布打包命令：`npm run release`；tag 构建先把版本戳记到项目和插件清单，再构建桌面端与独立 DSH `.tgz`，并为全部产物生成校验和。只调试插件时运行 `npm run build --prefix agent-integrations/dsh-workbench` 和 `node scripts/release/pack-dsh-plugin.mjs ./dist`。
+- GitHub Release 附带源码 ZIP、同 tag 版本的 DSH `.tgz` 和 SHA256 清单；npm 正式发布由 `dsh-plugin-v<版本>` 标签工作流执行，同样从 tag 戳记版本。
 - 当前交付状态：`jianzi-content-workbench` 已发布到 npm，普通用户可在官方 DeepSeek Harness 插件管理器中直接输入包名安装；DSH 插件索引尚未单独发布。npm 发布工作流见插件 README；官方索引可按 [插件索引说明](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/guide/plugin-market.md)单独生成和托管。
