@@ -32,9 +32,20 @@ try {
 
   Write-Host "Installing $installer into $installDir"
   $install = Start-Process -FilePath $installer -ArgumentList @('/S', "/D=$installDir") -PassThru -WindowStyle Hidden
-  if (-not $install.WaitForExit(120000)) {
+  if (-not $install.WaitForExit(300000)) {
+    $install.Refresh()
+    $processDetails = Get-CimInstance Win32_Process | Where-Object {
+      $_.ProcessId -eq $install.Id -or $_.ParentProcessId -eq $install.Id
+    } | Select-Object ProcessId, ParentProcessId, Name, ExecutablePath, CommandLine | Format-List | Out-String
+    @(
+      "Installer did not finish within 300 seconds: $installer"
+      "Install directory: $installDir"
+      "Installer process ID: $($install.Id)"
+      "Installer has exited: $($install.HasExited)"
+      $processDetails
+    ) | Set-Content -LiteralPath (Join-Path $diagnosticsDir 'installer-timeout.txt') -Encoding utf8
     & taskkill.exe /PID $install.Id /T /F | Out-Null
-    throw 'NSIS installer did not finish within 120 seconds'
+    throw 'NSIS installer did not finish within 300 seconds; see test-results/desktop-installer/installer-timeout.txt'
   }
   if ($install.ExitCode -ne 0) { throw "NSIS installer exited with code $($install.ExitCode)" }
 
