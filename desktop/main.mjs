@@ -150,7 +150,6 @@ function traceDesktopIpc(stage, details = {}) {
   } catch {
     // 诊断日志不能影响菜单功能。
   }
-  console.log(`[desktop-ipc] ${stage}`, details);
 }
 
 let nextDesktopCommandId = 1;

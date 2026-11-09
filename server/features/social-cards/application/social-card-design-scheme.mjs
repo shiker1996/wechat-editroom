@@ -3,6 +3,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { MODEL_JSON_ERROR_CODES, parseModelJson } from '../../../platform/llm/model-json.mjs';
 import { colorContrast } from '../../../shared/themes/theme-validator.mjs';
+import { visualDirectionReference } from '../../../shared/themes/visual-direction-catalog.mjs';
 
 const COLOR_MOOD_PROMPT = '色彩气质决策：先根据文章主题、情绪、受众、内容类型和故事板叙事判断色彩气质，再独立判断明暗（明亮/深沉）与冷暖（暖/冷/中性），两者不能绑定推断。将判断落实到完整 palette，并在 visualDirection 中简短说明明暗与冷暖选择。不要把科技、代码、数据或专业感自动等同于深色、冷色或霓虹；明亮暖色、浅色冷调、深色暖调、中性方案都可按内容选择。除非内容语义确实支持，避免连续项目重复使用深色底加冷色霓虹的套路。无论选择何种气质，都必须保证文字清晰可读并通过对比度校验。';
 
@@ -100,7 +101,7 @@ export async function generateSocialCardDesignScheme({ gateway, store = null, pr
   const input = { title, channelMode, contentType, canvas: { width: 375, height: 667 }, pages: story };
   const system = `你是公众号与小红书图文设计师。针对当前文章和故事板，每次独立制定一份视觉方案；参考 Layout Guide，避免重复旧主题。事实内容只能来自输入，标题和页面职责不得改写。只返回紧凑 JSON，形状：{"designScheme":{"visualDirection":"","palette":{"background":"#RRGGBB","surface":"#RRGGBB","text":"#RRGGBB","muted":"#RRGGBB","accent":"#RRGGBB","accentSecondary":"#RRGGBB"},"typography":{"family":"sans|serif|mono","titlePx":34,"bodyPx":14,"captionPx":12,"lineHeight":1.55},"composition":{"grid":"","density":"","rhythm":"","motif":""},"pages":[{"page":1,"role":"cover|content|ending","layout":"poster|editorial|data|checklist|steps|minimal|timeline|comparison|evidence|feature","focus":"","treatment":""}]}}。pages 必须逐页对应输入，页数、顺序和 role 一致；不得添加新页面。视觉方向最多 100 字；每页 focus/treatment 各最多 100 字。颜色需满足标题文字与背景/卡片表面的对比度至少 4.5:1、注释文字至少 3:1、强调色与背景至少 3:1。字号限制：标题 30–40px、正文 13–16px、注释 12–14px、行高 1.45–1.7。方案负责视觉风格和页面层级，不改变原始信息、组件结构契约、分页与内容容量。\n\n## 参考排版规范\n${String(references || '').slice(0, 16000)}`;
   const messages = [
-    { role: 'system', protected: true, content: `${system}\n\n${COLOR_MOOD_PROMPT}` },
+    { role: 'system', protected: true, content: `${system}\n\n${COLOR_MOOD_PROMPT}\n\n${visualDirectionReference('social')}` },
     { role: 'user', protected: true, content: JSON.stringify(input) },
   ];
   const configured = Number(gateway?.config?.providers?.[provider]?.maxOutputTokens)

@@ -15,6 +15,7 @@ import { bindGenerationSnapshot, prepareSkillRun } from '../../../platform/skill
 import { parseModelJson } from '../../../platform/llm/model-json.mjs';
 import { enforceWechatFlowLayout, extractHtmlModelOutput, htmlPreservesStructure } from '../../../shared/rendering/typeset-output.mjs';
 import { markdownToHtml, normalizeDesignTokens } from '../../../shared/rendering/markdown-renderer.mjs';
+import { visualDirectionReference } from '../../../shared/themes/visual-direction-catalog.mjs';
 import { getAccountContext } from '../../../platform/application/account-context-service.mjs';
 
 export { enforceWechatFlowLayout, extractHtmlModelOutput, htmlPreservesStructure } from '../../../shared/rendering/typeset-output.mjs';
@@ -119,7 +120,7 @@ export async function runTypesetPipeline({ gateway, store, batchId, candidateId,
   onProgress('排版 2/6：按总契约执行 magazine-design-advisor');
   const designResult = await gateway.complete({ provider, purpose: 'magazine-design', batchId, candidateId, jsonMode: true,
     maxOutputTokens: Math.min(3200, providerConfig.maxOutputTokens), messages: [
-      { role: 'system', protected: true, content: `${skills['wechat-article-typeset'].prompt}\n\n## 当前阶段子技能\n${skills['magazine-design-advisor'].prompt}\n\n${resolvePrompt('articles.typeset-design-contract').text}` },
+      { role: 'system', protected: true, content: `${skills['wechat-article-typeset'].prompt}\n\n## 当前阶段子技能\n${skills['magazine-design-advisor'].prompt}\n\n${visualDirectionReference('article')}\n\n${resolvePrompt('articles.typeset-design-contract').text}` },
       { role: 'user', protected: true, content: fs.readFileSync(renderedPath, 'utf8').slice(0, 16000) },
     ] });
   const design = parseJson(designResult, store);

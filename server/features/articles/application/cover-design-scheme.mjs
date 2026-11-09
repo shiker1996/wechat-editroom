@@ -5,6 +5,7 @@ import { loadSkillBundle } from '../../../platform/llm/skill-runtime.mjs';
 import { MODEL_JSON_ERROR_CODES, parseModelJson } from '../../../platform/llm/model-json.mjs';
 import { validateThemeDefinition, colorContrast } from '../../../shared/themes/theme-validator.mjs';
 import { coverSpecFromTheme, validateCoverSpec, COVER_WIDTH, COVER_HEIGHT, COVER_LAYOUT_RECIPES, COVER_THEME_SPEC_FIELDS } from '../../../shared/themes/cover-components.mjs';
+import { visualDirectionReference } from '../../../shared/themes/visual-direction-catalog.mjs';
 import { normalizeCoverSemantics } from './cover-semantics.mjs';
 
 const REFERENCE_NAMES = new Set(['cover-layout-guide.md', 'cover-visual-contract.md', 'cover-visual-component-mapping.md']);
@@ -152,7 +153,7 @@ export async function generateCoverDesignScheme({ gateway, store = null, provide
   log('正在生成本篇封面设计方案…');
   let initialResponse;
   const originalMessages = [
-    { role: 'system', protected: true, content: `${system}\n\n${COLOR_MOOD_PROMPT}` },
+    { role: 'system', protected: true, content: `${system}\n\n${COLOR_MOOD_PROMPT}\n\n${visualDirectionReference('cover')}` },
     { role: 'user', protected: true, content: JSON.stringify(userPayload) },
   ];
   try {
