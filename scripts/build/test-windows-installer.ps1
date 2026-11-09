@@ -56,34 +56,68 @@ try {
 
   $stdoutPath = Join-Path $diagnosticsDir 'app-stdout.log'
   $stderrPath = Join-Path $diagnosticsDir 'app-stderr.log'
+  $electronLogPath = Join-Path $diagnosticsDir 'electron-main.log'
+  $portsBeforeLaunch = @(
+    Get-NetTCPConnection -State Listen -LocalAddress '127.0.0.1' -ErrorAction SilentlyContinue |
+      Select-Object -ExpandProperty LocalPort -Unique
+  )
   Write-Host 'Starting installed application and waiting for /api/overview'
-  $appProcess = Start-Process -FilePath $appPath -ArgumentList @('--disable-gpu') -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
+  $appProcess = Start-Process -FilePath $appPath -ArgumentList @('--disable-gpu', '--enable-logging=file', "--log-file=$electronLogPath") -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
   $serverLog = Join-Path $workspaceDir 'logs\desktop-workbench.log'
   $serverErrorLog = Join-Path $workspaceDir 'logs\desktop-workbench.error.log'
   $ipcLog = Join-Path $workspaceDir 'logs\desktop-ipc.log'
   $deadline = (Get-Date).AddSeconds($StartupTimeoutSeconds)
   $healthy = $false
+  $apiUri = $null
 
   while ((Get-Date) -lt $deadline) {
     if ($appProcess.HasExited) { throw "Installed application exited early with code $($appProcess.ExitCode)" }
+    $candidatePorts = @(
+      Get-NetTCPConnection -State Listen -LocalAddress '127.0.0.1' -ErrorAction SilentlyContinue |
+        Where-Object { $portsBeforeLaunch -notcontains $_.LocalPort } |
+        Select-Object -ExpandProperty LocalPort -Unique
+    )
     if (Test-Path -LiteralPath $serverLog) {
       $logText = Get-Content -LiteralPath $serverLog -Raw -ErrorAction SilentlyContinue
       $match = [regex]::Match($logText, 'http://127\.0\.0\.1:(\d+)')
       if ($match.Success) {
-        $uri = "http://127.0.0.1:$($match.Groups[1].Value)/api/overview"
-        try {
-          $response = Invoke-WebRequest -Uri $uri -TimeoutSec 3 -UseBasicParsing
-          if ($response.StatusCode -eq 200) { $healthy = $true; break }
-        } catch {
-          # The child server may have logged its address just before listen completes.
-        }
+        $loggedPort = [uint16]$match.Groups[1].Value
+        if ($candidatePorts -notcontains $loggedPort) { $candidatePorts += $loggedPort }
       }
     }
+    foreach ($port in $candidatePorts) {
+      $uri = "http://127.0.0.1:$port/api/overview"
+      try {
+        $response = Invoke-WebRequest -Uri $uri -TimeoutSec 3 -UseBasicParsing
+        if ($response.StatusCode -eq 200) {
+          $healthy = $true
+          $apiUri = $uri
+          break
+        }
+      } catch {
+        # Ignore unrelated loopback listeners and probe again while the app starts.
+      }
+    }
+    if ($healthy) { break }
     Start-Sleep -Milliseconds 500
   }
 
   if (-not $healthy) {
-    foreach ($path in @($serverLog, $serverErrorLog, $ipcLog, $stdoutPath, $stderrPath)) {
+    $processDetails = Get-CimInstance Win32_Process | Where-Object {
+      $_.ProcessId -eq $appProcess.Id -or $_.ParentProcessId -eq $appProcess.Id
+    } | Select-Object ProcessId, ParentProcessId, Name, ExecutablePath, CommandLine | Format-List | Out-String
+    $listenerDetails = Get-NetTCPConnection -State Listen -LocalAddress '127.0.0.1' -ErrorAction SilentlyContinue |
+      Select-Object LocalAddress, LocalPort, OwningProcess | Format-Table -AutoSize | Out-String
+    @(
+      "Installed application did not serve /api/overview within $StartupTimeoutSeconds seconds"
+      "Application process ID: $($appProcess.Id)"
+      "Application has exited: $($appProcess.HasExited)"
+      'Application process tree:'
+      $processDetails
+      'Loopback listeners:'
+      $listenerDetails
+    ) | Set-Content -LiteralPath (Join-Path $diagnosticsDir 'startup-timeout.txt') -Encoding utf8
+    foreach ($path in @($serverLog, $serverErrorLog, $ipcLog, $stdoutPath, $stderrPath, $electronLogPath)) {
       if (Test-Path -LiteralPath $path) {
         Copy-Item -LiteralPath $path -Destination (Join-Path $diagnosticsDir (Split-Path -Leaf $path)) -Force -ErrorAction SilentlyContinue
       }
@@ -103,7 +137,7 @@ try {
   }
   if (-not $rendererReady) { throw 'Installed application API started, but the renderer did not report ready within 30 seconds' }
 
-  Write-Host "Installer smoke test passed: renderer ready and /api/overview returned HTTP $($response.StatusCode)"
+  Write-Host "Installer smoke test passed: renderer ready and $apiUri returned HTTP $($response.StatusCode)"
 } finally {
   if ($appProcess -and -not $appProcess.HasExited) {
     & taskkill.exe /PID $appProcess.Id /T /F | Out-Null
@@ -115,6 +149,11 @@ try {
       if (Test-Path -LiteralPath $path) {
         Copy-Item -LiteralPath $path -Destination (Join-Path $diagnosticsDir $name) -Force -ErrorAction SilentlyContinue
       }
+    }
+  }
+  foreach ($path in @($stdoutPath, $stderrPath, $electronLogPath)) {
+    if ($path -and (Test-Path -LiteralPath $path)) {
+      Copy-Item -LiteralPath $path -Destination (Join-Path $diagnosticsDir (Split-Path -Leaf $path)) -Force -ErrorAction SilentlyContinue
     }
   }
 
