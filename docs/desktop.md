@@ -33,6 +33,13 @@ npm run desktop:dir  # 生成 dist/win-unpacked
 npm run desktop:win  # 生成 Windows 安装包
 ```
 
+Windows 安装包可在本机或 CI 中用同一脚本执行静默安装、启动和本地服务健康检查。完成后会静默卸载并清理临时工作区：
+
+```powershell
+$installer = Get-ChildItem .\dist -Filter 'jianzi-*-win-x64.exe' | Select-Object -First 1
+pwsh -File .\scripts\build\test-windows-installer.ps1 -InstallerPath $installer.FullName
+```
+
 当前 Windows 包使用 x64、NSIS 和外置 Node.js 24 运行时。构建产物包括：
 
 - `dist/win-unpacked/`：已验证可启动的目录包；

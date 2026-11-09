@@ -15,6 +15,47 @@ permissions:
   checks: write
 
 jobs:
+  desktop-installer:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      PUPPETEER_SKIP_DOWNLOAD: "true"
+      PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci --no-audit --no-fund
+
+      - name: 准备桌面打包依赖
+        shell: pwsh
+        run: |
+          & "$env:GITHUB_WORKSPACE\scripts\build\prepare-windows-desktop-build.ps1"
+
+      - name: 构建 Windows 安装包
+        run: npm run desktop:win
+
+      - name: 静默安装并启动验证
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem -LiteralPath (Join-Path $env:GITHUB_WORKSPACE "dist") -Filter "jianzi-*-win-x64.exe" | Select-Object -First 1
+          if (-not $installer) { throw "Windows installer was not produced" }
+          & (Join-Path $env:GITHUB_WORKSPACE "scripts\build\test-windows-installer.ps1") -InstallerPath $installer.FullName
+
+      - name: 上传安装冒烟诊断日志
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-installer-diagnostics-${{ github.run_id }}
+          path: test-results/desktop-installer
+          if-no-files-found: ignore
+          retention-days: 14
+
   verify:
     runs-on: windows-latest
     timeout-minutes: 45
