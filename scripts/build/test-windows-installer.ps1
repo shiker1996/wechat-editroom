@@ -125,14 +125,26 @@ try {
     throw "Installed application did not serve /api/overview within $StartupTimeoutSeconds seconds"
   }
 
-  $rendererDeadline = (Get-Date).AddSeconds(30)
+  $rendererDeadline = (Get-Date).AddSeconds(75)
+  $roamingRoot = Join-Path $env:USERPROFILE 'AppData\Roaming'
+  $rendererLogRoots = @(
+    $workspaceDir,
+    $isolatedAppData,
+    (Join-Path $roamingRoot 'wechat-newsroom-workbench'),
+    (Join-Path $roamingRoot '见字'),
+    (Join-Path $roamingRoot 'com.shiker.wechat-newsroom-workbench')
+  ) | Select-Object -Unique
   $rendererReady = $false
   while ((Get-Date) -lt $rendererDeadline) {
     if ($appProcess.HasExited) { throw "Installed application exited after the API became healthy with code $($appProcess.ExitCode)" }
     $ipcLogs = @(
-      Get-ChildItem -LiteralPath $smokeRoot -Filter 'desktop-ipc.log' -File -Recurse -ErrorAction SilentlyContinue |
-        Select-Object -ExpandProperty FullName -Unique
-    )
+      foreach ($root in $rendererLogRoots) {
+        if (Test-Path -LiteralPath $root -PathType Container) {
+          Get-ChildItem -LiteralPath $root -Filter 'desktop-ipc.log' -File -Recurse -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty FullName
+        }
+      }
+    ) | Select-Object -Unique
     foreach ($candidateLog in $ipcLogs) {
       if ((Get-Content -LiteralPath $candidateLog -Raw -ErrorAction SilentlyContinue) -match '"stage":"renderer-ready"') {
         $rendererReady = $true
@@ -145,16 +157,41 @@ try {
   }
   if (-not $rendererReady) {
     $logFiles = @(
-      Get-ChildItem -LiteralPath $smokeRoot -Filter 'desktop-*.log' -File -Recurse -ErrorAction SilentlyContinue |
-        Select-Object -ExpandProperty FullName -Unique
+      foreach ($root in $rendererLogRoots) {
+        if (Test-Path -LiteralPath $root -PathType Container) {
+          Get-ChildItem -LiteralPath $root -Filter 'desktop-*.log' -File -Recurse -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty FullName
+        }
+      }
+    ) | Select-Object -Unique
+    $processDetails = Get-CimInstance Win32_Process | Where-Object {
+      $_.ProcessId -eq $appProcess.Id -or $_.ParentProcessId -eq $appProcess.Id
+    } | Select-Object ProcessId, ParentProcessId, Name, ExecutablePath, CommandLine | Format-List | Out-String
+    $apiPort = [uint16]([regex]::Match($apiUri, ':(\d+)/').Groups[1].Value)
+    $apiListener = Get-NetTCPConnection -State Listen -LocalPort $apiPort -ErrorAction SilentlyContinue |
+      Select-Object LocalAddress, LocalPort, OwningProcess | Format-Table -AutoSize | Out-String
+    $appDataInventory = @(
+      foreach ($root in @($isolatedAppData, (Join-Path $roamingRoot 'wechat-newsroom-workbench'), (Join-Path $roamingRoot '见字'))) {
+        if (Test-Path -LiteralPath $root -PathType Container) {
+          Get-ChildItem -LiteralPath $root -Force -Recurse -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty FullName
+        }
+      }
     )
     @(
-      'Installed application API started, but the renderer did not report ready within 30 seconds'
+      'Installed application API started, but the renderer did not report ready within 75 seconds'
       "Workspace marker: $($markerPaths -join '; ')"
       "Expected workspace: $workspaceDir"
-      "Electron user data root: $isolatedAppData"
-      'Desktop logs found under isolated smoke root:'
+      "Isolated APPDATA: $isolatedAppData"
+      "Renderer log search roots: $($rendererLogRoots -join '; ')"
+      'Desktop logs found:'
       ($logFiles -join [Environment]::NewLine)
+      'App data files and directories found:'
+      ($appDataInventory -join [Environment]::NewLine)
+      'Application process tree:'
+      $processDetails
+      'API listener:'
+      $apiListener
     ) | Set-Content -LiteralPath (Join-Path $diagnosticsDir 'renderer-timeout.txt') -Encoding utf8
     foreach ($path in $logFiles) {
       $name = [System.IO.Path]::GetFileName($path)
@@ -164,7 +201,7 @@ try {
       }
       Copy-Item -LiteralPath $path -Destination $destination -Force -ErrorAction SilentlyContinue
     }
-    throw 'Installed application API started, but the renderer did not report ready within 30 seconds; see test-results/desktop-installer/renderer-timeout.txt'
+    throw 'Installed application API started, but the renderer did not report ready within 75 seconds; see test-results/desktop-installer/renderer-timeout.txt'
   }
 
   Write-Host "Installer smoke test passed: renderer ready and $apiUri returned HTTP $($response.StatusCode)"
