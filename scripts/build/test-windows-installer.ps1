@@ -129,13 +129,43 @@ try {
   $rendererReady = $false
   while ((Get-Date) -lt $rendererDeadline) {
     if ($appProcess.HasExited) { throw "Installed application exited after the API became healthy with code $($appProcess.ExitCode)" }
-    if ((Test-Path -LiteralPath $ipcLog) -and (Get-Content -LiteralPath $ipcLog -Raw -ErrorAction SilentlyContinue) -match '"stage":"renderer-ready"') {
-      $rendererReady = $true
-      break
+    $ipcLogs = @(
+      Get-ChildItem -LiteralPath $smokeRoot -Filter 'desktop-ipc.log' -File -Recurse -ErrorAction SilentlyContinue |
+        Select-Object -ExpandProperty FullName -Unique
+    )
+    foreach ($candidateLog in $ipcLogs) {
+      if ((Get-Content -LiteralPath $candidateLog -Raw -ErrorAction SilentlyContinue) -match '"stage":"renderer-ready"') {
+        $rendererReady = $true
+        $ipcLog = $candidateLog
+        break
+      }
     }
+    if ($rendererReady) { break }
     Start-Sleep -Milliseconds 500
   }
-  if (-not $rendererReady) { throw 'Installed application API started, but the renderer did not report ready within 30 seconds' }
+  if (-not $rendererReady) {
+    $logFiles = @(
+      Get-ChildItem -LiteralPath $smokeRoot -Filter 'desktop-*.log' -File -Recurse -ErrorAction SilentlyContinue |
+        Select-Object -ExpandProperty FullName -Unique
+    )
+    @(
+      'Installed application API started, but the renderer did not report ready within 30 seconds'
+      "Workspace marker: $($markerPaths -join '; ')"
+      "Expected workspace: $workspaceDir"
+      "Electron user data root: $isolatedAppData"
+      'Desktop logs found under isolated smoke root:'
+      ($logFiles -join [Environment]::NewLine)
+    ) | Set-Content -LiteralPath (Join-Path $diagnosticsDir 'renderer-timeout.txt') -Encoding utf8
+    foreach ($path in $logFiles) {
+      $name = [System.IO.Path]::GetFileName($path)
+      $destination = Join-Path $diagnosticsDir $name
+      if (Test-Path -LiteralPath $destination) {
+        $destination = Join-Path $diagnosticsDir "$(Split-Path -Leaf (Split-Path -Parent $path))-$name"
+      }
+      Copy-Item -LiteralPath $path -Destination $destination -Force -ErrorAction SilentlyContinue
+    }
+    throw 'Installed application API started, but the renderer did not report ready within 30 seconds; see test-results/desktop-installer/renderer-timeout.txt'
+  }
 
   Write-Host "Installer smoke test passed: renderer ready and $apiUri returned HTTP $($response.StatusCode)"
 } finally {
