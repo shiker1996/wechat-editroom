@@ -2,6 +2,15 @@ param([int]$Port = 4317)
 
 $ErrorActionPreference = "Stop"
 
+$rsshubStopScript = Join-Path $PSScriptRoot "rsshub-stop.ps1"
+if (Test-Path -LiteralPath $rsshubStopScript -PathType Leaf) {
+  try {
+    & $rsshubStopScript
+  } catch {
+    Write-Output "Could not stop RSSHub: $($_.Exception.Message)"
+  }
+}
+
 $connections = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
 if (-not $connections) {
   Write-Output "No process is listening on port $Port. Workbench is not running."
