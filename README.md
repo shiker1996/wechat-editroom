@@ -16,6 +16,7 @@
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="MIT License"></a>
   <a href="./docs/user-guide.md#1-安装与启动"><img src="https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6?logo=windows&amp;logoColor=white" alt="Platform: Windows 10/11"></a>
   <a href="https://github.com/shiker1996/wechat-editroom/releases/latest"><img src="https://img.shields.io/github/v/release/shiker1996/wechat-editroom?label=latest%20release" alt="Latest release"></a>
+  <a href="https://dshfind.com/zh/plugins/shiker1996/wechat-editroom?ref=badge"><img src="https://dshfind.com/api/badge/shiker1996/wechat-editroom?lang=zh" alt="dshfind"></a>
 </p>
 
 <p align="center">

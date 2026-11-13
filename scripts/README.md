@@ -12,8 +12,8 @@
 | `runtime/setup-workbench.ps1`、根目录 `setup-workbench.sh` | 跨平台安装入口 |
 | `runtime/start-workbench.ps1` / `runtime/start-workbench.sh` | 跨平台启动入口 |
 | `runtime/start-server.mjs` | Node 服务启动器；沿用显式代理环境变量，Windows 未设置时读取系统默认代理，并在服务启动前启用 Node 环境代理 |
-| `runtime/stop-workbench.ps1` / `runtime/stop-workbench.sh` | 跨平台停止入口 |
-| `runtime/rsshub-start.ps1` / `runtime/rsshub-stop.ps1` | RSSHub 生命周期脚本，由 RSSHub 配置和采集器调用 |
+| `runtime/stop-workbench.ps1` / `runtime/stop-workbench.sh` | 跨平台停止入口；两版都会先停止 RSSHub，再停止工作台 |
+| `runtime/rsshub-start.ps1` / `runtime/rsshub-stop.ps1` | RSSHub 生命周期脚本；Windows RSSHub 配置和采集器使用 PowerShell 脚本，总停止入口按当前平台复用其 PID 文件与端口配置 |
 | `runtime/install-skill-deps.mjs` | 根 `postinstall`，级联安装技能包依赖 |
 
 ## 构建、测试与持续校验
