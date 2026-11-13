@@ -327,6 +327,24 @@ export async function pollJob(id) {
       state.jobTimer = setTimeout(() => pollJob(id), 1200);
       return;
     }
+    if (job.type === "article-image-pipeline") {
+      await loadOverview();
+      await window.go("preview");
+      const candidateId=String(job.candidateId||job.candidate_id||"");
+      if(candidateId){
+        $("#typeset-candidate").value=candidateId;
+        window.renderProductionCandidate(candidateId);
+        await window.loadImageWorkspace(candidateId);
+      }
+      const result=job.result||(()=>{try{return JSON.parse(job.result_json||"{}");}catch{return {};}})();
+      if(job.status==="completed"){
+        const failed=Number(result.failed||0),needsReview=Number(result.needsReview||0);
+        const details=[...(result.failedItems||[]).map((item)=>`${item.imageId} 失败：${item.error}`),...(result.needsReviewItems||[]).map((item)=>`${item.imageId} 待确认：${item.reason}`)];
+        const summary=failed||needsReview?`配图流水线完成：${result.completed||0} 张就绪，${failed} 张失败，${needsReview} 张需人工处理。${details.slice(0,2).join("；")}。再次运行会重试缺失项。`:`配图流水线完成：${result.completed||0} 张配图已就绪`;
+        toast(summary,failed||needsReview?"error":"success");
+      }else toast(`配图任务${job.status==="cancelled"?"已取消":"失败"}：${job.error||"未取得有效结果"}`,"error");
+      return;
+    }
     if (job.status === "completed" && job.type === "collect" && state.currentBatch?.batch_type !== "breaking") {
       try {
         const batch=await request(`/api/batches/${encodeURIComponent(job.batchId || job.batch_id)}`);

@@ -41,6 +41,9 @@ export { runTutorialPipeline, tutorialVisibleChars } from './llm/tutorial-pipeli
 export { analyzeVisualComplexity, normalizeVisualPlan, planArticleVisuals, insertVisualFences } from './llm/visual-planner.mjs';
 export { imageManifestFile, planImagePlaceholders, registerGeneratedImageAssets, uploadImageToCdn, buildImagesMarkdown, applyImagePlan, parseImagePlaceholders, saveImageMetadata, registerGeneratedSlotImage, getImageWorkspace, saveLocalImage } from './application/image-workflow.mjs';
 export { generateArticleImage } from './application/article-image-generator.mjs';
+export { createArticleImageAsset } from './application/article-image-create.mjs';
+export { collectCandidateImageSources } from './application/article-image-sources.mjs';
+export { runArticleImagePipeline } from './application/article-image-pipeline.mjs';
 export { runCoverImageJob } from './application/cover-image-generator.mjs';
 export { renderCover, runAiVisualCoverJob, validateGeneratedCoverHtml } from './application/ai-visual-cover-generator.mjs';
 export { AI_VISUAL_COVER_STAGE_CONTRACT, createAiVisualCoverStageRecorder, writeAiVisualCoverDeliveryGate, writeAiVisualCoverGenerationReport, writeAiVisualCoverSkillManifest } from './application/ai-visual-cover-pipeline.mjs';

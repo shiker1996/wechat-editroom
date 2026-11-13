@@ -1,12 +1,12 @@
 import { tagBatch } from '../../research/llm/tasks.mjs';
 import { runResearchPipeline, ensureBatchEventCards } from '../../research/index.mjs';
-import { runArticlePipeline, runArticleReview, runTypesetPipeline, runBreakingAnalysisPipeline, runDailyPipeline, runTutorialPipeline, runCoverImageJob } from '../../articles/index.mjs';
+import { runArticlePipeline, runArticleReview, runTypesetPipeline, runBreakingAnalysisPipeline, runDailyPipeline, runTutorialPipeline, runCoverImageJob, runArticleImagePipeline } from '../../articles/index.mjs';
 import { runSocialCardBeautify } from '../../social-cards/index.mjs';
 import { runAutoPipeline } from './auto-pipeline.mjs';
 import { retryPipelineFailure } from './pipeline-failure-retry.mjs';
 import { bindPipelineHarnessGateway } from '../../../platform/skills/pipeline-runtime.mjs';
 
-export const AI_JOB_TYPES = Object.freeze(['tag', 'retag', 'event-cards', 'research', 'pipeline-failure-retry', 'breaking-analysis', 'article', 'article-review', 'daily', 'tutorial', 'typeset', 'social-card-beautify', 'cover-image', 'auto']);
+export const AI_JOB_TYPES = Object.freeze(['tag', 'retag', 'event-cards', 'research', 'pipeline-failure-retry', 'breaking-analysis', 'article', 'article-review', 'daily', 'tutorial', 'typeset', 'article-image-pipeline', 'social-card-beautify', 'cover-image', 'auto']);
 export const BATCH_LEVEL_AI_JOB_TYPES = new Set(['tag', 'retag', 'event-cards', 'research', 'pipeline-failure-retry', 'breaking-analysis', 'auto', 'daily']);
 
 export function createAiJobHandlers({ store, gateway, config, log, onThinking = () => {} }) {
@@ -46,6 +46,7 @@ export function createAiJobHandlers({ store, gateway, config, log, onThinking = 
     ['daily', ({ job, options }) => runDailyPipeline({ gateway: jobGateway(job), store, batchId: job.batchId, provider: job.requestedProvider, workspaceRoot: config.workspaceRoot, snapshotId: job.snapshotId, stageSelections: job.stageSelections, focus: options.focus, focuses: options.focuses, articleLength: config.articleLength, rootRunId: `job:${job.id}`, workflowRunId: `job:${job.id}`, onProgress: progress(job) })],
     ['tutorial', ({ job, options }) => runTutorialPipeline({ gateway: jobGateway(job), store, batchId: job.batchId, candidateId: options.candidateId, provider: job.requestedProvider, workspaceRoot: config.workspaceRoot, snapshotId: job.snapshotId, skillSelection: job.skillSelection, stageSelections: job.stageSelections, articleLength: config.articleLength, rootRunId: `job:${job.id}`, workflowRunId: `job:${job.id}`, onProgress: progress(job) })],
     ['typeset', ({ job, options }) => runTypesetPipeline({ gateway: jobGateway(job), store, batchId: job.batchId, candidateId: options.candidateId, provider: job.requestedProvider, workspaceRoot: config.workspaceRoot, snapshotId: job.snapshotId, documentKind: options.documentKind, imageDeliveryMode: options.imageDeliveryMode || 'local', rootRunId: `job:${job.id}`, workflowRunId: `job:${job.id}`, stageId: 'typeset', onProgress: progress(job) })],
+    ['article-image-pipeline', ({ job, options }) => runArticleImagePipeline({ gateway:jobGateway(job),store,batchId:job.batchId,candidateId:job.candidateId,provider:job.requestedProvider,workspaceRoot:config.workspaceRoot,replan:options.replan!==false,rootRunId:`job:${job.id}`,workflowRunId:`job:${job.id}`,signal:job.abortController?.signal,onProgress:progress(job) })],
     ['social-card-beautify', ({ job, options }) => runSocialCardBeautify({ gateway: jobGateway(job), store, batchId: job.batchId, candidateId: options.candidateId, provider: job.requestedProvider, workspaceRoot: config.workspaceRoot, rootRunId: `job:${job.id}`, workflowRunId: `job:${job.id}`, styleBrief: options.styleBrief, resumeFrom: options.resumeFrom || '', onProgress: progress(job), onEvent: visualEventSink(job) })],
     ['cover-image', ({ job }) => runCoverImageJob({ gateway: jobGateway(job), store, batchId: job.batchId, candidateId: job.candidateId, provider: job.requestedProvider, workspaceRoot: config.workspaceRoot, rootRunId: `job:${job.id}`, workflowRunId: `job:${job.id}`, onProgress: progress(job), onEvent: visualEventSink(job) })],
     ['auto', async ({ job, batch, maxAgeHours }) => { const result = await runAutoPipeline({ gateway: jobGateway(job), store, config, job, batch, maxAgeHours, onProgress: progress(job) }); for (const failure of store.listPipelineFailures(job.batchId, { statuses: ['open', 'retrying'], stages: ['research'] })) store.resolvePipelineFailure(failure.id); return result; }],

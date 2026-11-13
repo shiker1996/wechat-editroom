@@ -1,0 +1,4 @@
+interface:
+  display_name: "文章配图来源规划"
+  short_description: "从选题采集来源匹配文章配图"
+  default_prompt: "为文章配图占位匹配直接相关的已采集来源，只返回来源 ID。"
