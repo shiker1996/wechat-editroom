@@ -20,8 +20,8 @@
 | 阶段 | 输入 | 输出/状态变化 | 实现位置 |
 | --- | --- | --- | --- |
 | 查看 | `candidateId` | 返回配图占位、本地/CDN 状态和 CDN 是否已配置 | `GET /api/candidates/:id/images` |
-| 启动 | `candidateId`、可选 provider | 要求已有 `09-FINAL.md`；创建候选级异步任务 | `POST /api/candidates/:id/images/run` |
-| 规划（按需/重规划） | 终稿 Markdown、`replan` | 默认重规划；没有已完成图片时先清除旧占位再规划，有已完成图片时保留现有占位以免图片与新占位错配 | `article-image-pipeline.mjs`、`image-workflow.mjs` |
+| 启动 | `candidateId`、可选 provider、可选 `restartFromStart` | 要求已有 `09-FINAL.md`；创建候选级异步任务。默认续跑缺失项；显式从占位重跑时先归档旧图片、清单和检查点 | `POST /api/candidates/:id/images/run` |
+| 规划（按需/重规划） | 终稿 Markdown、`replan`、`restartFromStart` | 默认保留已完成图片并只处理缺失项；显式从占位重跑时重新规划，并将旧图片、资产清单和检查点归档到 `.image-history/` | `article-image-pipeline.mjs`、`image-workflow.mjs` |
 | 来源发现与匹配 | 待配图占位、候选已采集来源、已启用的 web-search 槽位 | 工作台为占位检索公开页面；Agent 只能选输入中的 sourceId。搜索结果仅作候选，不算已核验事实 | `article-image-pipeline.mjs`、`article-image-agent/SKILL.md`、`capability-slots.mjs` |
 | 来源核验与呈现选择 | 已选公开来源、终稿、搜索摘要 | capture 选择直接相关页面；datacard 仅可使用终稿数字并要求数字同时出现在重新抓取的来源正文；不满足时转人工确认 | `article-image-pipeline.mjs`、`article-image-create.mjs` |
 | 逐项生成 | 已核验的截图/数据卡方案 | 生成来源页面截图或带来源 URL、核验日期的数据卡；单项失败不阻塞其他图片；逐项更新资产清单和流水线检查点 | `article-image-pipeline.mjs`、`article-image-create.mjs` |

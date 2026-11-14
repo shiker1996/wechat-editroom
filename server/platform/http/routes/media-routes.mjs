@@ -153,7 +153,7 @@ export async function handleMediaRoutes(context) {
     const batch = store.getBatch(candidate.batch_id); const workdir = articleWorkdir(batch, candidate);
     if (!fs.existsSync(path.join(workdir,'09-FINAL.md'))) return json(response, 409, { error:'缺少 09-FINAL.md，请先完成成稿链' });
     const input = await body(request) || {};
-    return json(response, 202, aiJobs.start({batchId:batch.id,candidateId:candidate.id,provider:input.provider||null,type:'article-image-pipeline',replan:input.replan!==false}));
+    return json(response, 202, aiJobs.start({batchId:batch.id,candidateId:candidate.id,provider:input.provider||null,type:'article-image-pipeline',replan:input.replan!==false,restartFromStart:input.restartFromStart===true}));
   }
   const imagePlanMatch = pathname.match(/^\/api\/candidates\/(\d+)\/images\/plan$/);
   if (imagePlanMatch && request.method === 'POST') {

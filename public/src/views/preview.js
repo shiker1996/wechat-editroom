@@ -29,7 +29,11 @@ function bindPreview() {
     await withLoading(event.currentTarget, "正在扫描…", () => reindex().catch((error) => toast(error.message, "error")));
     await loadProductionPreview().catch((error) => toast(error.message, "error"));
   });
-  document.getElementById("plan-article-images").addEventListener("click", (event) => withLoading(event.currentTarget, "正在配图…", () => runArticleImagePipeline().catch((error) => toast(error.message, "error"))));
+  document.getElementById("plan-article-images").addEventListener("click", (event) => withLoading(event.currentTarget, "正在配图…", () => runArticleImagePipeline(false).catch((error) => toast(error.message, "error"))));
+  document.getElementById("restart-article-images").addEventListener("click", (event) => {
+    if (!window.confirm("将当前配图、资产清单和检查点归档，然后从终稿占位重新规划并配图。继续吗？")) return;
+    withLoading(event.currentTarget, "正在重跑…", () => runArticleImagePipeline(true).catch((error) => toast(error.message, "error")));
+  });
   document.getElementById("run-local-typeset").addEventListener("click", (event) => {
     const blocked = typesetBlockReason();
     if (blocked) { toast(blocked); return; }
@@ -107,11 +111,11 @@ async function createSlotImage(imageId) {
   toast(`${imageId} 已从选题采集来源自动配图${saved?.source?'；来源已记录':''}；确认后可单独上传 CDN`);
 }
 
-async function runArticleImagePipeline() {
+async function runArticleImagePipeline(restartFromStart=false) {
   const candidateId=Number(document.getElementById("typeset-candidate")?.value);
   if(!candidateId)throw new Error("请先选择一篇文章候选");
   const provider=document.getElementById("typeset-provider")?.value||state.models?.defaultProvider;
-  const job=await request(`/api/candidates/${candidateId}/images/run`,{method:"POST",body:JSON.stringify({provider,replan:true})});
+  const job=await request(`/api/candidates/${candidateId}/images/run`,{method:"POST",body:JSON.stringify({provider,replan:true,restartFromStart})});
   await openProductionJob(job.id);
 }
 
@@ -211,6 +215,8 @@ function renderImageWorkspace() {
   const status = document.getElementById('image-stage-status');
   const button = document.getElementById('plan-article-images');
   if (button) button.hidden = Boolean(data.daily);
+  const restartButton = document.getElementById('restart-article-images');
+  if (restartButton) restartButton.hidden = Boolean(data.daily);
   if (button) button.textContent = '检查并自动配图';
   if (status) {
     if (localOnly) status.textContent = data.cdnReason ? `未配置图片 CDN：${data.cdnReason}。将使用仅本地排版，图片位置输出为空占位符，粘贴到公众号后请逐个替换。` : '当前使用仅本地排版，图片位置会输出为空占位符，粘贴到公众号后请逐个替换。';

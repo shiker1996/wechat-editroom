@@ -31,6 +31,17 @@ function checkpointArtifact(store,batchId,candidateId,filePath,stat) {
   store.upsertArtifact({batchId,candidateId,track:'article',kind:'配图流水线检查点',name:path.basename(filePath),path:filePath,size:stat.size,modifiedAt:stat.mtime.toISOString()});
 }
 
+export function archivePreviousImageRun(workdir) {
+  const historyRoot=path.join(workdir,'.image-history');
+  const archiveDir=path.join(historyRoot,new Date().toISOString().replace(/[:.]/g,'-'));
+  const files=[['images',path.join(workdir,'images')],['image-assets.json',imageManifestFile(workdir)],[CHECKPOINT_NAME,path.join(workdir,CHECKPOINT_NAME)]];
+  const existing=files.filter(([,file])=>fs.existsSync(file));
+  if(!existing.length)return null;
+  fs.mkdirSync(archiveDir,{recursive:true});
+  for(const [name,file] of existing)fs.renameSync(file,path.join(archiveDir,name));
+  return archiveDir;
+}
+
 function checkCancelled(signal) {
   if(signal?.aborted) throw Object.assign(new Error(signal.reason?.message||'配图流水线已取消'),{code:'JOB_CANCELLED'});
 }
@@ -109,12 +120,13 @@ async function planSourceAssignments({gateway,store,batchId,candidateId,provider
   return assignments;
 }
 
-export async function runArticleImagePipeline({gateway,store,batchId,candidateId,provider,workspaceRoot,replan=true,rootRunId=null,workflowRunId=null,signal=null,onProgress=()=>{}}) {
+export async function runArticleImagePipeline({gateway,store,batchId,candidateId,provider,workspaceRoot,replan=true,restartFromStart=false,rootRunId=null,workflowRunId=null,signal=null,onProgress=()=>{}}) {
   const batch=store.getBatch(batchId),candidate=store.getCandidate(Number(candidateId));
   if(!batch||!candidate||candidate.batch_id!==batchId)throw new Error('文章候选不存在或不属于当前批次');
   const workdir=candidateArticleDir(workspaceRoot,batch,candidate),finalPath=path.join(workdir,'09-FINAL.md');
   if(!fs.existsSync(finalPath))throw new Error('缺少 09-FINAL.md，请先完成成稿链');
   checkCancelled(signal);
+  if(restartFromStart)archivePreviousImageRun(workdir);
   const checkpointPath=path.join(workdir,CHECKPOINT_NAME);
   let checkpoint={schemaVersion:1,batchId,candidateId:candidate.id,items:{},createdAt:new Date().toISOString()};
   try { const saved=JSON.parse(fs.readFileSync(checkpointPath,'utf8')); if(saved?.candidateId===candidate.id&&saved.items)checkpoint={...checkpoint,...saved}; } catch {}
