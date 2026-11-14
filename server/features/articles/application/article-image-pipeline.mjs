@@ -8,6 +8,7 @@ import { parseModelJson } from '../../../platform/llm/model-json.mjs';
 import { collectCandidateImageSources } from './article-image-sources.mjs';
 import { createArticleImageAsset } from './article-image-create.mjs';
 import { generateArticleImage } from './article-image-generator.mjs';
+import { executeInformationCapabilitySlot, listInformationCapabilitySlots } from '../../../platform/tools/capability-slots.mjs';
 import { clearImagePlan, getImageWorkspace, imageManifestFile, planImagePlaceholders, registerGeneratedSlotImage, saveLocalImage } from './image-workflow.mjs';
 
 const CHECKPOINT_NAME='article-image-pipeline.json';
@@ -33,20 +34,52 @@ function checkCancelled(signal) {
   if(signal?.aborted) throw Object.assign(new Error(signal.reason?.message||'配图流水线已取消'),{code:'JOB_CANCELLED'});
 }
 
-function sourceAgentInput(slots,sources) {
+function sourceAgentInput(slots,sources,articleText='') {
   return {slots:slots.map((item)=>({imageId:item.id,description:item.content,position:item.position,suggestedSource:item.suggestedSource})),
-    sources:sources.slice(0,30).map((source)=>({sourceId:source.sourceId,title:source.title,site:source.source||source.source_name||'',url:source.url,excerpt:String(source.description||source.content||'').slice(0,1000)}))};
+    sources:sources.slice(0,40).map((source)=>({sourceId:source.sourceId,title:source.title,site:source.source||source.source_name||'',url:source.url,kind:source.kind||'collected',excerpt:String(source.content||source.description||'').slice(0,5000)})),
+    articleText:String(articleText).slice(0,24000)};
 }
 
-async function planSourceAssignments({gateway,store,batchId,candidateId,provider,workspaceRoot,rootRunId,workflowRunId,slots,sources,signal}) {
+async function discoverImageSources({workspaceRoot,slots,signal}) {
+  const slotList=await listInformationCapabilitySlots(workspaceRoot);
+  if(!slotList.find((item)=>item.id==='web-search')?.available)return {sources:[],warning:'网络搜索槽位未配置或不可用'};
+  const sources=[],warnings=[];
+  for(const item of slots.slice(0,4)) {
+    if(signal?.aborted)throw Object.assign(new Error('配图流水线已取消'),{code:'JOB_CANCELLED'});
+    const topic=[item.content,item.suggestedSource].filter(Boolean).join(' ').slice(0,500);
+    if(!topic)continue;
+    const result=await executeInformationCapabilitySlot('web-search',{query:`官方 ${topic}`,maxResults:4},{workspaceRoot,allowedCapabilities:['cap_content_web_search'],skillId:'article-image-agent',consumerId:'article-image-pipeline:web-search'});
+    if(result?.status!=='ok') { warnings.push(result?.error?.message||'网络搜索失败'); continue; }
+    for(const candidate of result.data?.results||[]) {
+      const url=String(candidate?.url||'').trim();
+      try { const parsed=new URL(url); if(!['http:','https:'].includes(parsed.protocol)||parsed.username||parsed.password)continue; } catch { continue; }
+      if(sources.some((source)=>source.url===url))continue;
+      sources.push({sourceId:`web-${String(sources.length+1).padStart(3,'0')}`,kind:'web-search',title:String(candidate.title||'').slice(0,300),source:String(candidate.source||new URL(url).hostname).slice(0,150),url,description:String(candidate.snippet||'').slice(0,1600),publishedAt:String(candidate.publishedAt||'')});
+    }
+  }
+  for(const source of sources.slice(0,8)) {
+    if(signal?.aborted)throw Object.assign(new Error('配图流水线已取消'),{code:'JOB_CANCELLED'});
+    try {
+      const fetched=await executeInformationCapabilitySlot('web-page',{targetUrl:source.url,title:source.title,root:workspaceRoot},{workspaceRoot,allowedCapabilities:['cap_content_url_fetch'],skillId:'article-image-agent',consumerId:'article-image-pipeline:source-verify'});
+      if(fetched?.status==='ok') { source.content=String(fetched.data?.content||fetched.data?.text||'').slice(0,12000); source.verifiedAt=fetched.provenance?.fetchedAt||new Date().toISOString(); }
+      else warnings.push(`${source.url}：${fetched?.error?.message||'网页正文抓取失败'}`);
+    } catch(error) { warnings.push(`${source.url}：${String(error.message||error)}`); }
+  }
+  return {sources,warnings};
+}
+
+function numericTokens(value) { return new Set((String(value||'').match(/\d+(?:\.\d+)?%?/g)||[]).map((item)=>item.replace(/%$/,''))); }
+
+async function planSourceAssignments({gateway,store,batchId,candidateId,provider,workspaceRoot,rootRunId,workflowRunId,slots,sources,articleText,searchWarning='',signal}) {
   if(!slots.length)return new Map();
-  if(!sources.length)return new Map(slots.map((item)=>[item.id,{action:'needs_review',reason:'当前选题没有可用的已采集来源'}]));
+  if(!sources.length)return new Map(slots.map((item)=>[item.id,{action:'needs_review',reason:`没有可用来源。${searchWarning||'请检查网络搜索槽位配置'}`.slice(0,300)}]));
   const skill=loadSkillBundle({workspaceRoot,skillName:'article-image-agent'});
   if(skill.fallback)throw new Error('配图来源规划 Agent 技能不可用');
   const availableIds=new Set(sources.map((source)=>source.sourceId));
-  const result=await runPipelineStage({gateway,store,batchId,candidateId,provider,purpose:'article-image-agent-plan',skillId:'article-image-agent',entryPoint:'article-image-pipeline',stageId:'source-plan',input:sourceAgentInput(slots,sources),messages:[
+  const input=sourceAgentInput(slots,sources,articleText);
+  const result=await runPipelineStage({gateway,store,batchId,candidateId,provider,purpose:'article-image-agent-plan',skillId:'article-image-agent',entryPoint:'article-image-pipeline',stageId:'source-plan',input,messages:[
     {role:'system',content:skill.prompt,protected:true},
-    {role:'user',content:JSON.stringify(sourceAgentInput(slots,sources)),protected:true},
+    {role:'user',content:JSON.stringify(input),protected:true},
   ],maxOutputTokens:2500,jsonMode:true,rootRunId,workflowRunId,signal});
   const parsed=parseModelJson(result,{store,label:'配图来源规划'});
   const assignments=new Map();
@@ -54,9 +87,22 @@ async function planSourceAssignments({gateway,store,batchId,candidateId,provider
     const imageId=String(assignment?.imageId||'');
     if(!slots.some((slot)=>slot.id===imageId)||assignments.has(imageId))continue;
     const sourceId=String(assignment?.sourceId||'');
-    assignments.set(imageId,assignment?.action==='capture'&&availableIds.has(sourceId)
-      ?{action:'capture',sourceId,reason:String(assignment.reason||'').slice(0,300)}
-      :{action:'needs_review',reason:String(assignment.reason||'没有找到足够相关的采集来源').slice(0,300)});
+    if(assignment?.action==='capture'&&availableIds.has(sourceId)) assignments.set(imageId,{action:'capture',sourceId,reason:String(assignment.reason||'').slice(0,300)});
+    else if(assignment?.action==='datacard'&&availableIds.has(sourceId)&&assignment.spec&&typeof assignment.spec==='object') {
+      const source=sources.find((item)=>item.sourceId===sourceId);
+      let evidenceText=source?.content||source?.description||'';
+      if(source?.kind==='web-search'&&!source?.content) {
+        try {
+          const fetched=await executeInformationCapabilitySlot('web-page',{targetUrl:source.url,title:source.title,root:workspaceRoot},{workspaceRoot,allowedCapabilities:['cap_content_url_fetch'],skillId:'article-image-agent',consumerId:'article-image-pipeline:source-verify'});
+          if(fetched?.status==='ok')evidenceText=String(fetched.data?.content||fetched.data?.text||evidenceText);
+        } catch {}
+      }
+      const articleNumbers=numericTokens(articleText), evidenceNumbers=numericTokens(evidenceText);
+      const items=Array.isArray(assignment.spec.items)?assignment.spec.items:[];
+      const values=items.flatMap((item)=>[...numericTokens(item?.value)]);
+      const verified=items.length>=2&&items.length<=8&&values.length>0&&values.every((value)=>articleNumbers.has(value)&&evidenceNumbers.has(value));
+      assignments.set(imageId,verified?{action:'datacard',sourceId,spec:assignment.spec,reason:String(assignment.reason||'').slice(0,300)}:{action:'needs_review',reason:'数据卡数字未能同时在终稿和联网来源摘要中核对'});
+    } else assignments.set(imageId,{action:'needs_review',reason:String(assignment.reason||'没有找到足够相关的公开来源').slice(0,300)});
   }
   for(const item of slots)if(!assignments.has(item.id))assignments.set(item.id,{action:'needs_review',reason:'来源规划 Agent 未为该配图选择有效来源'});
   return assignments;
@@ -103,9 +149,15 @@ export async function runArticleImagePipeline({gateway,store,batchId,candidateId
   if(!pending.length){onProgress(items.length?'配图流水线 4/4：所有配图均已就绪':'配图流水线 4/4：文章无需额外配图');return {status:'completed',candidateId:candidate.id,total:eligible.length,completed:eligible.length,needsReview:0,failed:0,items:[...current.values()]};}
 
   const sourceSlots=pending.filter((item)=>!item.generate&&!item.generated);
-  const sources=collectCandidateImageSources(candidate,store);
+  const articleText=fs.readFileSync(finalPath,'utf8');
+  const collectedSources=collectCandidateImageSources(candidate,store);
+  let discovered={sources:[],warnings:[]};
+  onProgress(`配图流水线 2/4：联网检索 ${sourceSlots.length} 张配图的公开来源`);
+  try { discovered=await discoverImageSources({workspaceRoot,slots:sourceSlots,signal}); }
+  catch(error) { if(error.code==='JOB_CANCELLED')throw error; discovered={sources:[],warnings:[String(error.message||error)]}; }
+  const sources=[...collectedSources,...discovered.sources];
   let assignments=new Map();
-  try { checkCancelled(signal);onProgress(`配图流水线 2/4：Agent 正在匹配 ${sourceSlots.length} 张来源配图与选题采集报道`);assignments=await planSourceAssignments({gateway,store,batchId,candidateId:candidate.id,provider,workspaceRoot,rootRunId,workflowRunId,slots:sourceSlots,sources,signal}); }
+  try { checkCancelled(signal);onProgress(`配图流水线 2/4：Agent 正在选择截图或数据卡方案`);assignments=await planSourceAssignments({gateway,store,batchId,candidateId:candidate.id,provider,workspaceRoot,rootRunId,workflowRunId,slots:sourceSlots,sources,articleText,searchWarning:discovered.warning||discovered.warnings?.join('；'),signal}); }
   catch(error){if(error.code==='JOB_CANCELLED')throw error;for(const item of sourceSlots)assignments.set(item.id,{action:'failed',reason:error.message});}
 
   const orderedPending=[...pending].sort((left,right)=>{
@@ -125,6 +177,10 @@ export async function runArticleImagePipeline({gateway,store,batchId,candidateId
         state.status='needs_review';state.reason='缺少可恢复的原始图表规格，请重新规划或手动补图';state.updatedAt=new Date().toISOString();onProgress(`${item.id} 暂停：${state.reason}`);persist();continue;
       }else if(assignment?.action==='needs_review'){
         state.status='needs_review';state.reason=assignment.reason||'未找到足够相关的选题来源';state.updatedAt=new Date().toISOString();onProgress(`${item.id} 暂停：${state.reason}`);persist();continue;
+      }else if(assignment?.action==='datacard'){
+        const source=sources.find((entry)=>entry.sourceId===assignment.sourceId);
+        const verifiedAt=source?.verifiedAt||source?.fetched_at||new Date().toISOString();
+        await createArticleImageAsset({workspaceRoot,workdir,imageId:item.id,input:{mode:'datacard',spec:assignment.spec,source:`${source?.title||'来源'} · ${source?.url||''} · 核验日期 ${verifiedAt.slice(0,10)}`},sources,saveLocalImage});
       }else if(assignment?.action==='failed'){
         throw new Error(assignment.reason||'来源规划失败');
       }else{
@@ -139,5 +195,5 @@ export async function runArticleImagePipeline({gateway,store,batchId,candidateId
   }
   onProgress('配图流水线 4/4：保存配图结果与恢复检查点');
   const results=[...current.values()],failed=results.filter((item)=>item.status==='failed'),needsReview=results.filter((item)=>item.status==='needs_review');
-  return {status:failed.length||needsReview.length?'partial':'completed',candidateId:candidate.id,total:eligible.length,completed:results.filter((item)=>item.status==='completed').length,needsReview:needsReview.length,failed:failed.length,items:results,failedItems:failed.map(({imageId,error})=>({imageId,error})),needsReviewItems:needsReview.map(({imageId,reason})=>({imageId,reason}))};
+  return {status:failed.length||needsReview.length?'partial':'completed',candidateId:candidate.id,total:eligible.length,completed:results.filter((item)=>item.status==='completed').length,needsReview:needsReview.length,failed:failed.length,warnings:[...(discovered.warnings||[]),...(discovered.warning?[discovered.warning]:[])],items:results,failedItems:failed.map(({imageId,error})=>({imageId,error})),needsReviewItems:needsReview.map(({imageId,reason})=>({imageId,reason}))};
 }
