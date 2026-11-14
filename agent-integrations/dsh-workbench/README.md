@@ -44,6 +44,7 @@
 - `mcp-server.mjs` + `shared/`：复用 `scripts/agent-integration/` 的工具定义、执行器与本机 API 客户端，默认 `http://127.0.0.1:4317`（`JIANZI_WORKBENCH_URL` 可覆盖）。
 - DSH 中调用 `jianzi_workbench_start` 可启动已停止的本机项目并等待健康检查；通过 `projectRoot` 参数或 MCP 进程环境变量 `JIANZI_PROJECT_ROOT` 指定源码项目绝对路径。启动器复用项目内官方启动脚本，不会打开浏览器，并并行轮询就绪接口；服务有效响应后立即核对健康信息与项目指纹，避免启动器进程未退出造成误报。启动最多等待 90 秒，DSH MCP 单次调用上限为 120 秒。
 - DSH 插件/MCP 版本高于本地项目时，工具会停止业务调用并提示在项目根目录 `git pull`，按项目升级说明更新依赖并重建，再重启工作台和 MCP；工作台状态卡也会展示本地版本、所需版本和修复步骤。
+- `@deepseek-ai/dsh-mcp-client` 使用无版本限制的 peer 声明，DSH 升级不会仅因版本范围禁用本插件。若 MCP 工具不可用或出现 client 启动、传输、握手、协议错误，Agent 会停止业务操作并建议更新 DSH 与插件、重启后重试一次；仍失败时，请附 DSH、插件、client 版本和脱敏错误日志提交到[项目 GitHub Issues](https://github.com/shiker1996/wechat-editroom/issues)。不要附 token、密钥或文章/用户隐私。
 - 面板文案不硬编码 MCP 工具名，也不复述流程细节；流程以项目技能为准，改流程只改技能。
 
 ## 面板读取的数据
