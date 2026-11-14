@@ -5,6 +5,7 @@ import { candidateArticleDir } from '../../../platform/core/workspace-paths.mjs'
 import { runPipelineStage } from '../../../platform/skills/pipeline-runtime.mjs';
 import { loadSkillBundle } from '../../../platform/llm/skill-runtime.mjs';
 import { parseModelJson } from '../../../platform/llm/model-json.mjs';
+// capability-call: cap_content_web_search, cap_content_url_fetch
 import { collectCandidateImageSources } from './article-image-sources.mjs';
 import { createArticleImageAsset } from './article-image-create.mjs';
 import { generateArticleImage } from './article-image-generator.mjs';

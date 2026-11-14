@@ -37,11 +37,6 @@ function bindPreview() {
   });
   document.getElementById("copy-typeset-html").addEventListener("click", (event) => withLoading(event.currentTarget, "正在复制…", () => copyTypesetHtml().catch((error) => toast(error.message, "error"))));
   document.addEventListener("click", (event) => {
-    const generateImageButton = event.target.closest("[data-generate-image]");
-    if (generateImageButton) {
-      withLoading(generateImageButton, "正在生成…", () => generateSlotImage(generateImageButton.dataset.generateImage).catch((error) => toast(error.message, "error")));
-      return;
-    }
     const createImageButton = event.target.closest("[data-create-image]");
     if (createImageButton) {
       withLoading(createImageButton, "正在匹配来源…", () => createSlotImage(createImageButton.dataset.createImage).catch((error) => toast(error.message, "error")));
@@ -112,14 +107,6 @@ async function createSlotImage(imageId) {
   toast(`${imageId} 已从选题采集来源自动配图${saved?.source?'；来源已记录':''}；确认后可单独上传 CDN`);
 }
 
-async function generateSlotImage(imageId) {
-  const candidateId=state.imageWorkspace?.candidateId;
-  if(!candidateId||state.imageWorkspace?.daily)throw new Error('请先选择一篇文章候选');
-  await request(`/api/candidates/${encodeURIComponent(candidateId)}/images/${encodeURIComponent(imageId)}/generate`,{method:'POST',body:'{}'});
-  await loadImageWorkspace(candidateId);
-  toast(`${imageId} 已按终稿数据生成`);
-}
-
 async function runArticleImagePipeline() {
   const candidateId=Number(document.getElementById("typeset-candidate")?.value);
   if(!candidateId)throw new Error("请先选择一篇文章候选");
@@ -166,8 +153,7 @@ function imageCard(item) {
   const uploadAction = cdnAction
     ? `<button class="ghost-button" data-upload-cdn="${escapeHtml(item.id)}"${cdnAvailable ? '' : ' disabled'} title="${cdnAvailable ? '上传这张图片到 CDN' : escapeHtml(cdnDisabledReason)}">${item.status === 'cdn' ? '重新上传 CDN' : '上传 CDN'}</button>`
     : '';
-  const createAction = state.imageWorkspace?.daily || !hasImage ? '' : item.generate
-    ? `<button class="ghost-button" data-generate-image="${escapeHtml(item.id)}">重新生成</button>`
+  const createAction = state.imageWorkspace?.daily || !hasImage ? ''
     : `<button class="ghost-button" data-create-image="${escapeHtml(item.id)}">重新配图</button>`;
   return `<article class="image-slot ${cardClass}" data-image-id="${escapeHtml(item.id)}">
     <div class="image-slot-top"><span class="image-slot-tags"><span class="image-slot-id">${escapeHtml(item.id)} · ${escapeHtml(item.type)}</span>${generatable ? '<span class="image-slot-kind">✦ 排版自动生成</span>' : ""}</span><span class="image-slot-status">${statusLabel}</span></div>

@@ -242,6 +242,15 @@
       "optionalCapabilities": []
     },
     {
+      "id": "article-image-agent",
+      "name": "文章配图来源与呈现规划 Agent",
+      "requiredCapabilities": [],
+      "optionalCapabilities": [
+        "cap_content_web_search",
+        "cap_content_url_fetch"
+      ]
+    },
+    {
       "id": "article-image-placeholders",
       "name": "文章配图占位规划",
       "requiredCapabilities": [],
@@ -679,9 +688,43 @@
         }
       ],
       "purpose": "写作过程中把 Mermaid/ECharts 代码即时渲染成预览图返回前端"
+    },
+    {
+      "id": "feature.article-image-pipeline",
+      "name": "文章自动配图流水线",
+      "type": "feature",
+      "sourceFiles": [
+        "server/features/articles/application/article-image-pipeline.mjs"
+      ],
+      "dependencies": [
+        {
+          "capability": "cap_content_web_search",
+          "requirement": "conditional",
+          "failurePolicy": "continue-with-warning",
+          "adapterStatus": "ready",
+          "triggerPolicy": "code-path",
+          "resultPolicy": "image-source-discovery"
+        },
+        {
+          "capability": "cap_content_url_fetch",
+          "requirement": "conditional",
+          "failurePolicy": "continue-with-warning",
+          "adapterStatus": "ready",
+          "triggerPolicy": "code-path",
+          "resultPolicy": "image-source-verification"
+        }
+      ],
+      "purpose": "为文章配图搜索并核验公开来源，按可读性与证据质量生成截图或数据卡"
     }
   ],
   "codeCalls": [
+    {
+      "sourceFile": "server/features/articles/application/article-image-pipeline.mjs",
+      "capabilities": [
+        "cap_content_url_fetch",
+        "cap_content_web_search"
+      ]
+    },
     {
       "sourceFile": "server/features/articles/application/image-workflow.mjs",
       "capabilities": [
