@@ -513,7 +513,7 @@ AI 规划配图占位
 → 排版预览（配图工作台「生成图片」）
 
 ### POST /api/candidates/:id/images/:imageId/create
-统一创建文章配图本地图片。`mode` 支持 `auto`（从当前候选关联热点、已采集报道和补充来源中自动匹配并截图，无需 URL）、`capture`（指定公开网页截图，支持 `selector`、`fullPage`、`width`、`height`）、`timeline`、`datacard`、`echarts`。结构化模式传入 `spec`，事实数据需由调用方核验；自动截图记录所选报道 URL、标题和匹配方式。若隔离浏览器遇到可识别的人机验证，会打开配图专用可见 Chrome 等待人工完成，最长约 85 秒。成功写入现有占位和 `image-assets.json`，不会自动上传 CDN。
+统一创建文章配图本地图片。`mode` 支持 `auto`（从当前候选关联热点、已采集报道和补充来源中自动匹配并截图，无需 URL）、`capture`（指定公开网页截图，支持 `selector`、`fullPage`、`width`、`height`）、`timeline`、`datacard`、`diagram`（受限节点/连线机制示意图，可由多条已核验来源共同支撑）、`echarts`。结构化模式传入 `spec`，事实数据需由调用方核验；自动截图记录所选报道 URL、标题和匹配方式。若隔离浏览器遇到可识别的人机验证，会打开配图专用可见 Chrome 等待人工完成，最长约 85 秒。成功写入现有占位和 `image-assets.json`，不会自动上传 CDN。
 
 ### GET /api/batches/:id/daily/images
 读取批次早报配图工作区。

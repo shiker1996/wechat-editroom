@@ -7,7 +7,7 @@
   "entryPoints": ["article-image-pipeline"],
   "contentTypes": ["article-image"],
   "inputContract": "article_image_slots_article_text_and_public_sources",
-  "outputContract": "source_id_strategy_and_data_card_specifications",
+  "outputContract": "source_id_visual_strategy_data_card_and_diagram_specifications",
   "requiredCapabilities": [],
   "optionalCapabilities": ["cap_content_web_search", "cap_content_url_fetch"],
   "compatibleApp": ">=0.1.0",

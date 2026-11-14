@@ -46,9 +46,24 @@ function checkCancelled(signal) {
   if(signal?.aborted) throw Object.assign(new Error(signal.reason?.message||'配图流水线已取消'),{code:'JOB_CANCELLED'});
 }
 
+function relevantSourceExcerpt(source,slots,limit=5000) {
+  const text=String(source?.content||source?.description||'').trim();
+  if(text.length<=limit)return text;
+  const query=slots.map((item)=>`${item.content||''} ${item.suggestedSource||''}`).join(' ');
+  const terms=[...new Set((query.match(/[a-z0-9][a-z0-9._+-]{2,}/gi)||[]).map((term)=>term.toLowerCase()))];
+  const paragraphs=text.split(/\n{2,}|(?<=[。！？])\s*/).map((part)=>part.trim()).filter(Boolean);
+  const chunks=paragraphs.flatMap((part)=>part.length<=900?[part]:Array.from({length:Math.ceil((part.length-700)/500)+1},(_,index)=>part.slice(index*500,index*500+700)).filter(Boolean));
+  if(!terms.length||!chunks.length)return text.slice(0,limit);
+  const ranked=chunks.map((chunk,index)=>({chunk,index,score:terms.reduce((score,term)=>score+(chunk.toLowerCase().includes(term)?Math.min(3,chunk.toLowerCase().split(term).length-1):0),0)}))
+    .sort((left,right)=>right.score-left.score||left.index-right.index);
+  const selected=[];let size=0;
+  for(const item of ranked){if(item.score===0)break;if(size+item.chunk.length>limit)continue;selected.push(item);size+=item.chunk.length+2;}
+  return selected.length?selected.sort((left,right)=>left.index-right.index).map((item)=>item.chunk).join('\n\n'):text.slice(0,limit);
+}
+
 function sourceAgentInput(slots,sources,articleText='') {
   return {slots:slots.map((item)=>({imageId:item.id,description:item.content,position:item.position,suggestedSource:item.suggestedSource})),
-    sources:sources.slice(0,40).map((source)=>({sourceId:source.sourceId,title:source.title,site:source.source||source.source_name||'',url:source.url,kind:source.kind||'collected',excerpt:String(source.content||source.description||'').slice(0,5000)})),
+    sources:sources.slice(0,40).map((source)=>({sourceId:source.sourceId,title:source.title,site:source.source||source.source_name||'',url:source.url,kind:source.kind||'collected',excerpt:relevantSourceExcerpt(source,slots)})),
     articleText:String(articleText).slice(0,24000)};
 }
 
@@ -73,7 +88,7 @@ async function discoverImageSources({workspaceRoot,slots,signal}) {
     if(signal?.aborted)throw Object.assign(new Error('配图流水线已取消'),{code:'JOB_CANCELLED'});
     try {
       const fetched=await executeInformationCapabilitySlot('web-page',{targetUrl:source.url,title:source.title,root:workspaceRoot},{workspaceRoot,allowedCapabilities:['cap_content_url_fetch'],skillId:'article-image-agent',consumerId:'article-image-pipeline:source-verify'});
-      if(fetched?.status==='ok') { source.content=String(fetched.data?.content||fetched.data?.text||'').slice(0,12000); source.verifiedAt=fetched.provenance?.fetchedAt||new Date().toISOString(); }
+      if(fetched?.status==='ok') { source.content=String(fetched.data?.content||fetched.data?.text||'').slice(0,50000); source.verifiedAt=fetched.provenance?.fetchedAt||new Date().toISOString(); }
       else warnings.push(`${source.url}：${fetched?.error?.message||'网页正文抓取失败'}`);
     } catch(error) { warnings.push(`${source.url}：${String(error.message||error)}`); }
   }
@@ -114,6 +129,29 @@ async function planSourceAssignments({gateway,store,batchId,candidateId,provider
       const values=items.flatMap((item)=>[...numericTokens(item?.value)]);
       const verified=items.length>=2&&items.length<=8&&values.length>0&&values.every((value)=>articleNumbers.has(value)&&evidenceNumbers.has(value));
       assignments.set(imageId,verified?{action:'datacard',sourceId,spec:assignment.spec,reason:String(assignment.reason||'').slice(0,300)}:{action:'needs_review',reason:'数据卡数字未能同时在终稿和联网来源摘要中核对'});
+    } else if(assignment?.action==='diagram'&&assignment.spec&&typeof assignment.spec==='object') {
+      const sourceIds=[...new Set((Array.isArray(assignment.sourceIds)?assignment.sourceIds:[sourceId]).map((id)=>String(id||'')).filter(Boolean))];
+      const evidence=Array.isArray(assignment.spec.evidence)?assignment.spec.evidence.map((item)=>({sourceId:String(item?.sourceId||''),quote:String(item?.quote||'').trim()})):[];
+      const sourceRows=sourceIds.map((id)=>sources.find((item)=>item.sourceId===id)).filter(Boolean);
+      let verified=sourceIds.length>=1&&sourceIds.length<=3&&sourceRows.length===sourceIds.length&&evidence.length>0&&evidence.length<=6&&evidence.every((item)=>sourceIds.includes(item.sourceId)&&item.quote.length>=24)&&sourceIds.every((id)=>evidence.some((item)=>item.sourceId===id));
+      if(verified){
+        for(const source of sourceRows){
+          const quotes=evidence.filter((item)=>item.sourceId===source.sourceId).map((item)=>item.quote);
+          let evidenceText=String(source.content||'');
+          if(!quotes.every((quote)=>evidenceText.includes(quote))&&source.url){
+            try {
+              const fetched=await executeInformationCapabilitySlot('web-page',{targetUrl:source.url,title:source.title,root:workspaceRoot},{workspaceRoot,allowedCapabilities:['cap_content_url_fetch'],skillId:'article-image-agent',consumerId:'article-image-pipeline:source-verify'});
+              if(fetched?.status==='ok'){
+                evidenceText=String(fetched.data?.content||fetched.data?.text||'');
+                source.content=evidenceText.slice(0,50000);
+                source.verifiedAt=fetched.provenance?.fetchedAt||source.verifiedAt||new Date().toISOString();
+              }
+            } catch {}
+          }
+          if(!quotes.every((quote)=>evidenceText.includes(quote))){verified=false;break;}
+        }
+      }
+      assignments.set(imageId,verified?{action:'diagram',sourceIds,sourceId:sourceIds[0],spec:assignment.spec,reason:String(assignment.reason||'').slice(0,300)}:{action:'needs_review',reason:'示意图的多来源原文摘录未能逐条核验'});
     } else assignments.set(imageId,{action:'needs_review',reason:String(assignment.reason||'没有找到足够相关的公开来源').slice(0,300)});
   }
   for(const item of slots)if(!assignments.has(item.id))assignments.set(item.id,{action:'needs_review',reason:'来源规划 Agent 未为该配图选择有效来源'});
@@ -170,7 +208,7 @@ export async function runArticleImagePipeline({gateway,store,batchId,candidateId
   catch(error) { if(error.code==='JOB_CANCELLED')throw error; discovered={sources:[],warnings:[String(error.message||error)]}; }
   const sources=[...collectedSources,...discovered.sources];
   let assignments=new Map();
-  try { checkCancelled(signal);onProgress(`配图流水线 2/4：Agent 正在选择截图或数据卡方案`);assignments=await planSourceAssignments({gateway,store,batchId,candidateId:candidate.id,provider,workspaceRoot,rootRunId,workflowRunId,slots:sourceSlots,sources,articleText,searchWarning:discovered.warning||discovered.warnings?.join('；'),signal}); }
+  try { checkCancelled(signal);onProgress(`配图流水线 2/4：Agent 正在选择截图、数据卡或示意图方案`);assignments=await planSourceAssignments({gateway,store,batchId,candidateId:candidate.id,provider,workspaceRoot,rootRunId,workflowRunId,slots:sourceSlots,sources,articleText,searchWarning:discovered.warning||discovered.warnings?.join('；'),signal}); }
   catch(error){if(error.code==='JOB_CANCELLED')throw error;for(const item of sourceSlots)assignments.set(item.id,{action:'failed',reason:error.message});}
 
   const orderedPending=[...pending].sort((left,right)=>{
@@ -194,6 +232,10 @@ export async function runArticleImagePipeline({gateway,store,batchId,candidateId
         const source=sources.find((entry)=>entry.sourceId===assignment.sourceId);
         const verifiedAt=source?.verifiedAt||source?.fetched_at||new Date().toISOString();
         await createArticleImageAsset({workspaceRoot,workdir,imageId:item.id,input:{mode:'datacard',spec:assignment.spec,source:`${source?.title||'来源'} · ${source?.url||''} · 核验日期 ${verifiedAt.slice(0,10)}`},sources,saveLocalImage});
+      }else if(assignment?.action==='diagram'){
+        const linkedSources=(assignment.sourceIds||[assignment.sourceId]).map((id)=>sources.find((entry)=>entry.sourceId===id)).filter(Boolean);
+        const sourceNote=`来源：${linkedSources.map((source)=>`${String(source.title||'公开原文').slice(0,36)} · ${source.url||''} · 核验日期 ${(source.verifiedAt||source.fetched_at||new Date().toISOString()).slice(0,10)}`).join('；')}`;
+        await createArticleImageAsset({workspaceRoot,workdir,imageId:item.id,input:{mode:'diagram',spec:{...assignment.spec,sourceNote},source:sourceNote},sources,saveLocalImage});
       }else if(assignment?.action==='failed'){
         throw new Error(assignment.reason||'来源规划失败');
       }else{

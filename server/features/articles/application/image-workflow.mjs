@@ -109,7 +109,7 @@ export function applyImagePlan(markdown, placements = []) {
   }
   if (!accepted.length) return `${original}\n\n<!-- IMAGE-PLAN:none -->`;
   const list = accepted.map((item) => `- ${item.id}｜${item.content}｜建议来源：${item.suggestedSource}｜版权动作：${item.copyrightAction}`).join('\n');
-  return `${output.trim()}\n\n<!-- IMAGE-SUPPLY-LIST\n# 手动供图清单\n${list}\n-->`;
+  return `${output.trim()}\n\n<!-- IMAGE-SUPPLY-LIST\n# 配图任务清单\n${list}\n-->`;
 }
 
 export function clearImagePlan(markdown) {

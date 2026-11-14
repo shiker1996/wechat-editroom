@@ -270,7 +270,7 @@
           "resultPolicy": "image-source-verification"
         }
       ],
-      "purpose": "为文章配图搜索并核验公开来源，按可读性与证据质量生成截图或数据卡"
+      "purpose": "为文章配图搜索并核验公开来源，按可读性与证据质量生成截图、数据卡或原文约束的示意图"
     },
     {
       "id": "agent.independent-writing",

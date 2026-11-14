@@ -60,6 +60,22 @@ function validateSpec(mode,spec) {
     if(normalized.some((item)=>!item.label||!item.value))throw new Error('每项都需要非空 label 和 value');
     return {kind:mode, title:String(spec.title||'').trim().slice(0,60), items:normalized};
   }
+  if(mode==='diagram'){
+    const nodes=Array.isArray(spec.nodes)?spec.nodes:[],edges=Array.isArray(spec.edges)?spec.edges:[];
+    if(nodes.length<2||nodes.length>8||edges.length<1||edges.length>12)throw new Error('示意图需要 2–8 个节点和 1–12 条连线');
+    const normalizedNodes=nodes.map((node)=>({id:String(node?.id||'').trim(),label:String(node?.label||'').trim().slice(0,48),detail:String(node?.detail||'').trim().slice(0,80),level:Number(node?.level)}));
+    if(normalizedNodes.some((node)=>! /^[a-z0-9_-]{1,24}$/i.test(node.id)||!node.label||!Number.isInteger(node.level)||node.level<0||node.level>3))throw new Error('示意图节点需要有效 id、label 和 0–3 的 level');
+    if(new Set(normalizedNodes.map((node)=>node.id)).size!==normalizedNodes.length)throw new Error('示意图节点 id 不能重复');
+    if([0,1,2,3].some((level)=>normalizedNodes.filter((node)=>node.level===level).length>2))throw new Error('每个示意图层级最多放置 2 个节点');
+    const ids=new Set(normalizedNodes.map((node)=>node.id));
+    const normalizedEdges=edges.map((edge)=>({from:String(edge?.from||''),to:String(edge?.to||''),label:String(edge?.label||'').trim().slice(0,24)}));
+    if(normalizedEdges.some((edge)=>!ids.has(edge.from)||!ids.has(edge.to)||edge.from===edge.to))throw new Error('示意图连线必须引用不同的有效节点');
+    const nodeById=new Map(normalizedNodes.map((node)=>[node.id,node]));
+    if(normalizedEdges.some((edge)=>nodeById.get(edge.from).level>=nodeById.get(edge.to).level))throw new Error('示意图连线必须从前层指向后层');
+    const evidence=Array.isArray(spec.evidence)?spec.evidence.map((item)=>typeof item==='string'?{sourceId:'',quote:item.trim().slice(0,500)}:{sourceId:String(item?.sourceId||'').trim().slice(0,80),quote:String(item?.quote||'').trim().slice(0,500)}).filter((item)=>item.quote).slice(0,6):[];
+    if(!evidence.length)throw new Error('示意图必须提供来源原文证据摘录');
+    return {kind:'diagram',title:String(spec.title||'').trim().slice(0,60),nodes:normalizedNodes,edges:normalizedEdges,evidence,sourceNote:String(spec.sourceNote||'').trim().slice(0,280)};
+  }
   if(mode==='echarts'){
     const text=JSON.stringify(spec.option||{});
     if(text.length>50000)throw new Error('ECharts 配置超过 50KB');
@@ -73,7 +89,7 @@ function validateSpec(mode,spec) {
     if(pointCount>300)throw new Error('ECharts 数据点不能超过 300');
     return spec.option;
   }
-  throw new Error('mode 仅支持 auto、capture、timeline、datacard、echarts');
+  throw new Error('mode 仅支持 auto、capture、timeline、datacard、diagram、echarts');
 }
 
 export async function createArticleImageAsset({workspaceRoot,workdir,imageId,input={},sources=[],saveLocalImage}) {
@@ -93,7 +109,7 @@ export async function createArticleImageAsset({workspaceRoot,workdir,imageId,inp
   }
   const spec=validateSpec(mode,input.spec);
   const imageDir=path.join(workdir,'images');fs.mkdirSync(imageDir,{recursive:true});
-  if(mode==='timeline'||mode==='datacard'){
+  if(mode==='timeline'||mode==='datacard'||mode==='diagram'){
     ({localPath}=await generateArticleImage({workspaceRoot,workdir,slotId:imageId,generate:spec,ratio:slot.ratio}));
     generation={...generation,spec};
   } else {

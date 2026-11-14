@@ -2,7 +2,8 @@
 
 ## 用户目标与范围
 
-- 工作台 UI 与外部 Agent 均可读取文章配图占位、按需规划或创建（自动匹配选题采集来源并截图、时间轴、数据卡、ECharts）本地图片，并在用户明确要求时上传到已配置 CDN。
+- 工作台 UI 与外部 Agent 均可读取文章配图占位、按需规划或创建（自动匹配选题采集来源并截图、时间轴、数据卡、受来源原文约束的关系示意图、ECharts）本地图片，并在用户明确要求时上传到已配置 CDN。
+- 占位只描述配图目标和可搜索的来源方向；流水线负责公开来源的联网发现、核验与呈现选择。只有私有材料、作者真实实测或指定授权原图无法由公开来源替代时才要求人工提供。
 - 本流程覆盖普通文章候选配图；批次早报配图仍只通过工作台 API/UI 操作。
 
 ## 入口与实现
@@ -12,7 +13,7 @@
 | 工作台 UI | `public/index.html`、`public/src/views/preview.js`、`public/src/views/batch-drawer.js` | 主按钮提交候选级配图流水线任务并显示任务进度；已有图片可在卡片上单独重做 |
 | 工作台 HTTP / Job | `server/platform/http/routes/media-routes.mjs`、`server/features/batches/application/ai-job-handlers.mjs` | 候选配图流水线入口、异步任务调度及已有工作区/单项接口 |
 | MCP 工具 | `scripts/agent-integration/tools.mjs`、`agent-integrations/dsh-workbench/shared/tools.mjs` | 两份 `jianzi_article_images_run` 工具映射到同一候选配图流水线 API |
-| 配图业务逻辑 | `server/features/articles/application/article-image-pipeline.mjs`、`article-image-agent` Skill、`image-workflow.mjs` | 占位规划、采集来源与联网搜索、来源核验、截图/数据卡生成与检查点恢复 |
+| 配图业务逻辑 | `server/features/articles/application/article-image-pipeline.mjs`、`article-image-agent` Skill、`image-workflow.mjs` | 占位规划、采集来源与联网搜索、来源核验、截图/数据卡/示意图生成与检查点恢复 |
 | 外部 Agent 指引 | `agent-integrations/skills/jianzi-typeset-cover/SKILL.md` | 指导规划、生成及需要明确要求的 CDN 上传 |
 
 ## 阶段与数据流
@@ -23,12 +24,12 @@
 | 启动 | `candidateId`、可选 provider、可选 `restartFromStart` | 要求已有 `09-FINAL.md`；创建候选级异步任务。默认续跑缺失项；显式从占位重跑时先归档旧图片、清单和检查点 | `POST /api/candidates/:id/images/run` |
 | 规划（按需/重规划） | 终稿 Markdown、`replan`、`restartFromStart` | 默认保留已完成图片并只处理缺失项；显式从占位重跑时重新规划，并将旧图片、资产清单和检查点归档到 `.image-history/` | `article-image-pipeline.mjs`、`image-workflow.mjs` |
 | 来源发现与匹配 | 待配图占位、候选已采集来源、已启用的 web-search 槽位 | 工作台为占位检索公开页面；Agent 只能选输入中的 sourceId。搜索结果仅作候选，不算已核验事实 | `article-image-pipeline.mjs`、`article-image-agent/SKILL.md`、`capability-slots.mjs` |
-| 来源核验与呈现选择 | 已选公开来源、终稿、搜索摘要 | capture 选择直接相关页面；datacard 仅可使用终稿数字并要求数字同时出现在重新抓取的来源正文；不满足时转人工确认 | `article-image-pipeline.mjs`、`article-image-create.mjs` |
-| 逐项生成 | 已核验的截图/数据卡方案 | 生成来源页面截图或带来源 URL、核验日期的数据卡；单项失败不阻塞其他图片；逐项更新资产清单和流水线检查点 | `article-image-pipeline.mjs`、`article-image-create.mjs` |
+| 来源核验与呈现选择 | 已选公开来源、终稿、搜索摘要 | capture 选择直接相关页面；datacard 仅可使用终稿数字并要求数字同时出现在重新抓取的来源正文；diagram 可组合 1–3 个来源，并要求每条原文摘录绑定对应来源、逐字出现在重新抓取的正文；不满足时转人工确认。长文来源会优先向规划 Agent 提供与占位相关的段落 | `article-image-pipeline.mjs`、`article-image-create.mjs` |
+| 逐项生成 | 已核验的截图/数据卡/示意图方案 | 生成来源页面截图、数据卡或由受限节点与连线规格绘制的机制图，并附来源 URL、核验日期；单项失败不阻塞其他图片；逐项更新资产清单和流水线检查点 | `article-image-pipeline.mjs`、`article-image-create.mjs`、`article-image-generator.mjs` |
 | 等待与恢复 | Job ID、工作区检查点 | 同一流水线再次运行会跳过已有本地/CDN 图片，只重试仍缺失的项；完成后由 UI 刷新配图工作区 | `ai-job-manager.mjs`、`batch-drawer.js`、`article-image-pipeline.json` |
 | 生成（可选） | `candidateId`、工作区返回的 `imageId` | 仅对标记为可生成的占位生成图片并登记清单 | `POST /api/candidates/:id/images/:imageId/generate` |
 | 单项重做（可选） | `candidateId`、`imageId` | 直接创建单张来源配图时按候选采集来源的确定性相关度排序并截图；流水线批量配图使用来源规划 Agent | `POST /api/candidates/:id/images/:imageId/create`，`mode: auto` |
-| 其他创建（可选） | `candidateId`、`imageId`、显式来源 URL 或结构化图表规格 | 使用隔离浏览器或受控图表渲染生成 PNG 并登记到现有占位；识别到人工验证时尝试配图专用可见 Chrome | 同上 |
+| 其他创建（可选） | `candidateId`、`imageId`、显式来源 URL 或结构化图表/示意图规格 | 使用隔离浏览器或受控图表渲染生成 PNG 并登记到现有占位；识别到人工验证时尝试配图专用可见 Chrome | 同上 |
 | 上传（用户明确要求时） | `candidateId`、`imageId` | 上传已保存的本地图片至配置的 CDN，更新公开 URL 和资产清单 | `POST /api/candidates/:id/images/:imageId/cdn` |
 
 HTTP 层验证候选、终稿和可生成占位；底层保存流程限制 PNG/JPEG/GIF/WebP 且单张不超过 8MB。MCP 不提供任意文件路径或任意 HTTP 调用。
@@ -38,7 +39,7 @@ HTTP 层验证候选、终稿和可生成占位；底层保存流程限制 PNG/J
 - MCP 与工作台候选图片接口共用同一业务逻辑和上传门控。早报图片没有暴露为 MCP 工具。
 - 两份外部 Agent 工具注册表都把自动配图入口映射到同一流水线 API，单项重做仍映射到配图创建接口；流水线搜索复用工作台已启用的 `web-search` 能力，来源抓取复用 `web-page` 能力。流水线将受校验的来源 ID 交给图片服务，截图使用独立 `article-image-capture` Profile，不复用 Reddit Profile。
 - 工作台按钮和外部 Agent 均调用同一候选级流水线，默认重规划未完成占位、优先生成可处理图片、记录检查点并重试缺失项。外部 Agent 调用 `jianzi_article_images_run` 后通过 `jianzi_job_wait` 等待；逐占位生成/创建接口保留为人工单项重做入口。
-- 手动调用单项 `create` 的 `mode:auto` 仍使用确定性相关度排序；批量流水线规划 Agent 可选输入中已采集或联网搜索得到的 sourceId，不得自造 URL。联网搜索能力不可用时仍尝试已采集来源；没有足够证据的占位标记待人工确认。
+- 手动调用单项 `create` 的 `mode:auto` 仍使用确定性相关度排序；批量流水线规划 Agent 可选输入中已采集或联网搜索得到的 sourceId，不得自造 URL。联网搜索能力不可用时仍尝试已采集来源；没有足够证据的占位标记待人工确认。示意图由固定 HTML 模板按白名单规格绘制，不接受模型生成 HTML/SVG。
 - CDN 上传会产生外部写入；MCP 描述和 Skill 要求只有用户明确要求时才调用。
 
 ## 产物与验证
