@@ -246,6 +246,33 @@
       ]
     },
     {
+      "id": "feature.article-image-pipeline",
+      "name": "文章自动配图流水线",
+      "type": "feature",
+      "sourceFiles": [
+        "server/features/articles/application/article-image-pipeline.mjs"
+      ],
+      "dependencies": [
+        {
+          "capability": "cap_content_web_search",
+          "requirement": "conditional",
+          "failurePolicy": "continue-with-warning",
+          "adapterStatus": "ready",
+          "triggerPolicy": "code-path",
+          "resultPolicy": "image-source-discovery"
+        },
+        {
+          "capability": "cap_content_url_fetch",
+          "requirement": "conditional",
+          "failurePolicy": "continue-with-warning",
+          "adapterStatus": "ready",
+          "triggerPolicy": "code-path",
+          "resultPolicy": "image-source-verification"
+        }
+      ],
+      "purpose": "为文章配图搜索并核验公开来源，按可读性与证据质量生成截图、数据卡或原文约束的示意图"
+    },
+    {
       "id": "agent.independent-writing",
       "name": "自主写作 Agent",
       "type": "agent",

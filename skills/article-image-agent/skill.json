@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "article-image-agent",
+  "name": "文章配图来源与呈现规划 Agent",
+  "version": "1.0.0",
+  "kind": "image-planner",
+  "entryPoints": ["article-image-pipeline"],
+  "contentTypes": ["article-image"],
+  "inputContract": "article_image_slots_article_text_and_public_sources",
+  "outputContract": "source_id_visual_strategy_data_card_and_diagram_specifications",
+  "requiredCapabilities": [],
+  "optionalCapabilities": ["cap_content_web_search", "cap_content_url_fetch"],
+  "compatibleApp": ">=0.1.0",
+  "source": { "type": "builtin", "url": "" },
+  "runtimeKind": "stage-skill",
+  "budget": { "maxModelSteps": 1, "maxToolCalls": 1, "timeoutMs": 120000 },
+  "gates": []
+}

@@ -6,7 +6,7 @@ import { fontStack } from '../../../shared/themes/font-utils.mjs';
 import { resolveSkillFile } from '../../../platform/llm/skill-runtime.mjs';
 
 // 文章配图确定性生成（待办「文章配图接入图文确定性生成链」）：
-// 占位标记为可生成（IMG-DATA，kind=timeline|datacard）时，用固定 HTML 模板 + html-pages-to-images
+// 结构化配图使用固定 HTML 模板 + html-pages-to-images
 // 截图产出单张浅色插图。数据只能来自占位中的结构化清单（规划时取自正文），模型不参与渲染。
 // 生成失败保留占位并抛错，绝不静默删除或伪造图片。
 
@@ -143,6 +143,35 @@ function datacardHtml({ title, items }, { width, height }, tokens) {
   return pageHtml({ width, height, title, subtitle: '数据速览', body }, articleStructuredCardCss({ dense, featureCount: items.length }), tokens);
 }
 
+function diagramHtml({ title, nodes, edges, sourceNote = '' }, { width, height }, tokens) {
+  const canvasWidth = width - 60;
+  const canvasHeight = 250;
+  const columnWidth = canvasWidth / 4;
+  const positions = new Map();
+  for (let level = 0; level < 4; level += 1) {
+    const group = nodes.filter((node) => node.level === level);
+    group.forEach((node, index) => positions.set(node.id, {
+      x: columnWidth * (level + 0.5),
+      y: group.length === 1 ? canvasHeight / 2 : canvasHeight * (index === 0 ? 0.28 : 0.72),
+    }));
+  }
+  const paths = edges.map((edge) => {
+    const from = positions.get(edge.from), to = positions.get(edge.to);
+    const startX = from.x + (to.x > from.x ? 68 : -68), endX = to.x + (to.x > from.x ? -68 : 68);
+    const midX = (startX + endX) / 2;
+    const label = edge.label ? `<text class="edge-label" x="${midX}" y="${(from.y + to.y) / 2 - 8}" text-anchor="middle">${escapeHtml(edge.label)}</text>` : '';
+    return `<path class="edge" d="M ${startX} ${from.y} C ${midX} ${from.y}, ${midX} ${to.y}, ${endX} ${to.y}" marker-end="url(#arrow)"/>${label}`;
+  }).join('');
+  const boxes = nodes.map((node) => {
+    const point = positions.get(node.id);
+    return `<div class="diagram-node" style="left:${point.x}px;top:${point.y}px"><strong>${escapeHtml(node.label)}</strong>${node.detail ? `<span>${escapeHtml(node.detail)}</span>` : ''}</div>`;
+  }).join('');
+  const body = `<div class="diagram-canvas"><svg viewBox="0 0 ${canvasWidth} ${canvasHeight}" aria-hidden="true"><defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z"/></marker></defs>${paths}</svg>${boxes}</div>`;
+  const css = `.diagram-canvas{position:relative;width:100%;height:${canvasHeight}px}.diagram-canvas svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}.diagram-canvas .edge{fill:none;stroke:var(--accent);stroke-width:2}.diagram-canvas marker path{fill:var(--accent)}.diagram-canvas .edge-label{font:11px ${fontFamily('sans')};fill:var(--muted);paint-order:stroke;stroke:var(--bg);stroke-width:5px;stroke-linejoin:round}.diagram-node{position:absolute;transform:translate(-50%,-50%);width:136px;min-height:64px;padding:10px 9px;border:1px solid var(--line);border-top:3px solid var(--accent);background:var(--surface);display:flex;flex-direction:column;justify-content:center;text-align:center}.diagram-node strong{font-size:15px;line-height:1.3;overflow-wrap:anywhere}.diagram-node span{margin-top:3px;color:var(--muted);font-size:10px;line-height:1.25;overflow-wrap:anywhere}`;
+  const footer = sourceNote ? `<div class="diagram-source">${escapeHtml(sourceNote)}</div>` : '';
+  return pageHtml({ width, height, title, subtitle: '机制示意图', body: `${body}${footer}` }, `${css}.diagram-source{margin-top:8px;color:var(--muted);font-size:9px;line-height:1.35;overflow-wrap:anywhere}`, tokens);
+}
+
 function pageHtml({ width, height, title, subtitle, body }, extraCss, tokens) {
   const colors = tokens.colors;
   const headingFamily = fontFamily(tokens.typography.headingFamily);
@@ -171,11 +200,12 @@ export function buildGenerateImageHtml(generate, ratio = '16:9', inputTokens = {
   const tokens = normalizeTokens(inputTokens);
   if (generate?.kind === 'timeline') return { html: timelineHtml(generate, size, tokens), ...size };
   if (generate?.kind === 'datacard') return { html: datacardHtml(generate, size, tokens), ...size };
+  if (generate?.kind === 'diagram') return { html: diagramHtml(generate, size, tokens), ...size };
   throw new Error(`未知的可生成图片类型：${generate?.kind || '未声明'}`);
 }
 
 export async function generateArticleImage({ workspaceRoot, workdir, slotId, generate, ratio, tokens = null, renderHtmlPages = null }) {
-  if (!generate?.items?.length) throw new Error('该占位没有可生成的结构化数据');
+  if (generate?.kind !== 'diagram' && !generate?.items?.length) throw new Error('该占位没有可生成的结构化数据');
   const visualTokens = tokens || resolveArticleImageTokens(workdir);
   const { html, width, height } = buildGenerateImageHtml(generate, ratio, visualTokens);
   const safeName = String(slotId || 'image').replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-');

@@ -109,7 +109,17 @@ export function applyImagePlan(markdown, placements = []) {
   }
   if (!accepted.length) return `${original}\n\n<!-- IMAGE-PLAN:none -->`;
   const list = accepted.map((item) => `- ${item.id}｜${item.content}｜建议来源：${item.suggestedSource}｜版权动作：${item.copyrightAction}`).join('\n');
-  return `${output.trim()}\n\n<!-- IMAGE-SUPPLY-LIST\n# 手动供图清单\n${list}\n-->`;
+  return `${output.trim()}\n\n<!-- IMAGE-SUPPLY-LIST\n# 配图任务清单\n${list}\n-->`;
+}
+
+export function clearImagePlan(markdown) {
+  return String(markdown||'')
+    .replace(PLACEHOLDER_RE,'')
+    .replace(IMG_DATA_RE,'')
+    .replace(SUPPLY_LIST_RE,'')
+    .replace(PLAN_NONE_RE,'')
+    .replace(/\n{3,}/g,'\n\n')
+    .trim();
 }
 
 export async function planImagePlaceholders({ gateway, store, batchId, candidateId, provider, markdown, maxOutputTokens = 5000, skillPrompt = '' }) {
@@ -184,15 +194,15 @@ export function registerGeneratedImageAssets(workdir, label, relativeImages = []
   return getImageWorkspace(workdir);
 }
 
-export function registerGeneratedSlotImage(workdir, id, localPath) {
+export function registerGeneratedSlotImage(workdir, id, localPath, metadata = {}) {
   const workspace = getImageWorkspace(workdir);
   const item = workspace.items.find((entry) => entry.id === id);
   if (!item) throw new Error('图片占位不存在');
-  if (!item.generate) throw new Error('该占位未标记为可生成');
   const manifest = readManifest(workdir);
   manifest.items[id] = { ...(manifest.items[id] || {}), generated:true, localPath,
     originalName:path.basename(localPath), mimeType:'image/png',
-    source:'排版阶段确定性生成（正文数据）', copyright:'无需授权',
+    source:String(metadata.source || '排版阶段确定性生成（正文数据）'), copyright:String(metadata.copyright || '待确认'),
+    ...(metadata.generation ? { generation:metadata.generation } : {}),
     // 重新生成后旧 CDN 地址不能继续进入最终 HTML，必须视为新的待上传版本。
     url:'', key:'', uploadedAt:null, updatedAt:new Date().toISOString() };
   writeJson(manifestPath(workdir), manifest);
@@ -226,6 +236,7 @@ export function saveLocalImage(workdir, id, input) {
   const manifest = readManifest(workdir);
   manifest.items[id] = { ...(manifest.items[id] || {}), localPath, originalName:path.basename(String(input.fileName || localPath)), mimeType,
     source:String(input.source || manifest.items[id]?.source || '').trim(), copyright:String(input.copyright || manifest.items[id]?.copyright || '').trim(),
+    ...(input.generation && typeof input.generation === 'object' ? { generation:input.generation, generated:true } : {}),
     url:'', key:'', updatedAt:new Date().toISOString() };
   writeJson(manifestPath(workdir), manifest);
   return getImageWorkspace(workdir).items.find((entry) => entry.id === id);

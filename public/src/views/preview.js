@@ -29,7 +29,11 @@ function bindPreview() {
     await withLoading(event.currentTarget, "正在扫描…", () => reindex().catch((error) => toast(error.message, "error")));
     await loadProductionPreview().catch((error) => toast(error.message, "error"));
   });
-  document.getElementById("plan-article-images").addEventListener("click", (event) => withLoading(event.currentTarget, "正在分析…", () => planArticleImages().catch((error) => toast(error.message, "error"))));
+  document.getElementById("plan-article-images").addEventListener("click", (event) => withLoading(event.currentTarget, "正在配图…", () => runArticleImagePipeline(false).catch((error) => toast(error.message, "error"))));
+  document.getElementById("restart-article-images").addEventListener("click", (event) => {
+    if (!window.confirm("将当前配图、资产清单和检查点归档，然后从终稿占位重新规划并配图。继续吗？")) return;
+    withLoading(event.currentTarget, "正在重跑…", () => runArticleImagePipeline(true).catch((error) => toast(error.message, "error")));
+  });
   document.getElementById("run-local-typeset").addEventListener("click", (event) => {
     const blocked = typesetBlockReason();
     if (blocked) { toast(blocked); return; }
@@ -37,6 +41,11 @@ function bindPreview() {
   });
   document.getElementById("copy-typeset-html").addEventListener("click", (event) => withLoading(event.currentTarget, "正在复制…", () => copyTypesetHtml().catch((error) => toast(error.message, "error"))));
   document.addEventListener("click", (event) => {
+    const createImageButton = event.target.closest("[data-create-image]");
+    if (createImageButton) {
+      withLoading(createImageButton, "正在匹配来源…", () => createSlotImage(createImageButton.dataset.createImage).catch((error) => toast(error.message, "error")));
+      return;
+    }
     // 显式「上传 CDN」按钮：本地图片已就位时点击才产生外部写入
     const uploadCdnButton = event.target.closest("[data-upload-cdn]");
     if (uploadCdnButton) {
@@ -92,6 +101,24 @@ function bindPreview() {
   });
 }
 
+async function createSlotImage(imageId) {
+  const input={mode:'auto'};
+  const candidateId=state.imageWorkspace?.candidateId;
+  if(!candidateId||state.imageWorkspace?.daily)throw new Error('请先选择一篇文章候选');
+  await request(`/api/candidates/${encodeURIComponent(candidateId)}/images/${encodeURIComponent(imageId)}/create`,{method:'POST',body:JSON.stringify(input)});
+  await loadImageWorkspace(candidateId);
+  const saved=state.imageWorkspace?.items?.find((entry)=>entry.id===imageId);
+  toast(`${imageId} 已从选题采集来源自动配图${saved?.source?'；来源已记录':''}；确认后可单独上传 CDN`);
+}
+
+async function runArticleImagePipeline(restartFromStart=false) {
+  const candidateId=Number(document.getElementById("typeset-candidate")?.value);
+  if(!candidateId)throw new Error("请先选择一篇文章候选");
+  const provider=document.getElementById("typeset-provider")?.value||state.models?.defaultProvider;
+  const job=await request(`/api/candidates/${candidateId}/images/run`,{method:"POST",body:JSON.stringify({provider,replan:true,restartFromStart})});
+  await openProductionJob(job.id);
+}
+
 function imageSlot(id) { return document.querySelector(`[data-image-id="${CSS.escape(id)}"]`); }
 function imageApiBase() {
   return state.imageWorkspace?.daily
@@ -103,8 +130,11 @@ function imageCard(item) {
   const encoded = encodeURIComponent(item.id);
   const generatable = Boolean(item.generate);
   const hasImage = !!item.localPath;
+  let actualSourceUrl='';
+  try { const parsed=new URL(item.generation?.sourceUrl||''); if(['http:','https:'].includes(parsed.protocol))actualSourceUrl=parsed.href; } catch {}
+  const actualSourceTitle=String(item.generation?.selectedSourceTitle||item.generation?.title||'采集报道').trim();
   const localOnly = state.imageWorkspace?.deliveryMode === 'local' || state.imageWorkspace?.cdnConfigured === false;
-  const statusLabel = localOnly && item.status !== "missing" ? "仅本地排版 · 输出占位" : item.status === "cdn" ? "CDN 已就绪" : item.generated ? "排版时自动上传" : generatable ? "排版时自动生成" : hasImage ? "本地待上传" : "等待供图";
+  const statusLabel = localOnly && item.status !== "missing" ? "仅本地排版 · 输出占位" : item.status === "cdn" ? "CDN 已就绪" : hasImage ? "本地待上传" : item.generated ? "排版时自动上传" : generatable ? "排版时自动生成" : "等待供图";
   const fileInput = item.generated || generatable ? '' : '<input class="image-slot-file" data-image-file type="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden>';
   let preview;
   if (hasImage) {
@@ -119,7 +149,7 @@ function imageCard(item) {
   } else {
     preview = `<span>${escapeHtml(item.ratio)}<br>点击选择图片</span>`;
   }
-  const cdnAction = !item.generated && !generatable && ['local', 'cdn'].includes(item.status);
+  const cdnAction = !state.imageWorkspace?.daily && hasImage && ['local', 'cdn'].includes(item.status);
   const cdnAvailable = state.imageWorkspace?.uploaderAvailable === true;
   const cdnDisabledReason = state.imageWorkspace?.cdnConfigured === false ? 'CDN 未配置，暂不可上传' : `CDN 当前不可用${state.imageWorkspace?.cdnReason ? `：${state.imageWorkspace.cdnReason}` : ''}`;
   const uploadTarget = item.generated || generatable ? '' : ` data-upload-image="${escapeHtml(item.id)}"`;
@@ -127,6 +157,8 @@ function imageCard(item) {
   const uploadAction = cdnAction
     ? `<button class="ghost-button" data-upload-cdn="${escapeHtml(item.id)}"${cdnAvailable ? '' : ' disabled'} title="${cdnAvailable ? '上传这张图片到 CDN' : escapeHtml(cdnDisabledReason)}">${item.status === 'cdn' ? '重新上传 CDN' : '上传 CDN'}</button>`
     : '';
+  const createAction = state.imageWorkspace?.daily || !hasImage ? ''
+    : `<button class="ghost-button" data-create-image="${escapeHtml(item.id)}">重新配图</button>`;
   return `<article class="image-slot ${cardClass}" data-image-id="${escapeHtml(item.id)}">
     <div class="image-slot-top"><span class="image-slot-tags"><span class="image-slot-id">${escapeHtml(item.id)} · ${escapeHtml(item.type)}</span>${generatable ? '<span class="image-slot-kind">✦ 排版自动生成</span>' : ""}</span><span class="image-slot-status">${statusLabel}</span></div>
     <h4>${escapeHtml(item.content)}</h4>
@@ -134,7 +166,8 @@ function imageCard(item) {
       ${fileInput}
     </div></div>
     <div class="image-slot-meta"><span>位置：${escapeHtml(item.position)}</span><span>比例：${escapeHtml(item.ratio)}</span><span>建议来源：${escapeHtml(item.suggestedSource)}</span></div>
-    <div class="image-slot-actions">${hasImage ? `<span class="muted">${item.generated ? "排版时按本篇设计方案处理" : "本地已保存"}</span>` : ""}${uploadAction}</div>
+    <div class="image-slot-actions">${hasImage ? `<span class="muted">${item.generated ? "本地图片已生成" : "本地已保存"}</span>` : ""}${createAction}${uploadAction}</div>
+    ${actualSourceUrl ? `<a class="image-cdn-url" href="${escapeHtml(actualSourceUrl)}" target="_blank" rel="noopener noreferrer">实际来源：${escapeHtml(actualSourceTitle)}</a>` : ""}
     ${item.url ? `<a class="image-cdn-url" href="${escapeHtml(item.url)}" target="_blank">${escapeHtml(item.url)}</a>` : ""}
   </article>`;
 }
@@ -170,7 +203,7 @@ function typesetBlockReason() {
   const data = state.imageWorkspace;
   const hasCandidate = Boolean(state.productionPreview?.candidates?.length);
   if (!hasCandidate) return "请先运行完整成稿链";
-  if (!data?.planned) return "请先点击「AI 规划必要配图」，确认本文需要哪些配图";
+  if (!data?.planned) return "请先点击「检查并自动配图」，确认并生成本文必要配图";
   if (data.deliveryMode === 'local' || data.cdnConfigured === false) return "";
   return "";
 }
@@ -182,7 +215,9 @@ function renderImageWorkspace() {
   const status = document.getElementById('image-stage-status');
   const button = document.getElementById('plan-article-images');
   if (button) button.hidden = Boolean(data.daily);
-  if (button) button.textContent = data.planned ? '重新检查必要配图' : 'AI 规划必要配图';
+  const restartButton = document.getElementById('restart-article-images');
+  if (restartButton) restartButton.hidden = Boolean(data.daily);
+  if (button) button.textContent = '检查并自动配图';
   if (status) {
     if (localOnly) status.textContent = data.cdnReason ? `未配置图片 CDN：${data.cdnReason}。将使用仅本地排版，图片位置输出为空占位符，粘贴到公众号后请逐个替换。` : '当前使用仅本地排版，图片位置会输出为空占位符，粘贴到公众号后请逐个替换。';
     else if (!data.planned) status.textContent = '尚未执行配图规划；正式排版前需要先确认是否存在必要图片。';
@@ -201,7 +236,7 @@ function renderImageWorkspace() {
   if (list) {
     list.innerHTML = data.items && data.items.length
       ? data.items.map(imageCard).join('')
-      : '<div class="image-stage-empty">' + (data.planned ? '没有必要的人工配图，文章可直接排版。' : '点击“AI 规划必要配图”，系统只会为有证据或阅读价值的图片留位。') + '</div>';
+      : '<div class="image-stage-empty">' + (data.planned ? '没有必要的人工配图，文章可直接排版。' : '点击“检查并自动配图”，系统会先检查终稿，再自动匹配来源或生成数据图。') + '</div>';
   }
   const hasCandidate = Boolean(state.productionPreview?.candidates?.length);
   const manualPending = localOnly ? [] : data.manualUnresolved || (data.unresolved || []).filter((id) => !(data.generatedPending || []).includes(id));
@@ -327,17 +362,6 @@ async function loadImageWorkspace(candidateId) {
   }
 }
 
-async function planArticleImages() {
-  const candidateId = Number(document.getElementById("typeset-candidate")?.value);
-  if (!candidateId) return toast("请先选择一个候选");
-  const provider = document.getElementById("typeset-provider")?.value || state.models?.defaultProvider;
-  try {
-    const result = await request(`/api/candidates/${candidateId}/images/plan`, { method: "POST", body: JSON.stringify({ provider }) });
-    toast("配图占位已生成");
-    await loadImageWorkspace(candidateId);
-  } catch (err) { toast(err.message, "error"); }
-}
-
 // 选中图片后仅保存到本地，不产生外部写入；上传 CDN 由「上传 CDN」按钮显式触发
 async function saveLocalImageAsset(id, droppedFile = null) {
   const card = imageSlot(id);
@@ -415,7 +439,7 @@ async function openProductionJob(id) {
   const dialog = document.getElementById("production-job-dialog");
   if (!dialog) return;
   dialog.showModal();
-  pollJob(id);
+  await pollJob(id);
 }
 
 // batch-drawer 的排版完成跳转依赖这两个桥接

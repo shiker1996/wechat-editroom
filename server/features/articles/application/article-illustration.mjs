@@ -2,7 +2,8 @@ import { planArticleVisuals, insertVisualFences } from '../llm/visual-planner.mj
 import { planImagePlaceholders } from './image-workflow.mjs';
 
 // 三类成稿链共用的配图编排：先自动配图（Mermaid/ECharts 围栏直接插入正文），
-// 再按既有 visualNeed=manual 规划必须由编辑手动提供的来源图/资料图占位。
+// 再按既有 visualNeed=manual 规划配图任务；后续配图流水线负责搜索、核验和生成，
+// 只有私有材料、作者真实实测或指定授权原图等需求才要求编辑手动提供。
 // 没有有效视觉落点时不凭空插入图片占位，避免普通文章被无关配图打断完读。
 export async function illustrateArticle({
   gateway, store, provider, batchId, candidateId = null, markdown, factBase = '',

@@ -1,6 +1,6 @@
 import { executeCapability } from '../../tools/capability-runtime.mjs';
 import { createStoreExecutionLogger } from '../../tools/execution-log.mjs';
-import { auditExternalArticleLocally, generateArticleImage, registerGeneratedSlotImage, renderCover, validateGeneratedCoverHtml } from '../../../features/articles/index.mjs';
+import { auditExternalArticleLocally, collectCandidateImageSources, createArticleImageAsset, generateArticleImage, registerGeneratedSlotImage, renderCover, validateGeneratedCoverHtml } from '../../../features/articles/index.mjs';
 import { pipeFile } from '../route-helpers.mjs';
 import { createRequestHarnessGateway } from '../../skills/pipeline-runtime.mjs';
 import { deriveWritingStance, visualPolicyForStance } from '../../../shared/domain/writing-stance.mjs';
@@ -146,6 +146,15 @@ export async function handleMediaRoutes(context) {
     const batch = store.getBatch(candidate.batch_id);
     return json(response, 200, await imageWorkspaceResponse(articleWorkdir(batch, candidate)));
   }
+  const imageRunMatch = pathname.match(/^\/api\/candidates\/(\d+)\/images\/run$/);
+  if (imageRunMatch && request.method === 'POST') {
+    const candidate = store.getCandidate(Number(imageRunMatch[1]));
+    if (!candidate) return json(response, 404, { error:'候选不存在' });
+    const batch = store.getBatch(candidate.batch_id); const workdir = articleWorkdir(batch, candidate);
+    if (!fs.existsSync(path.join(workdir,'09-FINAL.md'))) return json(response, 409, { error:'缺少 09-FINAL.md，请先完成成稿链' });
+    const input = await body(request) || {};
+    return json(response, 202, aiJobs.start({batchId:batch.id,candidateId:candidate.id,provider:input.provider||null,type:'article-image-pipeline',replan:input.replan!==false,restartFromStart:input.restartFromStart===true}));
+  }
   const imagePlanMatch = pathname.match(/^\/api\/candidates\/(\d+)\/images\/plan$/);
   if (imagePlanMatch && request.method === 'POST') {
     const candidate = store.getCandidate(Number(imagePlanMatch[1]));
@@ -205,6 +214,22 @@ export async function handleMediaRoutes(context) {
       return json(response, 200, updated);
     } catch (error) {
       return json(response, 422, { error:`配图生成失败：${error.message}` });
+    }
+  }
+  const imageCreateMatch = pathname.match(/^\/api\/candidates\/(\d+)\/images\/([^/]+)\/create$/);
+  if (imageCreateMatch && request.method === 'POST') {
+    const candidate = store.getCandidate(Number(imageCreateMatch[1]));
+    if (!candidate) return json(response, 404, { error:'候选不存在' });
+    const batch = store.getBatch(candidate.batch_id); const workdir = articleWorkdir(batch, candidate);
+    const id = decodeURIComponent(imageCreateMatch[2]);
+    try {
+      const input = await body(request);
+      const item = await createArticleImageAsset({ workspaceRoot:root, workdir, imageId:id, input, sources:collectCandidateImageSources(candidate,store), saveLocalImage });
+      const manifestPath = imageManifestFile(workdir); const stat = fs.statSync(manifestPath);
+      store.upsertArtifact({ batchId:batch.id, kind:'配图资产清单', name:path.basename(manifestPath), path:manifestPath, size:stat.size, modifiedAt:stat.mtime.toISOString() });
+      return json(response, 200, item);
+    } catch (error) {
+      return json(response, error.code === 'BROWSER_BLOCKED' ? 409 : 422, { error:`配图创建失败：${error.message}`, code:error.code || 'IMAGE_CREATE_FAILED' });
     }
   }
   const coverGenerateMatch = pathname.match(/^\/api\/candidates\/(\d+)\/cover\/generate$/);

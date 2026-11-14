@@ -489,6 +489,10 @@ AI 起草（单步）{ provider, instructions, existingDraft }
 AI 规划配图占位
 → 排版预览
 
+### POST /api/candidates/:id/images/run
+启动候选级文章配图流水线任务，正文可包含可选 `provider` 和 `replan`（默认 `true`）。没有已完成本地/CDN 图片时，会清除旧配图占位并重新规划；已有图片时保留现有占位，继续处理缺失项。可配图会先生成，待人工确认项不会阻塞其他图片。返回 Job，使用 `GET /api/jobs/:jobId` 查询进度与结果；再次启动会跳过已就绪图片并重试缺失项。
+→ 配图预览
+
 ### POST /api/candidates/:id/images/:imageId
 保存本地图片 { fileName, mimeType, base64 }
 → 排版预览
@@ -507,6 +511,9 @@ AI 规划配图占位
 ### POST /api/candidates/:id/images/:imageId/generate
 可生成占位（`IMG-DATA`，timeline / datacard）确定性生成本地 PNG；仅本地写入，上传仍需显式调用 `/cdn`
 → 排版预览（配图工作台「生成图片」）
+
+### POST /api/candidates/:id/images/:imageId/create
+统一创建文章配图本地图片。`mode` 支持 `auto`（从当前候选关联热点、已采集报道和补充来源中自动匹配并截图，无需 URL）、`capture`（指定公开网页截图，支持 `selector`、`fullPage`、`width`、`height`）、`timeline`、`datacard`、`diagram`（受限节点/连线机制示意图，可由多条已核验来源共同支撑）、`echarts`。结构化模式传入 `spec`，事实数据需由调用方核验；自动截图记录所选报道 URL、标题和匹配方式。若隔离浏览器遇到可识别的人机验证，会打开配图专用可见 Chrome 等待人工完成，最长约 85 秒。成功写入现有占位和 `image-assets.json`，不会自动上传 CDN。
 
 ### GET /api/batches/:id/daily/images
 读取批次早报配图工作区。

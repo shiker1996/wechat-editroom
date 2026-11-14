@@ -453,7 +453,7 @@
     },
     {
       "id": "articles.image-plan",
-      "version": 1,
+      "version": 2,
       "file": "articles/image-plan.md",
       "purpose": "article-image-placement-planning",
       "variables": [],

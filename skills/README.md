@@ -34,7 +34,8 @@
 - `humanizer-zh`：去 AI 表达
 - `article-reviewer`：事实、逻辑和风险审稿
 - `seo-keyword-scoring`、`seo-content-optimizer`：SEO 阶段
-- `article-image-placeholders`：来源图和资料图占位
+- `article-image-placeholders`：规划供配图流水线联网搜索、核验和生成的视觉任务；仅为私有材料或作者真实实测等特殊情况保留人工供图占位
+- `article-image-agent`：联网搜索和核验文章配图来源，并规划截图、数据卡或受原文约束的示意图（配图流水线）
 - `article-visual-planner`：Mermaid/ECharts 图表插入建议（编辑器「图表建议」环节）
 - `wechat-article-typeset`：公众号排版总编排契约
 - `wechat-md-render`、`magazine-design-advisor`、`wechat-md-to-draft`：预渲染、杂志设计和 HTML 初稿

@@ -12,7 +12,7 @@ export const SKILL_ENTRY_POINTS=Object.freeze([
   'social-tool','social-custom','social-event','wechat-typeset','article-cover',
   // 会话 Agent 入口（contracts.mjs CONVERSATION_AGENT_ENTRY_POINTS）；custom-card-storyboard
   // 声明 custom-social 与会话 Agent 对齐，路由侧 'social-custom' 由 entry-routing 别名兼容
-  'custom-social',
+  'custom-social','article-image-pipeline',
 ]);
 
 const ID_PATTERN=/^[a-z0-9]+(?:-[a-z0-9]+)*$/;

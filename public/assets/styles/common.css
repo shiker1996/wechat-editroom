@@ -1247,6 +1247,7 @@ body.rail-collapsed .rail-foot { border-top:0; }
 .event-detail-badges > span { padding: 5px 8px; border: 1px solid var(--line); color: var(--muted); font-size: 11px; }
 .event-detail-badges .editorial-category-badge { color: var(--ink); }
 .event-detail-conclusion { margin: 0; padding: 14px 16px; border-left: 5px solid var(--yellow); background: var(--paper-deep); font: 600 15px/1.7 var(--display); }
+.image-slot-actions [data-create-image] { flex:0 0 auto; }
 .event-detail-background { margin: 14px 0 0; color: var(--muted); font-size: 12px; line-height: 1.75; }
 .event-detail-section { padding: 20px 0; border-bottom: 1px solid var(--line); }
 .event-detail-section h3 { margin: 0 0 10px; font: 600 19px var(--display); }

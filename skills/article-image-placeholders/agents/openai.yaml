@@ -1,4 +1,4 @@
 interface:
-  display_name: "文章手动配图占位"
-  short_description: "为来源图、资料图和参考图插入结构化占位"
-  default_prompt: "使用 $article-image-placeholders 为这篇文章标记需要手动提供的图片。"
+  display_name: "文章配图规划"
+  short_description: "规划后续配图流水线可搜索、核验和生成的图片任务"
+  default_prompt: "使用 $article-image-placeholders 为这篇文章规划适合配图流水线处理的图片任务；仅在确需私有材料或作者真实实测时要求人工提供。"
