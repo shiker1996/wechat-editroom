@@ -20,6 +20,8 @@ window.__ModuleLoader__.load({
         statusLoading: 'Checking…',
         statusOnline: 'Online',
         statusOffline: 'Unavailable',
+        mcpTroubleshooting: 'If MCP tools stop working, update DSH and this plugin, then restart DSH. If it still fails, report the error on GitHub.',
+        mcpTroubleshootingLink: 'Report an issue ↗',
         statusUpdateRequired: 'Project update required',
         statusUpgradeRequired: 'Installed MCP/plugin requires project version {required}; this project is {current}. Run git pull in the project root, update/rebuild as instructed, then restart the workbench and MCP connection.',
         statusRsshub: 'RSSHub',
@@ -99,6 +101,7 @@ window.__ModuleLoader__.load({
         stage6Detail: 'Upload a WeChat export table first; import it, link matched local content, then refresh signals and prepare a reviewable proposal.',
         stage6Action: 'Prepare feedback proposal',
         stage6Gate: 'Needs an attached WeChat export table; without one, ask for upload and stop',
+        mcpFailureGuidance: 'If a Jianzi MCP tool is unavailable, or the DSH MCP bridge reports a startup, transport, handshake, protocol, or tool-sync failure, stop Jianzi business operations and do not retry repeatedly. Distinguish these from ordinary business errors and report the exact error. Ask me to update the DSH desktop app and Jianzi plugin, restart DSH, then retry once. If it still fails, collect the DSH version, plugin version, dsh-mcp-client version if available, and redacted error logs, then direct me to https://github.com/shiker1996/wechat-editroom/issues. Do not guess versions or include tokens, secrets, or private article/user data.',
         nextStepContract: 'At the end, include a short "Next step" with one concrete action I can take now and the exact reply or ID to use. Never end with a generic "anything else?". If the next action needs my choice or approval, say so and wait; do not cross that gate.',
         nextStep1: 'If setup checks pass, recommend starting topic research with stage 02. If blocked, name the single highest-priority correction and how I can unblock it.',
         nextStep2: 'Show the candidate IDs and recommend one with a brief evidence-based reason. Ask me to reply with that ID; do not add a candidate or draft before I choose.',
@@ -158,6 +161,8 @@ window.__ModuleLoader__.load({
         statusLoading: '检查中…',
         statusOnline: '已连接',
         statusOffline: '未连接',
+        mcpTroubleshooting: 'MCP 工具不可用时，请更新 DSH 和见字插件并重启 DSH；仍有问题请提交 GitHub issue。',
+        mcpTroubleshootingLink: '提交 issue ↗',
         statusUpdateRequired: '需要更新项目',
         statusUpgradeRequired: '当前 MCP/插件需要项目版本 {required}，本地项目为 {current}。请在项目根目录执行 git pull，按升级说明更新依赖并重新构建，然后重启工作台和 MCP 连接。',
         statusRsshub: 'RSSHub',
@@ -237,6 +242,7 @@ window.__ModuleLoader__.load({
         stage6Detail: '先上传公众号导出表格；导入并关联本地产物后，再刷新快照和生成可审阅草案。',
         stage6Action: '生成反馈草案',
         stage6Gate: '必须先附上公众号导出表格；没有附件时先请我上传并停止',
+        mcpFailureGuidance: '如果见字 MCP 工具不可用，或 DSH MCP 桥接服务报告启动、传输、握手、协议或工具同步错误，立即停止见字业务操作，不要反复重试。区分这类问题与普通业务错误，并如实报告完整错误。提示我更新 DSH 桌面端和见字插件，重启 DSH 后重试一次；仍失败时，收集 DSH 版本、插件版本、可获取的 dsh-mcp-client 版本和脱敏错误日志，并引导我到 https://github.com/shiker1996/wechat-editroom/issues 提交 issue。不要猜测版本，不要附带 token、密钥或文章/用户隐私。',
         nextStepContract: '结尾必须单独给出「下一步」：只推荐一个现在可执行的动作，并写明我可以直接回复的内容或候选 ID。不要用「还需要什么帮助吗」之类泛泛收尾。若下一步需要我选择或确认，就明确停下等待；不要越过门禁。',
         nextStep1: '环境检查通过时，建议我接着点 02「准备选题研判」；若未通过，只指出优先级最高的一项修复和解法。',
         nextStep2: '列出候选 ID，并基于证据推荐一个。请我直接回复该 ID；我选择前不要加候选或写文章。',
@@ -494,7 +500,7 @@ window.__ModuleLoader__.load({
       if (stage.fields.includes('batch') && values.batch.trim()) extra.push(`${tr('batchLead')}${values.batch.trim()}`);
       if (stage.fields.includes('candidate') && values.candidate.trim()) extra.push(`${tr('candidateLead')}${values.candidate.trim()}`);
       if (values.context) extra.push(values.context);
-      return [base, ...extra, tr('nextStepContract'), tr(`nextStep${stage.key}`)].join('\n\n');
+      return [base, ...extra, tr('mcpFailureGuidance'), tr('nextStepContract'), tr(`nextStep${stage.key}`)].join('\n\n');
     }
 
     function Panel({ tr, startTask }) {
@@ -818,6 +824,13 @@ window.__ModuleLoader__.load({
                   startupMessage ? h('p', { className: `jianzi-desk__start-message jianzi-desk__start-message--${startupMessage.kind}`, role: 'status' }, startupMessage.text) : null,
                 ) : null,
                 h('span', { className: 'jianzi-desk__hint' }, tr('tipText')),
+                h('span', { className: 'jianzi-desk__hint' }, tr('mcpTroubleshooting')),
+                h('a', {
+                  className: 'jianzi-desk__hint',
+                  href: 'https://github.com/shiker1996/wechat-editroom/issues',
+                  target: '_blank',
+                  rel: 'noreferrer',
+                }, tr('mcpTroubleshootingLink')),
               ),
             ),
             h('div', { className: 'jianzi-desk__flows' }, cards.map((card) => h('article', { className: 'jianzi-desk__flow', key: card.id },

@@ -49,7 +49,7 @@ MCP 工具定义与执行器以 `scripts/agent-integration/tools.mjs` 和 `scrip
 ## 打包与交付
 
 - 插件目录：`agent-integrations/dsh-workbench/`；插件清单图标复用 `build/brand-seal.svg`（exe 图标的矢量源）；普通用户在 DSH 插件管理器中输入 npm 包名 `jianzi-content-workbench` 安装；开发者可用统一 release 命令或单独 `npm pack` 生成 `.tgz` 本地调试。
-- DSH 运行依赖：官方 `@deepseek-ai/dsh-mcp-client`，由 Harness 安装提供并在 `package.json` 中声明为 peer；Cordis patch 配置 stdio transport 和插件包内 MCP 服务入口。
+- DSH 运行依赖：官方 `@deepseek-ai/dsh-mcp-client`，由 Harness 安装提供；插件 peer 声明使用 `*`，不因 MCP client 版本变化阻止插件安装或加载。Cordis patch 配置 stdio transport 和插件包内 MCP 服务入口。若 MCP 工具不可用或出现 client 启动、传输、握手、协议错误，Agent 应停止业务操作，提示更新 DSH 与插件并重启；复现后请用户携带版本和脱敏日志提交 GitHub issue。
 - MCP 服务入口路径在 patch 中按 profile 定位（当前写死 `profiles/desktop`，与 DeepSeek Harness 桌面端的活动 profile 一致）；在其他 profile 安装时需同步修改该路径。
 - 统一发布打包命令：`npm run release`；tag 构建先把版本戳记到项目和插件清单，再构建桌面端与独立 DSH `.tgz`，并为全部产物生成校验和。只调试插件时运行 `npm run build --prefix agent-integrations/dsh-workbench` 和 `node scripts/release/pack-dsh-plugin.mjs ./dist`。
 - 数字版本 tag 同时触发 GitHub Release 和 DSH npm 发布，二者使用相同 tag 版本；旧式 `dsh-plugin-v<版本>` 标签仍兼容。

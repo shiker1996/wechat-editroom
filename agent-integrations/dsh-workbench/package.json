@@ -36,7 +36,7 @@
     }
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh-mcp-client": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-mcp-client": "*",
     "@deepseek-ai/schemastery": "*"
   },
   "scripts": { "build": "node ./build.mjs" }
