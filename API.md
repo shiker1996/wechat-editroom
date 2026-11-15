@@ -615,7 +615,7 @@ AI 规划配图占位
 外部 Agent 通过 MCP/CLI 完成模型生成后，可将结果提交到以下接口。工作台会校验输入并负责保存、确定性门禁、浏览器审计、截图和产物登记。所有写请求仍遵循本文件开头的本地会话与 CSRF 约定。
 
 ### POST /api/batches/:id/external/tags
-提交本批次热点打标。`items` 为 1–200 项；每项需提供 `id`、分类、`marketScope`、`riskLevel`、`relevanceReason`、0–12 的 `chinaRelevance`、主体/动作 `eventParts`，以及各项处于定义范围内的 `preScores`。热点必须属于该批次。
+提交本批次热点打标。items 为 1–200 项；每项需提供 id、分类、marketScope、riskLevel、relevanceReason、0–12 的 chinaRelevance、主体/动作 eventParts，以及处于定义范围内的 preScores。可选提供 domesticSubject（国内厂商/国内监管/国内市场/无），仅作打标依据并存入热点 tags，不进入事件评分。热点必须属于该批次。
 
 ### GET /api/batches/:id/external/events
 读取已打标且符合批次新鲜度条件的稳定事件聚类、关联热点、报道和已有事件卡。必须先完成热点打标。
@@ -627,7 +627,7 @@ AI 规划配图占位
 读取已保存的外部 Agent 研判报告；尚未提交时返回 `exists: false`。
 
 ### POST /api/batches/:id/external/research
-提交外部 Agent 的事件研判与选题。`items` 为 1–200 项；每项须引用稳定 `eventId` 和属于该事件的一个或多个 `hotspotIds`，并提供 `thesis`、`reason`；可附标题、角度、读者收益、风险、推荐轨道和评分。提交前必须有覆盖全部已打标稳定事件的事件事实卡。报告保存至 `sources/external-research-report.json` 并登记为产物。
+提交外部 Agent 的事件研判与选题。items 为 1–200 项；每项须引用稳定 eventId 和属于该事件的一个或多个 hotspotIds，并提供 thesis、reason；可附标题、角度、读者收益、风险、推荐轨道和 H/B/J/竞争扣分输入。T、P 与国内关联值由工作台读取事件和账号配置后计算，国内关联缺失时按剩余权重归一化。提交前必须有覆盖全部已打标稳定事件的事件事实卡。报告保存至 sources/external-research-report.json 并登记为产物，顶层包含 formulaVersion。
 
 ### POST /api/batches/:id/external/research-stage/prepare
 外部 Agent 完成打标和事件卡后领取原研判流程的下一项模型任务；可传 `reset: true` 清除本批次外部阶段记录并重新开始。返回 `pending` 时包含任务 ID、消息和输出格式，返回 `completed` 时包含最终结果。
