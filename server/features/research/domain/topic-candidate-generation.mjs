@@ -197,7 +197,7 @@ function candidateFromEvents({ events, type, relation = null, ranking, scope, si
     hotspotId: articleList[0]?.hotspot_id ?? primary.representativeHotspotId,
     title: seed.candidate_title || titleFor(events, relation), category,
     marketScope: rankItems.map((item) => item.marketScope).find(Boolean) || primary.market_scope,
-    chinaRelevance: Math.max(...rankItems.map((item) => finite(item.chinaRelevance, 0)), 0),
+    chinaRelevance: finite(lead.chinaRelevance, finite(primary.china_relevance_score, 0)),
     chinaRelevanceReason: '', riskLevel: rankItems.map((item) => item.riskLevel).find((value) => value && value !== '待评估') || '待评估', riskReason: '',
     preScores: lead.preScores || {}, base: finite(lead.base, 0), categoryPreference: 0, credibleScoop: 0, saturationPenalty: 0,
     keywords: [...new Set(events.flatMap((event) => list(event.keywords)))].slice(0, 12), articles: articleList, repositoryMeta: null,

@@ -11,6 +11,7 @@ import { skipPipelineFailure, reopenPipelineFailure } from '../../../features/ba
 import { createRequestHarnessGateway } from '../../skills/pipeline-runtime.mjs';
 import { resolveStableBatchEvents } from '../../../features/research/application/stable-event-service.mjs';
 import { tagsOf } from '../../../features/research/domain/hotspot-clustering.mjs';
+import { computeFinalScore, TOPIC_SCORING_FORMULA_VERSION } from '../../../shared/domain/topic-scoring.mjs';
 
 export async function handleTaskRoutes({ request, response, pathname, searchParams, store, body, json, aiJobs, jobs, models, root, config,
   batchWorkdir, batchMaxAgeHours }) {
@@ -70,7 +71,7 @@ export async function handleTaskRoutes({ request, response, pathname, searchPara
       if (!hotspot || ids.has(Number(item.id))) return respond(json, response, 422, { error: `热点 ID 无效或重复：${item?.id}` });
       const scores = item.preScores;
       const parts=normalizeEventParts(item.eventParts);
-      if (!parts || !item.category || !item.marketScope || !['低','中','高'].includes(item.riskLevel) || !item.relevanceReason || !Number.isFinite(Number(item.chinaRelevance)) || Number(item.chinaRelevance)<0 || Number(item.chinaRelevance)>12 || (item.score!=null&&(!Number.isFinite(Number(item.score))||Number(item.score)<0||Number(item.score)>100)) || !scores || Object.entries(scoreRanges).some(([key,max]) => !Number.isFinite(Number(scores[key])) || Number(scores[key]) < 0 || Number(scores[key]) > max)) {
+      if (!parts || !item.category || !item.marketScope || !['低','中','高'].includes(item.riskLevel) || !item.relevanceReason || !Number.isFinite(Number(item.chinaRelevance)) || Number(item.chinaRelevance)<0 || Number(item.chinaRelevance)>12 || (item.domesticSubject!=null&&!['国内厂商','国内监管','国内市场','无'].includes(item.domesticSubject)) || (item.score!=null&&(!Number.isFinite(Number(item.score))||Number(item.score)<0||Number(item.score)>100)) || !scores || Object.entries(scoreRanges).some(([key,max]) => !Number.isFinite(Number(scores[key])) || Number(scores[key]) < 0 || Number(scores[key]) > max)) {
         return respond(json, response, 422, { error: `热点 ${item.id} 缺少分类、市场范围、风险、事件主体/动作、相关性或有效评分` });
       }
       ids.add(Number(item.id));
@@ -163,15 +164,17 @@ export async function handleTaskRoutes({ request, response, pathname, searchPara
       if(values.some((key)=>!Number.isFinite(Number(dims[key]))))throw Object.assign(new Error(`事件 ${item.eventId} 缺少 scoreInputs：需要 H、B、J、saturationPenalty、duplicatePenalty`),{statusCode:422});
       const T=heatById.get(String(item.eventId));
       if(!Number.isFinite(T))throw Object.assign(new Error(`事件 ${item.eventId} 缺少事件热度 T，无法计算最终分`),{statusCode:409});
-      const P=Number(scoring.accountFitByCategory?.[event.topic_category||event.topicCategory]||0);
+      const category=event.topic_category||event.topicCategory;
+      const hasConfiguredP=Object.hasOwn(scoring.accountFitByCategory||{},category);
+      const P=Number(hasConfiguredP?scoring.accountFitByCategory[category]:25);
       const H=Math.max(0,Math.min(100,Number(dims.H)));const B=Math.max(0,Math.min(100,Number(dims.B)));const J=Math.max(0,Math.min(100,Number(dims.J)));
-      const S=Math.max(0,Math.min(15,Number(dims.saturationPenalty)));const D=Math.max(0,Math.min(20,Number(dims.duplicatePenalty)));const C=Math.min(35,S+D);
-      const A=Math.max(0,Math.min(100,H*scoring.weights.h+B*scoring.weights.b+P*scoring.weights.p));
-      const F=Math.max(0,Math.min(100,A*(1-scoring.eventValueWeight-scoring.researchValueWeight)+T*scoring.eventValueWeight+J*scoring.researchValueWeight-C));
-      return {eventId:String(item.eventId),title:String(item.title||event.representative_title).trim().slice(0,120),T:Number(T.toFixed(1)),J,H,B,P:Number(P.toFixed(1)),A:Number(A.toFixed(1)),S:Number(S.toFixed(1)),D:Number(D.toFixed(1)),C:Number(C.toFixed(1)),F:Number(F.toFixed(1))};
+      const S=Math.max(0,Math.min(15,Number(dims.saturationPenalty)));const D=Math.max(0,Math.min(20,Number(dims.duplicatePenalty)));
+      const computed=computeFinalScore({H,B,P,T,J,S,D,chinaRelevance:event.china_relevance_score},scoring);
+      const scoreWeightWarnings=[...computed.weightWarnings,...(!hasConfiguredP?[`分类“${category||'未分类'}”未配置 accountFit，P 使用 25 兜底分`]:[])];
+      return {eventId:String(item.eventId),title:String(item.title||event.representative_title).trim().slice(0,120),T:Number(T.toFixed(1)),J,H,B,P:Number(P.toFixed(1)),A:computed.A,S:Number(S.toFixed(1)),D:Number(D.toFixed(1)),C:computed.C,DOM:computed.DOM,F:computed.F,scoreWeightWarnings};
     }).sort((a,b)=>b.F-a.F||a.eventId.localeCompare(b.eventId)).map((item,index)=>({...item,rank:index+1}));
     const scoreById=new Map(scoreItems.map((item)=>[item.eventId,item]));
-    const report={schemaVersion:2,source:'external-agent',batchId,generatedAt:new Date().toISOString(),summary:String(input.summary||'').slice(0,4000),items:input.items.map((item)=>({eventId:String(item.eventId),eventTitle:byId.get(String(item.eventId)).representative_title,hotspotIds:[...new Set(item.hotspotIds.map(Number))],title:String(item.title||'').trim().slice(0,120),thesis:String(item.thesis).trim().slice(0,800),angle:String(item.angle||'').trim().slice(0,800),readerBenefit:String(item.readerBenefit||'').trim().slice(0,500),riskLevel:String(item.riskLevel||'').trim().slice(0,40),riskReason:String(item.riskReason||'').trim().slice(0,500),reason:String(item.reason).trim().slice(0,1200),recommendedTrack:['article','social_cards'].includes(item.recommendedTrack)?item.recommendedTrack:'article',score:scoreById.get(String(item.eventId)).F,scoreBreakdown:scoreById.get(String(item.eventId))}))};
+    const report={schemaVersion:2,formulaVersion:TOPIC_SCORING_FORMULA_VERSION,source:'external-agent',batchId,generatedAt:new Date().toISOString(),summary:String(input.summary||'').slice(0,4000),items:input.items.map((item)=>({eventId:String(item.eventId),eventTitle:byId.get(String(item.eventId)).representative_title,hotspotIds:[...new Set(item.hotspotIds.map(Number))],title:String(item.title||'').trim().slice(0,120),thesis:String(item.thesis).trim().slice(0,800),angle:String(item.angle||'').trim().slice(0,800),readerBenefit:String(item.readerBenefit||'').trim().slice(0,500),riskLevel:String(item.riskLevel||'').trim().slice(0,40),riskReason:String(item.riskReason||'').trim().slice(0,500),reason:String(item.reason).trim().slice(0,1200),recommendedTrack:['article','social_cards'].includes(item.recommendedTrack)?item.recommendedTrack:'article',score:scoreById.get(String(item.eventId)).F,scoreBreakdown:scoreById.get(String(item.eventId))}))};
     const reportPath=path.join(batchWorkdir(batch),'sources','external-research-report.json');
     fs.mkdirSync(path.dirname(reportPath),{recursive:true});fs.writeFileSync(reportPath,JSON.stringify(report,null,2),'utf8');
     const stat=fs.statSync(reportPath);store.upsertArtifact({batchId,kind:'外部 Agent 选题研判',name:'external-research-report.json',path:reportPath,size:stat.size,modifiedAt:stat.mtime.toISOString()});
