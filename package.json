@@ -17,6 +17,7 @@
         "jianzi": "node scripts/agent-integration/cli.mjs",
         "dev": "node scripts/runtime/start-server.mjs --watch --watch-path=server.mjs --watch-path=server",
         "test": "node --disable-warning=ExperimentalWarning --test test/**/*.test.mjs",
+        "migrate:topic-scoring-v3": "node scripts/migrate-topic-scoring-v3.mjs",
         "test:e2e": "node --disable-warning=ExperimentalWarning --test test/e2e/**/*.test.mjs",
         "test:fast": "node scripts/build/test-fast.mjs",
         "event-resolution:backfill": "node scripts/migration/backfill-event-resolution.mjs",

@@ -19,8 +19,8 @@ const preselection = fs.existsSync(preselectionPath)
 const scoring = replay.scoring || {};
 const clamp = (value, min, max) => Math.max(min, Math.min(max, Number(value) || 0));
 
-function scoreLegacyV2(inputs) {
-  const weights = { h: 0.6, b: 0.25, p: 0.15 };
+function scoreLegacyV2(inputs, configuredWeights = {}) {
+  const weights = { h: Number(configuredWeights.h ?? 0.6), b: Number(configuredWeights.b ?? 0.25), p: Number(configuredWeights.p ?? 0.15) };
   const H = clamp(inputs.H, 0, 100);
   const B = clamp(inputs.B, 0, 100);
   const P = clamp(inputs.P, 0, 100);
@@ -41,7 +41,7 @@ const items = replay.items.map((item) => {
     title: String(item.title || ''),
     category: String(item.category || ''),
     poolRole: String(item.poolRole || ''),
-    v2: scoreLegacyV2(v2Inputs),
+    v2: scoreLegacyV2(v2Inputs, replay.legacyScoring?.weights),
     v3: { A: v3.A, DOM: v3.DOM, F: v3.F },
     savedV3: item.output || null,
     usesLegacyComponentSnapshot: Boolean(item.legacyInputs),
@@ -61,7 +61,7 @@ const ranked = Array.isArray(preselection?.items) ? preselection.items : [];
 const report = {
   schemaVersion: 1,
   formulaVersion: replay.formulaVersion || 'unknown',
-  comparisonBasis: 'v2 applies legacy weights to supplied components; unless legacyInputs are present, H/B/P are the archived v3 components. This is a formula comparison, not a full historical replay.',
+  comparisonBasis: 'When legacyInputs are present, v2 H/B/P are reconstructed from archived raw B scores, hProfile, capped reader score, and the v2 account scoring snapshot captured by the migration path. This compares formula inputs and outputs; it does not replay candidate-pool gates or model decisions.',
   preselection: preselection ? {
     rankedEventCount: ranked.length,
     selectedEventCount: ranked.filter((item) => item.poolRole && item.poolRole !== '未入选').length,

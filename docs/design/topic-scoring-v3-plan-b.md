@@ -152,7 +152,7 @@ emotionSpread 是传播情绪，relatability 是更广泛的读者共鸣。当�
 
 ### 5.3 P：分级表
 
-resolveScoring() 已读取 scoring.accountFit 并合并到 accountFitByCategory。本方案不新增评分配置管道；只需明确账号配置值，并确认各运行环境加载该配置。
+resolveScoring() 已读取 scoring.accountFit 并合并到 accountFitByCategory。本方案不新增评分配置管道；在现有账号配置中更新 v3 权重、分类值和 hBase。旧账号配置会覆盖代码默认值，因此提供显式迁移脚本并在未迁移时输出提示。
 
 | 分类 | v3 候选值 |
 |---|---:|
@@ -162,7 +162,7 @@ resolveScoring() 已读取 scoring.accountFit 并合并到 accountFitByCategory�
 | 产品与技术动态 | 65 |
 | 行业趋势与市场变化 | 55 |
 | 政策与公共议题 | 20 |
-| 未配置分类 | 保持现有兜底逻辑；若需 warning，另确认实际日志位置 |
+| 未配置分类 | 具体分类使用本表建议值；未知分类 P=25 并记录 warning |
 
 这些值是待回放校准的初始配置，不是两批样本证明的最优参数。文章池选择阶段的 accountFit 只用于同分优先级和审计，不叠加到事件分，不能靠改 P 救回未入池事件。
 
@@ -185,7 +185,7 @@ wA=0.55  wT=0.25  wJ=0.10  wD=0.10
 | `chinaRelevance` | **剔除 DOM 项**，其余三项按 0.90 重新归一化 | 缺数据不能当 0 分打压；`candidate-routes` 的综合选题走此分支 |
 | `relatability` | 走 B 的可用项均值 | 历史卡片兼容 |
 | `readerStakeScore` | `audience = 0` | 沿用 v2 |
-| 分类未配置 `accountFit` | P = 25，并记录 warning | 不能白送 80 |
+| 账号配置缺少具体分类 `accountFit` | 应用本方案的分类建议值并记录配置未迁移提示；未知分类 P = 25 并记录 warning | 避免旧画像回退到统一支柱映射值，也不白送未知类目 80 分 |
 
 ### 5.6 打标口径（DOM 的输入质量）
 
@@ -210,6 +210,7 @@ chinaRelevanceScore 当前 0–10 字段只是返回/审计值，不参与 T；�
   "eventValueWeight": 0.25,
   "researchValueWeight": 0.10,
   "domesticWeight": 0.10,
+  "formulaVersion": "v3",
   "accountFit": {
     "大厂与商业战略": 85, "职场与组织变化": 85,
     "开源项目与开发者生态": 75, "产品与技术动态": 65,
@@ -231,7 +232,7 @@ chinaRelevanceScore 当前 0–10 字段只是返回/审计值，不参与 T；�
 - `domesticWeight` 夹取 `[0, 0.25]`，默认 `0.10`。
 - `eventValueWeight ∈ [0.25, 0.40]`、`researchValueWeight ∈ [0.10, 0.30]`（沿用）。
 - 强制 `eventValueWeight + researchValueWeight + domesticWeight ≤ 0.85`，剩余归 A；越界时按比例缩放并记 warning。
-- `weights.h + weights.b + weights.p` 归一化到 1。
+- `weights.h + weights.b + weights.p` 归一化到 1；非 1 时写入可见 warning。
 
 ---
 
@@ -241,12 +242,10 @@ chinaRelevanceScore 当前 0–10 字段只是返回/审计值，不参与 T；�
 
 | 文件 | 位置 | 改动 |
 |---|---|---|
-| `server/features/research/application/research-pipeline.mjs` | `DEFAULT_SCORING` (L54)、`resolveScoring()` (L65) | 加 `domesticWeight`、夹取与归一化校验 |
-| 同上 | `scoreCards()` (L520–571) | ①B 六项均值 ②audience 拆两用 ③加 DOM ④F 新公式 ⑤缺失回退矩阵 |
-| 同上 | 报告模板 (L651) | 同步公式说明文字（现在硬编码 `A = H×0.60 …`） |
-| `server/platform/http/routes/task-routes.mjs` | L160–171 | **同一公式的第二份内联实现**（外部 Agent 提交研判），必须同步；DOM 取 `event.china_relevance_score` |
-| `server/platform/http/routes/candidate-routes.mjs` | L269–272 | 综合选题的 bScores prompt 补 `relatability`；`source` 缺 `chinaRelevance` 时走回退 |
-| `server/shared/domain/topic-scoring.mjs`（**新增，若采纳 §12-6**） | — | 抽出 `computeFinalScore()`，供上述三处复用，从根上消除"两份公式实现" |
+| `server/features/research/application/research-pipeline.mjs` | `resolveScoring()`、`scoreCards()`、报告与回放产物 | v3 权重与迁移提示；B 六项均值、raw/capped 拆分、DOM、F 计算与精确 v2 分量快照 |
+| `server/shared/domain/topic-scoring.mjs` | `computeFinalScore()` | 内部流水线、综合选题和直接外部研判共用公式与缺失值回退 |
+| `server/platform/http/routes/task-routes.mjs` | 外部研判提交与打标校验 | 直接外部研判复用共享评分；国内关联取稳定事件分数 |
+| `server/platform/http/routes/candidate-routes.mjs` | 综合选题输入 | bScores prompt 补 `relatability`；缺少 T 时不生成 F，缺 DOM 时归一化 |
 
 ### 6.2 打标与校验
 
@@ -254,7 +253,7 @@ chinaRelevanceScore 当前 0–10 字段只是返回/审计值，不参与 T；�
 |---|---|
 | `skills/hotspot-tagging/SKILL.md` | 补 `chinaRelevance` 分档锚点；新增 `domesticSubject` 枚举 |
 | `server/platform/http/routes/task-routes.mjs:73` | 打标入参校验接受 `domesticSubject`（否则 422） |
-| `server/platform/persistence/repositories/hotspot-repository.mjs:31` | `updateTags` 字段白名单加 `domesticSubject` |
+| `server/platform/persistence/repositories/hotspot-repository.mjs` | `updateTags` 持久化可选 `domesticSubject`；未提供时留空，与显式“无”区分 |
 | `API.md:618` | 接口文档同步 |
 
 ### 6.3 数据流一致性
@@ -263,7 +262,7 @@ chinaRelevanceScore 当前 0–10 字段只是返回/审计值，不参与 T；�
 |---|---|---|
 | hotspot-clustering.mjs | 事件映射 | 保持 chinaRelevance 到事件级 china_relevance_score 的映射，作为 DOM 唯一输入 |
 | event-heat-ranking.mjs | chinaRelevanceScore | 若统一 0–12，仅改返回/审计字段与对应测试；明确不进入 T 公式 |
-| topic-candidate-generation.mjs | 候选生成 | 只有 DOM 实际需要此路径时才确定候选取值规则；lead 值优于成员最大值尚未验证，先以回放结果决定 |
+| topic-candidate-generation.mjs | 候选生成 | 多事件候选取 lead 事件的 chinaRelevance，不用成员最大值抬高 DOM |
 | social-scoring.mjs | 图文榜 | 只有打标口径变化时才回归分布；本轮不改变图文榜权重 |
 
 ### 6.4 脑暴产出端
@@ -280,8 +279,9 @@ chinaRelevanceScore 当前 0–10 字段只是返回/审计值，不参与 T；�
 |---|---|
 | `account-context.json` | 按 5.7 更新 `scoring` |
 | `account-context.example.json` | 同步示例 |
-| `public/src/core/account-context.js` | 表单透传，代码不变；提示文案补 `domesticWeight` |
-| `public/src/views/topics.js:20` | 可选：F 列表增加 DOM 构成列 |
+| `scripts/migrate-topic-scoring-v3.mjs` | 预览或备份后迁移被忽略的本地 account-context.json；旧公式配置保存为 legacyV2 供回放 |
+| `public/src/core/account-context.js` | 配置编辑提示含 v3 权重和迁移命令 |
+| `server/features/research/application/research-pipeline.mjs` | `topics-ranked.md` 展示 DOM 列、公式版本和账号配置告警；不改候选表 UI |
 
 ### 6.6 不改动清单
 
@@ -296,7 +296,7 @@ chinaRelevanceScore 当前 0–10 字段只是返回/审计值，不参与 T；�
 
 ## 7. 兼容性
 
-1. **历史批次**：`f_score` 不变；批次报告产物 JSON 顶层和 Markdown 报告头写 `formulaVersion`。本方案不增加候选行版本字段；UI 若需标注，只能基于批次报告元数据显示批次级版本，并确保元数据可读取。
+1. **历史批次**：`f_score` 不变；批次报告产物 JSON 顶层和 Markdown 报告头写 `formulaVersion`。本方案不增加候选行版本字段；产物中心预览的 `topics-ranked.md` 会展示报告头的批次级版本。
 2. **外部 Agent 契约**：`jianzi_batch_research_submit` 的 `scoreInputs` 保持 H/B/J/饱和/重复五字段必填；DOM **可选**，缺失走 5.5 回退。若强制必填，现有调用方会全部 422。
 3. **图文榜**：`G_social` 权重不变，但 `chinaRelevance` 口径收紧会使其数值整体下移，需单独回归（不视为失败）。
 4. **分数整体漂移**：v3 下所有候选 F 会移动约 ±3–8 分，属于预期；不使用硬阈值（现有代码已无 `f_score < 55` 拦截）。

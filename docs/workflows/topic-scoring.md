@@ -36,7 +36,9 @@
 
 - 批次产物：sources/external-research-report.json、sources/topic-scoring-candidates.json、sources/preselection-ranking.json、topics-ranked.md。
 - 公式版本为 v3，写入批次评分产物 JSON 与评分报告头；不在候选数据库增加版本列。
-- 相关测试：test/topic-scoring.test.mjs、test/research-pipeline.test.mjs、外部研究提交路由测试。
+- `topics-ranked.md` 在产物中心预览时显示批次公式版本与账号配置提示；迁移前的账号配置会保留旧权重/H 基线覆盖，运行 `npm run migrate:topic-scoring-v3` 先预览，确认后运行 `npm run migrate:topic-scoring-v3 -- --write` 迁移并自动备份。
+- 评分回放输入保存 raw B 子项、hProfile、旧公式输入快照及公式参数；回放比较分数，不重跑候选池门禁或模型决策。
+- 相关测试：test/topic-scoring.test.mjs、test/research-pipeline.test.mjs、test/external-event-card-batching.test.mjs、test/topic-candidate-generation-domestic.test.mjs。
 - 回放：node scripts/quality/backtest-topic-scoring.mjs <batch-workdir>。
 
 ## 变更触点

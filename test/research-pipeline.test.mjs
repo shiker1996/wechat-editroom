@@ -165,10 +165,10 @@ test('T/J/A/C/F由服务端公式计算', () => {
   const cards=[{candidateId:'C001',status:'PASS',source,bScores:{angleUniqueness:4,emotionSpread:4,titleHook:4,audienceRelevance:4,factSupport:4},
     hProfile:{historicalType:'bigtech',fiveSenseCount:4,fiveQuestionCount:3,recommendationFit:6,emotionTheme:4,searchFriendly:3}}];
   const result=scoreCards(cards,{items:[{candidateId:'C001',saturationPenalty:5,duplicatePenalty:2,audienceRelevance:4,reason:'测试'}]})[0];
-  assert.equal(result.b,80); assert.equal(result.p,80); assert.equal(result.s,5); assert.equal(result.d,0);
-  assert.equal(result.a,79);
+  assert.equal(result.b,80); assert.equal(result.p,65); assert.equal(result.s,5); assert.equal(result.d,0);
+  assert.equal(result.a,76);
   assert.equal(result.j,0); assert.equal(result.c,5);
-  assert.equal(result.f,43.3);
+  assert.equal(result.f,41.4);
 });
 
 test('阶段5 T 接入 F：同等文章化质量下事件价值更高者优先', () => {
@@ -632,12 +632,23 @@ test('评分权重可通过 scoring 配置覆盖', () => {
     hProfile:{historicalType:'bigtech',fiveSenseCount:4,fiveQuestionCount:3,recommendationFit:6,emotionTheme:4,searchFriendly:3}}];
   const synthesis={items:[{candidateId:'C001',saturationPenalty:5,duplicatePenalty:2,audienceRelevance:4,reason:'测试'}]};
   const defaults=scoreCards(cards,synthesis)[0];
-  assert.equal(defaults.f,43.3);
-  // H=78,B=80,P=80：A=79；DOM 缺失时 A/T/J 按 .90 归一化；自定义权重只改 A 聚合比例
+  assert.equal(defaults.f,41.4);
+  // H=78,B=80,P=65：A=76；DOM 缺失时 A/T/J 按 .90 归一化；自定义权重只改 A 聚合比例
   const custom=resolveScoring({contentPillars:['AI 行业热点：开发者影响'],scoring:{weights:{h:0.5,b:0.3,p:0.2}}});
   const adjusted=scoreCards(cards,synthesis,custom)[0];
-  assert.equal(adjusted.h,78); assert.equal(adjusted.b,80); assert.equal(adjusted.p,80); assert.equal(adjusted.s,5);
-  assert.equal(adjusted.f,Number(((78*0.5+80*0.3+80*0.2)*(0.55/0.9)-5).toFixed(1)));
+  assert.equal(adjusted.h,78); assert.equal(adjusted.b,80); assert.equal(adjusted.p,65); assert.equal(adjusted.s,5);
+  assert.equal(adjusted.f,Number(((78*0.5+80*0.3+65*0.2)*(0.55/0.9)-5).toFixed(1)));
+});
+
+test('legacy account context is visibly marked for v3 migration while recommended category P values apply', () => {
+  const scoring=resolveScoring({ contentPillars:['AI 行业热点：开发者影响'], scoring:{
+    weights:{h:0.6,b:0.25,p:0.15}, hBase:{bigtech:33},
+  } });
+  assert.equal(scoring.weights.h,0.6);
+  assert.equal(scoring.finalAccountFitByCategory['产品与技术动态'],65);
+  assert.equal(scoring.legacyV2.hBase.bigtech,33);
+  assert.ok(scoring.scoringWarnings.some((warning)=>warning.includes('尚未升级到 v3')));
+  assert.ok(scoring.scoringWarnings.some((warning)=>warning.includes('缺少 accountFit 分类')));
 });
 
 test('scoring 覆盖分类偏好与账号契合加分，非法值回退默认', () => {

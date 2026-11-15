@@ -71,6 +71,7 @@
     ]
   },
   "scoring": {
+    "formulaVersion": "v3",
     "weights": { "h": 0.5, "b": 0.3, "p": 0.2 },
     "eventValueWeight": 0.25,
     "researchValueWeight": 0.1,

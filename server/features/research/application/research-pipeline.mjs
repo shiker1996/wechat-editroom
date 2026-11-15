@@ -46,7 +46,12 @@ export { DISCUSSION_RESEARCH_TOP_K, DISCUSSION_RESEARCH_READER_RECALL_LIMIT, bui
 export { buildTopicCandidates, selectTopicCandidates, topicCandidatesMarkdown };
 
 const H_BASE = { worker_social: 58, bigtech: 42, owned_experience: 36, controversial_return: 35, key_person_move: 32, github_tool: 10, ai_tool_test: 14, financing: 3, career_anxiety: 50, contrarian_bigtech: 35 };
+const V2_H_BASE = { worker_social: 48, bigtech: 33, owned_experience: 35, controversial_return: 30, key_person_move: 33, ai_tool_test: 20, financing: 10, career_anxiety: 5, contrarian_bigtech: 35 };
 const ACCOUNT_FIT_LEVEL_SCORE = Object.freeze({ strong: 80, explore: 45, weak: 25 });
+const V3_ACCOUNT_FIT = Object.freeze({
+  '大厂与商业战略': 85, '职场与组织变化': 85, '开源项目与开发者生态': 75,
+  '产品与技术动态': 65, '行业趋势与市场变化': 55, '政策与公共议题': 20,
+});
 
 // 评分参数默认值。account-context.json 可用 scoring 段覆盖：
 // {"scoring":{"weights":{"h":0.6,"b":0.25,"p":0.15},"eventValueWeight":0.25,"researchValueWeight":0.2,"accountFit":{"产品与技术动态":80},
@@ -57,6 +62,7 @@ const DEFAULT_SCORING = Object.freeze({
   eventValueWeight: 0.25,
   researchValueWeight: 0.10,
   domesticWeight: 0.10,
+  accountFit: V3_ACCOUNT_FIT,
   categoryPreference: Object.freeze({}),
   marketScopeCategoryPreference: Object.freeze({}),
   pBase: Object.freeze({}),
@@ -76,6 +82,7 @@ export function resolveScoring(ctx = getAccountContext()) {
     return table;
   };
   const accountFitOverrides = scoring.accountFit && typeof scoring.accountFit === 'object' ? scoring.accountFit : {};
+  const categories = editorialCategoriesFor(ctx);
   const rawComponentWeights = {
     h: Math.max(0, num(weights.h, DEFAULT_SCORING.weights.h)),
     b: Math.max(0, num(weights.b, DEFAULT_SCORING.weights.b)),
@@ -90,23 +97,49 @@ export function resolveScoring(ctx = getAccountContext()) {
     researchValueWeight: Math.max(0.10, Math.min(0.30, num(scoring.researchValueWeight, DEFAULT_SCORING.researchValueWeight))),
     domesticWeight: Math.max(0, Math.min(0.25, num(scoring.domesticWeight, DEFAULT_SCORING.domesticWeight))),
   });
+  const warnings = [...resolvedTopicWeights.warnings];
+  if (Math.abs(componentTotal - 1) > 0.000001) warnings.push('H/B/P 权重和不为 1，已归一化；请检查账号评分配置');
+  if (Object.keys(scoring).length && scoring.formulaVersion !== TOPIC_SCORING_FORMULA_VERSION) {
+    warnings.push('账号评分配置尚未升级到 v3；运行 npm run migrate:topic-scoring-v3 -- --write 更新配置');
+  }
+  const missingAccountFit = categories.filter((category) => !Object.hasOwn(accountFitOverrides, category));
+  if (Object.keys(scoring).length && missingAccountFit.length) {
+    warnings.push(`账号评分配置缺少 accountFit 分类：${missingAccountFit.join('、')}；已使用 v3 建议值`);
+  }
+  const legacy = scoring.legacyV2 && typeof scoring.legacyV2 === 'object' ? scoring.legacyV2 : scoring;
+  const legacyWeights = legacy.weights && typeof legacy.weights === 'object' ? legacy.weights : { h: 0.6, b: 0.25, p: 0.15 };
+  const legacyHBase = mergeTable(V2_H_BASE, legacy.hBase);
+  const legacyAccountFitOverrides = legacy.accountFit && typeof legacy.accountFit === 'object' ? legacy.accountFit : {};
+  const legacyV2 = {
+    weights: { h: num(legacyWeights.h, 0.6), b: num(legacyWeights.b, 0.25), p: num(legacyWeights.p, 0.15) },
+    eventValueWeight: num(legacy.eventValueWeight, 0.25),
+    researchValueWeight: num(legacy.researchValueWeight, 0.20),
+    hBase: legacyHBase,
+    accountFitByCategory: Object.fromEntries(categories.map((category) => [
+      category, clamp(num(legacyAccountFitOverrides[category], accountFitForCategory(category, ctx)), 0, 100),
+    ])),
+  };
   return {
     weights: normalizedComponentWeights,
     eventValueWeight: resolvedTopicWeights.eventValue,
     researchValueWeight: resolvedTopicWeights.researchValue,
     domesticWeight: resolvedTopicWeights.domestic,
     articleWeight: resolvedTopicWeights.article,
-    scoringWarnings: resolvedTopicWeights.warnings,
+    scoringWarnings: warnings,
     categoryPreference: mergeTable(Object.fromEntries(editorialCategoriesFor(ctx).map((category) => [category, 0])), scoring.categoryPreference),
     marketScopeCategoryPreference: scoring.marketScopeCategoryPreference && typeof scoring.marketScopeCategoryPreference === 'object'
       ? scoring.marketScopeCategoryPreference : {},
     // pBase 已退出评分，仅原样保留旧账号配置以兼容历史调用方。
     pBase: scoring.pBase && typeof scoring.pBase === 'object' ? scoring.pBase : {},
     hBase: mergeTable(H_BASE, scoring.hBase),
-    categories: editorialCategoriesFor(ctx),
-    accountFitByCategory: Object.fromEntries(editorialCategoriesFor(ctx).map((category) => [
+    categories,
+    accountFitByCategory: Object.fromEntries(categories.map((category) => [
       category, clamp(num(accountFitOverrides[category], accountFitForCategory(category, ctx)), 0, 100),
     ])),
+    finalAccountFitByCategory: Object.fromEntries(categories.map((category) => [
+      category, clamp(num(accountFitOverrides[category], V3_ACCOUNT_FIT[category] ?? 25), 0, 100),
+    ])),
+    legacyV2,
     accountFitBonus: num(scoring.accountFitBonus, DEFAULT_SCORING.accountFitBonus),
     notificationPolicy: resolveNotificationPolicy(ctx),
   };
@@ -556,7 +589,7 @@ export function scoreCards(cards, synthesis, scoring = resolveScoring()) {
     const B = bParts.length ? bParts.reduce((sum, value) => sum + value, 0) / bParts.length * 20 : 0;
     const H = clamp((scoring.hBase[hp.historicalType] ?? 10) + clamp(hp.fiveSenseCount,0,5)*2 + clamp(hp.fiveQuestionCount,0,5)*5 + clamp(hp.recommendationFit,0,10) + clamp(hp.emotionTheme,0,10) + clamp(hp.searchFriendly,0,5),0,100);
     // Phase 3：P 只来自 L2 accountFit；pBase/可信独家旧口径不再参与最终评分。
-    const configuredP = card.source?.accountFit ?? scoring.accountFitByCategory?.[card.source?.category];
+    const configuredP = card.source?.accountFit ?? scoring.finalAccountFitByCategory?.[card.source?.category];
     const P = clamp(Number(configuredP ?? accountFitForCategory(card.source?.category)), 0, 100);
     const scoreWarnings = configuredP == null
       ? [`分类“${card.source?.category || '未分类'}”未配置 accountFit，P 使用 ${P} 兜底分`]
@@ -669,8 +702,10 @@ function markdownAgenda(scored) {
 export function markdownRanked(scored, synthesis, dimensionGroups = [], scoring = DEFAULT_SCORING) {
   const grade = (f) => f>=85?'S+':f>=70?'S':f>=55?'A+':f>=40?'A':f>=25?'B':'C';
   const pct = (value) => `${Math.round(value * 100)}%`;
+  const configWarnings = [...new Set(scored.flatMap((item) => item.scoreWeightWarnings || []))];
+  const warningSection = configWarnings.length ? `> 配置提示：${configWarnings.join('；')}\n\n` : '';
   const topicSection = dimensionGroups.length ? `\n## 维度候选（早报）\n\n| 维度 | 选题 | 维度分 | 风险 | 覆盖事件 | 代表报道 |\n|---|---|---:|---|---:|---|\n${dimensionGroups.map((t)=>`| ${DIMENSION_POOL_ROLES[t.dimension] || t.dimension} | ${t.title.replace(/\|/g,'/')} | ${t.score} | ${t.riskLevel} | ${t.events.length} | ${t.leads.map((x)=>x.replace(/\|/g,'/')).join('、')} |`).join('\n')}\n` : '';
-  return `# 综合选题研判报告（临时排名，待编辑会确认）\n\n> 评分公式版本：v3\n\n## 爆款总榜\n\n| # | 身份 | 分发池 | 分类 | 选题 | T 热度 | J 研判 | A 文章 | C 竞争 | F 最终 | 等级 | 风险 |\n|---:|---|---|---|---|---:|---:|---:|---:|---:|:---:|---|\n${scored.map((c)=>`| ${c.finalRank} | ${c.source.poolRole} | ${c.distributionLane} | ${editorialCategoryForCard(c)} | ${c.source.title.replace(/\|/g,'/')} | ${c.eventValue.toFixed(1)} | ${c.j} | ${c.a} | ${c.c} | ${c.f} | ${grade(c.f)} | ${c.source.riskLevel} |`).join('\n')}\n\n## 综合研判\n\n### 元叙事\n${(synthesis.metaNarratives||[]).map((x)=>`- ${x}`).join('\n') || '- 暂无明确跨题元叙事'}\n\n### 组合推荐\n- 主推：${synthesis.combination?.primary || '待定'}\n- 稳定：${synthesis.combination?.stable || '待定'}\n- 黑马：${synthesis.combination?.darkHorse || '待定'}\n- 理由：${synthesis.combination?.reason || ''}\n\n## 逐条评分\n\n${scored.map((c)=>`### #${c.finalRank} ${c.candidateId} · ${c.source.title}\n- 所属类别：${editorialCategoryForCard(c)}\n- T/J/A/C/F：${c.eventValue.toFixed(1)}/${c.j}/${c.a}/${c.c}/${c.f}\n- A 内部：H ${c.h} · B ${c.b} · P ${c.p.toFixed(1)}\n- J 内部：事件内 ${c.researchInternal} · 事件间 ${c.researchInterEvent}\n- 脑暴五项：${c.bParts.join('/')}\n- 核心角度：${c.angle}\n- 临时命题：${c.thesis}\n- 分发池：${c.distributionLane}\n- 读者利益：${c.readerStake || '待明确'}\n- 竞争扣分构成：同题饱和 ${c.s} · 重复 ${c.d}\n- 受众与竞争校正：${c.synthesisReason || '无额外校正'}\n- 合规风险：${c.source.riskLevel} ${c.source.riskReason || ''}\n- 推荐文章类型：${c.articleType || 'wechat-mp-deep-dive'}\n`).join('\n')}\n\n*评分公式：A = H×${pct(scoring.weights.h)} + B×${pct(scoring.weights.b)} + P×${pct(scoring.weights.p)}；F = A×${pct(scoring.articleWeight ?? (1-scoring.eventValueWeight-scoring.researchValueWeight-scoring.domesticWeight))} + T×${pct(scoring.eventValueWeight)} + J×${pct(scoring.researchValueWeight)} + DOM×${pct(scoring.domesticWeight)} - C（C = S + D）\n${topicSection}`;
+  return `# 综合选题研判报告（临时排名，待编辑会确认）\n\n> 评分公式版本：v3\n\n${warningSection}## 爆款总榜\n\n| # | 身份 | 分发池 | 分类 | 选题 | T 热度 | J 研判 | A 文章 | DOM 国内 | C 竞争 | F 最终 | 等级 | 风险 |\n|---:|---|---|---|---|---:|---:|---:|---:|---:|---:|:---:|---|\n${scored.map((c)=>`| ${c.finalRank} | ${c.source.poolRole} | ${c.distributionLane} | ${editorialCategoryForCard(c)} | ${c.source.title.replace(/\|/g,'/')} | ${c.eventValue.toFixed(1)} | ${c.j} | ${c.a} | ${c.dom ?? '—'} | ${c.c} | ${c.f} | ${grade(c.f)} | ${c.source.riskLevel} |`).join('\n')}\n\n## 综合研判\n\n### 元叙事\n${(synthesis.metaNarratives||[]).map((x)=>`- ${x}`).join('\n') || '- 暂无明确跨题元叙事'}\n\n### 组合推荐\n- 主推：${synthesis.combination?.primary || '待定'}\n- 稳定：${synthesis.combination?.stable || '待定'}\n- 黑马：${synthesis.combination?.darkHorse || '待定'}\n- 理由：${synthesis.combination?.reason || ''}\n\n## 逐条评分\n\n${scored.map((c)=>`### #${c.finalRank} ${c.candidateId} · ${c.source.title}\n- 所属类别：${editorialCategoryForCard(c)}\n- T/J/A/DOM/C/F：${c.eventValue.toFixed(1)}/${c.j}/${c.a}/${c.dom ?? '缺失'}/${c.c}/${c.f}\n- A 内部：H ${c.h} · B ${c.b} · P ${c.p.toFixed(1)}\n- J 内部：事件内 ${c.researchInternal} · 事件间 ${c.researchInterEvent}\n- 脑暴五项：${c.bParts.join('/')}\n- 核心角度：${c.angle}\n- 临时命题：${c.thesis}\n- 分发池：${c.distributionLane}\n- 读者利益：${c.readerStake || '待明确'}\n- 竞争扣分构成：同题饱和 ${c.s} · 重复 ${c.d}\n- 受众与竞争校正：${c.synthesisReason || '无额外校正'}\n- 合规风险：${c.source.riskLevel} ${c.source.riskReason || ''}\n- 推荐文章类型：${c.articleType || 'wechat-mp-deep-dive'}\n`).join('\n')}\n\n*评分公式：A = H×${pct(scoring.weights.h)} + B×${pct(scoring.weights.b)} + P×${pct(scoring.weights.p)}；F = A×${pct(scoring.articleWeight ?? (1-scoring.eventValueWeight-scoring.researchValueWeight-scoring.domesticWeight))} + T×${pct(scoring.eventValueWeight)} + J×${pct(scoring.researchValueWeight)} + DOM×${pct(scoring.domesticWeight)} - C（C = S + D）\n${topicSection}`;
 }
 
 const GENERIC_WORDS_HOTWORD = new Set(['ai','公司','发布','消息','最新','回应','宣布','科技','行业','全球','技术','产品','平台','企业','市场','今日','新闻']);
@@ -1176,11 +1211,28 @@ export async function runResearchPipeline({ gateway, store, batchId, provider, w
       weights: scoring.weights, eventValueWeight: scoring.eventValueWeight,
       researchValueWeight: scoring.researchValueWeight, domesticWeight: scoring.domesticWeight,
     },
+    legacyScoring: { formulaVersion: 'v2', weights: scoring.legacyV2.weights },
     items: scored.map((item) => ({
       candidateId: item.candidateId, title: item.source?.title || '',
       category: editorialCategoryForCard(item), poolRole: item.source?.poolRole || '',
       inputs: { H: item.h, B: item.b, P: item.p, T: item.eventValue, J: item.j,
         S: item.s, D: item.d, chinaRelevance: item.source?.chinaRelevance ?? null },
+      rawBParts: { ...(item.bScores || {}), readerStakeScoreRaw: item.audienceRawScore,
+        readerStakeScoreCapped: item.readerStakeScoreCapped },
+      hProfile: item.hProfile || {},
+      legacyInputs: (() => {
+        const profile = item.hProfile || {};
+        const base = scoring.legacyV2.hBase[profile.historicalType] ?? 10;
+        const legacyH = clamp(base + clamp(profile.fiveSenseCount, 0, 5) * 2
+          + clamp(profile.fiveQuestionCount, 0, 5) * 5 + clamp(profile.recommendationFit, 0, 10)
+          + clamp(profile.emotionTheme, 0, 10) + clamp(profile.searchFriendly, 0, 5), 0, 100);
+        const parts = [item.bScores?.angleUniqueness, item.bScores?.emotionSpread, item.bScores?.titleHook,
+          item.readerStakeScoreCapped, item.bScores?.factSupport].map((value) => clamp(value, 0, 5));
+        const legacyB = parts.reduce((sum, value) => sum + value, 0) * 4;
+        const legacyP = clamp(Number(item.source?.accountFit
+          ?? scoring.legacyV2.accountFitByCategory?.[item.source?.category] ?? accountFitForCategory(item.source?.category)), 0, 100);
+        return { H: legacyH, B: legacyB, P: legacyP, T: item.eventValue, J: item.j, S: item.s, D: item.d };
+      })(),
       output: { A: item.a, DOM: item.dom, F: item.f },
     })),
   }, null, 2));

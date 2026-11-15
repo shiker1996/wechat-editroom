@@ -41,3 +41,11 @@ test('non-article weights are capped at 0.85 with an auditable warning', () => {
   assert.ok(weights.article >= 0.149999 && weights.article <= 0.150001);
   assert.equal(weights.warnings.length, 1);
 });
+
+test('duplicate configured and computed weight warnings are returned once', () => {
+  const warning = 'T/J/DOM 权重合计超过上限，已按比例缩放';
+  const result = computeFinalScore({ H: 60, B: 60, P: 60, T: 60, J: 60 }, {
+    eventValueWeight: 0.5, researchValueWeight: 0.5, domesticWeight: 0.25, scoringWarnings: [warning],
+  });
+  assert.equal(result.weightWarnings.filter((item) => item === warning).length, 1);
+});

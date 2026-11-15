@@ -165,8 +165,8 @@ export async function handleTaskRoutes({ request, response, pathname, searchPara
       const T=heatById.get(String(item.eventId));
       if(!Number.isFinite(T))throw Object.assign(new Error(`事件 ${item.eventId} 缺少事件热度 T，无法计算最终分`),{statusCode:409});
       const category=event.topic_category||event.topicCategory;
-      const hasConfiguredP=Object.hasOwn(scoring.accountFitByCategory||{},category);
-      const P=Number(hasConfiguredP?scoring.accountFitByCategory[category]:25);
+      const hasConfiguredP=Object.hasOwn(scoring.finalAccountFitByCategory||{},category);
+      const P=Number(hasConfiguredP?scoring.finalAccountFitByCategory[category]:25);
       const H=Math.max(0,Math.min(100,Number(dims.H)));const B=Math.max(0,Math.min(100,Number(dims.B)));const J=Math.max(0,Math.min(100,Number(dims.J)));
       const S=Math.max(0,Math.min(15,Number(dims.saturationPenalty)));const D=Math.max(0,Math.min(20,Number(dims.duplicatePenalty)));
       const computed=computeFinalScore({H,B,P,T,J,S,D,chinaRelevance:event.china_relevance_score},scoring);

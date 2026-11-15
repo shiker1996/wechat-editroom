@@ -47,7 +47,7 @@ export function computeFinalScore({
   const c = clamp(saturation + duplicate, 0, 35);
   const a = clamp((h * hWeight + b * bWeight + p * pWeight) / componentWeightTotal, 0, 100);
   const { warnings: computedWarnings, ...weights } = resolveTopicScoreWeights(scoring);
-  const weightWarnings = [...(scoring.scoringWarnings || []), ...computedWarnings];
+  const weightWarnings = [...new Set([...(scoring.scoringWarnings || []), ...computedWarnings])];
   const hasDomestic = chinaRelevance != null && Number.isFinite(Number(chinaRelevance));
   const dom = hasDomestic ? clamp(chinaRelevance, 0, 12) / 12 * 100 : null;
   let appliedWeights = { ...weights };
