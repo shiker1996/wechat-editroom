@@ -647,6 +647,7 @@ test('legacy account context is visibly marked for v3 migration while recommende
   assert.equal(scoring.weights.h,0.6);
   assert.equal(scoring.finalAccountFitByCategory['产品与技术动态'],65);
   assert.equal(scoring.accountFitByCategory['产品与技术动态'],65);
+  assert.strictEqual(scoring.accountFitByCategory,scoring.finalAccountFitByCategory);
   assert.equal(scoring.legacyV2.hBase.bigtech,33);
   assert.equal(scoring.legacyV2.eventValueWeight,0.3);
   assert.equal(scoring.legacyV2.researchValueWeight,0.25);

@@ -62,7 +62,6 @@ const DEFAULT_SCORING = Object.freeze({
   eventValueWeight: 0.25,
   researchValueWeight: 0.10,
   domesticWeight: 0.10,
-  accountFit: V3_ACCOUNT_FIT,
   categoryPreference: Object.freeze({}),
   marketScopeCategoryPreference: Object.freeze({}),
   pBase: Object.freeze({}),
@@ -120,7 +119,7 @@ export function resolveScoring(ctx = getAccountContext()) {
     ])),
   };
   const finalAccountFitByCategory = Object.fromEntries(categories.map((category) => [
-    category, clamp(num(accountFitOverrides[category], V3_ACCOUNT_FIT[category] ?? accountFitForCategory(category, ctx) ?? 25), 0, 100),
+    category, clamp(num(accountFitOverrides[category], V3_ACCOUNT_FIT[category] ?? accountFitForCategory(category, ctx)), 0, 100),
   ]));
   return {
     weights: normalizedComponentWeights,
@@ -136,6 +135,7 @@ export function resolveScoring(ctx = getAccountContext()) {
     pBase: scoring.pBase && typeof scoring.pBase === 'object' ? scoring.pBase : {},
     hBase: mergeTable(H_BASE, scoring.hBase),
     categories,
+    // Compatibility alias for existing preselection consumers; both names intentionally share the v3 map.
     accountFitByCategory: finalAccountFitByCategory,
     finalAccountFitByCategory,
     legacyV2,
