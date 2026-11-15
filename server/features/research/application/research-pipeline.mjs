@@ -104,7 +104,7 @@ export function resolveScoring(ctx = getAccountContext()) {
   }
   const missingAccountFit = categories.filter((category) => !Object.hasOwn(accountFitOverrides, category));
   if (Object.keys(scoring).length && missingAccountFit.length) {
-    warnings.push(`账号评分配置缺少 accountFit 分类：${missingAccountFit.join('、')}；已使用 v3 建议值`);
+    warnings.push(`账号评分配置缺少 accountFit 分类：${missingAccountFit.join('、')}；已使用 v3 建议值或账号画像回退`);
   }
   const legacy = scoring.legacyV2 && typeof scoring.legacyV2 === 'object' ? scoring.legacyV2 : scoring;
   const legacyWeights = legacy.weights && typeof legacy.weights === 'object' ? legacy.weights : { h: 0.6, b: 0.25, p: 0.15 };
@@ -119,6 +119,9 @@ export function resolveScoring(ctx = getAccountContext()) {
       category, clamp(num(legacyAccountFitOverrides[category], accountFitForCategory(category, ctx)), 0, 100),
     ])),
   };
+  const finalAccountFitByCategory = Object.fromEntries(categories.map((category) => [
+    category, clamp(num(accountFitOverrides[category], V3_ACCOUNT_FIT[category] ?? accountFitForCategory(category, ctx) ?? 25), 0, 100),
+  ]));
   return {
     weights: normalizedComponentWeights,
     eventValueWeight: resolvedTopicWeights.eventValue,
@@ -133,12 +136,8 @@ export function resolveScoring(ctx = getAccountContext()) {
     pBase: scoring.pBase && typeof scoring.pBase === 'object' ? scoring.pBase : {},
     hBase: mergeTable(H_BASE, scoring.hBase),
     categories,
-    accountFitByCategory: Object.fromEntries(categories.map((category) => [
-      category, clamp(num(accountFitOverrides[category], accountFitForCategory(category, ctx)), 0, 100),
-    ])),
-    finalAccountFitByCategory: Object.fromEntries(categories.map((category) => [
-      category, clamp(num(accountFitOverrides[category], V3_ACCOUNT_FIT[category] ?? 25), 0, 100),
-    ])),
+    accountFitByCategory: finalAccountFitByCategory,
+    finalAccountFitByCategory,
     legacyV2,
     accountFitBonus: num(scoring.accountFitBonus, DEFAULT_SCORING.accountFitBonus),
     notificationPolicy: resolveNotificationPolicy(ctx),
@@ -1211,7 +1210,11 @@ export async function runResearchPipeline({ gateway, store, batchId, provider, w
       weights: scoring.weights, eventValueWeight: scoring.eventValueWeight,
       researchValueWeight: scoring.researchValueWeight, domesticWeight: scoring.domesticWeight,
     },
-    legacyScoring: { formulaVersion: 'v2', weights: scoring.legacyV2.weights },
+    legacyScoring: {
+      formulaVersion: 'v2', weights: scoring.legacyV2.weights,
+      eventValueWeight: scoring.legacyV2.eventValueWeight,
+      researchValueWeight: scoring.legacyV2.researchValueWeight,
+    },
     items: scored.map((item) => ({
       candidateId: item.candidateId, title: item.source?.title || '',
       category: editorialCategoryForCard(item), poolRole: item.source?.poolRole || '',

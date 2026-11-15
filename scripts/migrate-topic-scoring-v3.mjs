@@ -13,12 +13,31 @@ if (!context || typeof context !== 'object' || Array.isArray(context)) throw new
 const current = context.scoring && typeof context.scoring === 'object' ? context.scoring : {};
 const v2HBase = { worker_social: 48, bigtech: 33, owned_experience: 35, controversial_return: 30,
   key_person_move: 33, ai_tool_test: 20, financing: 10, career_anxiety: 5, contrarian_bigtech: 35 };
+const v3AccountFit = {
+  '大厂与商业战略': 85,
+  '职场与组织变化': 85,
+  '开源项目与开发者生态': 75,
+  '产品与技术动态': 65,
+  '行业趋势与市场变化': 55,
+  '政策与公共议题': 20,
+};
+const v3CategoryPreference = {
+  '大厂与商业战略': 6,
+  '职场与组织变化': 6,
+  '开源项目与开发者生态': 3,
+  '产品与技术动态': 2,
+  '行业趋势与市场变化': 1,
+  '政策与公共议题': 0,
+};
+const v3DomesticPreference = { '大厂与商业战略': 8, '职场与组织变化': 6, '产品与技术动态': 6 };
 const legacyV2 = current.legacyV2 || {
   weights: current.weights || { h: 0.6, b: 0.25, p: 0.15 },
   eventValueWeight: current.eventValueWeight ?? 0.25,
   researchValueWeight: current.researchValueWeight ?? 0.20,
   hBase: current.hBase || v2HBase,
   accountFit: current.accountFit || {},
+  categoryPreference: current.categoryPreference || {},
+  marketScopeCategoryPreference: current.marketScopeCategoryPreference || {},
 };
 const next = {
   ...context,
@@ -30,13 +49,11 @@ const next = {
     eventValueWeight: 0.25,
     researchValueWeight: 0.10,
     domesticWeight: 0.10,
-    accountFit: {
-      '大厂与商业战略': 85,
-      '职场与组织变化': 85,
-      '开源项目与开发者生态': 75,
-      '产品与技术动态': 65,
-      '行业趋势与市场变化': 55,
-      '政策与公共议题': 20,
+    accountFit: { ...(current.accountFit || {}), ...v3AccountFit },
+    categoryPreference: { ...(current.categoryPreference || {}), ...v3CategoryPreference },
+    marketScopeCategoryPreference: {
+      ...(current.marketScopeCategoryPreference || {}),
+      国内: { ...(current.marketScopeCategoryPreference?.国内 || {}), ...v3DomesticPreference },
     },
     hBase: {
       worker_social: 58,

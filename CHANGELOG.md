@@ -17,7 +17,7 @@
 
 ### Added
 
-- 选题评分升级到 v3，增加 account-context 配置迁移命令：先运行 `npm run migrate:topic-scoring-v3` 预览，再加 `-- --write` 写入并自动备份旧配置；旧评分快照保留在 `scoring.legacyV2` 供回放。
+- 选题评分升级到 v3，增加 account-context 配置迁移命令：先运行 `npm run migrate:topic-scoring-v3` 预览，再加 `-- --write` 写入并自动备份旧配置；标准分类的 accountFit、预选偏好会更新，自定义值保留，旧评分快照保留在 `scoring.legacyV2` 供回放。
 
 ### Changed
 

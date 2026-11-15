@@ -19,7 +19,11 @@ const preselection = fs.existsSync(preselectionPath)
 const scoring = replay.scoring || {};
 const clamp = (value, min, max) => Math.max(min, Math.min(max, Number(value) || 0));
 
-function scoreLegacyV2(inputs, configuredWeights = {}) {
+function scoreLegacyV2(inputs, configured = {}) {
+  const configuredWeights = configured.weights || {};
+  const eventValueWeight = Number(configured.eventValueWeight ?? 0.25);
+  const researchValueWeight = Number(configured.researchValueWeight ?? 0.20);
+  const articleWeight = clamp(1 - eventValueWeight - researchValueWeight, 0, 1);
   const weights = { h: Number(configuredWeights.h ?? 0.6), b: Number(configuredWeights.b ?? 0.25), p: Number(configuredWeights.p ?? 0.15) };
   const H = clamp(inputs.H, 0, 100);
   const B = clamp(inputs.B, 0, 100);
@@ -28,7 +32,7 @@ function scoreLegacyV2(inputs, configuredWeights = {}) {
   const J = clamp(inputs.J, 0, 100);
   const C = clamp(clamp(inputs.S, 0, 15) + clamp(inputs.D, 0, 20), 0, 35);
   const A = clamp(H * weights.h + B * weights.b + P * weights.p, 0, 100);
-  const F = T == null ? null : clamp(A * 0.55 + T * 0.25 + J * 0.20 - C, 0, 100);
+  const F = T == null ? null : clamp(A * articleWeight + T * eventValueWeight + J * researchValueWeight - C, 0, 100);
   return { A: Number(A.toFixed(1)), F: F == null ? null : Number(F.toFixed(1)), C: Number(C.toFixed(1)) };
 }
 
@@ -41,7 +45,7 @@ const items = replay.items.map((item) => {
     title: String(item.title || ''),
     category: String(item.category || ''),
     poolRole: String(item.poolRole || ''),
-    v2: scoreLegacyV2(v2Inputs, replay.legacyScoring?.weights),
+    v2: scoreLegacyV2(v2Inputs, replay.legacyScoring),
     v3: { A: v3.A, DOM: v3.DOM, F: v3.F },
     savedV3: item.output || null,
     usesLegacyComponentSnapshot: Boolean(item.legacyInputs),

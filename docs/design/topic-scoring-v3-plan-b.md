@@ -162,7 +162,7 @@ resolveScoring() 已读取 scoring.accountFit 并合并到 accountFitByCategory�
 | 产品与技术动态 | 65 |
 | 行业趋势与市场变化 | 55 |
 | 政策与公共议题 | 20 |
-| 未配置分类 | 具体分类使用本表建议值；未知分类 P=25 并记录 warning |
+| 未配置标准分类 | 本表建议值；账号画像中的自定义分类按 accountFit 配置或 `accountFitForCategory()` 回退；不在画像分类表中的事件分类 P=25 并记录 warning |
 
 这些值是待回放校准的初始配置，不是两批样本证明的最优参数。文章池选择阶段的 accountFit 只用于同分优先级和审计，不叠加到事件分，不能靠改 P 救回未入池事件。
 
@@ -185,7 +185,7 @@ wA=0.55  wT=0.25  wJ=0.10  wD=0.10
 | `chinaRelevance` | **剔除 DOM 项**，其余三项按 0.90 重新归一化 | 缺数据不能当 0 分打压；`candidate-routes` 的综合选题走此分支 |
 | `relatability` | 走 B 的可用项均值 | 历史卡片兼容 |
 | `readerStakeScore` | `audience = 0` | 沿用 v2 |
-| 账号配置缺少具体分类 `accountFit` | 应用本方案的分类建议值并记录配置未迁移提示；未知分类 P = 25 并记录 warning | 避免旧画像回退到统一支柱映射值，也不白送未知类目 80 分 |
+| 账号配置缺少标准分类 `accountFit` | 应用本方案建议值并记录配置未迁移提示；账号画像中的自定义分类按账号画像回退；不在画像分类表中的事件分类 P = 25 并记录 warning | 避免标准类目沿用旧统一值，也不白送未知类目 80 分 |
 
 ### 5.6 打标口径（DOM 的输入质量）
 
@@ -279,7 +279,7 @@ chinaRelevanceScore 当前 0–10 字段只是返回/审计值，不参与 T；�
 |---|---|
 | `account-context.json` | 按 5.7 更新 `scoring` |
 | `account-context.example.json` | 同步示例 |
-| `scripts/migrate-topic-scoring-v3.mjs` | 预览或备份后迁移被忽略的本地 account-context.json；旧公式配置保存为 legacyV2 供回放 |
+| `scripts/migrate-topic-scoring-v3.mjs` | 预览或备份后迁移被忽略的本地 account-context.json；更新标准分类的评分与预选偏好、保留自定义分类和 legacyV2 回放快照 |
 | `public/src/core/account-context.js` | 配置编辑提示含 v3 权重和迁移命令 |
 | `server/features/research/application/research-pipeline.mjs` | `topics-ranked.md` 展示 DOM 列、公式版本和账号配置告警；不改候选表 UI |
 

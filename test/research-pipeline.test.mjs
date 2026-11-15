@@ -129,8 +129,8 @@ test('阶段2事件池按 T 排序，账号契合不再叠加到事件分', () =
   assert.equal(matched.score, matched.topicValue);
   assert.equal(unmatched.score, unmatched.topicValue);
   assert.equal(matched.score, unmatched.score);
-  assert.equal(matched.accountFit, 80);
-  assert.equal(unmatched.accountFit, 25);
+  assert.equal(matched.accountFit, 65);
+  assert.equal(unmatched.accountFit, 85);
 });
 
 test('维度组从文章池拆到早报候选池', () => {
@@ -642,13 +642,25 @@ test('评分权重可通过 scoring 配置覆盖', () => {
 
 test('legacy account context is visibly marked for v3 migration while recommended category P values apply', () => {
   const scoring=resolveScoring({ contentPillars:['AI 行业热点：开发者影响'], scoring:{
-    weights:{h:0.6,b:0.25,p:0.15}, hBase:{bigtech:33},
+    weights:{h:0.6,b:0.25,p:0.15}, hBase:{bigtech:33}, eventValueWeight:0.3, researchValueWeight:0.25,
   } });
   assert.equal(scoring.weights.h,0.6);
   assert.equal(scoring.finalAccountFitByCategory['产品与技术动态'],65);
+  assert.equal(scoring.accountFitByCategory['产品与技术动态'],65);
   assert.equal(scoring.legacyV2.hBase.bigtech,33);
+  assert.equal(scoring.legacyV2.eventValueWeight,0.3);
+  assert.equal(scoring.legacyV2.researchValueWeight,0.25);
   assert.ok(scoring.scoringWarnings.some((warning)=>warning.includes('尚未升级到 v3')));
   assert.ok(scoring.scoringWarnings.some((warning)=>warning.includes('缺少 accountFit 分类')));
+});
+
+test('custom editorial categories use account-fit configuration then account-profile fallback', () => {
+  const profile={ editorialCategories:['自定义工程观察'], contentPillars:['开发者实践'] };
+  const fallback=resolveScoring(profile);
+  const configured=resolveScoring({ ...profile, scoring:{ formulaVersion:'v3', accountFit:{ '自定义工程观察':92 } } });
+  assert.equal(fallback.finalAccountFitByCategory['自定义工程观察'],80);
+  assert.equal(fallback.accountFitByCategory['自定义工程观察'],80);
+  assert.equal(configured.finalAccountFitByCategory['自定义工程观察'],92);
 });
 
 test('scoring 覆盖分类偏好与账号契合加分，非法值回退默认', () => {
