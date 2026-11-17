@@ -181,7 +181,7 @@ export async function handleTaskRoutes({ request, response, pathname, searchPara
   if (tagMatch && request.method === 'POST') {
     const input = await body(request); const batchId = decodeURIComponent(tagMatch[1]);
     const blocked=pipelineFailureGate(batchId,['collect'],'打标');if(blocked)return respond(json,response,409,blocked);
-    if (input.background === true) return respond(json, response, 202, aiJobs.start({ batchId, provider: input.provider, type: input.force ? 'retag' : 'tag', force: Boolean(input.force) }));
+    if (input.background === true) return respond(json, response, 202, aiJobs.start({ batchId, provider: input.provider, type: input.force ? 'retag' : 'tag', force: Boolean(input.force), hotspotIds: Array.isArray(input.hotspotIds) ? input.hotspotIds : undefined }));
     const harness=createRequestHarnessGateway({gateway:models,store,entryPoint:'batch-tag-sync',skillId:'hotspot-tagging',provider:input.provider||models.config.defaultProvider,batchId,stageId:'tag'});
     try {
       const result = await tagBatch({ gateway: harness.gateway, store, batchId, provider: input.provider, limit: input.limit, force: Boolean(input.force), maxAgeHours: batchMaxAgeHours(store.getBatch(batchId)), workspaceRoot: config.workspaceRoot });

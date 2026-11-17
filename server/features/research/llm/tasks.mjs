@@ -235,7 +235,7 @@ export async function tagBatch({ gateway, store, batchId, provider, limit, hotsp
   onProgress(items.length ? `准备打标 ${items.length} 条：${chunks.length} 批，并发 ${workerCount}` : '本批热点已经全部完成语义打标');
   await Promise.all(Array.from({ length: workerCount }, () => worker()));
   onProgress(items.length ? `语义打标完成：${updatedIds.size}/${items.length}${failedIds.length ? `，${failedIds.length} 条失败已跳过` : ''}` : '本批热点已经全部完成语义打标');
-  return { requested: items.length, updated:updatedIds.size, failed:failedIds.length, failedIds, skipped: batch.hotspots.length - items.length, skippedStale: staleCount, chunks:chunks.length, concurrency:workerCount, calls };
+  return { requested: items.length, updated:updatedIds.size, updatedIds:[...updatedIds], failed:failedIds.length, failedIds, skipped: batch.hotspots.length - items.length, skippedStale: staleCount, chunks:chunks.length, concurrency:workerCount, calls };
 }
 
 export async function draftArticle({ gateway, store, candidateId, provider, instructions = '', existingDraft = '' }) {
