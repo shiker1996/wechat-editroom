@@ -95,6 +95,7 @@ export async function openBatch(id, mode) {
   const latestAiRun = batch.ai_runs?.[0];
   const pipelineFailures = (batch.pipeline_failures || []).filter((item) => item.status === "open" || item.status === "retrying");
   const pendingCollectionFailures = pipelineFailures.filter((item) => item.stage === "collect");
+  const pendingTagFailures = pipelineFailures.filter((item) => item.stage === "tag" && item.status === "open" && item.hotspot_id);
   const decidedFailures = (batch.pipeline_failures || []).filter((item) => item.status === "skipped" || item.status === "resolved");
   const failureStageLabel = { collect: "采集", tag: "语义打标", "event-card": "事件卡", research: "事件研判" };
   const failureGroups = Object.entries(Object.groupBy(pipelineFailures, (item) => item.stage));
@@ -116,7 +117,7 @@ export async function openBatch(id, mode) {
   const pipelinePrimaryAction = researchDone
     ? `<button class="primary-button" data-view-research>查看研判结果 →</button>`
     : ai.tagged < ai.total || !ai.total
-      ? `<button class="primary-button" data-ai-tag ${!batch.hotspots.length || pendingCollectionFailures.length ? "disabled" : ""}>${pendingCollectionFailures.length ? `先处理 ${pendingCollectionFailures.length} 个采集失败` : ai.tagged ? `继续打标（还差 ${ai.total - ai.tagged} 条）` : "开始打标"}</button>`
+      ? `<button class="primary-button" data-ai-tag ${!batch.hotspots.length || pendingCollectionFailures.length ? "disabled" : ""}>${pendingCollectionFailures.length ? `先处理 ${pendingCollectionFailures.length} 个采集失败` : pendingTagFailures.length ? `继续打标（重试 ${pendingTagFailures.length} 条失败热点）` : ai.tagged ? `继续打标（还差 ${ai.total - ai.tagged} 条）` : "开始打标"}</button>`
       : !cardsReady
         ? `<button class="primary-button" data-ai-event-cards>${cards.count ? "继续生成事件卡" : "生成事件卡"}</button>`
         : `<button class="primary-button" data-ai-research>开始事件研判</button>`;
@@ -278,7 +279,11 @@ export async function startBatchAi(type) {
   if (type === "retag" && !await confirmAction("重新打标将覆盖本批次全部已有语义标注，是否继续？", { confirmText: "重新打标" })) return;
   if (type === "event-cards-force" && !await confirmAction("这会覆盖本批次全部已有事件卡并重新调用模型，是否继续？", { confirmText: "重新生成全部" })) return;
   const path = type === "research" ? "research" : type === "event-cards" || type === "event-cards-force" ? "event-cards" : "tag";
-  const payload = { provider, background: true, force: type === "retag" || type === "event-cards-force" };
+  const failedHotspotIds = type === "tag" ? [...new Set((state.currentBatch?.pipeline_failures || [])
+    .filter((item) => item.stage === "tag" && item.status === "open" && item.hotspot_id)
+    .map((item) => Number(item.hotspot_id)))] : [];
+  const payload = { provider, background: true, force: type === "retag" || type === "event-cards-force",
+    ...(failedHotspotIds.length ? { hotspotIds: failedHotspotIds } : {}) };
   const job = await request(`/api/batches/${encodeURIComponent(state.currentBatch.id)}/ai/${path}`, { method: "POST", body: JSON.stringify(payload) });
   showJobConsole(type === "research" ? "事件研判任务已入队…" : type === "event-cards-force" ? "全量事件卡重建任务已入队…" : type === "event-cards" ? "事件卡增量生成任务已入队…" : "语义打标任务已入队…");
   pollJob(job.id);
