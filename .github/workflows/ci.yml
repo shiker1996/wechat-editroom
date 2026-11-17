@@ -15,6 +15,21 @@ permissions:
   checks: write
 
 jobs:
+  next-development-version:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: 校验下一个开发版本
+        run: node scripts/release/check-next-development-version.mjs
+
   desktop-installer:
     runs-on: windows-latest
     timeout-minutes: 45

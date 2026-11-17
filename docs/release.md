@@ -6,7 +6,7 @@
 
 1. 确认 `master` 全绿：`npm run build && npm test`（CI 也必须通过）。
 2. 更新 `CHANGELOG.md`：把 `[Unreleased]` 内容归入新版本号并写日期，同步更新文件底部的比较链接。
-3. 确认 `[Unreleased]` 内容、版本 tag 与发布范围一致；无需手工修改项目或插件清单版本。
+3. 确认 `[Unreleased]` 内容、版本 tag 与发布范围一致。每次发布后，新 PR 应将根 `package.json`、`package-lock.json` 和 DSH 插件 `package.json` 统一更新为最新稳定 tag 的下一个 patch 版本；PR CI 会校验这一点。例如最新 tag 为 `1.0.14` 时，版本清单应为 `1.0.15`。同一发行周期内的 PR 使用相同的下一个版本，不要逐 PR 递增。
 4. 提交并打 tag：`git tag <version>`（如 `1.0.7`，不加 `v` 前缀）；workflow 会把该 tag 用作本次构建版本。
 5. 推送：`git push origin master --tags`。
 6. 生成统一发布包与校验和：
@@ -15,9 +15,8 @@
    node scripts/release/release.mjs
    ```
 
-   产物在 `dist/`：源码 `<name>-<version>.zip`、独立 DSH 插件 `<plugin-name>-<version>.tgz` 与 `SHA256SUMS.txt`。tag 是构建版本的唯一来源；workflow 先同步更新临时工作区的项目与插件版本，再构建 Windows 安装包和插件包，源码 ZIP 也包含相同版本。插件源目录的 `package.json` 不需要手工改版本。
-7. 数字版本 tag 推送后，桌面 Release 和 DSH npm 发布 workflow 会并行启动：前者构建 Windows 安装包并发布源码 ZIP、插件 `.tgz` 和校验和；后者从同一 tag 戳记版本、检查 npm 上没有同版本后发布插件。桌面 Release 完成后会创建 PR，将根项目、lockfile 和 DSH 插件 manifest 的版本同步到 master。`dsh-plugin-v<版本>` 旧式 tag 仍可单独触发插件发布。Release 正文由 Actions 根据本次 tag 范围内已合并的 PR 自动生成，不要用 CHANGELOG 段落覆盖。
-   版本同步 PR 使用 GitHub App token，以便 PR CI 自动启动；检查通过后由 GitHub Auto-merge 自动合并，不需要人工处理。仓库需启用 Auto-merge，并配置 Actions variable `RELEASE_APP_ID` 与 secret `RELEASE_APP_PRIVATE_KEY`。该 GitHub App 安装到本仓库，并授予 `Contents: Read and write`、`Pull requests: Read and write` 权限。若凭据未配置，发布流程会给出 warning 并跳过版本同步 PR，桌面安装包和 Release 产物仍会正常生成与发布。
+   产物在 `dist/`：源码 `<name>-<version>.zip`、独立 DSH 插件 `<plugin-name>-<version>.tgz` 与 `SHA256SUMS.txt`。tag 是构建版本的唯一来源；workflow 先同步更新临时工作区的项目与插件版本，再构建 Windows 安装包和插件包，源码 ZIP 也包含相同版本。仓库中的版本清单则保持为下一 patch 开发版本，并由 PR CI 校验。
+7. 数字版本 tag 推送后，桌面 Release 和 DSH npm 发布 workflow 会并行启动：前者构建 Windows 安装包并发布源码 ZIP、插件 `.tgz` 和校验和；后者从同一 tag 戳记版本、检查 npm 上没有同版本后发布插件。桌面 Release 随后创建版本推进 PR，将清单更新为 tag 的下一个 patch（例如 `1.0.14` 后更新为 `1.0.15`）；PR CI 会校验。`dsh-plugin-v<版本>` 旧式 tag 仍可单独触发插件发布。Release 正文由 Actions 根据本次 tag 范围内已合并的 PR 自动生成，不要用 CHANGELOG 段落覆盖。
 8. 用户侧校验下载完整性：`certutil -hashfile <zip> SHA256`（Windows）或 `shasum -a 256 <zip>`，与 `SHA256SUMS.txt` 比对。
 
 ## Release 正文规范
