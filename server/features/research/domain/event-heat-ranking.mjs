@@ -293,7 +293,7 @@ export function scoreEventHeat({ event, currentMemberships = [], historicalMembe
   const incrementScore = Math.round(clamp(newReportCount * 8 + Math.max(0, sourceNames.size - 1) * 2, 0, 25));
   const sourceSpreadScore = Math.round(clamp(sourceNames.size * 4 + sourceGroups.size, 0, 15));
   const momentumScore = Math.round(clamp(recentReportCount * 2.5, 0, 15));
-  const chinaRelevanceScore = Math.round(clamp(chinaRelevance, 0, 10));
+  const chinaRelevanceScore = Math.round(clamp(chinaRelevance, 0, 12));
   const evidenceScore = Math.round(clamp(sourceNames.size * 2 + Math.min(urlCount, 4) + (event.confidence === 'high' ? 2 : 1), 0, 10));
   const historyDecayScore = Math.round(clamp(Math.max(0, repeatDays - 1) * 4 + (newReportCount === 0 && repeatDays > 1 ? 5 : 0), 0, 20));
   const stale = (newReportCount === 0 && repeatDays > 1 && ageHours > 24) || ageHours > 72;

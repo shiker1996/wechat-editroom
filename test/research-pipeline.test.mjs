@@ -129,8 +129,8 @@ test('阶段2事件池按 T 排序，账号契合不再叠加到事件分', () =
   assert.equal(matched.score, matched.topicValue);
   assert.equal(unmatched.score, unmatched.topicValue);
   assert.equal(matched.score, unmatched.score);
-  assert.equal(matched.accountFit, 80);
-  assert.equal(unmatched.accountFit, 25);
+  assert.equal(matched.accountFit, 65);
+  assert.equal(unmatched.accountFit, 85);
 });
 
 test('维度组从文章池拆到早报候选池', () => {
@@ -165,10 +165,10 @@ test('T/J/A/C/F由服务端公式计算', () => {
   const cards=[{candidateId:'C001',status:'PASS',source,bScores:{angleUniqueness:4,emotionSpread:4,titleHook:4,audienceRelevance:4,factSupport:4},
     hProfile:{historicalType:'bigtech',fiveSenseCount:4,fiveQuestionCount:3,recommendationFit:6,emotionTheme:4,searchFriendly:3}}];
   const result=scoreCards(cards,{items:[{candidateId:'C001',saturationPenalty:5,duplicatePenalty:2,audienceRelevance:4,reason:'测试'}]})[0];
-  assert.equal(result.b,80); assert.equal(result.p,80); assert.equal(result.s,5); assert.equal(result.d,0);
-  assert.equal(result.a,73.4);
+  assert.equal(result.b,80); assert.equal(result.p,65); assert.equal(result.s,5); assert.equal(result.d,0);
+  assert.equal(result.a,76);
   assert.equal(result.j,0); assert.equal(result.c,5);
-  assert.equal(result.f,35.4);
+  assert.equal(result.f,41.4);
 });
 
 test('阶段5 T 接入 F：同等文章化质量下事件价值更高者优先', () => {
@@ -177,7 +177,7 @@ test('阶段5 T 接入 F：同等文章化质量下事件价值更高者优先',
   const scored=scoreCards([{...base,candidateId:'C-HIGH',source:{...base.source,eventValue:90}},{...base,candidateId:'C-LOW',source:{...base.source,eventValue:40}}],{items:[]});
   assert.equal(scored[0].candidateId,'C-HIGH');
   assert.equal(scored[0].a,scored[1].a);
-  assert.equal(Number((scored[0].f-scored[1].f).toFixed(1)),12.5);
+  assert.equal(Number((scored[0].f-scored[1].f).toFixed(1)),13.9);
 });
 
 test('研判价值 J 只统计候选实际绑定的模型信号和事件关系', () => {
@@ -222,6 +222,29 @@ test('阶段4 readerStakeScore 只进入 B 的受众项一次', () => {
   assert.equal(result.readerAction,'在截止日前完成迁移');
   assert.equal(result.readerConsequence,'避免部署中断');
   assert.equal(result.readerStakeEvidence,'官方迁移公告');
+});
+
+
+test('v3 uses raw audience for B and capped audience only for eligibility', () => {
+  const source={title:'平台变化',category:'产品与技术动态',accountFit:80,eventValue:80,chinaRelevance:6,riskLevel:'低'};
+  const result=scoreCards([{candidateId:'C-RAW',status:'PASS',source,
+    packaging:{readerStake:'影响技术选择',readerStakeScore:5},
+    bScores:{angleUniqueness:4,emotionSpread:3,titleHook:4,readerStakeScore:5,factSupport:4,relatability:1},
+    hProfile:{historicalType:'bigtech'}}],{items:[]})[0];
+  assert.equal(result.audienceRawScore,5);
+  assert.equal(result.readerStakeScoreCapped,2);
+  assert.equal(result.readerStakeScore,2);
+  assert.equal(result.b,70);
+  assert.equal(result.dom,50);
+  assert.equal(Object.hasOwn(result,'formulaVersion'),false);
+  assert.deepEqual(result.scoreWeightWarnings,[]);
+});
+
+test('unconfigured account-fit category uses the conservative P fallback and records a warning', () => {
+  const result=scoreCards([{candidateId:'C-P-FALLBACK',status:'PASS',source:{title:'未知分类事件',category:'未配置分类',eventValue:60},
+    bScores:{angleUniqueness:3,emotionSpread:3,titleHook:3,factSupport:3},hProfile:{historicalType:'bigtech'}}],{items:[]})[0];
+  assert.equal(result.p,25);
+  assert.ok(result.scoreWeightWarnings.some((warning)=>warning.includes('未配置 accountFit')));
 });
 
 test('阶段4 结构化读者分不能绕过通知池文字门槛', () => {
@@ -609,12 +632,36 @@ test('评分权重可通过 scoring 配置覆盖', () => {
     hProfile:{historicalType:'bigtech',fiveSenseCount:4,fiveQuestionCount:3,recommendationFit:6,emotionTheme:4,searchFriendly:3}}];
   const synthesis={items:[{candidateId:'C001',saturationPenalty:5,duplicatePenalty:2,audienceRelevance:4,reason:'测试'}]};
   const defaults=scoreCards(cards,synthesis)[0];
-  assert.equal(defaults.f,35.4);
-  // H=69,B=80,P=80：A=73.4；无 T/J 的兼容候选按 T=0、J=0 计算 F=A×.55-S=35.4；自定义权重只改 A 聚合比例
+  assert.equal(defaults.f,41.4);
+  // H=78,B=80,P=65：A=76；DOM 缺失时 A/T/J 按 .90 归一化；自定义权重只改 A 聚合比例
   const custom=resolveScoring({contentPillars:['AI 行业热点：开发者影响'],scoring:{weights:{h:0.5,b:0.3,p:0.2}}});
   const adjusted=scoreCards(cards,synthesis,custom)[0];
-  assert.equal(adjusted.h,69); assert.equal(adjusted.b,80); assert.equal(adjusted.p,80); assert.equal(adjusted.s,5);
-  assert.equal(adjusted.f,Number(((69*0.5+80*0.3+80*0.2)*0.55-5).toFixed(1)));
+  assert.equal(adjusted.h,78); assert.equal(adjusted.b,80); assert.equal(adjusted.p,65); assert.equal(adjusted.s,5);
+  assert.equal(adjusted.f,Number(((78*0.5+80*0.3+65*0.2)*(0.55/0.9)-5).toFixed(1)));
+});
+
+test('legacy account context is visibly marked for v3 migration while recommended category P values apply', () => {
+  const scoring=resolveScoring({ contentPillars:['AI 行业热点：开发者影响'], scoring:{
+    weights:{h:0.6,b:0.25,p:0.15}, hBase:{bigtech:33}, eventValueWeight:0.3, researchValueWeight:0.25,
+  } });
+  assert.equal(scoring.weights.h,0.6);
+  assert.equal(scoring.finalAccountFitByCategory['产品与技术动态'],65);
+  assert.equal(scoring.accountFitByCategory['产品与技术动态'],65);
+  assert.strictEqual(scoring.accountFitByCategory,scoring.finalAccountFitByCategory);
+  assert.equal(scoring.legacyV2.hBase.bigtech,33);
+  assert.equal(scoring.legacyV2.eventValueWeight,0.3);
+  assert.equal(scoring.legacyV2.researchValueWeight,0.25);
+  assert.ok(scoring.scoringWarnings.some((warning)=>warning.includes('尚未升级到 v3')));
+  assert.ok(scoring.scoringWarnings.some((warning)=>warning.includes('缺少 accountFit 分类')));
+});
+
+test('custom editorial categories use account-fit configuration then account-profile fallback', () => {
+  const profile={ editorialCategories:['自定义工程观察'], contentPillars:['开发者实践'] };
+  const fallback=resolveScoring(profile);
+  const configured=resolveScoring({ ...profile, scoring:{ formulaVersion:'v3', accountFit:{ '自定义工程观察':92 } } });
+  assert.equal(fallback.finalAccountFitByCategory['自定义工程观察'],80);
+  assert.equal(fallback.accountFitByCategory['自定义工程观察'],80);
+  assert.equal(configured.finalAccountFitByCategory['自定义工程观察'],92);
 });
 
 test('scoring 覆盖分类偏好与账号契合加分，非法值回退默认', () => {
@@ -622,7 +669,7 @@ test('scoring 覆盖分类偏好与账号契合加分，非法值回退默认', 
   assert.equal(scoring.categoryPreference['产品与技术动态'],-8);
   assert.equal(scoring.categoryPreference['大厂与商业战略'],0);
   assert.equal(scoring.accountFitBonus,12);
-  assert.equal(scoring.weights.h,0.6);
+  assert.equal(scoring.weights.h,0.5);
   const events=clusterItems([hotspot(1,'A报道','主体|发布|模型')]);
   const ranking=preselection(events,'2026-07-23',scoring);
   assert.equal(ranking[0].categoryPreference,-8);
@@ -637,6 +684,6 @@ test('选题报告公式文案跟随实际权重', () => {
   const scored=scoreCards([{candidateId:'C001',status:'PASS',source,bScores:{angleUniqueness:4,emotionSpread:4,titleHook:4,audienceRelevance:4,factSupport:4},
     hProfile:{historicalType:'bigtech',fiveSenseCount:4,fiveQuestionCount:3,recommendationFit:6,emotionTheme:4,searchFriendly:3}}],{items:[]});
   const custom=resolveScoring({scoring:{weights:{h:0.5,b:0.3,p:0.2}}});
-  assert.match(markdownRanked(scored,{items:[],metaNarratives:[],combination:{}},[],custom),/A = H×50% \+ B×30% \+ P×20%[；;].*F = A×55% \+ T×25% \+ J×20% - C/);
-  assert.match(markdownRanked(scored,{items:[],metaNarratives:[],combination:{}}),/A = H×60% \+ B×25% \+ P×15%[；;].*F = A×55% \+ T×25% \+ J×20% - C/);
+  assert.match(markdownRanked(scored,{items:[],metaNarratives:[],combination:{}},[],custom),/评分公式版本：v3[\s\S]*A = H×50% \+ B×30% \+ P×20%[；;].*F = A×55% \+ T×25% \+ J×10% \+ DOM×10% - C/);
+  assert.match(markdownRanked(scored,{items:[],metaNarratives:[],combination:{}}),/A = H×50% \+ B×30% \+ P×20%[；;].*F = A×55% \+ T×25% \+ J×10% \+ DOM×10% - C/);
 });

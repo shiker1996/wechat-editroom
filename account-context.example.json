@@ -71,12 +71,15 @@
     ]
   },
   "scoring": {
-    "weights": { "h": 0.6, "b": 0.25, "p": 0.15 },
+    "formulaVersion": "v3",
+    "weights": { "h": 0.5, "b": 0.3, "p": 0.2 },
     "eventValueWeight": 0.25,
-    "researchValueWeight": 0.2,
+    "researchValueWeight": 0.1,
+    "domesticWeight": 0.1,
+    "accountFit": { "大厂与商业战略": 85, "职场与组织变化": 85, "开源项目与开发者生态": 75, "产品与技术动态": 65, "行业趋势与市场变化": 55, "政策与公共议题": 20 },
     "accountFitBonus": 6,
-    "categoryPreference": { "产品与技术动态": 4, "大厂与商业战略": 4, "职场与组织变化": 5, "开源项目与开发者生态": 5, "行业趋势与市场变化": 2, "政策与公共议题": 0 },
-    "marketScopeCategoryPreference": {},
-    "hBase": { "worker_social": 55, "bigtech": 33, "owned_experience": 40, "controversial_return": 35, "key_person_move": 25, "github_tool": 15, "ai_tool_test": 20, "financing": 5, "career_anxiety": 45, "contrarian_bigtech": 35 }
+    "categoryPreference": { "大厂与商业战略": 6, "职场与组织变化": 6, "开源项目与开发者生态": 3, "产品与技术动态": 2, "行业趋势与市场变化": 1, "政策与公共议题": 0 },
+    "marketScopeCategoryPreference": { "国内": { "大厂与商业战略": 8, "职场与组织变化": 6, "产品与技术动态": 6 } },
+    "hBase": { "worker_social": 58, "bigtech": 42, "owned_experience": 36, "controversial_return": 35, "key_person_move": 32, "github_tool": 10, "ai_tool_test": 14, "financing": 3, "career_anxiety": 50, "contrarian_bigtech": 35 }
   }
 }
