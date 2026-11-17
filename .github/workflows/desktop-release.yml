@@ -144,6 +144,12 @@ jobs:
             Write-Host "::warning title=Release version sync skipped::Configure the RELEASE_APP_ID Actions variable and RELEASE_APP_PRIVATE_KEY Actions secret to enable the automatic version-sync PR."
           }
 
+      - name: Prepare next development version for master
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: node scripts/release/prepare-next-development-version.mjs "$env:RELEASE_TAG"
+
       - name: Create release automation token
         if: startsWith(github.ref, 'refs/tags/') && steps.release-pr-config.outputs.configured == 'true'
         id: release-app-token
@@ -168,12 +174,12 @@ jobs:
             package.json
             package-lock.json
             agent-integrations/dsh-workbench/package.json
-          commit-message: "chore(release): sync package versions to ${{ github.ref_name }}"
-          title: "chore(release): sync package versions to ${{ github.ref_name }}"
+          commit-message: "chore(release): prepare next development version after ${{ github.ref_name }}"
+          title: "chore(release): prepare next development version after ${{ github.ref_name }}"
           body: |
-            Automated version sync after release tag `${{ github.ref_name }}`.
+            Automated next-version update after release tag `${{ github.ref_name }}`.
 
-            Updates the application manifest, lockfile, and DSH plugin manifest to the released version.
+            Updates the application manifest, lockfile, and DSH plugin manifest to the next patch version required by PR CI.
 
       - name: Enable auto-merge after PR checks pass
         if: startsWith(github.ref, 'refs/tags/') && steps.release-pr-config.outputs.configured == 'true' && steps.version-sync-pr.outputs.pull-request-number != ''
