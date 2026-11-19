@@ -20,7 +20,7 @@
 
 | 阶段 | 输入 | 输出/状态变化 | 实现位置 |
 | --- | --- | --- | --- |
-| 视觉方案 | 标题、渠道、内容类型、故事板页职责/标题/导语/布局意图 | 生成并校验 schema v2：先记录具体内容判断（主题对象、叙事方式、读者感受、视觉锚点），再选择颜色、字体、构图、形状、表面、图形和图像处理；按 2–3 个共用视觉锚点维持系列感，5 页及以上要求至少 3 种构图/主视觉媒介和 2 种背景/表面处理；内容类型仅为流程元数据，不直接映射视觉风格。输出 `social-design-scheme.json/.md` | `social-card-design-scheme.mjs`、`visual-direction-catalog.mjs` |
+| 视觉方案 | 标题、渠道、内容类型、故事板页职责/标题/导语/布局意图 | 生成并校验 schema v2：先记录具体内容判断（主题对象、叙事方式、读者感受、视觉锚点），再选择颜色、字体、构图、形状、表面、图形和图像处理；内容类型仅为流程元数据，不直接映射视觉风格。输出 `social-design-scheme.json/.md` | `social-card-design-scheme.mjs`、`visual-direction-catalog.mjs` |
 | 生成 | 冻结输入、故事板、schema v2 视觉方案 | 单 Agent 按内容判断和逐项元素选择写入完整 HTML；finish 前插件强制核对每页 `CARD-PAGE:N:START/END` 注释，且 `.page[data-page="N"]` 与 DOM 顺序一致 | `social-card-beautify.mjs`、`ai-visual-document-agent.mjs`、`ai-visual-document-writer/adapter.mjs` |
 | 首次审计 | 当前完整 HTML | 程序返回每页尺寸、正文容器测量和带页码的问题；2px 内为可接受误差 | `social-card-visual-audit.mjs`、`html-layout-probe.mjs` |
 | 页级修复 | 审计只返回带页码的 `CONTENT_OVERFLOW` 问题 | Agent 一次用 `replace-page(page, content)` 替换一个完整 `.page` 根元素；插件验证目标页锚点、DOM 页码、唯一根元素、会话版本与请求幂等键。全局样式/结构错误和其他页原样保留，无法安全定位时走全量重建 | `social-card-beautify.mjs`、`ai-visual-document-writer/adapter.mjs` |
