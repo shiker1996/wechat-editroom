@@ -24,6 +24,13 @@ const SOCIAL_CARD_ENTRY_POINTS=Object.freeze({
   custom:'social-custom',
 });
 const eventBackedContentType=(contentType)=>contentType==='event';
+const storyboardListPageItemCounts=(cardPlan)=>Array.isArray(cardPlan)?cardPlan.map((page)=>{
+  const blocks=Array.isArray(page?.content_blocks)?page.content_blocks:Array.isArray(page?.contentBlocks)?page.contentBlocks:[];
+  return blocks.reduce((total,block)=>{
+    const items=Array.isArray(block?.items)?block.items:[];
+    return ['list','steps','checklist'].includes(String(block?.type||'').toLowerCase())&&items.length>=3?total+items.length:total;
+  },0);
+}):[];
 
 function socialStructureContext(channelMode, contentType) {
   return { capabilities:getSocialCardTemplateCapabilities({channelMode,contentType}) };
@@ -99,7 +106,9 @@ export async function handleSocialCardRoutes(context) {
     try {
       const selectedPage=input.page==null?null:Number(input.page);
       if(selectedPage!=null&&(!Number.isInteger(selectedPage)||selectedPage<1||selectedPage>pageCount))return json(response,400,{error:`page 必须是 1–${pageCount} 之间的整数`});
-      const report=await auditSocialCardHtmlFit({htmlPath:tempPath,width:375,height:667,page:selectedPage});
+      const pageRoles=Array.isArray(cardPlan)?cardPlan.map((entry)=>entry?.role||entry?.kind||''):[];
+      const listPageItemCounts=storyboardListPageItemCounts(cardPlan);
+      const report=await auditSocialCardHtmlFit({htmlPath:tempPath,width:375,height:667,page:selectedPage,pageRoles,listPageItemCounts});
       return json(response,report.valid?200:422,{candidateId:candidate.id,valid:report.valid,pageCount:report.pageCount,checkedPage:selectedPage,canvas:report.canvas,issues:report.issues,pages:report.pages});
     } catch(error) { return json(response,422,{candidateId:candidate.id,valid:false,error:`图文浏览器审计失败：${error.message}`}); }
     finally { fs.rmSync(tempPath,{force:true}); }
@@ -129,7 +138,9 @@ export async function handleSocialCardRoutes(context) {
     fs.mkdirSync(workspace.dir,{recursive:true});
     writeUtf8(tempHtmlPath,html);
     try {
-      const visualAudit = await auditSocialCardHtmlFit({htmlPath:tempHtmlPath,width:375,height:667});
+      const pageRoles = Array.isArray(cardPlan) ? cardPlan.map((entry) => entry?.role || entry?.kind || '') : [];
+      const listPageItemCounts = storyboardListPageItemCounts(cardPlan);
+      const visualAudit = await auditSocialCardHtmlFit({htmlPath:tempHtmlPath,width:375,height:667,pageRoles,listPageItemCounts});
       if (!visualAudit.valid) return json(response,422,{error:'图文浏览器布局审计未通过',issues:visualAudit.issues});
       const screenshotSkill = resolveSkillFile({workspaceRoot:root,skillName:'html-pages-to-images',relativePath:'index.js'});
       const outputDir = path.join(workspace.dir,SOCIAL_CARD_BEAUTIFY_OUTPUT);
