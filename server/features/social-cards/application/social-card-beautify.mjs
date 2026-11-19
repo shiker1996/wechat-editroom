@@ -741,25 +741,28 @@ export async function runSocialCardBeautify({ gateway, store, batchId, candidate
   let designScheme;
   const schemeJsonPath = path.join(workdir, 'social-design-scheme.json');
   const schemeMarkdownPath = path.join(workdir, 'social-design-scheme.md');
+  const createDesignScheme = () => generateSocialCardDesignScheme({
+    gateway, store, provider, batchId, candidateId, workdir,
+    title: candidate.hotspot_title || context.topic,
+    channelMode: context.channelMode,
+    contentType: context.contentType,
+    pages: editorialPages,
+    references: referenceText,
+    log: onProgress,
+  });
   if (resuming) {
     const previousScheme = readJsonFile(schemeJsonPath, null);
     if (!previousScheme?.audit?.valid || previousScheme.title !== (candidate.hotspot_title || context.topic)
       || previousScheme.channelMode !== context.channelMode || previousScheme.input?.pageCount !== editorialPages.length) {
       throw new Error('AI 视觉恢复找不到与当前故事板匹配的设计方案，请重新生成图文');
     }
-    designScheme = { ...previousScheme, markdown: fs.existsSync(schemeMarkdownPath) ? fs.readFileSync(schemeMarkdownPath, 'utf8') : '' };
+    designScheme = previousScheme.schemaVersion === 2
+      ? { ...previousScheme, markdown: fs.existsSync(schemeMarkdownPath) ? fs.readFileSync(schemeMarkdownPath, 'utf8') : '' }
+      : await createDesignScheme();
   } else {
     fs.rmSync(schemeJsonPath, { force: true });
     fs.rmSync(schemeMarkdownPath, { force: true });
-    designScheme = await generateSocialCardDesignScheme({
-      gateway, store, provider, batchId, candidateId, workdir,
-      title: candidate.hotspot_title || context.topic,
-      channelMode: context.channelMode,
-      contentType: context.contentType,
-      pages: editorialPages,
-      references: referenceText,
-      log: onProgress,
-    });
+    designScheme = await createDesignScheme();
   }
   const baseline = writeSocialCardAiVisualBaseline({
     workdir, candidateId, batchId,

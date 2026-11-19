@@ -37,7 +37,7 @@ Pipeline 每次运行只把候选专属资料放入 `render_request.workspace.fi
 | `card-plan.json` | 页数、页序、页面职责、内容块和正文事实的权威来源 |
 | `ai-visual-card-plan.json` | 不改变事实的精简视觉语义索引 |
 | `repository-fact-sheet.json` / `event-analysis.json` / `custom-fact-sheet.json` | 核对数字、人物、组织、因果、限制和来源边界 |
-| `social-design-scheme.json` | 本篇独立生成的视觉方向、配色、字阶、构图节奏和逐页安排 |
+| `social-design-scheme.json` | 本篇内容判断、逐项视觉元素选择、视觉方向、配色、字阶、构图节奏和逐页安排 |
 | `copy.txt` | 已生成的配套发布文案，只读参考，不在视觉阶段重写 |
 
 本技能随 Prompt 注入、但不属于 `workspace.files` 的参考只有：
@@ -49,6 +49,8 @@ Pipeline 每次运行只把候选专属资料放入 `render_request.workspace.fi
 | `references/visual-component-mapping.md` | 事实语义到主组件和辅助组件的选择建议 |
 
 文件缺失或内容冲突时，以 `card-plan.json` 的页序、页面职责和事实为准；`social-design-scheme.json` 负责本次视觉方向，不能改动故事板内容。页数作为基准，确需拆分或合并时，实际页数最多与基准相差 2 页。不得添加空白页、重复文案或虚构事实，不得从候选目录外读取文件。内置参考只指导实现，不能变成页面正文。不要通过 `cap_filesystem_project_read` 重复读取内置参考。
+
+视觉方案以 `contentReading` 为内容依据、以 `designLanguage` 为元素选择。先识别本篇具体主题对象、叙事方式、读者感受和最值得看见的证据/结果，再遵循方案中逐项选定的色彩、字体、构图、形状、表面、图形和图像处理。`contentType`（工具/事件/自定义）只是流程元数据，不代表视觉风格；不得因同属一种内容类型而重复套用同一配色、卡片皮肤或装饰。每页的 layout、focus、treatment 决定局部表达，整组仍需保持由内容逻辑支持的一致性。
 
 ## 视觉决策
 
