@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { syncInstalledSkillCopies } from './skill-copies.mjs';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(SCRIPT_DIR, '..', '..');
@@ -9,16 +10,7 @@ const SERVER_FILE = path.join(REPO_ROOT, 'scripts', 'agent-integration', 'mcp-se
 const SERVER_NAME = 'jianzi_workbench';
 
 function installSkills(targetRoot) {
-  const installed = [];
-  fs.mkdirSync(targetRoot, { recursive: true });
-  for (const entry of fs.readdirSync(SKILL_SOURCE, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-    const source = path.join(SKILL_SOURCE, entry.name);
-    const target = path.join(targetRoot, entry.name);
-    fs.cpSync(source, target, { recursive: true });
-    installed.push(target);
-  }
-  return installed;
+  return syncInstalledSkillCopies(REPO_ROOT, { targetRoots: [targetRoot] }).installed.map((entry) => entry.targetDirectory);
 }
 
 const tomlString = (value) => JSON.stringify(String(value));
