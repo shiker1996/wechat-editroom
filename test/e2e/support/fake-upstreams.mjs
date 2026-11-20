@@ -200,10 +200,12 @@ function jsonForRequest(payload, visualState) {
     const input = parseEmbeddedJson(userContent(payload)) || {};
     const pages = Array.isArray(input.pages) ? input.pages : [];
     return { designScheme: {
+      contentReading: { subject: '固定测试内容', narrative: '按故事板顺序解释信息', readerFeeling: '清楚、可信、易读', visualAnchor: '绿色节点串联每页核心信息' },
       visualDirection: '以清晰的信息层级和克制的绿色强调呈现固定测试内容',
       palette: { background: '#102018', surface: '#1A2B23', text: '#F4F0E5', muted: '#B0C0B5', accent: '#39C98A', accentSecondary: '#D98253' },
       typography: { family: 'sans', titlePx: 34, bodyPx: 14, captionPx: 12, lineHeight: 1.55 },
       composition: { grid: '单列信息网格', density: '中等', rhythm: '标题后接短段和重点块', motif: '细线与绿色节点' },
+      designLanguage: { shape: '规整直角卡片与圆形节点', surface: '深色纯色表面，不使用模拟纸纹', graphics: '用细线连接内容节点', imageTreatment: '以流程示意图替代外部照片' },
       pages: pages.map((page, index) => ({ page: index + 1, role: page.role, layout: page.role === 'cover' ? 'poster' : page.role === 'ending' ? 'minimal' : 'editorial', focus: `突出第 ${index + 1} 页的核心信息`, treatment: '保留清晰标题、正文和页脚边界' })),
     } };
   }

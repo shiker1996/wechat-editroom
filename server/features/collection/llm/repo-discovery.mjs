@@ -18,14 +18,12 @@ const BROAD_QUERY_TERMS = new Set(['ai', 'agent', 'agents', 'llm', 'prompt', 'fr
 const AI_LANES = new Set(['ai-utility', 'agent']);
 
 export const BUILTIN_REPO_DISCOVERY_QUERIES = Object.freeze([
-  { label: '网页结果工具', lane: 'browser-automation', query: 'website recreate screenshot preview', projectTypes: ['tool', 'component'], directUseCase: '从网页或界面参考得到可运行、可预览的页面结果', createdWithinDays: 90, activityWindowDays: 30, minStars: 50 },
-  { label: '文档格式转换', lane: 'file-content', query: 'pdf to markdown converter', projectTypes: ['tool', 'data-content'], directUseCase: '把 PDF 等文档转成可搜索、可继续处理的文本', createdWithinDays: 90, activityWindowDays: 30, minStars: 50 },
-  { label: '开发者资源', lane: 'developer-productivity', query: 'awesome free developer tools APIs', projectTypes: ['data-content', 'tool'], directUseCase: '按用途找到可直接使用的开发服务或资源，并说明适用限制', createdWithinDays: 90, activityWindowDays: 30, minStars: 50 },
-  { label: 'MCP 工作流', lane: 'skills-workflows', query: 'MCP server developer workflow integration', projectTypes: ['skill-workflow', 'tool'], directUseCase: '把具体开发任务接入现有编辑器、终端或自动化流程', createdWithinDays: 90, activityWindowDays: 30, minStars: 50 },
-  { label: '知识整理检索', lane: 'file-content', query: 'knowledge graph search local notes', projectTypes: ['tool', 'data-content'], directUseCase: '把代码或资料整理成可检索、可浏览的知识结构', createdWithinDays: 90, activityWindowDays: 30, minStars: 50 },
-  { label: '终端调试工具', lane: 'terminal-remote', query: 'terminal remote development debugging', projectTypes: ['tool', 'infrastructure'], directUseCase: '在终端或远程环境中完成调试、管理或协作任务', createdWithinDays: 90, activityWindowDays: 30, minStars: 50 },
-  { label: '浏览器自动化', lane: 'browser-automation', query: 'browser automation testing screenshot', projectTypes: ['tool', 'plugin-extension'], directUseCase: '自动执行网页操作或测试并得到可核验结果', createdWithinDays: 90, activityWindowDays: 30, minStars: 50 },
-  { label: '实用型 AI 工具', lane: 'ai-utility', query: 'AI document conversion code review browser automation', projectTypes: ['ai-utility', 'tool'], directUseCase: '用 AI 完成具体文件、代码或浏览器任务，并展示输出', createdWithinDays: 60, activityWindowDays: 30, minStars: 100 },
+  { label: '文档与扫描', lane: 'file-content', query: 'PDF OCR', projectTypes: ['tool', 'data-content'], directUseCase: '把纸质扫描件或 PDF 变成可搜索、可编辑的文档', searchMode: 'active', createdWithinDays: 120, activityWindowDays: 180, minStars: 30 },
+  { label: '照片与视频', lane: 'file-content', query: 'photo organizer', projectTypes: ['tool'], directUseCase: '整理照片视频、找出重复文件并更快找到想要的回忆', searchMode: 'active', createdWithinDays: 120, activityWindowDays: 180, minStars: 30 },
+  { label: '个人知识整理', lane: 'file-content', query: 'personal notes search', projectTypes: ['tool', 'data-content'], directUseCase: '把散落的笔记、网页收藏和资料集中整理并快速搜索', searchMode: 'active', createdWithinDays: 120, activityWindowDays: 180, minStars: 40 },
+  { label: '日常自动化', lane: 'skills-workflows', query: 'no code automation', projectTypes: ['tool', 'skill-workflow'], directUseCase: '把重复的电脑或网络操作自动完成，减少日常琐事', searchMode: 'new', createdWithinDays: 90, activityWindowDays: 120, minStars: 30 },
+  { label: '表格与数据', lane: 'developer-productivity', query: 'spreadsheet dashboard', projectTypes: ['tool', 'data-content'], directUseCase: '把表格数据整理、筛选并转成容易理解的图表或报告', searchMode: 'active', createdWithinDays: 120, activityWindowDays: 180, minStars: 40 },
+  { label: '隐私与文件', lane: 'data-observability', query: 'personal cloud sync', projectTypes: ['tool', 'infrastructure'], directUseCase: '在自己设备间同步和备份文件，更好掌控个人资料', searchMode: 'evergreen', createdWithinDays: 180, activityWindowDays: 180, minStars: 80 },
 ]);
 
 function parseJsonLoose(result, label) {
@@ -169,7 +167,7 @@ export async function filterRepositoriesByInterest({ gateway, accountContext, re
   const batches = [];
   for (let index = 0; index < list.length; index += Math.max(1, chunkSize)) batches.push(list.slice(index, index + chunkSize));
   const scoreBatch = async (batch) => {
-    const catalog = batch.map((repo, i) => `${i + 1}. ${repo.repository}｜${repo.description || '无简介'}｜topics:${(repo.topics || []).join(',') || '无'}｜场景:${(repo.scenarioIds || []).join(',') || '未识别'}｜类型:${repo.projectType || '未识别'}｜直接用途:${repo.directUseCase || '未说明'}｜来源:${(repo.discoveryContexts || []).map((context) => context.label || context.channel).filter(Boolean).slice(0, 3).join(',') || '未记录'}｜${repo.language || '未知'}｜⭐${repo.stars ?? '?'}`).join('\n');
+  const catalog = batch.map((repo, i) => `${i + 1}. ${repo.repository}｜${repo.description || '无简介'}｜许可证:${repo.license || '未提供'}｜topics:${(repo.topics || []).join(',') || '无'}｜场景:${(repo.scenarioIds || []).join(',') || '未识别'}｜类型:${repo.projectType || '未识别'}｜直接用途:${repo.directUseCase || '未说明'}｜来源:${(repo.discoveryContexts || []).map((context) => context.label || context.channel).filter(Boolean).slice(0, 3).join(',') || '未记录'}｜${repo.language || '未知'}｜⭐${repo.stars ?? '?'}`).join('\n');
     const user = `${accountInterestText(accountContext)}\n\n候选仓库：\n${catalog}`;
     try {
       const result = await gateway.complete({

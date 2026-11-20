@@ -97,6 +97,7 @@ async function searchRepositories({ requestGitHubJson, config, query, limit, sor
     publishedAt: new Date().toISOString(),
     description: repo.description || '',
     language: repo.language || '',
+    license: repo.license?.spdx_id || repo.license?.name || '',
     stars: repo.stargazers_count,
     topics: repo.topics || [],
     createdAt: repo.created_at,

@@ -3,7 +3,7 @@ import { probeHtmlLayout } from '../../../platform/browser/html-layout-probe.mjs
 
 const AUDIT_SELECTORS = Object.freeze(['.page-body', '.page-content-stack']);
 
-export async function auditSocialCardHtmlFit({ htmlPath, width = 375, height = 667, tolerancePx = 2, page: selectedPage = null } = {}) {
+export async function auditSocialCardHtmlFit({ htmlPath, width = 375, height = 667, tolerancePx = 2, page: selectedPage = null, pageRoles = [], listPageItemCounts = [], minimumContentUtilization = 0.6, minimumListItemHeight = 32 } = {}) {
   const result = {
     valid: false,
     status: 'error',
@@ -31,7 +31,8 @@ export async function auditSocialCardHtmlFit({ htmlPath, width = 375, height = 6
 
     result.pageCount = measurements.length;
     for (const item of measurements) {
-      const pageReport = { page: item.page, valid: true, containers: [] };
+      const pageRole = pageRoles[item.page - 1] || item.pageStyle?.role || '';
+      const pageReport = { page: item.page, role: pageRole || undefined, valid: true, containers: [], listMetrics: item.listMetrics || { itemCount: 0, averageItemHeight: 0, totalHeight: 0 } };
       const pageStyle = item.pageStyle || {};
       const styleProblems = [];
       if (Math.abs(Number(pageStyle.width) - result.canvas.width) > tolerancePx) styleProblems.push(`画布宽度应为 ${result.canvas.width}px，实测 ${Math.round(Number(pageStyle.width) || 0)}px`);
@@ -70,6 +71,48 @@ export async function auditSocialCardHtmlFit({ htmlPath, width = 375, height = 6
           overflowY,
           overflowMode: { x: container.overflowX, y: container.overflowY },
           message: `第 ${item.page} 页 ${container.selector} 内容超出可用区域${overflowY > tolerancePx ? ` ${overflowY}px（纵向）` : ''}${overflowX > tolerancePx ? ` ${overflowX}px（横向）` : ''}`,
+        });
+      }
+      const body = item.containers.find((container) => container.selector === '.page-body' && container.visible);
+      const content = item.containers.find((container) => container.selector === '.page-content-stack' && container.visible);
+      if (body && content && body.clientHeight > 0) {
+        pageReport.contentUtilization = Number((content.clientHeight / body.clientHeight).toFixed(3));
+        const isContentPage = pageRole && !['cover', 'ending'].includes(String(pageRole).toLowerCase());
+        if (isContentPage && pageReport.contentUtilization < minimumContentUtilization) {
+          pageReport.valid = false;
+          result.issues.push({
+            code: 'CONTENT_DENSITY_LOW',
+            page: item.page,
+            contentUtilization: pageReport.contentUtilization,
+            minimumContentUtilization,
+            message: `第 ${item.page} 页内容区占用率为 ${Math.round(pageReport.contentUtilization * 100)}%，低于内容页 60% 下限；请放大已有事实的视觉表达、展开信息关系或调整组件布局，不要添加占位文案`,
+          });
+        }
+      }
+      if (pageReport.listMetrics.itemCount >= 3) {
+        pageReport.listMetrics.averageItemHeight = Number(pageReport.listMetrics.averageItemHeight.toFixed(1));
+        pageReport.listMetrics.minItemHeight = Number(pageReport.listMetrics.minItemHeight.toFixed(1));
+        pageReport.listMetrics.totalHeight = Number(pageReport.listMetrics.totalHeight.toFixed(1));
+      }
+      const expectedListItems = Number(listPageItemCounts[item.page - 1]) || Number(pageStyle.listItemCount) || 0;
+      if (expectedListItems > 0 && pageReport.listMetrics.itemCount < expectedListItems) {
+        pageReport.valid = false;
+        result.issues.push({
+          code: 'LIST_ITEMS_UNMEASURED',
+          page: item.page,
+          expectedItemCount: expectedListItems,
+          measuredItemCount: pageReport.listMetrics.itemCount,
+          message: `第 ${item.page} 页故事板有 ${expectedListItems} 个列表/步骤条目，但 HTML 只标记了 ${pageReport.listMetrics.itemCount} 个可测条目；请使用 li、.step、.flow-card、.list-item 或 data-list-item 标记每个条目`,
+        });
+      } else if (pageReport.listMetrics.itemCount >= 3 && pageReport.listMetrics.minItemHeight < minimumListItemHeight) {
+        pageReport.valid = false;
+        result.issues.push({
+          code: 'LIST_ITEMS_TOO_DENSE',
+          page: item.page,
+          expectedItemCount: expectedListItems,
+          minItemHeight: pageReport.listMetrics.minItemHeight,
+          minimumListItemHeight,
+          message: `第 ${item.page} 页列表条目高度低于 ${minimumListItemHeight}px；请用分组、编号、对比或步骤轨道改善扫读层级`,
         });
       }
       result.pages.push(pageReport);

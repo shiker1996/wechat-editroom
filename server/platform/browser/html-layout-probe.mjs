@@ -26,8 +26,21 @@ export async function probeHtmlLayout({ html, width = 375, height = 667, pageSel
             backgroundImage: style.backgroundImage,
             display: style.display,
             overflow: style.overflow,
+            role: pageElement.dataset.pageRole || (pageElement.classList.contains('page-cover') ? 'cover' : pageElement.classList.contains('page-ending') ? 'ending' : ''),
+            listItemCount: Number(pageElement.dataset.listItemCount) || 0,
             innerDisplay: innerStyle?.display || null,
             innerHeight: inner?.getBoundingClientRect().height ?? null,
+          };
+        })(),
+        listMetrics: (() => {
+          const items = [...new Set(pageElement.querySelectorAll('li, [data-list-item], .list-item, .list-card, .feature-item, .flow-card, .step, .check, .risk'))];
+          if (!items.length) return { itemCount: 0, averageItemHeight: 0, minItemHeight: 0, totalHeight: 0 };
+          const heights = items.map((item) => item.getBoundingClientRect().height);
+          return {
+            itemCount: items.length,
+            averageItemHeight: heights.reduce((sum, value) => sum + value, 0) / heights.length,
+            minItemHeight: Math.min(...heights),
+            totalHeight: heights.reduce((sum, value) => sum + value, 0),
           };
         })(),
         containers: selectors.flatMap((selector) => [...pageElement.querySelectorAll(selector)].map((element) => {
