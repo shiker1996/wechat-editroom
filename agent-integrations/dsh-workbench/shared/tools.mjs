@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { inspectInstalledSkillCopies, syncInstalledSkillCopies } from './skill-copies.mjs';
 
 const id = (description, required = true) => ({ type: 'integer', ...(required ? { minimum: 1 } : {}), description });
 const string = (description, extra = {}) => ({ type: 'string', description, ...extra });
@@ -20,6 +22,14 @@ const MCP_PACKAGE_VERSION = (() => {
   }
   throw new Error('无法读取 MCP 所属 package.json 版本');
 })();
+const DEFAULT_PROJECT_ROOT = path.resolve(fileURLToPath(new URL('../../../', import.meta.url)));
+
+function skillCopyError(skillCopies) {
+  const error = new Error('检测到外部 Agent 的项目 Skill 副本落后于当前项目。请先调用 jianzi_skills_sync，同步后重新载入 Skill（建议开始新会话），再继续业务工具。');
+  error.code = 'SKILL_COPY_STALE';
+  error.details = { skillCopies, next_action: 'jianzi_skills_sync', reloadRequired: true };
+  return error;
+}
 
 function redactSensitive(value, key = '') {
   if (Array.isArray(value)) return value.map((item) => redactSensitive(item));
@@ -58,7 +68,8 @@ function safeImageResult(result) {
 }
 
 export const JIANZI_TOOLS = [
-  { name: 'jianzi_doctor', description: '检查见字工作台连接、项目版本与 MCP/插件兼容性、Node 运行时和核心功能是否可用。若版本不兼容，先按返回提示更新项目并重启，再继续业务工具。', inputSchema: { type: 'object', properties: {} }, readOnlyHint: true },
+  { name: 'jianzi_doctor', description: '检查见字工作台连接、项目版本与 MCP/插件兼容性、Node 运行时、核心功能及已安装项目 Skill 副本是否与源目录一致。若返回 skillCopies.status=stale，先调用 jianzi_skills_sync；同步后重新载入 Skill（建议开始新会话），再继续业务工具。', inputSchema: { type: 'object', properties: {} }, readOnlyHint: true },
+  { name: 'jianzi_skills_sync', description: '将当前项目 agent-integrations/skills 的最新内容同步到已安装的 Codex .agents/skills 和 WorkBuddy .codebuddy/skills 副本，并写入来源版本与 SHA-256 指纹。同步会覆盖这些目录中由项目管理的同名 Skill；完成后需重新载入 Skill，建议开始新会话。', inputSchema: { type: 'object', properties: {} }, readOnlyHint: false },
   { name: 'jianzi_workbench_start', description: '当用户要求启动已停止的本机见字工作台，或 jianzi_doctor 报告服务未运行时，调用项目官方启动脚本并等待服务 ready，再执行健康检查。不会打开浏览器或修改业务数据。源码 MCP 默认使用当前项目根目录；打包/独立 MCP 可传项目绝对路径 projectRoot，或设置 JIANZI_PROJECT_ROOT。', inputSchema: { type: 'object', properties: { projectRoot: string('见字项目的本机绝对路径。源码集成可省略；DSH/npm 包未配置 JIANZI_PROJECT_ROOT 时必须提供。') } }, readOnlyHint: false },
   { name: 'jianzi_account_profile', description: '读取账号画像，用于选题定位、语气和受众判断。', inputSchema: { type: 'object', properties: {} }, readOnlyHint: true },
   { name: 'jianzi_account_profile_update', description: '保存用户确认过的账号画像。至少包含公众号名称、简介、核心读者和一个内容支柱。', inputSchema: { type: 'object', properties: { context: { type: 'object', description: '符合 account-context.json 格式的账号画像字段。' } }, required: ['context'] }, readOnlyHint: false },
@@ -326,20 +337,32 @@ function artifactTypeForJob(job) {
 export async function executeJianziTool(client, name, input = {}, context = {}) {
   const batch = encodeURIComponent(String(input.batchId || ''));
   const candidate = encodeURIComponent(String(input.candidateId || ''));
-  if (!['jianzi_doctor', 'jianzi_workbench_start'].includes(name)) await assertWorkbenchVersion(client);
+  const projectRoot = path.resolve(String(context.projectRoot || process.env.JIANZI_PROJECT_ROOT || DEFAULT_PROJECT_ROOT));
+  if (!['jianzi_doctor', 'jianzi_workbench_start', 'jianzi_skills_sync'].includes(name)) {
+    await assertWorkbenchVersion(client);
+    const skillCopies = inspectInstalledSkillCopies(projectRoot);
+    if (skillCopies.status === 'stale') throw skillCopyError(skillCopies);
+  }
   switch (name) {
     case 'jianzi_doctor': {
       try {
         const [health, batches] = await Promise.all([client.get('/api/system/health'), client.get('/api/batches?limit=1')]);
         if (isVersionBelow(health?.appVersion, MCP_PACKAGE_VERSION)) throw outdatedWorkbenchError(health?.appVersion);
-        return { connected: true, node: health.node, integrationVersion: MCP_PACKAGE_VERSION, health, sampleBatchCount: Array.isArray(batches) ? batches.length : 0 };
+        const skillCopies = inspectInstalledSkillCopies(projectRoot);
+        return { connected: true, node: health.node, integrationVersion: MCP_PACKAGE_VERSION, health, sampleBatchCount: Array.isArray(batches) ? batches.length : 0, skillCopies, ...(skillCopies.status === 'stale' ? { next_action: 'jianzi_skills_sync', reloadRequired: true } : {}) };
       } catch (error) {
         throw unavailableWorkbenchError(error, client.baseUrl);
       }
     }
+    case 'jianzi_skills_sync': {
+      const skillCopies = inspectInstalledSkillCopies(projectRoot);
+      if (skillCopies.checkedTargets === 0) return { status: 'not_installed', message: '未发现项目安装的 Codex 或 WorkBuddy Skill 副本；请按客户端说明安装。' };
+      const sync = syncInstalledSkillCopies(projectRoot);
+      return { ...sync, skillCopies: inspectInstalledSkillCopies(projectRoot), reloadRequired: true, next_step: '重新载入 Skill；建议开始新会话后重试原流程。' };
+    }
     case 'jianzi_workbench_start': {
       const startup = await startWorkbenchProcess(client, input.projectRoot, context.projectRoot);
-      const doctor = await executeJianziTool(client, 'jianzi_doctor');
+      const doctor = await executeJianziTool(client, 'jianzi_doctor', {}, context);
       const expectedWorkspaceId = workspaceFingerprint(startup.projectRoot);
       if (!doctor.health?.workspaceId) {
         const error = new Error('服务已响应，但版本未提供项目指纹；无法确认它属于目标工作台，请升级并重启目标项目后重试。');

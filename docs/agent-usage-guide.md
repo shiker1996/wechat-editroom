@@ -85,7 +85,7 @@ npm run jianzi -- install --agent codex
 npm run jianzi -- doctor --json
 ```
 
-安装会创建项目级 `.codex/config.toml` 和 `.agents/skills/`。随后在 Codex 中信任该项目目录，并重载或重启 MCP 连接。确认 Codex 工具列表中出现 `jianzi_*` 工具，再调用 MCP 工具 `jianzi_doctor` 验证连通与项目版本兼容；CLI `doctor` 只验证工作台 API，不代替客户端 MCP 握手。若返回 `WORKBENCH_VERSION_MISMATCH`，先在项目根目录 `git pull`，按升级说明更新依赖并重新构建，再重启工作台和 MCP 后重试。MCP 子进程与工作台都运行在本机，连接默认 loopback 地址。
+安装会创建项目级 `.codex/config.toml` 和 `.agents/skills/`。随后在 Codex 中信任该项目目录，并重载或重启 MCP 连接。确认 Codex 工具列表中出现 `jianzi_*` 工具，再调用 MCP 工具 `jianzi_doctor` 验证连通、项目版本兼容和 Skill 副本指纹；CLI `doctor` 只验证工作台 API，不代替客户端 MCP 握手。若返回 `skillCopies.status: "stale"`，调用 `jianzi_skills_sync` 更新副本，然后新开会话重新载入 Skill。若返回 `WORKBENCH_VERSION_MISMATCH`，先在项目根目录 `git pull`，按升级说明更新依赖并重新构建，再重启工作台和 MCP 后重试。MCP 子进程与工作台都运行在本机，连接默认 loopback 地址。
 
 默认外部 Agent 工作流不需要在“运行与配置”中添加模型服务商。只有明确要调用 `jianzi_*_generate` 或 `jianzi_batch_auto_research` 等见字内部 AI 工具时，才配置并测试工作台模型。
 
