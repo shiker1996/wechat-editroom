@@ -21,6 +21,7 @@ description: 将已锁定文章简报和事实材料编排为微信公众号文�
 - `account_context`：可选，来自上游冻结快照或 `.agents/wechat-account-context.md`
 - `content_pillar`：可选，本题对应的账号内容支柱
 - `reader_job`：可选，读者看完要完成的判断、理解或行动
+- 受众优先级：开发者、普通职场人和泛科技读者是主要受众；技术管理者、产品经理和创业者是次要受众。观点先回应主要受众，除非材料表明次要受众才是事件的主要受影响者。
 - `distribution_lane`：可选，`推荐池`、`通知池`或`实验池`
 - `reader_stake`：可选，内容影响读者的工作、收入、岗位、效率、成本或选择中的具体一项
 - `packaging_mode`：可选，`搜索型`、`分享型`或`双栖型`
@@ -77,7 +78,11 @@ locked-brief + fact-base → drafting → review → length-adjustment → title
 
 ### 素材承接契约
 
-`material_brief` 是事实基座、流量规划、标题和类型化初稿共同读取的上游约束。优先兑现 `thesis`、`conflict`、`reader_consequence` 和 `reader_action`，但读者收益不默认单独成章；根据题材选择理解、判断、视角、影响、行动依据或清单，并选择融入正文、独立成节或放在结尾。新增并贯穿 `click_mechanism`、`opening_hook`、`retention_turns`、`reader_value_type`、`reader_value_placement` 和 `ending_payoff`。`evidence_boundary` 仍是全程表达边界；`material_readiness` 只表示素材成熟度，不是爆款分，也不能替代事实核验。若素材简报与锁定事实或作者立场冲突，回到事实基座或编辑会收窄命题，不得自行填补缺口。
+`material_brief` 是事实基座、流量规划、标题和类型化初稿共同读取的上游约束。优先兑现 `thesis`、`conflict` 和 `reader_consequence`；将 `reader_action` 视为可选的读者收益/判断依据，可为空，不默认等同于行动建议。主要受众是开发者、普通职场人和泛科技读者；除非材料表明管理者是主要受影响者，否则评论与建议优先从这些读者的工作、收入、岗位、效率、成本或选择出发。根据题材选择理解、判断、视角、影响或行动依据，并选择融入正文、独立成节或放在结尾。行动建议只在主要受众确实面临具体选择且证据充分时使用，并说明对象和条件。新增并贯穿 `click_mechanism`、`opening_hook`、`retention_turns`、`reader_value_type`、`reader_value_placement` 和 `ending_payoff`。`evidence_boundary` 仍是全程表达边界；`material_readiness` 只表示素材成熟度，不是爆款分，也不能替代事实核验。若素材简报与锁定事实或作者立场冲突，回到事实基座或编辑会收窄命题，不得自行填补缺口。
+
+### 事实铺垫与评论顺序
+
+文章可以从问题、冲突或判断切入，但必须尽早交代读者理解核心评论所需的事件事实、来源归属和关键不确定边界，再展开解释和判断。写清事实如何支持观点及推理环节；不得从标题立场直接跳到评论，也不要求固定使用“事实/评论”章节标签。事实量不足时收窄结论，不用建议段填补空白。
 
 ### 全文章流量基线
 
