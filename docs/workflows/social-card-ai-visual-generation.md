@@ -10,10 +10,10 @@
 | 入口 | 实现位置 | 说明 |
 | --- | --- | --- |
 | 社交卡图文编排 | `server/features/social-cards/application/social-card-beautify.mjs` | 准备输入、写入与审计工具、运行生成 Agent、记录阶段并启动交付 |
-| 外部 Agent MCP | `scripts/agent-integration/tools.mjs`、`server/platform/http/routes/media-routes.mjs` | 外部 Agent 提交整份 HTML 做浏览器审计；Agent 在自己的草稿中返修，再重审并提交 |
+| 外部 Agent MCP | `scripts/agent-integration/tools.mjs`、`server/platform/http/routes/social-card-routes.mjs` | 外部 Agent 必须把结构化视觉方案和整份 HTML 一起审计；Agent 在自己的草稿中返修，再重审并提交 |
 | 单 Agent 文档协议 | `server/platform/agent/ai-visual-document-agent.mjs` | 读取资料、管理写入/审计时序及 finish 条件；社交卡和文章封面共用 Agent 编排 |
 | 社交卡写入能力 | `plugins/ai-visual-document-writer/adapter.mjs`、`plugins/ai-visual-document-writer/manifest.json` | 在活动会话内追加文档，或按锚点精确替换单页 |
-| 程序布局审计 | `server/features/social-cards/application/social-card-visual-audit.mjs`、`server/platform/browser/html-layout-probe.mjs` | Chromium 按 DOM 中 `.page` 顺序编号，检查 375×667 画布、正文溢出和内容页占用率；低于 60% 的内容页会阻止交付，封面与结尾页例外；对故事板中的列表/步骤项检查条目标记和 32px 最小高度，并返回列表指标 |
+| 程序布局与方案兑现审计 | `server/features/social-cards/application/social-card-visual-audit.mjs`、`server/features/social-cards/application/social-card-external-visual-contract.mjs`、`server/platform/browser/html-layout-probe.mjs` | Chromium 检查 375×667 画布、正文溢出、内容页占用率、列表条目，以及外部方案与每页 DOM 标记、共用锚点和渲染背景差异 |
 | Agent 行为规范 | `skills/social-card-ai-visual-generator/SKILL.md` | 要求页码锚点、单页修复和事实/视觉边界 |
 
 ## 阶段与数据流
@@ -30,13 +30,15 @@
 ## 入口间差异
 
 - 社交卡使用程序视觉审计，并通过工具 schema 暴露 `replace-page`；服务端参数解析器与写入插件共同限制只修当前审计失败的页。
-- MCP 外部 Agent 路径按同一内容驱动原则自拟视觉方案，但不经过内部 schema v2 校验；两个外部 Skill 副本额外要求每页显式规划构图、主视觉、背景/表面处理和强调位置，并检查缩略图序列的整体差异。它通过 `jianzi_card_visual_audit` 接收布局、内容密度与列表项测量结果并自行修改 HTML，再调用 `jianzi_card_visual_submit`，不共享内部 Agent 写入会话，因此不调用 `replace-page`。
+- MCP 外部 Agent 路径使用独立 designScheme v1，不复用内部 schema v2。`jianzi_card_visual_audit` 和 `jianzi_card_visual_submit` 都要求携带同一份结构化方案；校验方案页数/职责与锁定故事板一致、HTML 每页标记与逐页方案一致、2–3 个系列锚点逐页存在、5 页及以上至少 3 种构图与 2 种背景、相邻页构图和主视觉不同，并检查浏览器计算出的页面背景确有差异。整组审计还会由共享 MCP 响应层返回联系表图片，包括审计未通过时；外部 Agent 必须查看联系表并修复自身草稿，提交时服务端会重新执行同一门禁，通过后才截图和归档。
+- 外部 Agent 的程序门禁可核对方案字段、HTML 标记和渲染背景，不会推断图片语义是否真的实现主视觉；因此 Skill 要求 Agent 并排检查整组缩略图，联系表负责把这个检查变成可见且可执行的流程步骤。标记不能替代视觉复核。外部路径不共享内部 Agent 写入会话，因此不调用 `replace-page`。
 - 文章封面复用共享 Agent 和写入插件，但其工具 schema 不暴露页级操作，也不使用本契约中的社交卡审计门禁。
 - Agent 的原生 function tool 和 JSON ToolRequest 两条调用路径共用社交卡参数解析器和同一个写入插件；非原生路径另有 Agent 层早期恢复校验。
 
 ## 产物与验证
 
 - HTML：候选工作目录中的 `ai-beautified.html`；阶段记录：`social-card-ai-visual-stage-executions.json`。
+- 外部 MCP 提交会同步归档 `publish-title.txt`、`copy.txt`、设计方案 JSON、逐页 PNG 和交付报告；标题文件与候选预览接口读取的标题保持一致。
 - 相关既有验证：`test/ai-visual-document-writer-plugin.test.mjs`、`test/social-card-ai-visual-baseline.test.mjs`。本次未运行测试。
 
 ## 变更触点
@@ -44,5 +46,5 @@
 - 视觉方案：`server/features/social-cards/application/social-card-design-scheme.mjs`、`server/shared/themes/visual-direction-catalog.mjs`。
 - 写入协议：`plugins/ai-visual-document-writer/adapter.mjs`、`plugins/ai-visual-document-writer/manifest.json`。
 - 社交卡调用门禁与记录：`server/features/social-cards/application/social-card-beautify.mjs`。
-- Agent 指令：`server/platform/agent/ai-visual-document-agent.mjs`。
-- 技能与当前流程：`skills/social-card-ai-visual-generator/SKILL.md`、`docs/workflows/social-card-ai-visual-generation.md`。
+- Agent 指令：`server/platform/agent/ai-visual-document-agent.mjs`、`agent-integrations/dsh-workbench/lib/client.js`。
+- 技能与当前流程：`skills/social-card-ai-visual-generator/SKILL.md`、`agent-integrations/skills/jianzi-social-cards/SKILL.md`、`agent-integrations/workbuddy/skills/jianzi-social-cards/SKILL.md`、`docs/workflows/social-card-ai-visual-generation.md`。

@@ -1,9 +1,10 @@
 import fs from 'node:fs';
 import { probeHtmlLayout } from '../../../platform/browser/html-layout-probe.mjs';
+import { compareExternalSocialCardDesignToMeasurements } from './social-card-external-visual-contract.mjs';
 
 const AUDIT_SELECTORS = Object.freeze(['.page-body', '.page-content-stack']);
 
-export async function auditSocialCardHtmlFit({ htmlPath, width = 375, height = 667, tolerancePx = 2, page: selectedPage = null, pageRoles = [], listPageItemCounts = [], minimumContentUtilization = 0.6, minimumListItemHeight = 32 } = {}) {
+export async function auditSocialCardHtmlFit({ htmlPath, width = 375, height = 667, tolerancePx = 2, page: selectedPage = null, pageRoles = [], listPageItemCounts = [], minimumContentUtilization = 0.6, minimumListItemHeight = 32, designScheme = null, storyboardPages = [], requireDesignScheme = false, includeContactSheet = false } = {}) {
   const result = {
     valid: false,
     status: 'error',
@@ -27,6 +28,7 @@ export async function auditSocialCardHtmlFit({ htmlPath, width = 375, height = 6
       pageSelector: '.page',
       selectors: AUDIT_SELECTORS,
       selectedPage,
+      includeContactSheet,
     });
 
     result.pageCount = measurements.length;
@@ -117,6 +119,17 @@ export async function auditSocialCardHtmlFit({ htmlPath, width = 375, height = 6
       }
       result.pages.push(pageReport);
     }
+    if (requireDesignScheme || designScheme) {
+      const designConformance = compareExternalSocialCardDesignToMeasurements({
+        designScheme,
+        storyboardPages,
+        pageMeasurements: measurements,
+        selectedPage,
+      });
+      result.designConformance = designConformance;
+      result.issues.push(...designConformance.issues);
+    }
+    if (measurements.previewImageBase64) result.previewImageBase64 = measurements.previewImageBase64;
     if (!result.pageCount) result.issues.push({
       code: selectedPage ? 'PAGE_NOT_FOUND' : 'NO_PAGES',
       page: Number(selectedPage) || undefined,
