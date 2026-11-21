@@ -7,6 +7,23 @@ export function startJianziMcpServer({ executeTool, tools, instructions, input =
   const send = (message) => output.write(`${JSON.stringify(message)}\n`);
   const result = (id, value) => send({ jsonrpc: '2.0', id, result: value });
   const rpcError = (id, code, message) => send({ jsonrpc: '2.0', id, error: { code, message } });
+  const toolResult = (data, isError = false) => {
+    let previewImageBase64 = typeof data?.previewImageBase64 === 'string' ? data.previewImageBase64 : '';
+    const textData = { ...(data || {}) };
+    delete textData.previewImageBase64;
+    if (textData.details && typeof textData.details === 'object') {
+      if (!previewImageBase64 && typeof textData.details.previewImageBase64 === 'string') previewImageBase64 = textData.details.previewImageBase64;
+      textData.details = { ...textData.details };
+      delete textData.details.previewImageBase64;
+    }
+    return {
+      content: [
+        { type: 'text', text: JSON.stringify(textData, null, 2) },
+        ...(previewImageBase64 ? [{ type: 'image', data: previewImageBase64, mimeType: 'image/png' }] : []),
+      ],
+      isError,
+    };
+  };
 
   async function handle(message) {
     const { id, method, params = {} } = message || {};
@@ -24,10 +41,10 @@ export function startJianziMcpServer({ executeTool, tools, instructions, input =
     if (method === 'tools/call') {
       try {
         const data = await executeTool(String(params.name || ''), params.arguments || {});
-        result(id, { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }], isError: false });
+        result(id, toolResult(data));
       } catch (error) {
         const data = { code: error.code || 'JIANZI_TOOL_FAILED', message: error.message || String(error), ...(error.details ? { details: error.details } : {}) };
-        result(id, { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }], isError: true });
+        result(id, toolResult(data, true));
       }
       return;
     }

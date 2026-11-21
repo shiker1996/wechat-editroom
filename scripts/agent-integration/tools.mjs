@@ -7,6 +7,19 @@ import { inspectInstalledSkillCopies, syncInstalledSkillCopies } from './skill-c
 
 const id = (description, required = true) => ({ type: 'integer', ...(required ? { minimum: 1 } : {}), description });
 const string = (description, extra = {}) => ({ type: 'string', description, ...extra });
+const socialCardDesignScheme = {
+  type: 'object',
+  description: '外部图文视觉方案 v1。pageLanguage 必须逐页匹配锁定故事板；HTML 每个 .page 根元素用 data-page、data-page-role、data-visual-composition、data-primary-visual、data-background-mode、data-accent-placement 回填同值，并在每页放置全部 data-shared-anchor 标记。',
+  properties: {
+    schemaVersion: { type: 'integer', enum: [1] },
+    contentReading: { type: 'object', properties: { subject: string('主题对象。'), narrative: string('叙事方式。'), readerFeeling: string('读者感受。'), visualAnchor: string('视觉锚点。') }, required: ['subject', 'narrative', 'readerFeeling', 'visualAnchor'], additionalProperties: false },
+    designLanguage: { type: 'object', properties: { colorLogic: string('色彩逻辑。'), typography: string('字阶与字体方向。'), shape: string('形状语言。'), surface: string('表面处理。'), graphics: string('图形语言。'), imageTreatment: string('图像处理。') }, required: ['colorLogic', 'typography', 'shape', 'surface', 'graphics', 'imageTreatment'], additionalProperties: false },
+    sharedAnchors: { type: 'array', minItems: 2, maxItems: 3, items: { type: 'object', properties: { id: { type: 'string', pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }, description: string('系列共用元素说明。') }, required: ['id', 'description'], additionalProperties: false } },
+    pageLanguage: { type: 'array', minItems: 4, maxItems: 10, items: { type: 'object', properties: { page: { type: 'integer', minimum: 1 }, role: string('必须与锁定故事板的 role 一致。'), visualPurpose: string('本页视觉目的。'), composition: { type: 'string', pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }, primaryVisual: { type: 'string', pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }, backgroundMode: { type: 'string', pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }, accentPlacement: { type: 'string', pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' } }, required: ['page', 'role', 'visualPurpose', 'composition', 'primaryVisual', 'backgroundMode', 'accentPlacement'], additionalProperties: false } },
+  },
+  required: ['schemaVersion', 'contentReading', 'designLanguage', 'sharedAnchors', 'pageLanguage'],
+  additionalProperties: false,
+};
 const positiveId = (value, field) => {
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || parsed < 1) throw Object.assign(new Error(`${field} 必须是正整数`), { code: 'INVALID_ARGUMENT' });
@@ -136,9 +149,9 @@ export const JIANZI_TOOLS = [
   { name: 'jianzi_card_storyboard_generate', description: '调用见字内部模型生成图文故事板；需要工作台已配置模型。', inputSchema: { type: 'object', properties: { candidateId: id('图文候选 ID。'), provider: string('可选的工作台模型服务商 ID。') }, required: ['candidateId'] }, readOnlyHint: false, openWorldHint: true },
   { name: 'jianzi_card_editorial_update', description: '保存外部 Agent 的图文编辑方案和故事板。读者、痛点、来源披露与禁止表达字段用于通过工作台门禁；工作台在锁定时校验故事板。', inputSchema: { type: 'object', properties: { candidateId: id('图文候选 ID。'), cardPlan: { type: 'array', minItems: 1, items: { type: 'object' } }, outputMode: string('可选发布渠道与内容类型。'), targetReader: string('目标读者。'), painPoint: string('读者的核心问题或传播问题。'), toolPositioning: string('内容定位；仓库或工具图文适用。'), mustHighlight: string('必须突出说明的事实或能力。'), mustDisclose: string('未核实内容、来源边界、限制或安装边界。'), gettingStarted: string('必要的上手说明。'), forbiddenClaims: string('不得出现的表达或未经证实的主张。'), recommendedPages: { type: 'integer', minimum: 4, maximum: 10, description: '建议故事板页数。' }, compositionMode: string('可选构图模式。'), layoutStyle: string('可选整体版式。') }, required: ['candidateId', 'cardPlan'] }, readOnlyHint: false },
   { name: 'jianzi_card_lock', description: '锁定图文故事板并执行 CARD GATE。', inputSchema: { type: 'object', properties: { candidateId: id('图文候选 ID。') }, required: ['candidateId'] }, readOnlyHint: false },
-  { name: 'jianzi_card_visual_audit', description: '在图文生成过程中对草稿 HTML 执行浏览器布局、内容密度和列表可扫读性审计，可指定单页或审计整组；报告包含 contentUtilization 与 listMetrics，内容页低于 60% 或故事板列表项未标记/低于 32px 会拦截；不保存产物。按报告修正后再提交。', inputSchema: { type: 'object', properties: { candidateId: id('已锁定故事板的图文候选 ID。'), html: { type: 'string', minLength: 1, maxLength: 10000000 }, page: { type: 'integer', minimum: 1, description: '可选：仅审计该页；省略则审计全部页面。' } }, required: ['candidateId','html'] }, readOnlyHint: true },
+  { name: 'jianzi_card_visual_audit', description: '外部 Agent 生成过程中使用：同时校验图文设计方案是否与锁定故事板页数/职责一致、HTML 页标记是否逐页兑现构图/主视觉/背景/强调位置、系列锚点是否每页存在，以及全组视觉多样性；并执行画布、溢出、内容密度和列表审计。整组审计会返回可视联系表图片，Agent 必须查看并确认页面剪影/主视觉/背景真实多样后再提交；可指定单页核对，但提交前必须省略 page 完成整组复审。报告未通过时修 HTML/方案后重审；不保存产物。', inputSchema: { type: 'object', properties: { candidateId: id('已锁定故事板的图文候选 ID。'), html: { type: 'string', minLength: 1, maxLength: 10000000 }, designScheme: socialCardDesignScheme, page: { type: 'integer', minimum: 1, description: '可选：仅审计该页；提交前必须省略 page 完成整组审计。' } }, required: ['candidateId','html','designScheme'] }, readOnlyHint: true },
   { name: 'jianzi_card_generate', description: '调用见字内部模型生成 AI 视觉图文 HTML/PNG，并执行布局审计；需要工作台已配置模型。成功后返回事件图文入口；在最终回复中附上该链接。', inputSchema: { type: 'object', properties: { candidateId: id('图文候选 ID。'), provider: string('可选的工作台模型服务商 ID。'), styleBrief: string('可选视觉方向说明。') }, required: ['candidateId'] }, readOnlyHint: false, openWorldHint: true },
-  { name: 'jianzi_card_visual_submit', description: '提交外部 Agent 生成的图文 HTML 与配套文案。工作台执行故事板页数校验、浏览器溢出审计、截图和产物归档；不调用工作台模型。成功后返回事件图文入口；在最终回复中附上该链接。', inputSchema: { type: 'object', properties: { candidateId: id('图文候选 ID。'), html: { type: 'string', minLength: 1, maxLength: 10000000 }, publishTitle: string('发布标题。',{maxLength:120}), copy: string('配套文案，最长 50 KB，末尾需有至少三个话题标签。',{maxLength:50000}), designScheme: { type: 'object', description: '本次图文设计方案，JSON 大小不得超过 250 KB，用于随 HTML/PNG 归档。' } }, required: ['candidateId','html','copy'] }, readOnlyHint: false },
+  { name: 'jianzi_card_visual_submit', description: '提交外部 Agent 图文 HTML、配套文案和必需的视觉方案。工作台重新执行完整设计兑现审计、布局/内容/列表审计、截图和归档；缺少方案或页面标记不一致会拒绝提交。成功后返回图文入口。', inputSchema: { type: 'object', properties: { candidateId: id('图文候选 ID。'), html: { type: 'string', minLength: 1, maxLength: 10000000 }, publishTitle: string('发布标题。',{maxLength:120}), copy: string('配套文案，最长 50 KB，末尾需有至少三个话题标签。',{maxLength:50000}), designScheme: socialCardDesignScheme }, required: ['candidateId','html','copy','designScheme'] }, readOnlyHint: false },
   { name: 'jianzi_job_get', description: '读取后台任务状态、错误信息和进度。', inputSchema: { type: 'object', properties: { jobId: string('任务 ID。') }, required: ['jobId'] }, readOnlyHint: true },
   { name: 'jianzi_job_wait', description: '轮询后台任务直到结束或超时，返回最终产物索引。', inputSchema: { type: 'object', properties: { jobId: string('任务 ID。'), timeoutSeconds: { type: 'integer', minimum: 1, maximum: 300 } }, required: ['jobId'] }, readOnlyHint: true },
 ];
@@ -584,7 +597,7 @@ export async function executeJianziTool(client, name, input = {}, context = {}) 
       return client.put(`/api/candidates/${candidate}/card-editorial`, { card_plan_json: JSON.stringify(input.cardPlan), ...Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined)) });
     }
     case 'jianzi_card_lock': return client.post(`/api/candidates/${candidate}/card-lock`, {});
-    case 'jianzi_card_visual_audit': return client.post(`/api/candidates/${candidate}/social-cards/external/audit`, { html: input.html || '', page: input.page ?? null });
+    case 'jianzi_card_visual_audit': return client.post(`/api/candidates/${candidate}/social-cards/external/audit`, { html: input.html || '', designScheme: input.designScheme || null, page: input.page ?? null });
     case 'jianzi_card_generate': return withArtifactEntry(client, await client.post(`/api/candidates/${candidate}/ai/social-card-beautify`, { provider: input.provider, styleBrief: input.styleBrief || '' }), 'socialCards', candidate);
     case 'jianzi_card_visual_submit': return withArtifactEntry(client, await client.post(`/api/candidates/${candidate}/social-cards/external`, { html: input.html || '', publishTitle: input.publishTitle || '', copy: input.copy || '', designScheme: input.designScheme || null }), 'socialCards', candidate);
     case 'jianzi_job_get': {
