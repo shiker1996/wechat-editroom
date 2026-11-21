@@ -1,8 +1,8 @@
 {
   "name": "jianzi-content-workbench",
-  "version": "1.0.16",
+  "version": "1.0.17",
   "icon": "./icon.svg",
-  "description": "DSH content workbench panel that starts native Agent sessions backed by Jianzi MCP tools.",
+  "description": "见字工作台：面向微信公众号创作者的内容创作平台，覆盖热点采集、选题研判、文章创作、排版与封面制作。",
   "repository": {
     "type": "git",
     "url": "https://github.com/shiker1996/wechat-editroom",
