@@ -2,7 +2,7 @@ import { resolvePrompt } from '../../../platform/llm/prompt-registry.mjs';
 
 // Runtime prompts deliberately stand alone. Skill configuration still selects models,
 // length and routing; complete workflow/skill prose is not injected into each call.
-export const ARTICLE_PROMPT_VERSION = 'direct-brief-v23';
+export const ARTICLE_PROMPT_VERSION = 'direct-brief-v24';
 export const ARTICLE_LENGTH_ADJUSTMENT_THRESHOLD = 200;
 
 export function planArticleLengthAdjustment(currentVisibleChars, allowedRange) {
@@ -41,7 +41,7 @@ export function articleReaderContext(account = {}) {
   return {
     description: account.description || '面向开发者和技术从业者，讨论技术、产品与平台变化。',
     readerProfile: account.readerProfile || '程序员和技术从业者，兼顾技术管理者与泛科技读者。',
-    expression: '通俗、具体，保留必要专业细节；具体角度与立场沿用已确认简报。背景用于写作选择，不作为正文内容。',
+    expression: '通俗、具体，保留必要专业细节；具体角度与立场沿用已确认简报。优先服务开发者、普通职场人和泛科技读者，管理者为次级受众，除非其为主要受影响者。可以用钩子开篇，但尽早交代支撑评论的事实、来源和边界，再展开推理；建议仅在主要受众确有具体选择且证据充分时提出。背景用于写作选择，不作为正文内容。',
   };
 }
 
