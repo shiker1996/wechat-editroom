@@ -25,6 +25,16 @@ function repositoryOf(event) {
 
 export function projectReaderValueInput(event, heat = {}) {
   const repository = repositoryOf(event);
+  const discoveryHypotheses = new Map();
+  for (const context of list(repository.discoveryContexts)) {
+    const label = text(context?.label, 60);
+    if (!label) continue;
+    const hypothesis = discoveryHypotheses.get(label) || { label, queryVariants: new Set(), projectCategories: new Set(), directUseCase: text(context?.directUseCase, 180) };
+    for (const query of [...list(context?.queryVariants), context?.query].filter(Boolean)) hypothesis.queryVariants.add(text(query, 160));
+    const category = context?.projectCategory || (context?.searchMode === 'evergreen' ? 'mature' : context?.searchMode);
+    if (category) hypothesis.projectCategories.add(category);
+    discoveryHypotheses.set(label, hypothesis);
+  }
   return {
     eventId: String(event?.event_id || event?.eventId || ''),
     title: text(event?.representative_title || event?.title, 160),
@@ -32,10 +42,11 @@ export function projectReaderValueInput(event, heat = {}) {
     projectType: text(repository.projectType, 40),
     scenarioIds: list(repository.scenarioIds).map((value) => text(value, 40)).slice(0, 6),
     directUseCase: text(repository.directUseCase, 180),
-    discoveryHypotheses: list(repository.discoveryContexts).slice(0, 6).map((context) => ({
-      label: text(context?.label, 60),
-      query: text(context?.query, 160),
-      directUseCase: text(context?.directUseCase, 180),
+    discoveryHypotheses: [...discoveryHypotheses.values()].slice(0, 6).map((hypothesis) => ({
+      label: hypothesis.label,
+      queryVariants: [...hypothesis.queryVariants].slice(0, 6),
+      projectCategories: [...hypothesis.projectCategories],
+      directUseCase: hypothesis.directUseCase,
     })),
     repository: {
       name: text(repository.repository, 120),

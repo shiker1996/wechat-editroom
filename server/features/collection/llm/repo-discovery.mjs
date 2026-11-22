@@ -13,17 +13,17 @@ import { resolvePrompt } from '../../../platform/llm/prompt-registry.mjs';
 import { GITHUB_PROJECT_TYPES, GITHUB_SCENARIO_LANES } from '../../../shared/domain/github-repository.mjs';
 
 const QUERIES_FILE = 'repo-discovery-queries.json';
-const QUERY_SCHEMA_VERSION = 3;
+const QUERY_SCHEMA_VERSION = 4;
 const BROAD_QUERY_TERMS = new Set(['ai', 'agent', 'agents', 'llm', 'prompt', 'framework', 'cli', 'rust', 'kubernetes']);
 const AI_LANES = new Set(['ai-utility', 'agent']);
 
 export const BUILTIN_REPO_DISCOVERY_QUERIES = Object.freeze([
-  { label: '文档与扫描', lane: 'file-content', query: 'PDF OCR', projectTypes: ['tool', 'data-content'], directUseCase: '把纸质扫描件或 PDF 变成可搜索、可编辑的文档', searchMode: 'active', createdWithinDays: 120, activityWindowDays: 180, minStars: 30 },
-  { label: '照片与视频', lane: 'file-content', query: 'photo organizer', projectTypes: ['tool'], directUseCase: '整理照片视频、找出重复文件并更快找到想要的回忆', searchMode: 'active', createdWithinDays: 120, activityWindowDays: 180, minStars: 30 },
-  { label: '个人知识整理', lane: 'file-content', query: 'personal notes search', projectTypes: ['tool', 'data-content'], directUseCase: '把散落的笔记、网页收藏和资料集中整理并快速搜索', searchMode: 'active', createdWithinDays: 120, activityWindowDays: 180, minStars: 40 },
-  { label: '日常自动化', lane: 'skills-workflows', query: 'no code automation', projectTypes: ['tool', 'skill-workflow'], directUseCase: '把重复的电脑或网络操作自动完成，减少日常琐事', searchMode: 'new', createdWithinDays: 90, activityWindowDays: 120, minStars: 30 },
-  { label: '表格与数据', lane: 'developer-productivity', query: 'spreadsheet dashboard', projectTypes: ['tool', 'data-content'], directUseCase: '把表格数据整理、筛选并转成容易理解的图表或报告', searchMode: 'active', createdWithinDays: 120, activityWindowDays: 180, minStars: 40 },
-  { label: '隐私与文件', lane: 'data-observability', query: 'personal cloud sync', projectTypes: ['tool', 'infrastructure'], directUseCase: '在自己设备间同步和备份文件，更好掌控个人资料', searchMode: 'evergreen', createdWithinDays: 180, activityWindowDays: 180, minStars: 80 },
+  { label: '文档与扫描', lane: 'file-content', query: 'PDF OCR', projectTypes: ['tool', 'data-content'], directUseCase: '把纸质扫描件或 PDF 变成可搜索、可编辑的文档' },
+  { label: '照片与视频', lane: 'file-content', query: 'photo organizer', projectTypes: ['tool'], directUseCase: '整理照片视频、找出重复文件并更快找到想要的回忆' },
+  { label: '个人知识整理', lane: 'file-content', query: 'personal notes search', projectTypes: ['tool', 'data-content'], directUseCase: '把散落的笔记、网页收藏和资料集中整理并快速搜索' },
+  { label: '日常自动化', lane: 'skills-workflows', query: 'no code automation', projectTypes: ['tool', 'skill-workflow'], directUseCase: '把重复的电脑或网络操作自动完成，减少日常琐事' },
+  { label: '表格与数据', lane: 'developer-productivity', query: 'spreadsheet dashboard', projectTypes: ['tool', 'data-content'], directUseCase: '把表格数据整理、筛选并转成容易理解的图表或报告' },
+  { label: '隐私与文件', lane: 'data-observability', query: 'personal cloud sync', projectTypes: ['tool', 'infrastructure'], directUseCase: '在自己设备间同步和备份文件，更好掌控个人资料' },
 ]);
 
 function parseJsonLoose(result, label) {
@@ -89,11 +89,7 @@ export function sanitizeQueries(parsed, { maxQueries = 6 } = {}) {
       label, lane: inferLane(item), query,
       projectTypes: normalizeProjectTypes(item?.projectTypes),
       directUseCase: String(item?.directUseCase || '').trim().slice(0, 180),
-      searchMode: ['active', 'evergreen'].includes(item?.searchMode) ? item.searchMode : 'new',
       language: String(item?.language || '').trim().slice(0, 30),
-      createdWithinDays: clampNumber(item?.createdWithinDays, 7, 180, 60),
-      activityWindowDays: clampNumber(item?.activityWindowDays, 7, 180, 30),
-      minStars: clampNumber(item?.minStars, 10, 5000, 50),
     });
     if (out.length >= maxQueries) break;
   }
