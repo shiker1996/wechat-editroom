@@ -6,6 +6,9 @@ import { createRequestHarnessGateway } from '../../skills/pipeline-runtime.mjs';
 import { deriveWritingStance, visualPolicyForStance } from '../../../shared/domain/writing-stance.mjs';
 import { htmlPreservesStructure } from '../../../shared/rendering/typeset-output.mjs';
 import { loadSkillBundle, resolveSkillFile } from '../../llm/skill-runtime.mjs';
+import { compareExternalCoverDesignToMeasurements, validateExternalCoverDesignScheme } from '../../../features/articles/application/external-cover-visual-contract.mjs';
+import { probeHtmlLayout } from '../../browser/html-layout-probe.mjs';
+import { compareExternalTypesetDesignToMeasurements, validateExternalTypesetDesignScheme } from '../../../features/articles/application/external-typeset-visual-contract.mjs';
 
 // capability-call: cap_diagram_mermaid_render, cap_diagram_echarts_render
 
@@ -252,9 +255,18 @@ export async function handleMediaRoutes(context) {
     const input = await body(request);
     const html = String(input.html || '');
     if (!html || html.length > 2_000_000) return json(response, 400, { error:'html 必须为非空字符串且不超过 2 MB' });
-    if (input.designScheme && Buffer.byteLength(JSON.stringify(input.designScheme)) > 250_000) return json(response,400,{error:'designScheme 不得超过 250 KB'});
+    if (!input.designScheme || typeof input.designScheme !== 'object' || Array.isArray(input.designScheme)) return json(response,422,{error:'必须提交有效的 designScheme'});
+    if (Buffer.byteLength(JSON.stringify(input.designScheme)) > 250_000) return json(response,400,{error:'designScheme 不得超过 250 KB'});
+    const schemeCheck = validateExternalCoverDesignScheme({ designScheme:input.designScheme, title:document.title || candidate.hotspot_title || '' });
+    if (!schemeCheck.valid) return json(response,422,{error:'封面设计方案未通过契约校验',issues:schemeCheck.issues});
     const issues = validateGeneratedCoverHtml(html, document.title || candidate.hotspot_title || '');
     if (issues.length) return json(response, 422, { error:'封面 HTML 未通过门禁', issues });
+    let visualAudit;
+    try {
+      const measurements = await probeHtmlLayout({ html, width:900, height:383, pageSelector:'.page' });
+      visualAudit = compareExternalCoverDesignToMeasurements({ designScheme:input.designScheme, title:document.title || candidate.hotspot_title || '', measurements });
+      if (!visualAudit.valid) return json(response,422,{error:'封面 HTML 未兑现设计方案',issues:visualAudit.issues,visualAudit});
+    } catch (error) { return json(response,422,{error:`封面视觉方案审计失败：${error.message}`}); }
     const workdir = articleWorkdir(batch, candidate);
     const imageDir = path.join(workdir, 'images');
     const aiHtmlPath = path.join(imageDir, 'ai-cover.html');
@@ -275,8 +287,8 @@ export async function handleMediaRoutes(context) {
       if (input.designScheme && typeof input.designScheme === 'object') writeUtf8(path.join(imageDir,'external-cover-design-scheme.json'),JSON.stringify(input.designScheme,null,2));
       const gatePath=path.join(imageDir,'cover-ai-delivery-gate.json');
       const reportPath=path.join(imageDir,'cover-ai-generation.json');
-      writeUtf8(gatePath,JSON.stringify({schemaVersion:1,gate:{status:'passed'},registered:true,source:'external-agent',checkedAt:new Date().toISOString(),checks:{html:{valid:true,issues:[]},image:{valid:true,size:stat.size,width:900,height:383}},artifacts:{html:'ai-cover.html',image:'cover.png'}},null,2));
-      writeUtf8(reportPath,JSON.stringify({schemaVersion:1,status:'passed',mode:'ai-visual',source:'external-agent',generatedAt:new Date().toISOString(),title:document.title||candidate.hotspot_title||'',designScheme:input.designScheme||null,artifacts:{html:'ai-cover.html',image:'cover.png',deliveryGate:'cover-ai-delivery-gate.json'}},null,2));
+      writeUtf8(gatePath,JSON.stringify({schemaVersion:2,gate:{status:'passed'},registered:true,source:'external-agent',checkedAt:new Date().toISOString(),checks:{html:{valid:true,issues:[]},designScheme:visualAudit,image:{valid:true,size:stat.size,width:900,height:383}},artifacts:{html:'ai-cover.html',image:'cover.png',designScheme:'external-cover-design-scheme.json'}},null,2));
+      writeUtf8(reportPath,JSON.stringify({schemaVersion:2,status:'passed',mode:'ai-visual',source:'external-agent',generatedAt:new Date().toISOString(),title:document.title||candidate.hotspot_title||'',designScheme:input.designScheme,visualAudit,artifacts:{html:'ai-cover.html',image:'cover.png',deliveryGate:'cover-ai-delivery-gate.json'}},null,2));
       const files=[['AI 视觉封面 HTML','ai-cover.html',aiHtmlPath],['封面图','cover.png',coverPath],['AI 视觉运行记录','cover-ai-delivery-gate.json',gatePath],['AI 视觉运行记录','cover-ai-generation.json',reportPath]];
       if(input.designScheme&&typeof input.designScheme==='object')files.push(['封面设计方案','external-cover-design-scheme.json',path.join(imageDir,'external-cover-design-scheme.json')]);
       for (const [kind, name, filePath] of files) {
@@ -464,7 +476,10 @@ export async function handleMediaRoutes(context) {
     if (!source) return json(response, 409, { error:'缺少文章终稿；请先保存 Markdown 终稿' });
     const html = String(input.html || '');
     if (!html || html.length > 8_000_000) return json(response, 400, { error:'html 必须为非空字符串且不超过 8 MB' });
-    if (input.designScheme && Buffer.byteLength(JSON.stringify(input.designScheme)) > 250_000) return json(response,400,{error:'designScheme 不得超过 250 KB'});
+    if (!input.designScheme || typeof input.designScheme !== 'object' || Array.isArray(input.designScheme)) return json(response,422,{error:'必须提交有效的排版 designScheme'});
+    if (Buffer.byteLength(JSON.stringify(input.designScheme)) > 250_000) return json(response,400,{error:'designScheme 不得超过 250 KB'});
+    const schemeCheck = validateExternalTypesetDesignScheme({ designScheme:input.designScheme });
+    if (!schemeCheck.valid) return json(response,422,{error:'排版设计方案未通过契约校验',issues:schemeCheck.issues});
     if (/<script\b|<iframe\b|<object\b|<embed\b|\son[a-z]+\s*=|javascript:|<form\b|@import|<link\b/i.test(html)) return json(response, 422, { error:'HTML 含有脚本、嵌入、表单、事件处理器或外部样式资源' });
     if (!htmlPreservesStructure(source.content, html)) return json(response, 422, { error:'HTML 未完整保留终稿中的标题、章节、链接或图片' });
     const workdir = articleWorkdir(batch, candidate);
@@ -480,20 +495,27 @@ export async function handleMediaRoutes(context) {
       await execFileAsync(process.execPath, [normalizeScript, draftPath, finalPath], { cwd:root, windowsHide:true, timeout:120_000, maxBuffer:2_000_000 });
       const normalized = fs.readFileSync(finalPath, 'utf8');
       if (!htmlPreservesStructure(source.content, normalized)) throw new Error('规范化后 HTML 未保留文章结构');
+      const measurements = await probeHtmlLayout({ html:normalized, width:375, height:1200, pageSelector:'body', includeDesignMetrics:true });
+      const visualAudit = compareExternalTypesetDesignToMeasurements({ designScheme:input.designScheme, measurements });
+      if (!visualAudit.valid) {
+        const error = new Error('排版 HTML 未兑现设计方案');
+        error.issues = visualAudit.issues;
+        throw error;
+      }
       await execFileAsync(process.execPath, [checkScript, finalPath], { cwd:root, windowsHide:true, timeout:120_000, maxBuffer:2_000_000 });
       const stat = fs.statSync(finalPath);
       store.upsertArtifact({ batchId,candidateId:candidate.id,track:'article',kind:'AI 排版 HTML',name:'article.ai.html',path:finalPath,size:stat.size,modifiedAt:stat.mtime.toISOString() });
-      const result={ batchId,candidateId:candidate.id,status:'passed',html:'article.ai.html',size:stat.size };
-      if(input.designScheme&&typeof input.designScheme==='object'){
-        const schemePath=path.join(workdir,'external-typeset-design-scheme.json');
-        const schemeFile=writeUtf8(schemePath,JSON.stringify(input.designScheme,null,2));
-        store.upsertArtifact({batchId,candidateId:candidate.id,track:'article',kind:'文章排版设计方案',name:path.basename(schemePath),path:schemePath,...schemeFile});
-        result.designScheme=path.basename(schemePath);
-      }
+      const schemePath=path.join(workdir,'external-typeset-design-scheme.json');
+      const schemeFile=writeUtf8(schemePath,JSON.stringify(input.designScheme,null,2));
+      store.upsertArtifact({batchId,candidateId:candidate.id,track:'article',kind:'文章排版设计方案',name:path.basename(schemePath),path:schemePath,...schemeFile});
+      const auditPath=path.join(workdir,'external-typeset-visual-audit.json');
+      const auditFile=writeUtf8(auditPath,JSON.stringify({schemaVersion:1,status:'passed',checkedAt:new Date().toISOString(),visualAudit},null,2));
+      store.upsertArtifact({batchId,candidateId:candidate.id,track:'article',kind:'文章排版视觉审计',name:path.basename(auditPath),path:auditPath,...auditFile});
+      const result={ batchId,candidateId:candidate.id,status:'passed',html:'article.ai.html',size:stat.size,designScheme:path.basename(schemePath),visualAudit };
       return json(response, 200, result);
     } catch (error) {
       fs.rmSync(finalPath, { force:true });
-      return json(response, 422, { error:`排版 HTML 未通过规范化或门禁：${String(error.stderr || error.message).trim().slice(0, 1000)}` });
+      return json(response, 422, { error:`排版 HTML 未通过规范化或门禁：${String(error.stderr || error.message).trim().slice(0, 1000)}`, ...(Array.isArray(error.issues) ? { issues:error.issues } : {}) });
     }
   }
   return false;

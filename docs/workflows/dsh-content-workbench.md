@@ -26,7 +26,7 @@
 | 05 图文 | 可选批次/候选与补充要求 | 从图文榜单选工具或事件候选，故事板确认后锁定、生成并提交图文产物 | `jianzi_batch_social_ranking`、`jianzi_candidate_add`、`jianzi_card_editorial_*`、`jianzi_card_lock`、`jianzi_card_visual_submit` |
 | 06 内容反哺 | 必须有本轮上传的公众号导出表格 | 无附件时请用户上传并停止，不读取本地反馈/策略或现有草案；有附件时导入、匹配并关联该批次的本地正文/图文文案，再刷新快照；关联失败时停下说明，不生成旧数据草案 | `jianzi_content_feedback_import`、`jianzi_content_feedback_adjustment_generate` |
 
-文章生产阶段仅保存 `draft`。用户确认已经生成的文章之后，Agent 才能保存 `final`；排版阶段检查到没有用户确认的终稿时必须停止。上述用户确认由 DSH 会话中的交互完成。
+文章生产阶段仅保存 `draft`。用户确认已经生成的文章之后，Agent 才能保存 `final`；排版阶段检查到没有用户确认的终稿时必须停止。排版提交必须同时携带 tokens 和 HTML；服务端规范化 HTML 后通过 Chromium 核对计算样式是否实际使用方案色彩、字号、行高和间距。封面提交必须同时携带结构化方案和 HTML；服务端校验方案 schema，并通过 Chromium 核对方案标记组件实际可见、位置/字号/色彩兑现后才截图归档。上述用户确认由 DSH 会话中的交互完成。
 
 面板只负责生成阶段任务草稿并调用 `uiWorkspace.startSession`；具体流程由项目技能 `jianzi-workbench-setup`、`jianzi-topic-to-article`、`jianzi-typeset-cover`、`jianzi-social-cards` 定义。
 

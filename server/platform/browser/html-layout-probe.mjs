@@ -1,7 +1,7 @@
 import puppeteer from 'puppeteer';
 
 /** Render a trusted HTML document in Chromium and report element box metrics. */
-export async function probeHtmlLayout({ html, width = 375, height = 667, pageSelector = 'body', selectors = [], selectedPage = null, includeContactSheet = false } = {}) {
+export async function probeHtmlLayout({ html, width = 375, height = 667, pageSelector = 'body', selectors = [], selectedPage = null, includeContactSheet = false, includeDesignMetrics = false } = {}) {
   let browser;
   try {
     browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
@@ -10,7 +10,7 @@ export async function probeHtmlLayout({ html, width = 375, height = 667, pageSel
     await page.setContent(String(html || ''), { waitUntil: 'networkidle0' });
     await page.evaluateHandle(() => document.fonts.ready);
 
-    const measurements = await page.evaluate(({ pageSelector, selectors, selectedPage }) => {
+    const measurements = await page.evaluate(({ pageSelector, selectors, selectedPage, includeDesignMetrics }) => {
       const pages = [...document.querySelectorAll(pageSelector)];
       return pages.map((pageElement, pageIndex) => ({
         page: pageIndex + 1,
@@ -32,6 +32,7 @@ export async function probeHtmlLayout({ html, width = 375, height = 667, pageSel
             primaryVisual: pageElement.dataset.primaryVisual || '',
             backgroundMode: pageElement.dataset.backgroundMode || '',
             accentPlacement: pageElement.dataset.accentPlacement || '',
+            coverLayout: pageElement.dataset.coverLayout || '',
             sharedAnchorIds: [...pageElement.querySelectorAll('[data-shared-anchor]')].filter((element) => {
               const anchorStyle = getComputedStyle(element);
               const anchorRect = element.getBoundingClientRect();
@@ -42,6 +43,49 @@ export async function probeHtmlLayout({ html, width = 375, height = 667, pageSel
             innerHeight: inner?.getBoundingClientRect().height ?? null,
           };
         })(),
+        coverComponents: [...pageElement.querySelectorAll('[data-cover-component]')].map((element) => {
+          const style = getComputedStyle(element);
+          const rect = element.getBoundingClientRect();
+          return {
+            component: element.dataset.coverComponent || '',
+            colorRole: element.dataset.coverColorRole || '',
+            text: element.innerText || element.textContent || '',
+            color: style.color,
+            backgroundColor: style.backgroundColor,
+            backgroundImage: style.backgroundImage,
+            borderColor: style.borderColor,
+            fontSize: Number.parseFloat(style.fontSize) || 0,
+            visible: style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0,
+            rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+          };
+        }),
+        designMetrics: includeDesignMetrics ? (() => {
+          const styleRecord = (element) => {
+            const style = getComputedStyle(element);
+            const rect = element.getBoundingClientRect();
+            if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) <= 0 || rect.width <= 0 || rect.height <= 0) return null;
+            return {
+              tag: element.tagName.toLowerCase(),
+              color: style.color,
+              backgroundColor: style.backgroundColor,
+              borderColor: style.borderColor,
+              fontSize: Number.parseFloat(style.fontSize) || 0,
+              lineHeight: Number.parseFloat(style.lineHeight) || 0,
+              marginTop: Number.parseFloat(style.marginTop) || 0,
+              marginBottom: Number.parseFloat(style.marginBottom) || 0,
+              borderRadius: Number.parseFloat(style.borderRadius) || 0,
+            };
+          };
+          const collect = (selector) => [...pageElement.querySelectorAll(selector)].map(styleRecord).filter(Boolean);
+          return {
+            elements: [...pageElement.querySelectorAll('*')].map(styleRecord).filter(Boolean),
+            paragraphs: collect('p'),
+            headings: collect('h1,h2,h3,h4'),
+            sectionHeadings: collect('h2,h3'),
+            images: collect('img'),
+            captions: collect('figcaption,[data-caption],small'),
+          };
+        })() : null,
         listMetrics: (() => {
           const items = [...new Set(pageElement.querySelectorAll('li, [data-list-item], .list-item, .list-card, .feature-item, .flow-card, .step, .check, .risk'))];
           if (!items.length) return { itemCount: 0, averageItemHeight: 0, minItemHeight: 0, totalHeight: 0 };
@@ -67,7 +111,7 @@ export async function probeHtmlLayout({ html, width = 375, height = 667, pageSel
           };
         })),
       })).filter((item) => !selectedPage || item.page === selectedPage);
-    }, { pageSelector, selectors, selectedPage: Number(selectedPage) || null });
+    }, { pageSelector, selectors, selectedPage: Number(selectedPage) || null, includeDesignMetrics });
 
     if (includeContactSheet && !selectedPage) {
       const pageElements = await page.$$(pageSelector);
