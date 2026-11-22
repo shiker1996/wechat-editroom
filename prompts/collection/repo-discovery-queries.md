@@ -7,6 +7,6 @@
 - 查询关键词优先组合具体输入、动作、结果或使用场景；允许使用 GitHub Search 的 `in:readme` 聚焦 README 描述，但不要把 Star 数当项目质量结论；
 - query 字段只写 GitHub Search 的关键词部分（可含 topic: 限定符），不要写 stars:/created:/fork: 等限定符，系统会统一追加；
 - 禁止单独使用宽泛词作为 query；每组必须说明账号核心读者使用后的直接结果；
-- minStars 按领域热度给 10~500，小众或新兴方向放低，避免 Star 门槛挡掉实用但未出圈的项目；
+- 每个主题会由系统分别查询新项目、活跃项目和成熟项目；日期窗口与 Star 门槛由系统统一配置，不要在主题规划中决定项目类别或筛选门槛；
 - 不能用项目名称、Stars、AI/Agent 标签替代使用结果；如果查询方向暂时说不清读者任务和输出，就不要生成该查询；
-- 返回严格 JSON：{"queries":[{"label":"方向名（10 字内）","lane":"场景组","query":"关键词","projectTypes":["tool|component|plugin-extension|skill-workflow|data-content|infrastructure|ai-utility|agent"],"directUseCase":"直接结果","searchMode":"new|active|evergreen","language":"可选，留空表示不限","createdWithinDays":30到90,"activityWindowDays":30到180,"minStars":数字}]}
+- 返回严格 JSON：{"queries":[{"label":"方向名（10 字内）","lane":"场景组","query":"关键词","projectTypes":["tool|component|plugin-extension|skill-workflow|data-content|infrastructure|ai-utility|agent"],"directUseCase":"直接结果","language":"可选，留空表示不限"}]}

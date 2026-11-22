@@ -26,7 +26,7 @@ function fakeGateway(payload) {
   };
 }
 
-test('sanitizeQueries 校验字段并夹紧范围', () => {
+test('sanitizeQueries 只保留主题字段，不让模型决定分类筛选条件', () => {
   const queries = sanitizeQueries({
     queries: [
       { label: 'AI Agent 框架', query: 'agent framework', language: 'TypeScript', createdWithinDays: 3, minStars: 99999 },
@@ -38,7 +38,10 @@ test('sanitizeQueries 校验字段并夹紧范围', () => {
   }, { maxQueries: 6 });
   assert.equal(queries.length, 1, '宽泛的 agent framework 查询应被拒绝');
   assert.equal(queries[0].query.length, 200);
-  assert.equal(queries[0].activityWindowDays, 30);
+  assert.equal(queries[0].searchMode, undefined);
+  assert.equal(queries[0].createdWithinDays, undefined);
+  assert.equal(queries[0].activityWindowDays, undefined);
+  assert.equal(queries[0].minStars, undefined);
 });
 
 test('expandAiQueryKeywords 拆分纯限定符 OR 查询，保留含文本词条的原样查询', () => {
@@ -138,7 +141,7 @@ test('discoverGitHubRepositories 执行 AI 查询组并按优先级归并通道'
   const items = await discoverGitHubRepositories([], {
     enabled: true, minStars: 1000, createdWithinDays: 30, limit: 5,
     aiQueries: [{ label: 'MCP 工具', lane: 'skills-workflows', query: 'mcp server', projectTypes: ['plugin-extension'], directUseCase: '把能力接入工作流', createdWithinDays: 60, minStars: 100, limit: 10 }],
-    fetchImpl,
+    fetchImpl, searchMinIntervalMs: 0,
   }, () => {}, (r) => sourceResults.push(r));
 
   const aiRepo = items.find((i) => i.repository === 'x/mcp-server');
@@ -187,12 +190,17 @@ test('discoverGitHubRepositories 纯限定符 OR 查询按分支拆分请求而�
   const items = await discoverGitHubRepositories([], {
     enabled: true, searchEnabled: false, minStars: 1000, createdWithinDays: 30, limit: 5,
     aiQueries: [{ label: '开发者工具', query: 'topic:developer-tools OR topic:cli', createdWithinDays: 60, minStars: 500, limit: 10 }],
-    fetchImpl,
+    fetchImpl, searchMinIntervalMs: 0,
   }, () => {}, (r) => sourceResults.push(r));
 
-  assert.equal(requests.length, 2, 'OR 查询应拆分为两个独立请求');
+  assert.equal(requests.length, 6, '两个关键词分支分别展开为新、活跃、成熟三类查询');
+  assert.equal(requests.filter((q) => /stars:>=1000 created:>=/.test(q)).length, 2, '两个分支都应执行新项目查询');
+  assert.equal(requests.filter((q) => /stars:>=100 pushed:>=/.test(q)).length, 2, '两个分支都应执行活跃项目查询');
+  assert.equal(requests.filter((q) => /stars:>=1000 pushed:>=/.test(q)).length, 2, '两个分支都应执行成熟项目查询');
   assert.ok(requests.some((q) => q.includes('topic:developer-tools') && !/topic:[^ ]+\s+OR/.test(q)), '请求不应再含裸 OR');
   assert.ok(requests.every((q) => !/(^|\s)OR(\s|$)/.test(q)), '没有任何请求包含孤立 OR');
-  assert.equal(items.filter((i) => i.sourceType === 'ai-search').length, 2);
+  assert.equal(items.filter((i) => i.sourceType === 'ai-search').length, 2, '不同类别命中的仓库应去重');
+  assert.deepEqual(items.find((i) => i.repository === 'x/cli-tool').discoveryModes, ['new', 'active', 'mature']);
+  assert.deepEqual(items.find((i) => i.repository === 'y/devtools').discoveryModes, ['new', 'active', 'mature']);
   assert.ok(sourceResults.some((r) => r.sourceType === 'ai-search' && r.status === 'success' && r.itemCount === 2));
 });

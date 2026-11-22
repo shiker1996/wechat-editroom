@@ -8,6 +8,31 @@ import { createStoreCollectionRunner } from './store-collection-runner.mjs';
 import { ExtensionConfigurationService } from '../../../platform/extensions/configuration-service.mjs';
 import { bindPipelineHarnessGateway } from '../../../platform/skills/pipeline-runtime.mjs';
 
+function summarizeGitHubAiDiscovery(items = []) {
+  const repositories = (items || []).filter((item) => item?.sourceGroup === 'github' && item.repository
+    && (item.discoveryChannels || []).includes('ai-search'));
+  const categories = ['new', 'active', 'mature'];
+  const topicMap = new Map();
+  const categoryRepositories = Object.fromEntries(categories.map((category) => [category, new Set()]));
+  for (const repo of repositories) {
+    for (const context of repo.discoveryContexts || []) {
+      if (context.channel !== 'ai-search') continue;
+      const label = String(context.label || '未命名主题');
+      if (!topicMap.has(label)) topicMap.set(label, { label, repositories: new Set(), categories: Object.fromEntries(categories.map((category) => [category, new Set()])) });
+      const topic = topicMap.get(label); const key = String(repo.repository).toLowerCase();
+      topic.repositories.add(key);
+      const category = context.projectCategory || (context.searchMode === 'evergreen' ? 'mature' : context.searchMode);
+      if (categories.includes(category)) { topic.categories[category].add(key); categoryRepositories[category].add(key); }
+    }
+  }
+  return {
+    topicCount: topicMap.size, uniqueRepositories: new Set(repositories.map((repo) => String(repo.repository).toLowerCase())).size,
+    categories: Object.fromEntries(categories.map((category) => [category, categoryRepositories[category].size])),
+    topics: [...topicMap.values()].map((topic) => ({ label: topic.label, uniqueRepositories: topic.repositories.size,
+      categories: Object.fromEntries(categories.map((category) => [category, topic.categories[category].size])) })),
+  };
+}
+
 export class CollectionJobManager {
   constructor(store, config, modelsResolver = null) { this.store = store; this.config = config; this.modelsResolver = modelsResolver; this.jobs = new Map(); }
   startCollection(batchId, sources, maxAgeHours = null) { if (!this.store.getBatch(batchId)) throw new Error('批次不存在'); const running = [...this.jobs.values()].find((job) => job.batchId === batchId && job.status === 'running'); if (running) return running; const job = { id: crypto.randomUUID(), batchId, type: 'collect', sources, maxAgeHours, status: 'running', progress: '准备采集', logs: [], createdAt: new Date().toISOString() }; this.jobs.set(job.id, job); this.runCollection(job).catch(() => {}); return job; }
@@ -38,8 +63,28 @@ export class CollectionJobManager {
       const gateway = baseGateway ? bindPipelineHarnessGateway(baseGateway, { store: this.store, batchId: job.batchId, rootRunId: harnessRunId, workflowRunId: harnessRunId, entryPoint: 'collection' }) : null;
       const { queries, aiCfg } = await this.#githubQueries(job, gateway); const configuration = new ExtensionConfigurationService({ root: this.config.workspaceRoot, repository: this.store.repositories.extensionSettings }); const registry = await createCollectorRuntime({ root: this.config.workspaceRoot, config: this.config, onProgress: (message) => this.log(job, message), githubQueries: queries, configurationResolver: (manifest) => configuration.resolve({ extensionType:'collector', extensionId: manifest.id, manifest }) }); const runner = createStoreCollectionRunner({ store: this.store, registry, traceContext: { rootRunId: harnessRunId, workflowRunId: harnessRunId, stageId: 'collect' } }); const run = await runner.run({ batchId: job.batchId, sourceTypes: [...new Set(sourceTypes)], limits: { maxItems: 100 } });
       const quality = filterCollectedItems(run.items); if (quality.dropped.length) { this.store.appendAgentRunEvent?.(harnessRunId, { type: 'quality.filtered', stageId: 'quality-filter', dropped: quality.dropped.length, kept: quality.kept.length }); this.log(job, `采集质量过滤：丢弃 ${quality.dropped.length} 条标题和正文均为空的记录`); } const deduped = dedupeCollectedItems(quality.kept); if (deduped.dropped.length) { this.store.appendAgentRunEvent?.(harnessRunId, { type: 'quality.deduped', stageId: 'identity-dedup', dropped: deduped.dropped.length, kept: deduped.kept.length }); this.log(job, `采集身份去重：合并 ${deduped.dropped.length} 条重复文章`); } let filtered = deduped.kept;
-      if (queries.length && aiCfg.relevanceFilter !== false && gateway) { const aiRepos = filtered.filter((item) => item.sourceGroup === 'github' && (item.discoveryChannels || []).includes('ai-search')); if (aiRepos.length) { const kept = await filterRepositoriesByInterest({ gateway, accountContext: getAccountContext(), repos: aiRepos, threshold: Number(aiCfg.minInterestScore || 6), log: (message) => this.log(job, message) }); const keep = new Map(kept.map((item) => [String(item.repository || '').toLowerCase(), item])); filtered = filtered.map((item) => item.sourceGroup === 'github' && (item.discoveryChannels || []).includes('ai-search') ? (keep.get(String(item.repository || '').toLowerCase()) || ((item.discoveryChannels || []).some((channel) => channel !== 'ai-search') ? item : null)) : item).filter(Boolean); } }
+      if (queries.length && aiCfg.relevanceFilter !== false && gateway) {
+        const aiRepos = filtered.filter((item) => item.sourceGroup === 'github' && (item.discoveryChannels || []).includes('ai-search'));
+        if (aiRepos.length) {
+          const kept = await filterRepositoriesByInterest({ gateway, accountContext: getAccountContext(), repos: aiRepos,
+            threshold: Number(aiCfg.minInterestScore || 6), log: (message) => this.log(job, message) });
+          const keep = new Map(kept.map((item) => [String(item.repository || '').toLowerCase(), item]));
+          filtered = filtered.map((item) => item.sourceGroup === 'github' && (item.discoveryChannels || []).includes('ai-search')
+            ? (keep.get(String(item.repository || '').toLowerCase()) || ((item.discoveryChannels || []).some((channel) => channel !== 'ai-search') ? item : null))
+            : item).filter(Boolean);
+          const aiRanked = filtered.filter((item) => item.sourceGroup === 'github' && (item.discoveryChannels || []).includes('ai-search'))
+            .sort((a, b) => Number(b.interestScore ?? -1) - Number(a.interestScore ?? -1));
+          let aiIndex = 0;
+          filtered = filtered.map((item) => item.sourceGroup === 'github' && (item.discoveryChannels || []).includes('ai-search')
+            ? aiRanked[aiIndex++] : item);
+        }
+      }
       filtered = this.#applyGitHubHistoryCoverage(job.batchId, filtered, job);
+      if (queries.length && job.sources.includes('github')) {
+        const summary = summarizeGitHubAiDiscovery(filtered);
+        this.log(job, `GitHub AI 兴趣发现日汇总：${summary.uniqueRepositories} 个去重仓库；新项目 ${summary.categories.new}、活跃项目 ${summary.categories.active}、成熟项目 ${summary.categories.mature}；覆盖 ${summary.topicCount} 个主题`);
+        this.store.appendAgentRunEvent?.(harnessRunId, { type: 'github.discovery.summary', stageId: 'github-summary', summary });
+      }
       for (const source of job.sources) {
         const selected = filtered.filter((item) => source === 'reddit' ? item.sourceGroup === 'reddit' : source === 'paper' ? item.sourceGroup === 'paper' : source === 'github' ? item.sourceGroup === 'github' : source === 'x' ? item.sourceGroup === 'x' : source === 'wechat' ? item.sourceGroup === 'wechat' : !['reddit', 'github', 'x', 'wechat', 'paper'].includes(item.sourceGroup));
         const sourceResults = run.results.filter((item) => source === 'reddit' ? item.sourceType === 'reddit' : source === 'paper' ? item.sourceType === 'paper' : source === 'github' ? item.sourceType === 'github' : source === 'x' ? item.sourceType === 'x' : source === 'wechat' ? item.sourceType === 'wechat' : !['reddit', 'github', 'x', 'wechat', 'paper'].includes(item.sourceType));

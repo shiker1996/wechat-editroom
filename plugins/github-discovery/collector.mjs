@@ -1,5 +1,8 @@
 import { classifyGitHubRepository, normalizeGitHubRepository } from './classification.mjs';
 
+let githubSearchQueue = Promise.resolve();
+let lastGitHubSearchAt = 0;
+
 export function repositoryFromUrl(value) {
   try {
     const url = new URL(String(value || ''));
@@ -19,7 +22,8 @@ function mergeRepository(map, item, channel) {
   const key = parsed.repository.toLowerCase();
   const current = map.get(key);
   const channels = [...new Set([...(current?.discoveryChannels || []), channel, ...(item.discoveryChannels || [])])];
-  const modes = [...new Set([...(current?.discoveryModes || []), item.discoveryMode].filter(Boolean))];
+  const modes = [...new Set([...(current?.discoveryModes || []), ...(item.discoveryModes || []),
+    item.projectCategory || ({ evergreen: 'mature' }[item.discoveryMode] || item.discoveryMode)].filter(Boolean))];
   const fallbackContext = {
     channel,
     sourceType: item.sourceType || '',
@@ -29,10 +33,23 @@ function mergeRepository(map, item, channel) {
   const incomingContexts = Array.isArray(item.discoveryContexts) && item.discoveryContexts.length
     ? item.discoveryContexts
     : [fallbackContext];
-  const discoveryContexts = [...(current?.discoveryContexts || []), ...incomingContexts]
-    .filter((context) => context && typeof context === 'object')
-    .filter((context, index, list) => list.findIndex((candidate) => JSON.stringify(candidate) === JSON.stringify(context)) === index)
-    .slice(0, 12);
+  const discoveryContexts = [];
+  for (const context of [...(current?.discoveryContexts || []), ...incomingContexts]) {
+    if (!context || typeof context !== 'object') continue;
+    const key = context.channel === 'ai-search'
+      ? `${context.channel}|${context.label || ''}|${context.projectCategory || context.searchMode || ''}`
+      : JSON.stringify(context);
+    const existingIndex = discoveryContexts.findIndex((candidate) => (candidate.channel === 'ai-search'
+      ? `${candidate.channel}|${candidate.label || ''}|${candidate.projectCategory || candidate.searchMode || ''}`
+      : JSON.stringify(candidate)) === key);
+    if (existingIndex < 0) { discoveryContexts.push(context); continue; }
+    const existing = discoveryContexts[existingIndex];
+    if (context.channel === 'ai-search') discoveryContexts[existingIndex] = {
+      ...existing,
+      queryVariants: [...new Set([...(existing.queryVariants || [existing.query]), context.query].filter(Boolean))],
+      searchQueries: [...new Set([...(existing.searchQueries || [existing.searchQuery]), context.searchQuery].filter(Boolean))],
+    };
+  }
   const priority = { trending: 4, 'ai-search': 3, search: 2, mentioned: 1 };
   const preferred = !current || priority[channel] > priority[current.primaryDiscovery || 'mentioned'] ? item : current;
   const merged = {
@@ -60,6 +77,41 @@ function mergeRepository(map, item, channel) {
   map.set(key, { ...merged, ...classifyGitHubRepository(classificationInput, classificationInput) });
 }
 
+function aiSearchProfiles(config) {
+  const baseMinStars = Math.max(1, Number(config.minStars || 1000));
+  return [
+    { category: 'new', mode: 'new', days: Math.max(1, Number(config.createdWithinDays || 30)), minStars: baseMinStars, field: 'created', sort: 'stars' },
+    ...(config.activeSearchEnabled === false ? [] : [{
+      category: 'active', mode: 'active', days: Math.max(7, Number(config.activeWithinDays || 30)),
+      minStars: Math.max(1, Number(config.activeMinStars || Math.min(baseMinStars, 100))), field: 'pushed', sort: 'updated',
+    }]),
+    ...(config.evergreenSearchEnabled === false ? [] : [{
+      category: 'mature', mode: 'evergreen', days: Math.max(30, Number(config.evergreenWithinDays || 180)),
+      minStars: Math.max(1, Number(config.evergreenMinStars || Math.max(baseMinStars, 500))), field: 'pushed', sort: 'stars',
+    }]),
+  ];
+}
+
+function fairlyOrderGitHubItems(items) {
+  const buckets = new Map([['new', []], ['active', []], ['mature', []], ['other', []]]);
+  for (const item of items) {
+    const categories = item.discoveryModes || [];
+    const assigned = ['new', 'active', 'mature'].filter((category) => categories.includes(category));
+    if (!assigned.length) buckets.get('other').push(item);
+    else for (const category of assigned) buckets.get(category).push(item);
+  }
+  const ordered = []; const seen = new Set();
+  while ([...buckets.values()].some((bucket) => bucket.length)) {
+    for (const key of ['new', 'active', 'mature', 'other']) {
+      const item = buckets.get(key).shift();
+      if (!item) continue;
+      const id = String(item.repository || item.url || item.id || '').toLowerCase();
+      if (!seen.has(id)) { seen.add(id); ordered.push(item); }
+    }
+  }
+  return ordered;
+}
+
 const LOGICAL_OPERATOR = /^(and|or|not)$/i;
 
 // 把 AI 查询拆成可执行的子查询：只要存在普通文本词条就原样返回；
@@ -82,7 +134,7 @@ export function expandAiQueryKeywords(keywords) {
 }
 
 async function searchRepositories({ requestGitHubJson, config, query, limit, sort = 'stars', mode, days, minStars, onProgress }) {
-  const result = await requestGitHubJson(`/search/repositories?q=${encodeURIComponent(query)}&sort=${sort}&order=desc&per_page=${limit}`, {
+  const result = await requestGitHubSearch(requestGitHubJson, `/search/repositories?q=${encodeURIComponent(query)}&sort=${sort}&order=desc&per_page=${limit}`, config, {
     cacheDir: config.cacheDir,
     ttlMs: Number(config.cacheTtlMs || 30 * 60 * 1000),
     fetchImpl: config.fetchImpl || fetch,
@@ -106,6 +158,20 @@ async function searchRepositories({ requestGitHubJson, config, query, limit, sor
     discoveryMode: mode,
     discoveryContexts: [{ channel: 'search', mode, query, windowDays: days, minStars }],
   }));
+}
+
+function requestGitHubSearch(requestGitHubJson, apiPath, config, options) {
+  const configuredInterval = Number(config.searchMinIntervalMs);
+  const intervalMs = Number.isFinite(configuredInterval) ? Math.max(0, configuredInterval)
+    : Boolean(config.token ?? process.env.GITHUB_ACCESS_TOKEN) ? 2100 : 6100;
+  const request = githubSearchQueue.then(async () => {
+    const waitMs = intervalMs - (Date.now() - lastGitHubSearchAt);
+    if (lastGitHubSearchAt && waitMs > 0) await new Promise((resolve) => setTimeout(resolve, waitMs));
+    lastGitHubSearchAt = Date.now();
+    return requestGitHubJson(apiPath, options);
+  });
+  githubSearchQueue = request.catch(() => {});
+  return request;
 }
 
 export async function discoverGitHubRepositories(items, config = {}, onProgress = () => {}, onSourceResult = () => {}) {
@@ -175,48 +241,49 @@ export async function discoverGitHubRepositories(items, config = {}, onProgress 
     const label = String(spec?.label || '兴趣发现').slice(0, 40);
     const subQueries = expandAiQueryKeywords(spec?.query);
     if (!subQueries.length) continue;
-    const mode = ['active', 'evergreen'].includes(spec.searchMode) ? spec.searchMode : 'new';
-    const days = Math.max(7, Number(mode !== 'new' ? spec.activityWindowDays || spec.createdWithinDays || 60 : spec.createdWithinDays || 60));
-    const stars = Math.max(10, Number(spec.minStars || 50));
     const perQuery = Math.max(1, Math.min(50, Number(spec.limit || 15)));
-    const after = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
     const language = String(spec.language || '').trim();
-    const timeField = mode !== 'new' ? 'pushed' : 'created';
-    const suffix = ` stars:>=${stars} ${timeField}:>=${after} fork:false archived:false${language ? ` language:${language}` : ''}`;
+    const profiles = aiSearchProfiles(config);
     const sourceKey = `github:ai-search:${label}`; const queryStarted = Date.now(); const queryStartedAt = new Date().toISOString();
-    const found = []; const failures = [];
-    for (const keywords of subQueries) {
-      const query = `${keywords}${suffix}`;
-      try {
-        onProgress(`正在按兴趣方向「${label}」搜索 GitHub 项目${subQueries.length > 1 ? `（${keywords}）` : ''}`);
-        const result = await requestGitHubJson(`/search/repositories?q=${encodeURIComponent(query)}&sort=${mode === 'active' ? 'updated' : 'stars'}&order=desc&per_page=${perQuery}`, {
-          cacheDir: config.cacheDir, ttlMs: Number(config.cacheTtlMs || 30 * 60 * 1000), fetchImpl: config.fetchImpl || fetch,
-          token: config.token ?? process.env.GITHUB_ACCESS_TOKEN,
-        });
-        for (const repo of (result.items || []).slice(0, perQuery)) {
-          if (found.some((item) => item.repository === repo.full_name)) continue;
-          found.push({
-            url: repo.html_url, repository: repo.full_name, sourceType: 'ai-search', sourceKey,
-            sourceName: `AI 兴趣发现 · ${label}`, publishedAt: queryStartedAt, description: repo.description || '',
-            language: repo.language || '', stars: repo.stargazers_count, topics: repo.topics || [],
-            createdAt: repo.created_at, updatedAt: repo.updated_at, searchQuery: query, discoveryMode: mode,
-            lane: spec.lane, projectTypes: spec.projectTypes, directUseCase: spec.directUseCase,
-            discoveryContexts: [{ channel: 'ai-search', label, lane: spec.lane, query: keywords, searchQuery: query,
-              searchMode: mode, projectTypes: spec.projectTypes || [], directUseCase: spec.directUseCase || '',
-              windowDays: days, minStars: stars }],
+    const found = new Map(); const failures = []; let successfulSearches = 0;
+    for (const profile of profiles) {
+      const after = new Date(Date.now() - profile.days * 86400000).toISOString().slice(0, 10);
+      const suffix = ` stars:>=${profile.minStars} ${profile.field}:>=${after} fork:false archived:false${language ? ` language:${language}` : ''}`;
+      for (const keywords of subQueries) {
+        const query = `${keywords}${suffix}`;
+        try {
+          onProgress(`正在按兴趣方向「${label}」搜索${profile.category === 'new' ? '新项目' : profile.category === 'active' ? '活跃项目' : '成熟项目'}${subQueries.length > 1 ? `（${keywords}）` : ''}`);
+          const result = await requestGitHubSearch(requestGitHubJson, `/search/repositories?q=${encodeURIComponent(query)}&sort=${profile.sort}&order=desc&per_page=${perQuery}`, config, {
+            cacheDir: config.cacheDir, ttlMs: Number(config.cacheTtlMs || 30 * 60 * 1000), fetchImpl: config.fetchImpl || fetch,
+            token: config.token ?? process.env.GITHUB_ACCESS_TOKEN,
           });
-        }
-      } catch (error) { failures.push(`${keywords}：${error.message}`); }
+          successfulSearches += 1;
+          for (const repo of (result.items || []).slice(0, perQuery)) {
+            mergeRepository(found, {
+              url: repo.html_url, repository: repo.full_name, sourceType: 'ai-search', sourceKey,
+              sourceName: `AI 兴趣发现 · ${label}`, publishedAt: queryStartedAt, description: repo.description || '',
+              language: repo.language || '', stars: repo.stargazers_count, topics: repo.topics || [],
+              createdAt: repo.created_at, updatedAt: repo.updated_at, searchQuery: query, discoveryMode: profile.mode,
+              discoveryModes: [profile.category], projectCategory: profile.category,
+              lane: spec.lane, projectTypes: spec.projectTypes, directUseCase: spec.directUseCase,
+              discoveryContexts: [{ channel: 'ai-search', label, lane: spec.lane, query: keywords, searchQuery: query,
+                searchMode: profile.mode, projectCategory: profile.category, projectTypes: spec.projectTypes || [], directUseCase: spec.directUseCase || '',
+                windowDays: profile.days, minStars: profile.minStars }],
+            }, 'ai-search');
+          }
+        } catch (error) { failures.push(`${profile.category}/${keywords}：${error.message}`); }
+      }
     }
-    if (found.length) {
-      for (const repo of found) mergeRepository(map, repo, 'ai-search');
-      onSourceResult({ sourceGroup: 'github', sourceType: 'ai-search', sourceKey, sourceName: `AI 兴趣发现 · ${label}`, status: 'success', itemCount: found.length, durationMs: Date.now() - queryStarted, startedAt: queryStartedAt, endedAt: new Date().toISOString() });
+    if (successfulSearches) {
+      for (const repo of found.values()) mergeRepository(map, repo, 'ai-search');
+      onSourceResult({ sourceGroup: 'github', sourceType: 'ai-search', sourceKey, sourceName: `AI 兴趣发现 · ${label}`, status: 'success', itemCount: found.size, durationMs: Date.now() - queryStarted, startedAt: queryStartedAt, endedAt: new Date().toISOString(), ...(failures.length ? { warning: `${failures.length} 条分类查询失败` } : {}) });
     } else if (failures.length) {
       onProgress(`兴趣方向「${label}」搜索失败，已跳过：${failures[0]}`);
       onSourceResult({ sourceGroup: 'github', sourceType: 'ai-search', sourceKey, sourceName: `AI 兴趣发现 · ${label}`, status: 'failed', itemCount: 0, durationMs: Date.now() - queryStarted, error: failures[0], startedAt: queryStartedAt, endedAt: new Date().toISOString() });
     }
   }
-  return [...others, ...map.values()].map((item) => item.sourceGroup === 'github' ? {
+  const githubItems = fairlyOrderGitHubItems([...map.values()]);
+  return [...others, ...githubItems].map((item) => item.sourceGroup === 'github' ? {
     ...item,
     sourceType: item.primaryDiscovery,
     sourceKey: `github:${item.primaryDiscovery}`,

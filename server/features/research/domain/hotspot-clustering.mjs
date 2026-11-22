@@ -32,7 +32,7 @@ function repositoryMetaOf(item) {
     updatedAt: raw.updatedAt || null,
     discoveryChannels: Array.isArray(raw.discoveryChannels) ? raw.discoveryChannels : [],
     primaryDiscovery: raw.primaryDiscovery || item.source_type || '',
-    discoveryContexts: Array.isArray(raw.discoveryContexts) ? raw.discoveryContexts.slice(0, 12) : [],
+    discoveryContexts: Array.isArray(raw.discoveryContexts) ? raw.discoveryContexts.slice(0, 18) : [],
     projectType: raw.projectType || '',
     scenarioIds: Array.isArray(raw.scenarioIds) ? raw.scenarioIds : [],
     directUseCase: String(raw.directUseCase || '').slice(0, 180),
