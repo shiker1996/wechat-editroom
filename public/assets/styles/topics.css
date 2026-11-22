@@ -131,7 +131,13 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .ranking-score { font:600 13px var(--display);text-align:center; }
 .ranking-title b { display:block;margin-bottom:2px; }
 .ranking-title span { display:block; }
-.ranking-actions { white-space:nowrap; }.topic-pool-hint { background:var(--bgelevated);border:1px dashed var(--line);border-radius:6px;padding:16px 20px;margin-bottom:16px;font-size:13px;color:var(--muted);line-height:1.5; }
+.ranking-track-summary { display:block;margin-top:3px;color:var(--muted);font-size:10px; }
+.ranking-actions { display:flex;flex-direction:column;align-items:flex-end;gap:6px;align-self:start;white-space:normal; }
+.ranking-stage-details { max-width:320px;white-space:normal; }
+.ranking-stage-details summary { cursor:pointer;color:var(--muted); }
+.ranking-stage-details ol { margin:6px 0 0;padding-left:18px;white-space:normal; }
+.ranking-stage-details li { margin:3px 0; }
+.topic-pool-hint { background:var(--bgelevated);border:1px dashed var(--line);border-radius:6px;padding:16px 20px;margin-bottom:16px;font-size:13px;color:var(--muted);line-height:1.5; }
 
 .hotword-index-card { background:var(--bgelevated);border:1px solid var(--line);border-left:3px solid var(--yellow);padding:14px 18px;margin-bottom:8px;border-radius:4px;cursor:pointer;transition:.15s ease; }
 

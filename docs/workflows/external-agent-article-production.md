@@ -6,6 +6,7 @@
 - 外部路径复用工作台的候选、来源、事实基座、字数配置读取和确定性本地审计；不启动内部文章成稿模型链。
 - 评论与建议优先服务开发者、普通职场人和泛科技读者；管理者为次级受众，除非是事件主要受影响者。
 - 文章可以用钩子开篇，但核心评论前应尽早交代事实、来源和边界，并解释事实如何支持判断；行动建议只在主要受众确有具体选择且证据充分时提出。
+- 内容价值审阅结合题材看主题/原创表达、真实创作与素材归属、读者增量/理解/判断/共鸣、专业内容的可靠知识或经确认实践；这些不是每篇必须同时具备的硬标签。热点评论有可靠事实、原创解释和具体读者增量即可成立，不以作者亲历或行动建议为普遍门槛。
 
 ## 入口与实现
 
@@ -21,9 +22,9 @@
 
 | 阶段 | 输入 | 输出/状态变化 | 实现位置 |
 | --- | --- | --- | --- |
-| 准备 | 候选、锁定简报、事实材料 | 外部 Agent 读取设置中的 `articleLength` 和已抓取来源 | `jianzi_settings_summary`、`jianzi_candidate_get` |
+| 准备 | 候选、锁定简报、事实材料 | 外部 Agent 读取设置中的 `articleLength` 和已抓取来源，并检查 `experience_required` / `confirmed_experiences`；若明确依赖亲历但缺少作者确认材料，则追问作者并暂停该写作路径 | `jianzi_settings_summary`、`jianzi_candidate_get`、外部 Agent Skill |
 | 写作与事实核验 | 项目基础写作提示、简报、事实材料 | 生成完整 Markdown，并联网核验影响标题、核心结论和读者行动的关键事实 | 外部 Agent Skill |
-| 审稿与定点返修 | 草稿、实际查阅的来源 | 按文章审阅标准检查简报兑现、事实、归因、论证、标题与风险；另检查主要受众优先级和评论前的事实铺垫；最多两轮实质问题修订/复审 | 外部 Agent Skill（外部模型自执行） |
+| 审稿与定点返修 | 草稿、实际查阅的来源 | 按文章审阅标准检查简报兑现、事实、归因、论证、标题与风险；评估四类内容价值信号但不要求每篇全覆盖；热点评论若有事实、原创解释和读者增量，不因无亲历/行动建议自动判低价值；最多两轮实质问题修订/复审 | 外部 Agent Skill（外部模型自执行） |
 | 字数调整 | 已审稿文章、设置范围或用户指定范围 | 超范围时最多两轮扩缩；调整后复核受影响句段；本地审计可传 `articleLength:{min,max}` | `jianzi_article_local_audit`、`auditExternalArticleLocally` |
 | 保存与确认 | 审稿和长度检查完成的文章 | 先保存 draft 并回读；用户确认具体文章后才保存 final | `jianzi_article_document_save`、`jianzi_article_documents` |
 
@@ -35,6 +36,7 @@
 - 内部链自动生成事实基座、调用联网事实与证据审稿门禁、记录审稿历史、按配置返修最多两轮，再按配置字数调整最多两轮并复核改动。
 - 外部链使用 MCP 已保存的事实/来源材料，外部 Agent 自行联网核验和审稿；MCP 本地审计只做确定性检查。两条路径的门禁自动化和审计产物不同。
 - 两条路径共用主要受众优先和事实铺垫原则，但执行不同：内部链由运行时写作提示、编排 Skill 和审稿门禁承载；外部链由分发 Skill 和外部 Agent 自行审稿承载，本地审计不验证这两项语义要求。
+- 亲历门禁也有意不同：内部编辑室原有作者提问与确认不变；外部 Agent 读取已锁定的 `experience_required`，只有要求亲历且 `confirmed_experiences` 缺失时才向作者补问并暂停。作者回复作为本次写作输入明确标注为作者确认，不得静默改写锁定简报或伪装成独立核验。
 
 ## 产物与验证
 
@@ -44,5 +46,6 @@
 ## 变更触点
 
 - 外部 Agent 行为与复制副本：`agent-integrations/skills/jianzi-topic-to-article/SKILL.md`、`agent-integrations/workbuddy/skills/jianzi-topic-to-article/SKILL.md`。
+- 内部审稿规则：`skills/article-reviewer/SKILL.md`、`prompts/articles/review.md`。
 - MCP schema/路由：`scripts/agent-integration/tools.mjs`、`server/platform/http/routes/media-routes.mjs`。
 - 本地审计与口径：`server/features/articles/application/external-article-local-audit.mjs`、`server/features/articles/application/article-pipeline-contract.mjs`。

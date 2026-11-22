@@ -275,10 +275,13 @@ curl.exe -X POST http://127.0.0.1:4317/api/system/backup/restore ^
 → 热点全景
 
 ### GET /api/batches/:id/ranking
-文章池的研判排名与预选结果。
+文章池的研判排名与预选结果。`score` 是热点初筛分，不是文章最终 F 分；`inPool` 和 `eliminationReason` 仅表示文章赛道，`inPoolByTrack`、`selection` 提供文章/图文两条赛道的当前入池状态与最后阶段原因。
 
 ### GET /api/batches/:id/social-ranking
-图文池的独立排名、GitHub 项目发现结果与历史覆盖信息。
+图文池的独立排名、GitHub 项目发现结果与历史覆盖信息。`inPool` 仅表示图文赛道状态，并附带两条赛道摘要。
+
+### GET /api/batches/:id/selection-trace
+按采集热点返回文章、图文赛道的逐阶段状态和原因。可选查询参数：`track=all|article|social_cards`（默认 `all`）、`hotspotId` 或逗号分隔的 `hotspotIds`、`limit`（默认 30，最大 500）。阶段状态包含 `passed`、`blocked`、`not_selected`、`not_reached`、`not_applicable` 等；未执行阶段和实际筛选淘汰会分别说明。纯 GitHub 项目默认进入图文赛道，明确标记为 `direct_practical` 的第一梯队项目可额外进入文章深研范围，最终仍须通过时效、事实、编辑与文章入池门禁。
 
 ---
 
@@ -627,7 +630,7 @@ AI 规划配图占位
 读取已保存的外部 Agent 研判报告；尚未提交时返回 `exists: false`。
 
 ### POST /api/batches/:id/external/research
-提交外部 Agent 的事件研判与选题。items 为 1–200 项；每项须引用稳定 eventId 和属于该事件的一个或多个 hotspotIds，并提供 thesis、reason；可附标题、角度、读者收益、风险、推荐轨道和 H/B/J/竞争扣分输入。T、P 与国内关联值由工作台读取事件和账号配置后计算，国内关联缺失时按剩余权重归一化。提交前必须有覆盖全部已打标稳定事件的事件事实卡。报告保存至 sources/external-research-report.json 并登记为产物，顶层包含 formulaVersion。
+提交外部 Agent 的事件研判与选题。items 为 1–200 项；每项须引用稳定 eventId 和属于该事件的一个或多个 hotspotIds，并提供 thesis、reason；可附标题、角度、读者收益、风险、推荐轨道、H/B/J/竞争扣分，以及素材策略 `direct_practical` / `event_trigger` 和 M（0–100）。T、P 与国内关联值由工作台读取事件和账号配置后计算；DOM 缺失时对 A/T/J/M 权重归一化。未分类或未提供 M 时仍使用 v4，M 取中性 50。提交前必须有覆盖全部已打标稳定事件的事件事实卡。报告保存至 sources/external-research-report.json 并登记为产物，顶层包含 formulaVersion=v4。
 
 ### POST /api/batches/:id/external/research-stage/prepare
 外部 Agent 完成打标和事件卡后领取原研判流程的下一项模型任务；可传 `reset: true` 清除本批次外部阶段记录并重新开始。返回 `pending` 时包含任务 ID、消息和输出格式，返回 `completed` 时包含最终结果。

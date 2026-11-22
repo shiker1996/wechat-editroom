@@ -4,6 +4,7 @@ import { scanPluginBoundaries } from '../../server/platform/plugins/boundary-aud
 
 const root=path.resolve(import.meta.dirname,'..','..');
 function governance(item){
+  if(item.type==='shared-source'&&['feed','rsshub'].includes(item.plugin))return {phase:'Phase 2',owner:'collector-runtime',resolution:'集中维护 RSS/Atom 公共实现，并在独立采集器分发包中复制 shared 运行目录'};
   if(item.type==='cross-plugin'){
     if(item.plugin==='feed'||item.plugin==='rsshub')return {phase:'Phase 2',owner:'collector-runtime',resolution:'保持 Feed/RSSHub 独立并移除采集器间源码依赖'};
     if(item.plugin==='url-fetch')return {phase:'Phase 3',owner:'tool-runtime',resolution:'改为 optional capability 调用 repository.inspect'};

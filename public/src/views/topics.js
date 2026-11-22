@@ -276,16 +276,41 @@ async function loadRanking() {
 }
 
 function renderRankingList(items, container) {
+  const statusLabel = (status) => ({ in_pool: "已入池", not_in_pool: "未入池", selected_not_persisted: "预选通过，未保存候选" }[status] || status || "未记录");
   container.innerHTML = items.map(function (item) {
-    const reason = item.eliminationReason
-      ? `<span class="muted">${escapeHtml(item.eliminationReason)}</span>`
-      : '<span class="muted">已入池</span>';
+    const reason = item.inPool
+      ? '<span class="muted">已进入文章池</span>'
+      : `<span class="muted">${escapeHtml(item.eliminationReason || "文章池筛选原因未记录")}</span>`;
     const cls = item.inPool ? "ranking-row in-pool" : "ranking-row";
     const btn = item.inPool
       ? ""
       : `<button class="text-button" data-ranking-add="${item.hotspotId}">加入候选</button>`;
-    return `<div class="${cls}"><span class="ranking-rank">#${item.rank}</span><span class="ranking-score">${item.score}</span><div class="ranking-title"><b>${escapeHtml(item.title)}</b>${reason}</div><div class="ranking-actions">${btn}</div></div>`;
+    return `<div class="${cls}"><span class="ranking-rank">#${item.rank}</span><span class="ranking-score" title="热点初筛分，不是文章 F 分">${item.score}</span><div class="ranking-title"><b>${escapeHtml(item.title)}</b>${reason}<small class="ranking-track-summary">文章：${escapeHtml(statusLabel(item.selection?.article?.status || (item.inPool ? "in_pool" : "not_in_pool")))} · 图文：${escapeHtml(statusLabel(item.selection?.social_cards?.status || (item.inPoolByTrack?.social_cards ? "in_pool" : "not_in_pool")))}</small></div><div class="ranking-actions">${btn}<details class="ranking-stage-details" data-selection-trace-details data-hotspot-id="${item.hotspotId}"><summary>阶段轨迹</summary><div class="muted">展开查看阶段筛选结果</div></details></div></div>`;
   }).join("");
+  bindSelectionTraceDetails(container);
+}
+
+function bindSelectionTraceDetails(container) {
+  container.querySelectorAll("[data-selection-trace-details]").forEach((details) => {
+    details.addEventListener("toggle", async () => {
+      if (!details.open || details.dataset.loaded === "true") return;
+      const content = details.querySelector("div");
+      content.textContent = "正在读取筛选轨迹…";
+      try {
+        const track = activeTrack();
+        const result = await request(`/api/batches/${encodeURIComponent(state.activeBatchId)}/selection-trace?hotspotId=${encodeURIComponent(details.dataset.hotspotId)}&track=${encodeURIComponent(track)}`);
+        const item = result.items?.[0];
+        const stages = item?.tracks?.[track]?.stages || [];
+        const stageStatus = (status) => ({ passed: "通过", blocked: "阻断", not_selected: "未入选", not_reached: "未执行", not_applicable: "不适用", unreported: "待核对" }[status] || status || "未记录");
+        content.innerHTML = stages.length
+          ? `<ol>${stages.map((stage) => `<li><b>${escapeHtml(stage.stage)}</b> · ${escapeHtml(stageStatus(stage.status))}${stage.reason ? `：${escapeHtml(stage.reason)}` : ""}</li>`).join("")}</ol>`
+          : '<span class="muted">当前批次没有可用的阶段产物。</span>';
+        details.dataset.loaded = "true";
+      } catch (error) {
+        content.textContent = `读取失败：${error.message}`;
+      }
+    });
+  });
 }
 
 async function loadSocialRanking() {
@@ -301,12 +326,14 @@ async function loadSocialRanking() {
 }
 
 function renderSocialRankingList(items,container){
+  const statusLabel=(status)=>({in_pool:'已入池',not_in_pool:'未入池',selected_not_persisted:'预选通过，未保存候选'}[status]||status||'未记录');
   container.innerHTML=items.map((item)=>{
-    const opinion=item.rejectionReason||((item.reasons||[]).join(' · ')||'适合进入图文池');
+    const opinion=item.inPool?`已进入图文池${item.qualificationReason?` · ${item.qualificationReason}`:''}`:(item.rejectionReason||((item.reasons||[]).join(' · ')||'未进入图文池'));
     const cls=item.inPool?'ranking-row in-pool':'ranking-row';
     const button=item.inPool?'':`<button class="text-button" data-social-ranking-add="${item.hotspotId}">加入图文池</button>`;
-    return `<div class="${cls}"><span class="ranking-rank">#${item.socialRank}</span><span class="ranking-score">${item.socialScore}</span><div class="ranking-title"><b>${escapeHtml(item.title)}</b><span class="muted">${escapeHtml(opinion)}</span></div><div class="ranking-actions">${button}</div></div>`;
+    return `<div class="${cls}"><span class="ranking-rank">#${item.socialRank}</span><span class="ranking-score" title="图文 G_social 分">${item.socialScore}</span><div class="ranking-title"><b>${escapeHtml(item.title)}</b><span class="muted">${escapeHtml(opinion)}</span><small class="ranking-track-summary">文章：${escapeHtml(statusLabel(item.selection?.article?.status || (item.inPoolByTrack?.article ? "in_pool" : "not_in_pool")))} · 图文：${escapeHtml(statusLabel(item.selection?.social_cards?.status || (item.inPool ? "in_pool" : "not_in_pool")))}</small></div><div class="ranking-actions">${button}<details class="ranking-stage-details" data-selection-trace-details data-hotspot-id="${item.hotspotId}"><summary>阶段轨迹</summary><div class="muted">展开查看阶段筛选结果</div></details></div></div>`;
   }).join('');
+  bindSelectionTraceDetails(container);
 }
 
 async function loadTopicPool() {

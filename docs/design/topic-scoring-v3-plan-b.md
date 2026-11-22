@@ -1,6 +1,7 @@
 # 选题评分 v3（B 方案）技术设计
 
-> 状态：**待评审，未实施**
+> 状态：**历史方案，已被 v4 正式评分取代**
+> 本文仅保留为历史设计记录，不是当前实现或迁移依据；当前流程见 `docs/workflows/topic-scoring.md`。
 > 范围：热点打标 → 事件聚类 → 预选 → 脑暴 → 卡片评分 → 候选池 → 榜单展示
 > 影响：所有新批次的文章分（F）；图文 G_social 间接受影响
 > 关联代码：`server/features/research/`、`server/platform/http/routes/`、`server/shared/domain/`、`skills/hotspot-tagging/`、`skills/hotspot-brainstorm/`

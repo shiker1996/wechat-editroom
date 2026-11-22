@@ -16,6 +16,8 @@ function copyDirectory(source,target){
 }
 
 function runtimeDependencies(directory){const dependencies=new Set();for(const entry of fs.readdirSync(directory,{withFileTypes:true})){const target=path.join(directory,entry.name);if(entry.isDirectory()&&!EXCLUDED_DIRECTORIES.has(entry.name))for(const value of runtimeDependencies(target))dependencies.add(value);else if(entry.isFile()&&path.extname(entry.name)==='.mjs'){const source=fs.readFileSync(target,'utf8');for(const match of source.matchAll(DEPENDENCY_PATTERN))if(!match[1].startsWith('node:'))dependencies.add(match[1].startsWith('@')?match[1].split('/').slice(0,2).join('/'):match[1].split('/')[0]);}}return [...dependencies].sort();}
+function importsSharedSource(directory){for(const entry of fs.readdirSync(directory,{withFileTypes:true})){const target=path.join(directory,entry.name);if(entry.isDirectory()&&!EXCLUDED_DIRECTORIES.has(entry.name)){if(importsSharedSource(target))return true;}else if(entry.isFile()&&path.extname(entry.name)==='.mjs'&&/(?:from\s*|import\s*\()\s*['"]\.\.\/shared\//.test(fs.readFileSync(target,'utf8')))return true;}return false;}
+function rebaseSharedImports(directory){for(const entry of fs.readdirSync(directory,{withFileTypes:true})){const target=path.join(directory,entry.name);if(entry.isDirectory()&&!EXCLUDED_DIRECTORIES.has(entry.name))rebaseSharedImports(target);else if(entry.isFile()&&path.extname(entry.name)==='.mjs'){const source=fs.readFileSync(target,'utf8');const rebased=source.replace(/(['"])\.\.\/shared\//g,'$1./shared/');if(rebased!==source)fs.writeFileSync(target,rebased,'utf8');}}}
 
 function distributionManifest(manifest,directory){
   const collector=manifest.kind==='collector';
@@ -41,6 +43,8 @@ export function stageBuiltinPluginPackage(sourceDirectory,outputRoot){
   const target=path.join(path.resolve(outputRoot),manifest.id);
   if(fs.existsSync(target))fs.rmSync(target,{recursive:true,force:true});
   copyDirectory(source,target);
+  const sharedDirectory=path.join(path.dirname(source),'shared');
+  if(importsSharedSource(source)&&fs.existsSync(sharedDirectory)){copyDirectory(sharedDirectory,path.join(target,'shared'));rebaseSharedImports(target);}
   fs.writeFileSync(path.join(target,'manifest.json'),`${JSON.stringify(manifest,null,2)}\n`,'utf8');
   return {directory:target,manifest};
 }

@@ -24,6 +24,8 @@ function mergeRepository(map, item, channel) {
   const channels = [...new Set([...(current?.discoveryChannels || []), channel, ...(item.discoveryChannels || [])])];
   const modes = [...new Set([...(current?.discoveryModes || []), ...(item.discoveryModes || []),
     item.projectCategory || ({ evergreen: 'mature' }[item.discoveryMode] || item.discoveryMode)].filter(Boolean))];
+  const materialStrategies = [...new Set([...(current?.materialStrategies || []), ...(item.materialStrategy ? [item.materialStrategy] : []),
+    ...((item.discoveryContexts || []).map((context) => context.materialStrategy).filter(Boolean))])];
   const fallbackContext = {
     channel,
     sourceType: item.sourceType || '',
@@ -62,6 +64,7 @@ function mergeRepository(map, item, channel) {
     sourceGroup: 'github',
     discoveryChannels: channels,
     discoveryModes: modes,
+    materialStrategies,
     discoveryContexts,
     primaryDiscovery: channels.sort((a, b) => priority[b] - priority[a])[0],
   };
@@ -266,8 +269,10 @@ export async function discoverGitHubRepositories(items, config = {}, onProgress 
               createdAt: repo.created_at, updatedAt: repo.updated_at, searchQuery: query, discoveryMode: profile.mode,
               discoveryModes: [profile.category], projectCategory: profile.category,
               lane: spec.lane, projectTypes: spec.projectTypes, directUseCase: spec.directUseCase,
+              materialStrategy: spec.materialStrategy || 'unclassified',
               discoveryContexts: [{ channel: 'ai-search', label, lane: spec.lane, query: keywords, searchQuery: query,
                 searchMode: profile.mode, projectCategory: profile.category, projectTypes: spec.projectTypes || [], directUseCase: spec.directUseCase || '',
+                materialStrategy: spec.materialStrategy || 'unclassified',
                 windowDays: profile.days, minStars: profile.minStars }],
             }, 'ai-search');
           }

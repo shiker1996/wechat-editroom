@@ -9,4 +9,6 @@
 - 禁止单独使用宽泛词作为 query；每组必须说明账号核心读者使用后的直接结果；
 - 每个主题会由系统分别查询新项目、活跃项目和成熟项目；日期窗口与 Star 门槛由系统统一配置，不要在主题规划中决定项目类别或筛选门槛；
 - 不能用项目名称、Stars、AI/Agent 标签替代使用结果；如果查询方向暂时说不清读者任务和输出，就不要生成该查询；
-- 返回严格 JSON：{"queries":[{"label":"方向名（10 字内）","lane":"场景组","query":"关键词","projectTypes":["tool|component|plugin-extension|skill-workflow|data-content|infrastructure|ai-utility|agent"],"directUseCase":"直接结果","language":"可选，留空表示不限"}]}
+- 账号的第一梯队是能直接提供可用资源、步骤或工程实践结果的项目。查询应优先找可获取、可运行、可复现且有清楚用途的项目；不要只追热度或大厂名。
+- 每个查询必须带 `materialStrategy:"direct_practical"`，表示该查询面向直接可用的工具/资源。它是选题素材方向，不代表仓库质量或可信度；仓库仍需独立核验。
+- 返回严格 JSON：{"queries":[{"label":"方向名（10 字内）","lane":"场景组","query":"关键词","projectTypes":["tool|component|plugin-extension|skill-workflow|data-content|infrastructure|ai-utility|agent"],"directUseCase":"直接结果","materialStrategy":"direct_practical","language":"可选，留空表示不限"}]}

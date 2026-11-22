@@ -7,11 +7,11 @@ import { sanitizeCardPlan } from '../server/features/social-cards/rendering/stor
 import { socialThemeDefinition } from '../server/shared/themes/social-theme-compiler.mjs';
 
 const okEditorial={must_disclose:'体验来自作者确认',forbidden_claims:'不得夸大效果',target_reader:'职场新人',pain_point:'整理效率低',recommended_pages:6};
-const okFact={kind:'custom',content_type:'tutorial',topic:'三步同步笔记',thesis:'',points:[
+const okFact={kind:'custom',content_type:'tutorial',topic:'三步同步笔记',thesis:'读者可以按步骤完成笔记同步并核对目标端结果',points:[
   {text:'要点一',source_level:'author_experience',source_url:''},
   {text:'要点二',source_level:'user_material',source_url:'https://example.com/a'},
   {text:'要点三',source_level:'model_suggestion',source_url:''},
-],steps:['第一步','第二步'],items:[],materials:[{url:'https://example.com/a',status:'ok',content_chars:100}],limitations:''};
+],steps:['第一步','第二步'],items:[],materials:[{url:'https://example.com/a',status:'ok',content_chars:100}],limitations:'适用于当前公开版本；需先完成账号授权'};
 
 test('自定义门禁在事实基座与编辑决策齐备时通过', () => {
   const gate=evaluateCustomCardGate({}, {data:okFact}, okEditorial);

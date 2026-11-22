@@ -43,7 +43,14 @@ test('全部内置插件可作为不携带其他源码的第三方包独立校�
       assert.equal(readToolPluginCatalog(runtimeRoot).plugins[item.manifest.id].status,'uninstalled');
     }
   }
-  assert.equal(fs.existsSync(path.join(projectRoot,'plugins','shared')),false);
+  assert.ok(fs.existsSync(path.join(projectRoot,'plugins','shared','feed-normalization.mjs')));
+  for(const id of ['feed-collector','rsshub-collector']){
+    const item=packages.find(({manifest})=>manifest.id===id);
+    assert.ok(item,`${id} 未打包`);
+    assert.ok(fs.existsSync(path.join(item.directory,'shared','feed-normalization.mjs')),`${id} 缺少共享 Feed 解析器`);
+    assert.ok(fs.existsSync(path.join(item.directory,'shared','source-http.mjs')),`${id} 缺少共享 HTTP 策略`);
+  }
+  assert.equal(packages.some(({manifest})=>manifest.id==='shared'),false);
 });
 
 test('插件代码卸载不删除独立运行数据',t=>{
