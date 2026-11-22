@@ -161,7 +161,9 @@ async function searchRepositories({ requestGitHubJson, config, query, limit, sor
 }
 
 function requestGitHubSearch(requestGitHubJson, apiPath, config, options) {
-  const intervalMs = Boolean(config.token ?? process.env.GITHUB_ACCESS_TOKEN) ? 2100 : 6100;
+  const configuredInterval = Number(config.searchMinIntervalMs);
+  const intervalMs = Number.isFinite(configuredInterval) ? Math.max(0, configuredInterval)
+    : Boolean(config.token ?? process.env.GITHUB_ACCESS_TOKEN) ? 2100 : 6100;
   const request = githubSearchQueue.then(async () => {
     const waitMs = intervalMs - (Date.now() - lastGitHubSearchAt);
     if (lastGitHubSearchAt && waitMs > 0) await new Promise((resolve) => setTimeout(resolve, waitMs));
