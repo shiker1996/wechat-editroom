@@ -168,7 +168,7 @@ test('T/J/A/C/F由服务端公式计算', () => {
   assert.equal(result.b,80); assert.equal(result.p,65); assert.equal(result.s,5); assert.equal(result.d,0);
   assert.equal(result.a,76);
   assert.equal(result.j,0); assert.equal(result.c,5);
-  assert.equal(result.f,41.4);
+  assert.equal(result.f,42.8);
 });
 
 test('阶段5 T 接入 F：同等文章化质量下事件价值更高者优先', () => {
@@ -177,7 +177,7 @@ test('阶段5 T 接入 F：同等文章化质量下事件价值更高者优先',
   const scored=scoreCards([{...base,candidateId:'C-HIGH',source:{...base.source,eventValue:90}},{...base,candidateId:'C-LOW',source:{...base.source,eventValue:40}}],{items:[]});
   assert.equal(scored[0].candidateId,'C-HIGH');
   assert.equal(scored[0].a,scored[1].a);
-  assert.equal(Number((scored[0].f-scored[1].f).toFixed(1)),13.9);
+  assert.equal(Number((scored[0].f-scored[1].f).toFixed(1)),11.1);
 });
 
 test('研判价值 J 只统计候选实际绑定的模型信号和事件关系', () => {

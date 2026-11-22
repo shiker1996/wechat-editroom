@@ -17,6 +17,13 @@ test('Feed 插件独立解析 Atom link href', () => {
   assert.equal(parseFeed(xml, 'https://example.com/atom.xml')[0].url, 'https://example.com/b');
 });
 
+test('Feed 文本仅解码一层 XML 实体并移除 HTML 标签边界', () => {
+  const xml = '<rss><channel><item><title>安全测试</title><link>https://example.com/security</link><description>&lt;script&gt;alert(1)&lt;/script&gt; &amp;lt;img&amp;gt;</description></item></channel></rss>';
+  const [item] = parseFeed(xml, 'https://example.com/feed.xml');
+  assert.equal(item.summary, 'scriptalert(1)/script &lt;img&gt;');
+  assert.doesNotMatch(item.summary, /[<>]/);
+});
+
 test('Feed 逐条过滤无链接条目并按规范链接去重', () => {
   const xml = '<rss><channel><item><guid>x1</guid><title>更新</title><link>https://example.com/a?utm_source=mail#top</link></item><item><title>重复</title><link>https://example.com/a</link></item><item><title>缺链接</title></item></channel></rss>';
   const items = parseFeed(xml, 'https://example.com/feed.xml');

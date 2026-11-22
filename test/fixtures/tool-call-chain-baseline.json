@@ -149,7 +149,7 @@
     {
       "id": "feed-collector",
       "name": "RSS / Atom 直连",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "kind": "collector",
       "capabilities": [
         "cap_collect_direct"
@@ -159,7 +159,7 @@
     {
       "id": "github-discovery-collector",
       "name": "GitHub 项目发现",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "kind": "collector",
       "capabilities": [
         "cap_collect_github"
@@ -189,7 +189,7 @@
     {
       "id": "rsshub-collector",
       "name": "RSSHub 路由",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "kind": "collector",
       "capabilities": [
         "cap_collect_rsshub",

@@ -2,9 +2,9 @@ import { sourceError } from './source-http.mjs';
 
 function decodeXml(value = '') {
   return String(value).replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
-    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
-    .replace(/<[^>]+>/g, '').trim();
+    .replace(/[<>]/g, '').replace(/&amp;/g, '&').trim();
 }
 
 function field(block, names) {

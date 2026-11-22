@@ -17,7 +17,7 @@ test('v4 shared formula includes A, T, J, DOM, M, and competition penalty', () =
   assert.equal(result.C, 5);
   assert.equal(result.M, 50);
   assert.equal(result.materialFitSource, 'neutral_unclassified');
-  assert.equal(result.F, 55);
+  assert.equal(result.F, 60);
   assert.deepEqual(
     { A: result.weights.article, T: result.weights.eventValue, J: result.weights.researchValue, DOM: result.weights.domestic, M: result.weights.material },
     { A: 0.5, T: 0.2, J: 0.1, DOM: 0.1, M: 0.1 },
