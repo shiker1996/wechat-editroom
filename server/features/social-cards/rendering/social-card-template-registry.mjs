@@ -12,7 +12,7 @@ export const SOCIAL_CARD_RENDERER_BLOCK_TYPES = Object.freeze([
 ]);
 
 export const SOCIAL_CARD_CHANNEL_BLOCK_TYPES = Object.freeze({
-  wechat: Object.freeze(['text', 'list', 'code', 'note']),
+  wechat: SOCIAL_CARD_RENDERER_BLOCK_TYPES,
   xiaohongshu: SOCIAL_CARD_RENDERER_BLOCK_TYPES,
 });
 

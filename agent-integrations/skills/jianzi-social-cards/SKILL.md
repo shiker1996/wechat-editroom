@@ -5,6 +5,8 @@ description: 在见字工作台中研判图文选题、制定故事板、生成 
 
 # 图文故事板与 AI 视觉生成
 
+编写或审核故事板前，先读取 `references/content-block-types.md`。公众号和小红书共用其中 10 种内容块；字段结构、建议长度和事实要求同时适用于外部 Agent 生成与工作台内部模型生成。长度是排版建议，不替代事实核验和工作台布局门禁。
+
 开始业务流程前先调用 `jianzi_doctor`。若返回 `WORKBENCH_VERSION_MISMATCH`，停止业务工具调用，在目标项目根目录执行 `git pull`，按升级说明更新依赖并重新构建，重启工作台和 MCP 连接后再调用 doctor。若返回 `skillCopies.status: "stale"`，先调用 `jianzi_skills_sync`，同步后停止当前流程并重新载入 Skill；建议开启新会话，确保不沿用已加载的旧提示词。若工作台未连接，调用 `jianzi_workbench_start`，等待其返回 ready 且项目指纹匹配后再继续；DSH/npm 包需传本机项目绝对路径 `projectRoot` 或配置 `JIANZI_PROJECT_ROOT`。启动失败、指纹不匹配或超时后停止业务操作并报告诊断，不要重复启动。
 
 ## 图文适配与资源/教程方向

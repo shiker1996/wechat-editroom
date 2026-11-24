@@ -297,7 +297,7 @@ test('图文编辑室可以编辑版式，且不再提供固定视觉主题',()=
 
 test('服务端支持保存故事板单页内容而不触发单图重绘',()=>{
   const source=fs.readFileSync(path.join(root,'server/platform/http/routes/social-card-routes.mjs'),'utf8');
-  const storyboardPrompt=fs.readFileSync(path.join(root,'server','features','social-cards','prompts','channel-xiaohongshu.md'),'utf8');
+  const storyboardPrompt=fs.readFileSync(path.join(root,'server','features','social-cards','prompts','content-block-types.md'),'utf8');
   assert.ok(source.includes("pathname.match(/^\\/api\\/candidates\\/(\\d+)\\/card-pages\\/(\\d+)$/)"));
   assert.ok(source.includes("pathname.match(/^\\/api\\/candidates\\/(\\d+)\\/card-pages\\/(\\d+)\\/ai$/)"));
   assert.match(source,/每页至少保留一个内容块/);
@@ -307,8 +307,8 @@ test('服务端支持保存故事板单页内容而不触发单图重绘',()=>{
   assert.doesNotMatch(source,/\['expand','compress','rewrite'\]/);
   assert.match(source,/AI 扩写本页/);
   assert.match(source,/AI 缩写本页/);
-  // 故事板策划 prompt 约束 stat 数值长度，避免窄数据卡内长算式折行
-  assert.match(storyboardPrompt,/num 不超过 6 个字符/);
+  // 共用故事板规范约束 stat 数值长度，避免窄数据卡内长算式折行
+  assert.match(storyboardPrompt,/`num` 不超过 6 个字符/);
 });
 
 test('确定性故事板 HTML 通过真实浏览器布局审计', async (t) => {
