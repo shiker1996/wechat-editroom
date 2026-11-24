@@ -23,7 +23,7 @@
 | 02 发现与选题 | 选题方向或补充要求、可选批次 ID | 复用/创建批次、采集、打标、事件与事实卡、研判管线；给用户候选排序，等待选择后再继续 | `jianzi_batches_list`、`jianzi_batch_create`、`jianzi_batch_collect`、`jianzi_job_wait`、`jianzi_batch_tags_submit`、`jianzi_batch_events`、`jianzi_batch_event_cards_submit`、`jianzi_research_stage_prepare/submit` |
 | 03 文章生产 | 用户选定的候选与补充要求 | 如有必要先加入文章候选；抓取来源、读取账号和材料，确认编辑角度，保存并回读文章草稿 | `jianzi_candidate_add`、`jianzi_candidate_source_fetch`、`jianzi_candidate_get`、`jianzi_article_document_save` |
 | 04 排版交付 | 用户确认的文章终稿 | 生成 HTML 并提交确定性排版，生成封面；返回排版与封面入口，不发布 | `jianzi_article_documents`、`jianzi_article_typeset_submit`、`jianzi_cover_submit` |
-| 05 图文 | 可选批次/候选与补充要求 | 从图文榜单选工具或事件候选；外部 Agent 与工作台内部故事板生成共用 10 种内容块的字段格式、建议长度和事实要求；确认后锁定、生成并提交图文产物 | `jianzi_batch_social_ranking`、`jianzi_candidate_add`、`jianzi_card_editorial_*`、`jianzi_card_lock`、`jianzi_card_visual_submit` |
+| 05 图文 | 可选批次/候选与补充要求 | 从图文榜单选工具或事件候选；抓取关联原文，repository 类型先核验 GitHub 仓库事实，读取门禁并补齐故事板；外部 Agent 与工作台内部故事板生成共用 10 种内容块的字段格式、建议长度和事实要求；确认后锁定、生成并提交图文产物 | `jianzi_batch_social_ranking`、`jianzi_candidate_add`、`jianzi_candidate_source_fetch`、`jianzi_candidate_repository_inspect`、`jianzi_card_editorial_*`、`jianzi_card_lock`、`jianzi_card_visual_submit` |
 | 06 内容反哺 | 必须有本轮上传的公众号导出表格 | 无附件时请用户上传并停止，不读取本地反馈/策略或现有草案；有附件时导入、匹配并关联该批次的本地正文/图文文案，再刷新快照；关联失败时停下说明，不生成旧数据草案 | `jianzi_content_feedback_import`、`jianzi_content_feedback_adjustment_generate` |
 
 内容块说明的内部提示源为 `server/features/social-cards/prompts/content-block-types.md`；外部 Agent 通过 `agent-integrations/skills/jianzi-social-cards/references/content-block-types.md` 读取同一份规范，WorkBuddy 分发副本位于 `agent-integrations/workbuddy/skills/jianzi-social-cards/references/content-block-types.md`。
@@ -47,6 +47,8 @@ DSH Agent 每次业务工具调用前检查工作台 `appVersion` 是否不低�
 DSH Agent 可通过只读 MCP 工具 `jianzi_calendar_list` 查询 `/api/calendar` 的内容日历条目，按 `month`（`YYYY-MM`）可选过滤；结果包含终稿文章、已交付图文和写作计划。
 
 MCP 工具定义与执行器以 `scripts/agent-integration/tools.mjs` 和 `scripts/agent-integration/client.mjs` 为源；插件打包前由 `agent-integrations/dsh-workbench/build.mjs` 复制到 `shared/`。当前路径使用 DSH 官方 `uiWorkspace` 与 Client Slots，不依赖 `desktopWorkbenches`，客户端插件也不会直接请求见字 API。
+
+仓库型工具图文使用 `jianzi_candidate_repository_inspect` 调用既有 `POST /api/candidates/:id/repository/inspect`；服务端从候选解析仓库地址，核验并保存仓库事实基座和清单产物。该调用必须发生在故事板生成/更新前。事件型图文使用事件事实卡，自定义图文使用自定义事实基座，不执行仓库核验。
 
 ## 打包与交付
 
