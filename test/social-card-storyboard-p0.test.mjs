@@ -7,11 +7,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadSkillBundle } from '../server/platform/llm/skill-runtime.mjs';
 import {
+  SOCIAL_CARD_RENDERER_BLOCK_TYPES,
   SOCIAL_CARD_STORYBOARD_CONTRACTS,
   buildSocialCardFactEnvelope,
   buildSocialCardStoryboardSystemPrompt,
   toLegacySocialCardPromptInput,
 } from '../server/features/social-cards/index.mjs';
+import { getSocialCardTemplateCapabilities } from '../server/features/social-cards/rendering/social-card-template-resolver.mjs';
 import { continuationBadge, renderStoryboardBlock, renderTechnicalText } from '../server/features/social-cards/rendering/storyboard-html-content.mjs';
 import { sanitizeCardPlan } from '../server/features/social-cards/rendering/storyboard-content.mjs';
 
@@ -152,17 +154,22 @@ test('统一事实信封覆盖三个入口且兼容迁移前模型输入',()=>{
     ['custom','social-custom','custom_facts'],
   ];
   for(const [contentType,entryPoint,legacyKey] of cases){
-    const envelope=buildSocialCardFactEnvelope({
-      contentType,channelMode:'xiaohongshu',topic:'测试主题',facts:{kind:contentType},
-      eventAnalysis:{kind:'event'},outputMode:`xiaohongshu-${contentType}`,
-    });
-    assert.equal(envelope.contract,'social_card_fact_base');
-    assert.equal(envelope.entryPoint,entryPoint);
-    assert.equal(envelope.constraints.pageWidth,375);
-    assert.ok(envelope.constraints.allowedBlockTypes.includes('stats'));
-    const legacy=toLegacySocialCardPromptInput(envelope);
-    assert.deepEqual(Object.keys(legacy),['topic','channel_mode',legacyKey]);
-    assert.equal(legacy.topic,'测试主题');
+    for(const channelMode of ['wechat','xiaohongshu']){
+      const envelope=buildSocialCardFactEnvelope({
+        contentType,channelMode,topic:'测试主题',facts:{kind:contentType},
+        eventAnalysis:{kind:'event'},outputMode:`${channelMode}-${contentType}`,
+      });
+      assert.equal(envelope.contract,'social_card_fact_base');
+      assert.equal(envelope.entryPoint,entryPoint);
+      assert.equal(envelope.constraints.pageWidth,375);
+      assert.deepEqual(envelope.constraints.allowedBlockTypes,SOCIAL_CARD_RENDERER_BLOCK_TYPES);
+      const capabilities=getSocialCardTemplateCapabilities({channelMode,contentType});
+      assert.deepEqual(capabilities.allowedBlockTypes,SOCIAL_CARD_RENDERER_BLOCK_TYPES);
+      assert.deepEqual(capabilities.roles.concept.supportedBlocks,SOCIAL_CARD_RENDERER_BLOCK_TYPES);
+      const legacy=toLegacySocialCardPromptInput(envelope);
+      assert.deepEqual(Object.keys(legacy),['topic','channel_mode',legacyKey]);
+      assert.equal(legacy.topic,'测试主题');
+    }
   }
 });
 
@@ -173,12 +180,12 @@ test('迁移后的故事板提示词保持六种入口和渠道组合的语义�
     custom:'custom-card-storyboard',
   };
   const snapshots={
-    'repository/wechat':'7a3946eb1aa477fb703911b321537f525ba105cc27b46d35909eb4c0401f391b',
-    'repository/xiaohongshu':'a674b37c530c46f5a5aa9865e9ce906a531f7ae05cbd726cc969a86e202fa7a0',
-    'event/wechat':'17768de900057f261efd5a936a300d82a0326333d66ae314f4ce08264b4fc445',
-    'event/xiaohongshu':'c3cfbe9131fd2c4bff0474891ea5d145f59a454d1944387b31eb7c6a2476e436',
-    'custom/wechat':'70ab58ef3512d486fbbd1eb26c0202458912089ac60c34cfb0728d2e5194d326',
-    'custom/xiaohongshu':'c088f413a43be6ba5749bdac7e14e0d3e2272310abfd54ef6973bb9f5dd00ec8',
+    'repository/wechat':'1b59c6d4286cd92ffb78218dca182e0d69aa84c521a7563416cfbf0e4714575f',
+    'repository/xiaohongshu':'cf1e0e528a3f9405869b41cc9326a6c56e390c82bc9a8504c35a0de779bcfdb2',
+    'event/wechat':'f436074ce57be679815289a706abbb5517cc8417461b5b266ea34bf45698809c',
+    'event/xiaohongshu':'415d0bb473a9142c1add0c4c66cec06ff7b601fb50b0d87a986a36219794c6e9',
+    'custom/wechat':'3bd16968b717627107683188d233131b4fd8c17eb1489c1f25ac85cb5f0c0792',
+    'custom/xiaohongshu':'c3e7f82ad619d1374d9d58870c457671cfabf773ecae6afbfc89f5893b6d6b0d',
   };
   for(const [key,expected] of Object.entries(snapshots)){
     const [contentType,channelMode]=key.split('/');

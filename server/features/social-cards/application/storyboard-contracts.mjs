@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { buildSocialCardTemplateCapabilityPrompt } from '../rendering/social-card-template-resolver.mjs';
+import { SOCIAL_CARD_RENDERER_BLOCK_TYPES } from '../rendering/social-card-template-registry.mjs';
 
 export const SOCIAL_CARD_STORYBOARD_CONTRACTS = Object.freeze({
   factBase:'social_card_fact_base',
@@ -51,9 +52,7 @@ export function buildSocialCardFactEnvelope({
     constraints:{
       minPages:limits.minPages,
       maxPages:limits.maxPages,
-      allowedBlockTypes:channel==='xiaohongshu'
-        ? ['text','list','code','note','stats','compare','steps','timeline','scenes','highlight']
-        : ['text','list','code','note'],
+      allowedBlockTypes:[...SOCIAL_CARD_RENDERER_BLOCK_TYPES],
       pageWidth:375,
       pageHeight:667,
     },
@@ -106,14 +105,12 @@ export function buildSocialCardStoryboardSystemPrompt({
   channelMode,
   templateCapabilities=null,
 }) {
-  const normalizedType=normalizeContentType(contentType);
   const xhs=channelMode==='xiaohongshu';
-  const cardBlockTypes=xhs?'text|list|note|stats|compare|steps|timeline|scenes|highlight':'text|list|note';
-  const repoBlockTypes=xhs?'text|list|code|note|stats|compare|steps|timeline|scenes|highlight':'text|list|code|note';
+  const blockTypes=SOCIAL_CARD_RENDERER_BLOCK_TYPES.join('|');
   const values={
-    CARD_BLOCK_TYPES:cardBlockTypes,
-    REPOSITORY_BLOCK_TYPES:repoBlockTypes,
-    BLOCK_TYPES:normalizedType==='repository'?repoBlockTypes:cardBlockTypes,
+    CARD_BLOCK_TYPES:blockTypes,
+    REPOSITORY_BLOCK_TYPES:blockTypes,
+    BLOCK_TYPES:blockTypes,
   };
   const embeddedContractSkillIds=new Set([
     BUILTIN_SOCIAL_CARD_STORYBOARD_SKILLS.repository,
@@ -125,7 +122,8 @@ export function buildSocialCardStoryboardSystemPrompt({
   // 必须注入同一份运行契约，确保三类事件故事板都输出 card_plan/content_blocks。
   const runtimeContract=embeddedContractSkillIds.has(skillId)?'':replaceTokens(readPromptReference(workspaceRoot,'runtime-contract.md',resourceRoot),values);
   const channel=readPromptReference(workspaceRoot,xhs?'channel-xiaohongshu.md':'channel-wechat.md',resourceRoot);
+  const contentBlocks=readPromptReference(workspaceRoot,'content-block-types.md',resourceRoot);
   const composition=readPromptReference(workspaceRoot,'composition-contract.md',resourceRoot);
   const template=buildSocialCardTemplateCapabilityPrompt(templateCapabilities);
-  return [methodPrompt,runtimeContract,channel,composition,template].filter(Boolean).join('\n\n');
+  return [methodPrompt,runtimeContract,channel,contentBlocks,composition,template].filter(Boolean).join('\n\n');
 }
