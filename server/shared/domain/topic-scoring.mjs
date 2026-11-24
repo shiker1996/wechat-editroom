@@ -26,7 +26,10 @@ function resolveWeights(input, defaults, label, warnings) {
     return { ...defaults };
   }
   if (Math.abs(total - 1) > 1e-8) warnings.push(`${label} 权重总和为 ${Number(total.toFixed(4))}，已自动归一化为 1`);
-  return Object.fromEntries(Object.entries(values).map(([key, value]) => [key, value / total]));
+  const normalized = Object.fromEntries(Object.entries(values).map(([key, value]) => [key, Number((value / total).toFixed(12))]));
+  const lastKey = Object.keys(normalized).at(-1);
+  normalized[lastKey] = Number((normalized[lastKey] + 1 - Object.values(normalized).reduce((sum, value) => sum + value, 0)).toFixed(12));
+  return normalized;
 }
 
 function resolveCompetition(input, warnings) {
