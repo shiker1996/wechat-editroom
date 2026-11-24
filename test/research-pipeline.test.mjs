@@ -6,7 +6,7 @@ import { classifyContentRoute, isPureProjectEvent } from '../server/features/res
 import { buildScoreDualRun } from '../scripts/migration/replay-topic-score.mjs';
 
 function hotspot(id, title, eventKey, source='rsshub') {
-  return { id, title, source, url:`https://example.com/${id}`, category:'🤖 AI/技术动态', market_scope:'全球性', score:80,
+  return { id, title, source, url:`https://example.com/${id}`, category:'🤖 AI/技术动态', market_scope:'国外', score:80,
     raw_json:JSON.stringify({aiTags:{eventKey,chinaRelevance:8,relevanceReason:'影响国内开发者',riskLevel:'低',keywords:['模型'],
       preScores:{conflict:14,audience:16,informationGain:12,emotion:10,timeliness:9,impact:8,sourceReliability:8},
       credibleScoop:0,saturationPenalty:2,duplicatePenalty:0,blackHorseSignals:['信息稀缺']}}) };
@@ -27,7 +27,7 @@ test('event_id 由事件指纹派生，与输入顺序和无关条目增减无�
   assert.equal(idOf(forward,'A报道'),idOf(reversed,'A报道'));
   assert.equal(idOf(forward,'另一事件'),idOf(reversed,'另一事件'));
   // 插入无关事件（含无 eventKey 的单条）后，已有事件的 event_id 保持不变
-  const untagged={id:99,title:'未打标',source:'rsshub',url:'https://example.com/99',category:'🤖 AI/技术动态',market_scope:'全球性',score:10,raw_json:'{}'};
+  const untagged={id:99,title:'未打标',source:'rsshub',url:'https://example.com/99',category:'🤖 AI/技术动态',market_scope:'国外',score:10,raw_json:'{}'};
   const expanded=clusterItems([untagged,...base,hotspot(4,'新事件','主体|融资|公司')]);
   assert.equal(idOf(expanded,'A报道'),idOf(forward,'A报道'));
   assert.equal(idOf(expanded,'另一事件'),idOf(forward,'另一事件'));

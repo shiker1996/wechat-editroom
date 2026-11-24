@@ -51,7 +51,7 @@ const todayItems = [
   hotspot({
     title: '开源大模型密集上新：性能对标旗舰，权重与量化包同步放出',
     url: 'https://example.com/news/open-model-release',
-    category: '行业趋势与市场变化', marketScope: '全球', score: 85,
+    category: '行业趋势与市场变化', marketScope: '国外', score: 85,
     sourceName: 'Solidot', route: '/solidot',
     publishedAt: isoHoursAgo(5),
     summary: '多个开源大模型在同一周内更新版本，参数量更小、推理更快，社区出现大量本地部署教程，MCP 工具生态随之增长。',
@@ -67,7 +67,7 @@ const todayItems = [
   hotspot({
     title: '海外主流内容平台集体上线 AI 生成内容标识',
     url: 'https://example.com/news/ai-content-label-global',
-    category: '政策与公共议题', marketScope: '全球', score: 84,
+    category: '政策与公共议题', marketScope: '国外', score: 84,
     sourceName: 'TechCrunch', route: '/techcrunch/news',
     publishedAt: isoHoursAgo(8),
     summary: '多家海外内容与社交媒体平台在同一周内推出 AI 生成内容标识，规范使用与透明度成为新一轮行业共识。',
@@ -83,7 +83,7 @@ const todayItems = [
   hotspot({
     title: 'Node.js 24 正式支持内置 SQLite，全栈开发再简化',
     url: 'https://example.com/news/node-sqlite',
-    category: '产品与技术动态', marketScope: '全球', score: 82,
+    category: '产品与技术动态', marketScope: '国外', score: 82,
     sourceName: 'Reddit · r/programming', route: 'programming',
     publishedAt: isoHoursAgo(12),
     summary: 'Node.js 24 将 SQLite 作为实验性内置模块提供，本地数据型工具不再需要单独安装数据库依赖，社区讨论热烈。',
@@ -126,7 +126,7 @@ const yesterdayItems = [
   hotspot({
     title: 'AI 编程助手进入日常：调查显示近半数开发者已在用',
     url: 'https://example.com/news/ai-coding-survey',
-    category: '职场与组织变化', marketScope: '全球', score: 90,
+    category: '职场与组织变化', marketScope: '国外', score: 90,
     sourceName: 'ReadHub', route: '/readhub',
     publishedAt: isoHoursAgo(28),
     summary: '一份开发者调查显示，近半数受访者已在日常开发中使用 AI 编程助手，代码审查与测试生成是最高频场景。',
@@ -134,7 +134,7 @@ const yesterdayItems = [
   hotspot({
     title: 'MCP 协议持续升温：主流工具与应用加速接入',
     url: 'https://example.com/news/mcp-adoption',
-    category: '产品与技术动态', marketScope: '全球', score: 87,
+    category: '产品与技术动态', marketScope: '国外', score: 87,
     sourceName: 'Reddit · r/artificial', route: 'artificial',
     publishedAt: isoHoursAgo(30),
     summary: 'Model Context Protocol 生态扩展加快，更多编辑器、数据库与浏览器工具接入，本地 AI 工作流的组装变得更容易。',

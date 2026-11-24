@@ -18,7 +18,7 @@ test('GitHub 元数据进入打标输入且限制字段规模',()=>{
 });
 
 test('图文研判使用仓库描述、Star 与发现渠道',()=>{
-  const hotspot={id:2,title:'o/r',source:'github:search',source_group:'github',source_type:'search',url:'https://github.com/o/r',category:'🤖 AI/技术动态',market_scope:'全球性',score:80,published_at:'2026-07-20',
+  const hotspot={id:2,title:'o/r',source:'github:search',source_group:'github',source_type:'search',url:'https://github.com/o/r',category:'🤖 AI/技术动态',market_scope:'国外',score:80,published_at:'2026-07-20',
     raw_json:JSON.stringify({description:'AI workflow CLI for developers',language:'TypeScript',stars:1800,topics:['agent','cli'],createdAt:'2026-07-10',discoveryChannels:['search','mentioned'],aiTags:tags})};
   const selected=selectSocialCandidates(preselection(clusterItems([hotspot]),'2026-07-22'));
   assert.equal(selected.length,1);

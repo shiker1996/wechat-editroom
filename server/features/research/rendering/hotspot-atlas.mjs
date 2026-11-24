@@ -1,4 +1,5 @@
 import { dimensionSelections } from '../domain/hotspot-dimensions.mjs';
+import { normalizeMarketScope } from '../domain/hotspot-clustering.mjs';
 
 function timeValue(value) {
   const parsed = Date.parse(value || '');
@@ -64,7 +65,8 @@ export function buildHotspotAtlas({ clusters, totalArticles, taggedCount, exclud
   const uniqueArticleIds = new Set(articleIds);
   const reportSum = events.reduce((sum,event) => sum + event.report_count, 0);
   const sourceSet = new Set(events.flatMap((event) => event.articles.map((article) => article.source).filter(Boolean)));
-  const scopes = Object.fromEntries(['国内','全球性','国外'].map((scope) => [scope, events.filter((event) => event.market_scope === scope).length]));
+  for (const event of events) event.market_scope = normalizeMarketScope(event.market_scope);
+  const scopes = Object.fromEntries(['国内','国外'].map((scope) => [scope, events.filter((event) => event.market_scope === scope).length]));
   const categories = [...new Set(events.map((event) => event.topic_category).filter(Boolean))].map((name) => ({ name, count:events.filter((event) => event.topic_category === name).length })).sort((a,b) => b.count-a.count || a.name.localeCompare(b.name));
   const sourceCounts = new Map();
   for (const event of events) for (const source of new Set(event.articles.map((article) => article.source).filter(Boolean))) sourceCounts.set(source,(sourceCounts.get(source)||0)+1);

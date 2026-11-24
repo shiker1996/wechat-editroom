@@ -56,7 +56,7 @@ test('直接外部研判按共享 v3 公式计分并只在报告顶层记录版�
   const date = new Date().toISOString().slice(0, 10);
   const batch = store.createBatch({ date, title: '外部研判评分' });
   store.addHotspots(batch.id, 'rsshub', [{ id: 'one', title: '公司发布工具', url: 'https://example.com/tool',
-    category: '🤖 AI/技术动态', market_scope: '全球性', publishedAt: new Date().toISOString() }]);
+    category: '🤖 AI/技术动态', market_scope: '国外', publishedAt: new Date().toISOString() }]);
   const hotspot = store.getBatch(batch.id).hotspots[0];
   store.updateHotspotTags(hotspot.id, { eventKey: '公司|发布|工具', eventParts: { who: '公司', what: '发布工具' },
     preScores: { audience: 10 }, chinaRelevance: 9 });

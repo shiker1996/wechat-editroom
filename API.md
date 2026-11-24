@@ -618,7 +618,7 @@ AI 规划配图占位
 外部 Agent 通过 MCP/CLI 完成模型生成后，可将结果提交到以下接口。工作台会校验输入并负责保存、确定性门禁、浏览器审计、截图和产物登记。所有写请求仍遵循本文件开头的本地会话与 CSRF 约定。
 
 ### POST /api/batches/:id/external/tags
-提交本批次热点打标。items 为 1–200 项；每项需提供 id、分类、marketScope、riskLevel、relevanceReason、0–12 的 chinaRelevance、主体/动作 eventParts，以及处于定义范围内的 preScores。可选提供 domesticSubject（国内厂商/国内监管/国内市场/无），仅作打标依据并存入热点 tags，不进入事件评分。热点必须属于该批次。
+提交本批次热点打标。items 为 1–200 项；每项需提供 id、分类、marketScope（仅“国内”或“国外”，全球/跨境事件归入“国外”）、riskLevel、relevanceReason、0–12 的 chinaRelevance、主体/动作 eventParts，以及处于定义范围内的 preScores。chinaRelevance 单独描述对国内用户的影响程度和传导依据，不由 marketScope 推断。可选提供 domesticSubject（国内厂商/国内监管/国内市场/无），仅作打标依据并存入热点 tags，不进入事件评分。热点必须属于该批次。
 
 ### GET /api/batches/:id/external/events
 读取已打标且符合批次新鲜度条件的稳定事件聚类、关联热点、报道和已有事件卡。必须先完成热点打标。

@@ -38,7 +38,7 @@ test('热点全景按事件覆盖聚合且报道数守恒', () => {
   }];
   const atlas=buildHotspotAtlas({clusters,totalArticles:3,taggedCount:3});
   assert.equal(atlas.eventCount,2); assert.equal(atlas.sourceCount,2); assert.equal(atlas.multiSourceCount,1);
-  assert.deepEqual(atlas.scopes,{国内:1,全球性:0,国外:1}); assert.equal(atlas.events[0].event_id,'E0001');
+  assert.deepEqual(atlas.scopes,{国内:1,国外:1}); assert.equal(atlas.events[0].event_id,'E0001');
   assert.equal(atlas.events[0].risk_level,'中'); assert.equal('keywords' in atlas,false);
   assert.equal(atlas.gate.valid,true); assert.equal(atlas.gate.reportSum,3);
 });

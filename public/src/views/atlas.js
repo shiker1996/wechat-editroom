@@ -276,7 +276,7 @@ function eventCardHtml(card) {
 
 function atlasEvents() {
   if (!state.atlas) return [];
-  let events = state.atlas.events || [];
+  let events = (state.atlas.events || []).map((event) => ({ ...event, market_scope: normalizeAtlasMarketScope(event.market_scope) }));
   const f = state.atlasFilters;
   if (f.scope !== "全部") events = events.filter((e) => e.market_scope === f.scope);
   if (f.multi) events = events.filter((e) => e.source_count > 1);
@@ -287,12 +287,16 @@ function atlasEvents() {
   return events;
 }
 
+function normalizeAtlasMarketScope(value) {
+  return value === '国内' ? '国内' : ['国外', '全球性', '全球'].includes(value) ? '国外' : '待标注';
+}
+
 function atlasHotlistItems() {
   if (!state.atlas) return [];
   const category = state.atlasFilters.category || Object.keys(state.atlas?.eventHeatRankings || {}).find((key) => key !== "repository_projects") || "";
   let items = state.atlas.eventHeatRankings?.[category]?.items || [];
   const f = state.atlasFilters;
-  if (f.scope !== "全部") items = items.filter((item) => (item.marketScopes || []).includes(f.scope));
+  if (f.scope !== "全部") items = items.filter((item) => (item.marketScopes || []).some((scope) => normalizeAtlasMarketScope(scope) === f.scope));
   if (f.multi) items = items.filter((item) => Number(item.sourceCount || 0) > 1);
   if (f.query) {
     const q = f.query.toLowerCase();
@@ -489,7 +493,7 @@ function renderEventHotlist() {
   container.innerHTML = summary + items.map((item) => {
     const stateLabel = stateLabels[item.state] || item.state || "持续";
     const delta = item.rankDelta == null ? "新上榜" : (item.rankDelta > 0 ? `↑${item.rankDelta}` : item.rankDelta < 0 ? `↓${Math.abs(item.rankDelta)}` : "—");
-    const scopes = (item.marketScopes || []).join(" / ") || "待标注";
+    const scopes = [...new Set((item.marketScopes || []).map(normalizeAtlasMarketScope))].join(" / ") || "待标注";
     const reason = (item.reason || []).slice(0, 3).map((value) => `<span>${escapeHtml(value)}</span>`).join("");
     const platformLabels = { x: "X", techtwitter: "TechTwitter", wechat: "公众号", reddit: "Reddit", huggingface: "Hugging Face", github: "GitHub" };
     const platformDetail = (item.platformImpactByPlatform || []).map((entry) => `${platformLabels[entry.platform] || entry.platform} ${entry.score}`).join(" · ");
@@ -630,11 +634,11 @@ function renderAtlas() {
   document.getElementById("atlas-filter-count").textContent = `显示 ${events.length} / ${atlas.eventCount} 个事件`;
 
   const scopeTotal = Math.max(1, events.length);
-  const scopeColors = { 国内: "var(--red)", 全球性: "var(--yellow)", 国外: "var(--mint)" };
+  const scopeColors = { 国内: "var(--red)", 国外: "var(--mint)" };
   const sd = document.getElementById("scope-distribution");
   if (sd) {
-    sd.innerHTML = ["国内", "全球性", "国外"].map((scope) => {
-      const count = events.filter((e) => e.market_scope === scope).length;
+    sd.innerHTML = ["国内", "国外"].map((scope) => {
+      const count = events.filter((e) => normalizeAtlasMarketScope(e.market_scope) === scope).length;
       return `<div class="scope-meter"><span>${scope}</span><div><i style="width:${(count / scopeTotal * 100)}%;background:${scopeColors[scope]}"></i></div><b>${count}</b></div>`;
     }).join("");
   }

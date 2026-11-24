@@ -112,7 +112,7 @@ test('打标 JSON 截断时标记 invalid_output 并自动拆分重试', async (
   const gateway={config:{defaultProvider:'deepseek',providers:{deepseek:{maxOutputTokens:8192}}},async complete(input){
     calls+=1; const rows=JSON.parse(input.messages[1].content);
     if(rows.length>1)return {callId:1,content:'{"items":[',finishReason:'length',model:'test',context:{compressed:false,afterTokens:10},usage:{completion_tokens:5000}};
-    return {callId:calls,content:JSON.stringify({items:[{id:rows[0].id,category:'🤖 AI/技术动态',marketScope:'全球性',chinaRelevance:8,relevanceReason:'相关',riskLevel:'低',score:80,eventKey:`事件${rows[0].id}`,preScores:{conflict:10}}]}),finishReason:'stop',model:'test',context:{compressed:false,afterTokens:10},usage:{completion_tokens:100}};
+    return {callId:calls,content:JSON.stringify({items:[{id:rows[0].id,category:'🤖 AI/技术动态',marketScope:'国外',chinaRelevance:8,relevanceReason:'相关',riskLevel:'低',score:80,eventKey:`事件${rows[0].id}`,preScores:{conflict:10}}]}),finishReason:'stop',model:'test',context:{compressed:false,afterTokens:10},usage:{completion_tokens:100}};
   }};
   const thinkingCalls=[];
   const origComplete=gateway.complete.bind(gateway);
