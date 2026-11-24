@@ -168,7 +168,7 @@ test('T/J/A/C/F由服务端公式计算', () => {
   assert.equal(result.b,80); assert.equal(result.p,65); assert.equal(result.s,5); assert.equal(result.d,0);
   assert.equal(result.a,76);
   assert.equal(result.j,0); assert.equal(result.c,5);
-  assert.equal(result.f,41.4);
+  assert.equal(result.f,42.8);
 });
 
 test('阶段5 T 接入 F：同等文章化质量下事件价值更高者优先', () => {
@@ -177,7 +177,7 @@ test('阶段5 T 接入 F：同等文章化质量下事件价值更高者优先',
   const scored=scoreCards([{...base,candidateId:'C-HIGH',source:{...base.source,eventValue:90}},{...base,candidateId:'C-LOW',source:{...base.source,eventValue:40}}],{items:[]});
   assert.equal(scored[0].candidateId,'C-HIGH');
   assert.equal(scored[0].a,scored[1].a);
-  assert.equal(Number((scored[0].f-scored[1].f).toFixed(1)),13.9);
+  assert.equal(Number((scored[0].f-scored[1].f).toFixed(1)),11.1);
 });
 
 test('研判价值 J 只统计候选实际绑定的模型信号和事件关系', () => {
@@ -626,39 +626,42 @@ test('选题报告合并维度候选一节', () => {
   assert.ok(!without.includes('维度候选'));
 });
 
-test('评分权重可通过 scoring 配置覆盖', () => {
+test('v4 正式评分使用固定公式权重并对未分类素材采用中性 M', () => {
   const source={candidateId:'C001',title:'事件',category:'产品与技术动态',poolRole:'核心8条',credibleScoop:0,riskLevel:'低'};
   const cards=[{candidateId:'C001',status:'PASS',source,bScores:{angleUniqueness:4,emotionSpread:4,titleHook:4,audienceRelevance:4,factSupport:4},
     hProfile:{historicalType:'bigtech',fiveSenseCount:4,fiveQuestionCount:3,recommendationFit:6,emotionTheme:4,searchFriendly:3}}];
   const synthesis={items:[{candidateId:'C001',saturationPenalty:5,duplicatePenalty:2,audienceRelevance:4,reason:'测试'}]};
   const defaults=scoreCards(cards,synthesis)[0];
-  assert.equal(defaults.f,41.4);
-  // H=78,B=80,P=65：A=76；DOM 缺失时 A/T/J 按 .90 归一化；自定义权重只改 A 聚合比例
+  const expectedDefault=Number(((defaults.a*0.5+defaults.eventValue*0.2+defaults.j*0.1+50*0.1)/0.9-defaults.c).toFixed(1));
+  assert.equal(defaults.f,expectedDefault);
+  // H=78,B=80,P=65：A=76；DOM 缺失时 A/T/J/M 按 .90 归一化；账号权重不再覆盖 v4 正式公式
   const custom=resolveScoring({contentPillars:['AI 行业热点：开发者影响'],scoring:{weights:{h:0.5,b:0.3,p:0.2}}});
   const adjusted=scoreCards(cards,synthesis,custom)[0];
   assert.equal(adjusted.h,78); assert.equal(adjusted.b,80); assert.equal(adjusted.p,65); assert.equal(adjusted.s,5);
-  assert.equal(adjusted.f,Number(((78*0.5+80*0.3+65*0.2)*(0.55/0.9)-5).toFixed(1)));
+  const expectedAdjusted=Number(((adjusted.a*0.5+adjusted.eventValue*0.2+adjusted.j*0.1+50*0.1)/0.9-adjusted.c).toFixed(1));
+  assert.equal(adjusted.f,expectedAdjusted);
+  assert.equal(adjusted.materialFit,50);
 });
 
-test('legacy account context is visibly marked for v3 migration while recommended category P values apply', () => {
+test('legacy account context is visibly marked for v4 migration while recommended category P values apply', () => {
   const scoring=resolveScoring({ contentPillars:['AI 行业热点：开发者影响'], scoring:{
     weights:{h:0.6,b:0.25,p:0.15}, hBase:{bigtech:33}, eventValueWeight:0.3, researchValueWeight:0.25,
   } });
-  assert.equal(scoring.weights.h,0.6);
+  assert.equal(scoring.weights.h,0.5);
   assert.equal(scoring.finalAccountFitByCategory['产品与技术动态'],65);
   assert.equal(scoring.accountFitByCategory['产品与技术动态'],65);
   assert.strictEqual(scoring.accountFitByCategory,scoring.finalAccountFitByCategory);
   assert.equal(scoring.legacyV2.hBase.bigtech,33);
   assert.equal(scoring.legacyV2.eventValueWeight,0.3);
   assert.equal(scoring.legacyV2.researchValueWeight,0.25);
-  assert.ok(scoring.scoringWarnings.some((warning)=>warning.includes('尚未升级到 v3')));
+  assert.ok(scoring.scoringWarnings.some((warning)=>warning.includes('尚未升级到 v4')));
   assert.ok(scoring.scoringWarnings.some((warning)=>warning.includes('缺少 accountFit 分类')));
 });
 
 test('custom editorial categories use account-fit configuration then account-profile fallback', () => {
   const profile={ editorialCategories:['自定义工程观察'], contentPillars:['开发者实践'] };
   const fallback=resolveScoring(profile);
-  const configured=resolveScoring({ ...profile, scoring:{ formulaVersion:'v3', accountFit:{ '自定义工程观察':92 } } });
+  const configured=resolveScoring({ ...profile, scoring:{ formulaVersion:'v4', accountFit:{ '自定义工程观察':92 } } });
   assert.equal(fallback.finalAccountFitByCategory['自定义工程观察'],80);
   assert.equal(fallback.accountFitByCategory['自定义工程观察'],80);
   assert.equal(configured.finalAccountFitByCategory['自定义工程观察'],92);
@@ -675,15 +678,15 @@ test('scoring 覆盖分类偏好与账号契合加分，非法值回退默认', 
   assert.equal(ranking[0].categoryPreference,-8);
   const pool=selectDimensionPool(events,ranking,{accountContext:{contentPillars:['AI 行业热点：x'],scoring:{accountFitBonus:12}}});
   assert.equal(pool.groups.find((g)=>g.accountFit>0).accountFit,12);
-  assert.equal(resolveScoring({scoring:{eventValueWeight:0.2}}).eventValueWeight,0.25);
-  assert.equal(resolveScoring({scoring:{eventValueWeight:0.8}}).eventValueWeight,0.4);
+  assert.equal(resolveScoring({scoring:{eventValueWeight:0.2}}).eventValueWeight,0.2);
+  assert.equal(resolveScoring({scoring:{eventValueWeight:0.8}}).eventValueWeight,0.2);
 });
 
-test('选题报告公式文案跟随实际权重', () => {
+test('选题报告展示正式 v4 公式与 M 分项', () => {
   const source={candidateId:'C001',title:'事件',category:'🤖 AI/技术动态',poolRole:'核心8条',credibleScoop:0,riskLevel:'低'};
   const scored=scoreCards([{candidateId:'C001',status:'PASS',source,bScores:{angleUniqueness:4,emotionSpread:4,titleHook:4,audienceRelevance:4,factSupport:4},
     hProfile:{historicalType:'bigtech',fiveSenseCount:4,fiveQuestionCount:3,recommendationFit:6,emotionTheme:4,searchFriendly:3}}],{items:[]});
   const custom=resolveScoring({scoring:{weights:{h:0.5,b:0.3,p:0.2}}});
-  assert.match(markdownRanked(scored,{items:[],metaNarratives:[],combination:{}},[],custom),/评分公式版本：v3[\s\S]*A = H×50% \+ B×30% \+ P×20%[；;].*F = A×55% \+ T×25% \+ J×10% \+ DOM×10% - C/);
-  assert.match(markdownRanked(scored,{items:[],metaNarratives:[],combination:{}}),/A = H×50% \+ B×30% \+ P×20%[；;].*F = A×55% \+ T×25% \+ J×10% \+ DOM×10% - C/);
+  assert.match(markdownRanked(scored,{items:[],metaNarratives:[],combination:{}},[],custom),/评分公式版本：v4[\s\S]*A = H×50% \+ B×30% \+ P×20%[；;].*F = A×50% \+ T×20% \+ J×10% \+ DOM×10% \+ M×10% - C/);
+  assert.match(markdownRanked(scored,{items:[],metaNarratives:[],combination:{}}),/A = H×50% \+ B×30% \+ P×20%[；;].*F = A×50% \+ T×20% \+ J×10% \+ DOM×10% \+ M×10% - C/);
 });

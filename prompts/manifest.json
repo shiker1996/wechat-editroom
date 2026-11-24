@@ -30,7 +30,7 @@
     },
     {
       "id": "articles.review",
-      "version": 8,
+      "version": 9,
       "file": "articles/review.md",
       "purpose": "article-review",
       "variables": [],
@@ -162,7 +162,7 @@
     },
     {
       "id": "collection.repo-discovery-queries",
-      "version": 2,
+      "version": 3,
       "file": "collection/repo-discovery-queries.md",
       "purpose": "collection-github-repo-discovery-query-planning",
       "variables": [

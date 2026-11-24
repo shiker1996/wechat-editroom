@@ -84,7 +84,7 @@ export function customFactMarkdown(fact) {
   ];
   if (fact.audience) lines.push(`目标受众：${fact.audience}`);
   if (fact.scenario) lines.push(`使用场景：${fact.scenario}`);
-  if (fact.thesis) lines.push(`核心观点：${fact.thesis}`);
+  if (fact.thesis) lines.push(`${fact.content_type === 'tutorial' ? '可核对的预期结果' : '核心观点'}：${fact.thesis}`);
   lines.push('', '## 核心要点（含来源等级）', '',
     ...(fact.points || []).map((item) => `- ${item.text}（${levelLabel(item.source_level)}${item.source_url ? `；来源 ${item.source_url}` : ''}）`));
   if ((fact.steps || []).length) lines.push('', '## 教程步骤', '', ...fact.steps.map((item, index) => `${index + 1}. ${item}`));

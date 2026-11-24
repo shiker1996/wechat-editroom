@@ -3,6 +3,8 @@ import { spawn } from 'node:child_process';
 import dns from 'node:dns/promises';
 import net from 'node:net';
 import path from 'node:path';
+import { feedDocumentTitle, parseFeedDocument } from '../shared/feed-normalization.mjs';
+import { fetchWithBoundedRetry } from '../shared/source-http.mjs';
 
 export function normalizeRssHubLifecycleConfig(config = {}) {
   const normalizeScript = (value) => {
@@ -21,27 +23,6 @@ export function normalizeRssHubLifecycleConfig(config = {}) {
 }
 function privateIp(address){if(net.isIPv4(address)){const [a,b]=address.split('.').map(Number);return a===10||a===127||a===0||(a===100&&b>=64&&b<=127)||(a===169&&b===254)||(a===172&&b>=16&&b<=31)||(a===192&&[0,2,168].includes(b))||(a===198&&(b===18||b===19||b===51))||(a===203&&b===0)||a>=224;}const value=address.toLowerCase();return !/^[23][0-9a-f]{0,3}:/.test(value)||value.startsWith('2001:db8:');}
 
-function decodeXml(value = '') {
-  return value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
-    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
-    .replace(/<[^>]+>/g, '').trim();
-}
-
-function field(block, names) {
-  for (const name of names) {
-    const match = block.match(new RegExp(`<${name}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${name}>`, 'i'));
-    if (match) return decodeXml(match[1]);
-  }
-  return null;
-}
-
-function normalizeDate(value) {
-  if (!value) return null;
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
-}
-
 export function filterRecentItems(items, config, now = Date.now()) {
   const maxAgeMs = Math.max(1, Number(config.maxAgeHours ?? 168)) * 60 * 60 * 1000;
   const kept = []; const stale = []; const undated = [];
@@ -57,14 +38,7 @@ export function filterRecentItems(items, config, now = Date.now()) {
 }
 
 export function parseFeed(xml, route) {
-  const blocks = xml.match(/<item\b[\s\S]*?<\/item>|<entry\b[\s\S]*?<\/entry>/gi) ?? [];
-  return blocks.map((block, index) => ({
-    id: field(block, ['guid', 'id']) ?? `${route}-${index}`,
-    title: field(block, ['title']) ?? '无标题',
-    url: field(block, ['link']) ?? block.match(/<link[^>]+href=["']([^"']+)/i)?.[1] ?? null,
-    publishedAt: normalizeDate(field(block, ['pubDate', 'published', 'updated'])),
-    summary:field(block,['description','summary','content'])||'',githubRepositories:[...new Set([...block.matchAll(/https?:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+/gi)].map((match)=>match[0].replace(/[),.;]+$/,'')))],route, rank:index+1,
-  }));
+  return parseFeedDocument(xml, route).items;
 }
 
 export function githubTrendingPeriod(route){return String(route).match(/^\/github\/trending\/(daily|weekly|monthly)\//i)?.[1]?.toLowerCase()||null;}
@@ -94,12 +68,15 @@ async function assertPublicFeedUrl(value) {
 
 export async function fetchDirectFeed(value, timeoutMs = 60000) {
   let url = await assertPublicFeedUrl(value);
+  const deadline = Date.now() + Math.max(1000, Number(timeoutMs) || 60000);
   for (let redirect = 0; redirect <= 4; redirect += 1) {
-    const response = await fetch(url, {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 1000) throw new Error('TIMEOUT: RSS/Atom 请求超过总时间预算');
+    const attemptTimeoutMs = Math.max(1000, Math.floor((remainingMs - 250) / 2));
+    const response = await fetchWithBoundedRetry(url, {
       redirect: 'manual',
       headers: { accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*;q=0.5', 'user-agent': 'WriteAssistant/1.0 RSS Reader' },
-      signal: AbortSignal.timeout(timeoutMs),
-    });
+    }, { timeoutMs: attemptTimeoutMs });
     if ([301, 302, 303, 307, 308].includes(response.status)) {
       const location = response.headers.get('location');
       if (!location) throw new Error(`订阅源重定向 ${response.status} 但没有 Location`);
@@ -111,10 +88,8 @@ export async function fetchDirectFeed(value, timeoutMs = 60000) {
     if (declared > 12_000_000) throw new Error('订阅源超过 12 MB 安全上限');
     const xml = await response.text();
     if (xml.length > 12_000_000) throw new Error('订阅源超过 12 MB 安全上限');
-    const items = parseFeed(xml, url.href);
-    const title = field(xml.match(/<channel\b[\s\S]*?<\/channel>|<feed\b[\s\S]*?<\/feed>/i)?.[0] ?? xml, ['title']);
-    if (!items.length) throw new Error('没有识别到 RSS/Atom 条目');
-    return { url: url.href, title: title || url.hostname, items };
+    const parsed = parseFeedDocument(xml, url.href);
+    return { url: url.href, title: feedDocumentTitle(xml, url.hostname), ...parsed };
   }
   throw new Error('订阅源重定向次数过多');
 }
@@ -122,13 +97,10 @@ export async function fetchDirectFeed(value, timeoutMs = 60000) {
 export async function testSubscription(config, input) {
   const route = String(input.value || input.route || '').trim();
   if (!route.startsWith('/')) throw new Error('RSSHub 路由必须以 / 开头');
-  const response = await fetch(new URL(route, config.baseUrl), { signal: AbortSignal.timeout(20000) });
-  if (!response.ok) throw new Error(`${route} 返回 HTTP ${response.status}`);
+  const response = await fetchWithBoundedRetry(new URL(route, config.baseUrl), {}, { timeoutMs: 10000 });
   const xml = await response.text();
-  const items = parseFeed(xml, route);
-  if (!items.length) throw new Error('路由没有返回可识别条目');
-  const title = field(xml.match(/<channel\b[\s\S]*?<\/channel>|<feed\b[\s\S]*?<\/feed>/i)?.[0] ?? xml, ['title']);
-  return { ok: true, title: title || route, itemCount: items.length, route };
+  const parsed = parseFeedDocument(xml, route);
+  return { ok: true, title: feedDocumentTitle(xml, route), itemCount: parsed.items.length, duplicateCount: parsed.duplicateCount, droppedCount: parsed.droppedCount, route };
 }
 
 function runPowerShell(scriptPath, args = [], timeoutMs = 190000) {
@@ -180,7 +152,7 @@ export async function stopRssHub(config) {
 }
 
 function titleOfFeed(xml, fallback) {
-  return field(xml.match(/<channel\b[\s\S]*?<\/channel>|<feed\b[\s\S]*?<\/feed>/i)?.[0] ?? xml, ['title']) || fallback;
+  return feedDocumentTitle(xml, fallback);
 }
 
 function withoutLimit(value) {
@@ -222,17 +194,12 @@ export async function collectRssHub(config, onProgress = () => {}, onSourceResul
           // 抓取型路由（anthropic、readhub、latepost 等）需要 RSSHub 回源抓上游页面，
           // 冷缓存时经常超过 30s：超时放宽到 90s，超时后自动重试一次（此时 RSSHub 缓存通常已预热）。
           const routeTimeoutMs = Number(config.routeTimeoutMs) || 90000;
-          let response;
-          try {
-            response = await fetch(new URL(route, config.baseUrl), { signal: AbortSignal.timeout(routeTimeoutMs) });
-          } catch (error) {
-            if (!/aborted|timeout/i.test(String(error?.message || error))) throw error;
-            onProgress(`${identity} 首次读取超时，重试一次`);
-            response = await fetch(new URL(route, config.baseUrl), { signal: AbortSignal.timeout(routeTimeoutMs) });
-          }
-          if(!response.ok)throw new Error(`${route} 返回 HTTP ${response.status}`);
+          const response = await fetchWithBoundedRetry(new URL(route, config.baseUrl), {}, { timeoutMs: Math.max(1000, Math.floor((routeTimeoutMs - 250) / 2)) });
           const xml=await response.text(); sourceName=titleOfFeed(xml,identity);
-          const filtered=filterRecentItems(parseFeed(xml,route).slice(0,30),config); items=filtered.kept.map((item)=>normalizeGitHubTrendingItem(item,identity));
+          const parsed = parseFeedDocument(xml, route);
+          if (parsed.duplicateCount) onProgress(`${sourceName} 已去重 ${parsed.duplicateCount} 条重复链接`);
+          if (parsed.droppedCount) onProgress(`${sourceName} 已忽略 ${parsed.droppedCount} 条缺少有效标题或链接的条目`);
+          const filtered=filterRecentItems(parsed.items.slice(0,30),config); items=filtered.kept.map((item)=>normalizeGitHubTrendingItem(item,identity));
           if(filtered.stale.length)onProgress(`${sourceName} 已忽略 ${filtered.stale.length} 条过期或未来时间异常内容`);
           if(filtered.undated.length)onProgress(`${sourceName} 有 ${filtered.undated.length} 条缺少有效发布时间`);
           const trendingPeriod=githubTrendingPeriod(identity);if(trendingPeriod){sourceType='trending';sourceKey=`github:trending:${trendingPeriod}`;sourceName=`GitHub Trending · ${trendingPeriod[0].toUpperCase()+trendingPeriod.slice(1)}`;}
@@ -244,6 +211,9 @@ export async function collectRssHub(config, onProgress = () => {}, onSourceResul
           const filtered=filterRecentItems(feed.items.slice(0,30),config);items=filtered.kept;
           if(filtered.stale.length)onProgress(`${sourceName} 已忽略 ${filtered.stale.length} 条过期内容`);
           if(filtered.undated.length)onProgress(`${sourceName} 有 ${filtered.undated.length} 条缺少有效发布时间`);
+          if (!filtered.kept.length) onProgress(`${sourceName} 本次没有可用的新条目`);
+          if (feed.duplicateCount) onProgress(`${sourceName} 已去重 ${feed.duplicateCount} 条重复链接`);
+          if (feed.droppedCount) onProgress(`${sourceName} 已忽略 ${feed.droppedCount} 条缺少有效标题或链接的条目`);
           items=items.map((item)=>({...item,route:feedConfig.url,feedLabel:sourceName,sourceKey,sourceType,sourceName}));
         }
         onSourceResult({sourceGroup:githubTrendingPeriod(String(target.value))?'github':'rsshub',sourceType,sourceKey,sourceName,status:'success',itemCount:items.length,durationMs:Date.now()-started,startedAt,endedAt:new Date().toISOString()});

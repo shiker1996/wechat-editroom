@@ -6,6 +6,7 @@ import { buildBatchPipelineStatus } from '../../../features/batches/index.mjs';
 import { getBatchDeleteImpact, deleteBatchPermanently } from '../../../features/batches/index.mjs';
 import { buildEventResolutionOperationsMetrics, readEventResolutionReview } from '../../../features/research/index.mjs';
 import { buildTopicScoreOperationsMetrics } from '../../../features/research/index.mjs';
+import { buildBatchSelectionTrace } from '../../../features/research/application/batch-selection-trace.mjs';
 import { displayItemsForTopicGroups } from '../../../features/research/index.mjs';
 import { selectBatchSourceGroups } from '../../../features/collection/application/batch-source-selection.mjs';
 import { inspectRsshubEnvironment } from '../../integrations/rsshub-installer.mjs';
@@ -35,6 +36,20 @@ function cacheJson(file, value) {
 
 export async function handleBatchRoutes({ request, response, pathname, searchParams, root, store, jobs, body, json,
   batchWorkdir, decorateBatch, batchMaxAgeHours, config, buildStatus = buildBatchPipelineStatus }) {
+  const selectionTraceForBatch = (batch) => buildBatchSelectionTrace({
+    batch, workdir: batchWorkdir(batch), hotspots: batch.hotspots,
+    articleCandidates: store.listCandidates(batch.id, 'article').map((candidate) => candidate.composite
+      ? { ...candidate, member_hotspot_ids: store.candidateHotspots(candidate.id).map((hotspot) => hotspot.id) }
+      : candidate),
+    socialCandidates: store.listCandidates(batch.id, 'social_cards').map((candidate) => candidate.composite
+      ? { ...candidate, member_hotspot_ids: store.candidateHotspots(candidate.id).map((hotspot) => hotspot.id) }
+      : candidate),
+    isResearchEligibleHotspot, isFreshForBatch, maxAgeHours: batchMaxAgeHours(batch),
+  });
+  const selectionSummary = (track) => ({
+    inPool: track.inPool, status: track.status, reason: track.reason,
+    lastStage: track.stages.at(-1)?.stage || '',
+  });
   if (request.method === 'GET' && pathname === '/api/batches') return respond(json, response, 200, store.listBatches(boundedLimit(searchParams,60,500)));
   if (request.method === 'GET' && pathname === '/api/event-resolution-metrics') {
     return respond(json, response, 200, buildEventResolutionOperationsMetrics({ store, workspaceRoot: root, days: searchParams.get('days') || 7 }));
@@ -166,23 +181,59 @@ export async function handleBatchRoutes({ request, response, pathname, searchPar
         items = scored.map((item, index) => ({ ...item, socialRank: index + 1, selected: selectedKeys.has(item.eventId ?? item.hotspotId ?? item.title) }));
       }
     }
-    const inPoolIds = new Set(store.listCandidates(batchId, 'social_cards').map((item) => item.hotspot_id));
-    return respond(json, response, 200, items.map((item) => ({ ...item, inPool: inPoolIds.has(item.hotspotId) })));
+    const traces = new Map(selectionTraceForBatch(batch).map((item) => [item.hotspotId, item.tracks]));
+    return respond(json, response, 200, items.map((item) => {
+      const trackSelection = traces.get(Number(item.hotspotId)) || {};
+      const social = trackSelection.social_cards || { inPool: false, status: 'not_in_pool', reason: '没有社交赛道状态记录', stages: [] };
+      const article = trackSelection.article || { inPool: false, status: 'not_in_pool', reason: '没有文章赛道状态记录', stages: [] };
+      return { ...item, inPool: social.inPool, inPoolByTrack: { article: article.inPool, social_cards: social.inPool },
+        selection: { article: selectionSummary(article), social_cards: selectionSummary(social) },
+        rejectionReason: social.inPool ? (item.qualificationReason || '已通过图文资格并进入图文池') : social.reason };
+    }));
   }
   if (rankingMatch && request.method === 'GET') {
     const batchId = decodeURIComponent(rankingMatch[1]); const batch = store.getBatch(batchId);
     if (!batch) return respond(json, response, 404, { error: '批次不存在' });
+    const traces = new Map(selectionTraceForBatch(batch).map((item) => [item.hotspotId, item.tracks]));
     const items = batch.hotspots.filter((item) => !item.is_stale).map((item) => {
       const raw = (() => { try { return JSON.parse(item.raw_json || '{}'); } catch { return {}; } })();
       const tags = raw.aiTags || {}; const preScores = tags.preScores || {};
       const base = ['conflict', 'audience', 'informationGain', 'emotion', 'timeliness', 'impact', 'sourceReliability'].reduce((s, k) => s + (preScores[k] || 0), 0);
+      const trackSelection = traces.get(Number(item.id)) || {};
+      const article = trackSelection.article || { inPool: false, status: 'not_in_pool', reason: '没有文章赛道状态记录', stages: [] };
+      const social = trackSelection.social_cards || { inPool: false, status: 'not_in_pool', reason: '没有图文赛道状态记录', stages: [] };
       return { hotspotId: item.id, title: item.title, category: item.category, marketScope: item.market_scope,
         riskLevel: tags.riskLevel || item.category, score: base + (tags.categoryPreference || 0) + (tags.credibleScoop || 0) - (tags.saturationPenalty || 0),
-        eliminationReason: raw.eliminationReason || '', inPool: false };
+        scoreType: 'hotspot_preselection', eliminationReason: article.reason, inPool: article.inPool,
+        inPoolByTrack: { article: article.inPool, social_cards: social.inPool },
+        selection: { article: selectionSummary(article), social_cards: selectionSummary(social) } };
     }).sort((a, b) => b.score - a.score).map((item, idx) => ({ ...item, rank: idx + 1 }));
-    const inPoolIds = new Set(store.listCandidates(batchId).map((c) => c.hotspot_id));
-    for (const item of items) if (inPoolIds.has(item.hotspotId)) item.inPool = true;
     return respond(json, response, 200, items);
+  }
+  const selectionTraceMatch = pathname.match(/^\/api\/batches\/([^/]+)\/selection-trace$/);
+  if (selectionTraceMatch && request.method === 'GET') {
+    const batch = store.getBatch(decodeURIComponent(selectionTraceMatch[1]));
+    if (!batch) return respond(json, response, 404, { error: '批次不存在' });
+    const track = searchParams.get('track') || 'all';
+    if (!['all', 'article', 'social_cards'].includes(track)) return respond(json, response, 400, { error: 'track 只支持 all、article、social_cards' });
+    const rawIds = searchParams.get('hotspotIds') || searchParams.get('hotspotId') || '';
+    const wantedIds = new Set(rawIds.trim()
+      ? rawIds.split(',').map((value) => Number(value.trim())).filter((value) => Number.isSafeInteger(value) && value > 0)
+      : []);
+    const allTrace = selectionTraceForBatch(batch);
+    const maxItems = boundedLimit(searchParams, 30, 500);
+    const filtered = allTrace.filter((item) => !wantedIds.size || wantedIds.has(item.hotspotId)).slice(0, maxItems).map((item) => ({
+      ...item,
+      tracks: track === 'all' ? item.tracks : { [track]: item.tracks[track] },
+    }));
+    const allArticle = allTrace.filter((item) => item.tracks.article.inPool).length;
+    const allSocial = allTrace.filter((item) => item.tracks.social_cards.inPool).length;
+    return respond(json, response, 200, {
+      batchId: batch.id,
+      summary: { hotspotCount: allTrace.length, articlePoolCount: allArticle, socialCardsPoolCount: allSocial,
+        requestedTrack: track, returnedCount: filtered.length, filteredByHotspotIds: wantedIds.size > 0 },
+      items: filtered,
+    });
   }
   if (eventHeatMatch && request.method === 'GET') {
     const batchId = decodeURIComponent(eventHeatMatch[1]); const batch = store.getBatch(batchId);

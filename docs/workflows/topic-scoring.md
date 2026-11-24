@@ -23,22 +23,36 @@
 | 事件候选池 | 稳定事件、事件热榜 | 按 T 选核心/黑马/候补；P 只影响同分优先级；含 developerImpact 保护位 | server/features/research/application/research-pipeline.mjs |
 | 研判依据门禁 | 入池事件、事件事实卡、研判素材与信号 | 无有效依据的候选不进入脑暴 | server/features/research/application/research-pipeline.mjs |
 | 脑暴与综合 | 研判依据、候选卡 | 生成 H/B 原始子项；综合阶段可校正 raw readerStakeScore 和饱和扣分 | skills/hotspot-brainstorm/SKILL.md；skills/hotspot-synthesis/SKILL.md；server/features/research/application/research/editorial-exploration.mjs |
-| 最终评分 | H/B/P/T/J/S/D 与 chinaRelevance | scoreCards 计算 capped 受众门禁分与 raw B 分；computeFinalScore 统一计算 A、DOM、C、F。T 缺失时 F 为 null；DOM 缺失时 A/T/J 权重按剩余占比归一化 | server/shared/domain/topic-scoring.mjs；server/features/research/application/research-pipeline.mjs |
+| 最终评分 | H/B/P/T/J/S/D、chinaRelevance、materialStrategy 与 materialFit | computeFinalScore 对所有候选统一计算 v4 的 A、DOM、M、C、F 并排序。未分类或缺少 M 时仍走 v4，M 取中性 50；T 缺失时 F 为 null；DOM 缺失时对 A/T/J/M 归一化 | server/shared/domain/topic-scoring.mjs；server/features/research/application/research-pipeline.mjs |
 | 候选筛选和产物 | 评分卡、文章资格字段 | 通过文章资格门禁的候选排序；写入 topics-ranked.md 和 topic-scoring-candidates.json，记录公式版本 | server/features/research/application/research-pipeline.mjs |
+
+## 文章与图文赛道及阶段轨迹
+
+- 文章和图文候选按各自赛道判断入池；`GET /api/batches/:id/ranking` 的 `inPool` / `eliminationReason` 只表示文章赛道，`GET /api/batches/:id/social-ranking` 的 `inPool` 只表示图文赛道。两个列表均附 `inPoolByTrack` 和 `selection` 状态摘要。
+- 纯 GitHub 项目默认保留在图文赛道。只有采集/项目元数据明确标记 `materialStrategy=direct_practical` 的项目，才可在图文池之外最多 3 个进入讨论深研范围与文章候选预选；进入候选不代表自动入文章池，仍执行新近触发事实、可回答性、研判依据、文章资格和最终选池门禁。其他项目不改变原分流。
+- `GET /api/batches/:id/selection-trace?track=all|article|social_cards&hotspotId=<id>` 将热点与事件、预选、深研覆盖、评分榜单和持久化候选产物关联，返回每个阶段的状态与原因。`not_reached` 表示前置条件未满足或阶段未运行，`not_selected` 表示执行过筛选但未入选；最终接口显示赛道自己的入池状态与最后可归因原因。
+  - 组合候选的持久化成员热点会逐一关联到候选，因此成员热点的轨迹会显示已入池。若评分产物声明入选、却未匹配到持久化候选，最终阶段标记为 `unreported`（界面显示“待核对”），避免把评分记录误报为实际入池。
+- 当前轨迹从批次已持久化产物重建，不新增数据库列或迁移。产物缺失时会明确显示未运行/未记录，不能据此推断为已筛选淘汰。
+- 内部与外部 Agent 分阶段路径共用讨论深研与评分 pipeline，因此适用同一分流与轨迹；外部 Agent 直接提交评分不运行这套阶段 pipeline，其最终候选状态可显示，但没有发生的上游阶段会标记为未执行。
+
+实现入口：`server/features/research/application/batch-selection-trace.mjs`、`server/features/research/domain/discussion-research.mjs`、`server/features/research/application/research-pipeline.mjs`、`server/platform/http/routes/batch-routes.mjs`、`scripts/agent-integration/tools.mjs`。
 
 ## 入口间差异
 
 - 工作台 pipeline 与外部 Agent 分阶段入口共用完整的研究依据、脑暴、综合及评分门禁。
-- 外部 Agent 直接提交入口不运行脑暴，也不从原始 bScores 重算 H/B/J；它信任提交的 H/B/J 和 S/D，在服务端读取事件 T、P、chinaRelevance。它与内部流程共用 computeFinalScore，但上游输入与门禁不同。
+- 外部 Agent 直接提交入口不运行脑暴，也不从原始 bScores 重算 H/B/J；它信任提交的 H/B/J 和 S/D，在服务端读取事件 T、P、chinaRelevance，可选接收素材策略/M。未提供 M 时使用中性 50。它与内部流程共用 v4 computeFinalScore，但上游输入与门禁不同。
+- 外部 Agent 分阶段入口复用脑暴产物，按相同 v4 公式评分。
 - 综合选题路由只对单个综合候选调用 scoreCards，可能没有 T 或国内关联；没有 T 时不产出 F，没有 DOM 时按余下权重归一化。
 
 ## 产物与验证
 
 - 批次产物：sources/external-research-report.json、sources/topic-scoring-candidates.json、sources/preselection-ranking.json、topics-ranked.md。
-- 公式版本为 v3，写入批次评分产物 JSON 与评分报告头；不在候选数据库增加版本列。
-- `topics-ranked.md` 在产物中心预览时显示批次公式版本与账号配置提示；迁移前的账号配置会保留旧权重/H 基线覆盖，运行 `npm run migrate:topic-scoring-v3` 先预览，确认后运行 `npm run migrate:topic-scoring-v3 -- --write` 迁移并自动备份。
-- `account-context.json` 中的 `scoring.formulaVersion: "v3"` 是本地配置迁移标记；`resolveScoring()` 用它判断是否提示旧配置迁移。它与批次产物中的公式版本各自独立。迁移会更新标准分类的 accountFit、categoryPreference 和国内 marketScope 偏好，同时保留自定义分类和旧配置快照。
+- 正式排序公式版本为 v4，批次评分产物 JSON、外部报告与 Markdown 报告头统一记录 v4；候选评分产物同时记录素材策略、M 值及中性值来源，不在候选数据库增加版本列。
+- v4 公式固定为 `A=H×0.50+B×0.30+P×0.20`、`F=A×0.50+T×0.20+J×0.10+DOM×0.10+M×0.10−C`；DOM 缺失时对 A/T/J/M 归一化，M 未分类或缺失时取中性 50。
+- `topics-ranked.md` 在产物中心预览时显示 v4 公式、M 分项和账号配置提示；旧账号配置运行 `npm run migrate:topic-scoring-v4` 预览，确认后运行 `npm run migrate:topic-scoring-v4 -- --write` 迁移并自动备份。
+- `account-context.json` 中的 `scoring.formulaVersion: "v4"` 是本地配置迁移标记；`resolveScoring()` 用它判断是否提示旧配置迁移。历史批次仍保留生成时的分数与公式版本，不重算。
 - 评分回放输入保存 raw B 子项、hProfile、旧公式输入快照及公式参数；回放比较分数，不重跑候选池门禁或模型决策。
+- 回放工具按 v4 重算新排名；旧回放没有素材策略/M 时以 `unclassified` 和中性 M=50 重算对照，不修改归档批次，也不推断编辑采纳结果。
 - 相关测试：test/topic-scoring.test.mjs、test/research-pipeline.test.mjs、test/external-event-card-batching.test.mjs、test/topic-candidate-generation-domestic.test.mjs。
 - 回放：node scripts/quality/backtest-topic-scoring.mjs <batch-workdir>。
 

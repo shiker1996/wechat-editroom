@@ -2,5 +2,28 @@
   "schemaVersion": 1,
   "generatedFrom": "plugins source boundary scan",
   "policy": "baseline may only shrink; new violations fail CI",
-  "violations": []
+  "violations": [
+    {
+      "id": "shared-source:feed:plugins/feed/collector.mjs:shared",
+      "type": "shared-source",
+      "plugin": "feed",
+      "file": "plugins/feed/collector.mjs",
+      "target": "shared",
+      "evidence": "../shared/source-http.mjs",
+      "phase": "Phase 2",
+      "owner": "collector-runtime",
+      "resolution": "集中维护 RSS/Atom 公共实现，并在独立采集器分发包中复制 shared 运行目录"
+    },
+    {
+      "id": "shared-source:rsshub:plugins/rsshub/collector.mjs:shared",
+      "type": "shared-source",
+      "plugin": "rsshub",
+      "file": "plugins/rsshub/collector.mjs",
+      "target": "shared",
+      "evidence": "../shared/source-http.mjs",
+      "phase": "Phase 2",
+      "owner": "collector-runtime",
+      "resolution": "集中维护 RSS/Atom 公共实现，并在独立采集器分发包中复制 shared 运行目录"
+    }
+  ]
 }

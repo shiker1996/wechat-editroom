@@ -75,25 +75,49 @@ export function isPureProjectEvent(event = {}) {
     || /^https?:\/\/github\.com\//i.test(String(event.url || ''));
 }
 
+/** A first-tier project can be considered for article research when discovery explicitly marked it practical. */
+export function isDirectPracticalProject(event = {}) {
+  if (!isPureProjectEvent(event)) return false;
+  const metas = [event.repositoryMeta, event.repository_meta,
+    ...list(event.articles).flatMap((article) => [article?.repositoryMeta, article?.repository_meta])]
+    .filter((item) => item && typeof item === 'object');
+  const strategies = metas.flatMap((meta) => [
+    meta.materialStrategy, meta.material_strategy,
+    ...list(meta.materialStrategies), ...list(meta.material_strategies),
+    ...list(meta.discoveryContexts).map((context) => context?.materialStrategy || context?.material_strategy),
+  ]).map((value) => String(value || '').trim());
+  return strategies.includes('direct_practical');
+}
+
 /** Choose a production route from source material and an explicit editorial decision. */
 export function classifyContentRoute(card = {}, { event = null, requestedRoute = '' } = {}) {
-  const articles = list(card.articles).length ? card.articles : list(event?.articles);
-  const project = isPureProjectEvent({ ...(event || {}), ...card, articles });
+  const source = card.source && typeof card.source === 'object' ? card.source : {};
+  const articles = list(card.articles).length ? card.articles
+    : list(source.articles).length ? source.articles : list(event?.articles);
+  const merged = { ...(event || {}), ...source, ...card, articles };
+  const project = isPureProjectEvent(merged);
+  const materialStrategy = card.materialStrategy || source.materialStrategy || card.material_strategy || source.material_strategy;
+  const articleEligible = card.articleEligible ?? card.article_eligible ?? source.articleEligible ?? source.article_eligible;
+  const directPracticalRoute = project && isDirectPracticalProject(merged)
+    && articleEligible !== false && (materialStrategy === undefined || materialStrategy === 'direct_practical');
   const manuallyApproved = requestedRoute === 'article'
-    || card.articleRouteApproved === true || card.article_route_approved === true;
-  if (project && !manuallyApproved) {
+    || card.articleRouteApproved === true || card.article_route_approved === true
+    || source.articleRouteApproved === true || source.article_route_approved === true;
+  if (project && !manuallyApproved && !directPracticalRoute) {
     return {
       contentRoute: 'social_only', articleEligible: false, pureProject: true,
       warning: 'GitHub 项目默认进入项目图文路线；文章路线需要人工选题并通过事实门禁',
     };
   }
-  if (project && manuallyApproved) {
+  if (project && (manuallyApproved || directPracticalRoute)) {
     return {
       contentRoute: 'manual_review', articleEligible: true, pureProject: true,
-      warning: '项目已由编辑明确选入文章路线，仍需通过文章事实门禁',
+      warning: manuallyApproved
+        ? '项目已由编辑明确选入文章路线，仍需通过文章事实门禁'
+        : '第一梯队项目进入文章候选，仍需编辑判断与事实门禁',
     };
   }
-  if (card.articleEligible === false || card.article_eligible === false) {
+  if (articleEligible === false) {
     return { contentRoute: 'editorial_review', articleEligible: false, pureProject: false, warning: card.articleEligibilityReason || card.article_eligibility_reason || '编辑资格待确认' };
   }
   return { contentRoute: 'article', articleEligible: true, pureProject: false, warning: '' };

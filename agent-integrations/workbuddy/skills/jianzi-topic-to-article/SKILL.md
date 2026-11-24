@@ -19,7 +19,7 @@ description: 使用见字工作台完成热点采集、选题研判、文章简�
 2. 调用 `jianzi_batch_collect` 启动采集，再用 `jianzi_job_wait` 等待完成。报告失败来源，不要把部分成功说成完整采集。
 3. 外部 Agent 路径：先调用 `jianzi_account_profile` 获取真实账号画像，再调用 `jianzi_batch_hotspots` 读取原始热点与项目发现元数据，按项目 `hotspot-tagging` Skill 执行打标；分批调用 `jianzi_batch_tags_submit` 保存标签。然后调用 `jianzi_batch_events` 获取稳定事件组，逐事件综合原文形成事件事实卡，每次最多 200 张调用 `jianzi_batch_event_cards_submit`；根据返回的 `remaining` 继续提交，直到全部覆盖。随后调用 `jianzi_research_stage_prepare` 领取原研判 pipeline 的第一项模型任务，严格按返回的 `messages`、`jsonMode`、`tools` 完成该任务，用 `jianzi_research_stage_submit` 提交 `taskId` 和原始输出。返回 `pending` 就继续执行下一项，返回 `completed` 才读取文章与图文榜单。JSON 阶段提交对象，单事件报告阶段提交 Markdown 字符串；不得用自己另算的 H/B/J 分替代 pipeline 的评分与入池逻辑。
    - 打标必须遵循 `hotspot-tagging` Skill，只处理 `researchEligible: true` 的热点：分类使用账号配置，事件要素写入 `eventParts.who/what`（系统据此生成 `eventKey`）；分数上限 conflict/audience=20、informationGain/emotion=15、timeliness/impact/sourceReliability=10。风险只标记不擅自删除热点。
-   - 文章与图文分别选题：原 pipeline 会保存文章候选与图文预选；文章读取 `jianzi_batch_ranking`，图文读取 `jianzi_batch_social_ranking`，把 T/J/A/C/F 与 G_social、入池理由分别交给用户审阅。不要用文章 F 分替代图文 G_social，也不要对同一批次再调用旧的 `jianzi_batch_research_submit` 重复计算。
+   - 文章与图文分别选题：原 pipeline 会保存文章候选与图文预选；文章读取 `jianzi_batch_ranking`，图文读取 `jianzi_batch_social_ranking`。排名接口的 `inPool` 只对应当前接口的赛道，`score` 是热点初筛分，不是文章 F 分。需要解释未入池时调用 `jianzi_batch_selection_trace` 查看两条赛道的逐阶段状态、未执行阶段和具体原因，再把文章 F 与图文 G_social、各自入池理由交给用户审阅。不要用文章 F 分替代图文 G_social，也不要对同一批次再调用旧的 `jianzi_batch_research_submit` 重复计算。
    - 若用户明确选择见字内部 AI 自动研判，才调用 `jianzi_batch_auto_research`。
    - 用户给定自主写作主题、教程或心得经验，而不是要求从热点池选题时，创建或复用批次后调用 `jianzi_independent_article_create`。教程需提供环境、至少两个步骤和三条带来源等级的要点；该工具只创建候选与事实基座，不启动见字内部模型。它已建立自主写作候选与锁定简报，不再执行热点候选的原文抓取、编辑判断和锁题步骤；若用户提供素材 URL，创建时会抓取并写入事实基座。外部 Agent 据事实基座写作并保存文章。
 4. 对已加入候选池的选题，**必须先调用 `jianzi_candidate_source_fetch`** 抓取并保存关联原文，再读取 `jianzi_candidate_get` 获取来源、事实和现有编辑决策；读取 `jianzi_account_profile` 了解受众与账号定位。不能用外部网页搜索代替这次项目内抓取，也不能仅因候选摘要已有内容就跳过。抓取失败时，先向用户报告工具结果和证据边界；只有用户明确同意基于现有材料继续，才可继续编辑判断和写作，并在文章中标明未核验内容。
@@ -32,6 +32,12 @@ description: 使用见字工作台完成热点采集、选题研判、文章简�
 7. 用户要求排版或封面时，先用 `jianzi_article_documents` 核对 `final`。若只有 `draft`，解释工作台需要终稿、当前没有排版/封面产物，并请用户先审阅确认；不要提前生成 HTML 或调用提交工具。只有读回确认终稿后，才继续设计和提交。
 
 ## 面向读者的正文边界
+
+### 亲历依赖检查与内容价值审阅
+
+- 写作前从 `jianzi_candidate_get` 返回的 `candidate.editorial.experience_required` / `candidate.editorial.confirmed_experiences` 检查亲历门禁，并与锁定简报字段交叉核对（若简报包含这些字段）。为 `false` 时可基于公开事实完成分析，不得添加第一人称亲历。为 `true` 且缺少已确认经历或证据时，向作者明确询问缺少的具体经历、时间/场景及可核对依据，并暂停依赖该经历的写作；不得把公开资料、模型建议或作者未确认的内容补成亲历。
+- 作者回复后，将内容标记为“作者确认的经历”，在本次工作记录中注明作者提供的依据和边界，再继续；若作者无法确认或提供材料，停止该角度的成稿，退回编辑会补料或改为不依赖亲历的命题并重新锁定。不要静默改写已锁定简报或替作者确认经历。
+- 审阅内容价值时，结合题材检查主题/原创表达、真实创作与素材归属、读者信息增量/理解/判断/共鸣、专业内容的可靠知识或经确认实践。这些是价值判断维度，不要求每篇同时具备。热点评论若有可靠事实、原创解释和具体读者增量，不得仅因没有作者亲历、工具教程或行动建议而判低价值；仍须通过事实、来源归属、标题兑现和发布风险审查。
 
 - MCP 返回的候选字段、内部编辑决策、抓取状态、评分、工具名和工作台处理记录只用于写作判断，不能直接当作文章素材或引用来源。尤其不要在正文写“工作台采集到的摘要”“候选摘要显示”“项目内抓取结果”等内部流程表述。
 - 对外引用必须归因到读者可访问的原始来源：使用来源名称/作者、发布时间和 URL；原文打不开或证据不足时，说明“目前无法核实”，不要把摘要、编辑备注或事件卡改写成来源已确认。

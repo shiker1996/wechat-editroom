@@ -9,6 +9,12 @@ function cacheFile(cacheDir,apiPath){return path.join(cacheDir,`${crypto.createH
 function readCache(file){try{return JSON.parse(fs.readFileSync(file,'utf8'));}catch{return null;}}
 function writeCache(file,value){fs.mkdirSync(path.dirname(file),{recursive:true});const temp=`${file}.tmp`;fs.writeFileSync(temp,JSON.stringify(value),'utf8');fs.renameSync(temp,file);}
 const delay=(ms)=>new Promise((resolve)=>setTimeout(resolve,ms));
+function githubError(response,detail=''){
+  const status=Number(response?.status||0),remaining=header(response,'x-ratelimit-remaining'),retryAfter=Number(header(response,'retry-after')||0);
+  const limited=status===429||(status===403&&(remaining==='0'||/rate.?limit|secondary rate/i.test(detail)));
+  const code=status===401?'AUTH_REQUIRED':limited?'RATE_LIMITED':status===403?'BLOCKED':status>=500?'NETWORK_ERROR':'BLOCKED';
+  const error=new Error(`${code}: GitHub API HTTP ${status||'network error'}`);error.code=code;error.retryable=code==='RATE_LIMITED'||code==='NETWORK_ERROR';error.retryAfter=retryAfter;return error;
+}
 function githubApiBaseUrl(){
   const configured=String(process.env.WORKBENCH_GITHUB_API_BASE_URL||process.env.GITHUB_API_BASE_URL||'https://api.github.com').trim();
   return configured.replace(/\/+$/,'');
@@ -19,14 +25,29 @@ export async function requestGitHubJson(apiPath,{fetchImpl=fetch,token=process.e
   if(cached&&Date.now()-Date.parse(cached.fetchedAt)<ttlMs){health={...health,status:'ok',authenticated,cacheHits:health.cacheHits+1};return cached.data;}
   const headers={'accept':'application/vnd.github+json','user-agent':'write-assistant/0.1','x-github-api-version':'2022-11-28'};if(token)headers.authorization=`Bearer ${token}`;if(cached?.etag)headers['if-none-match']=cached.etag;
   let lastError;
-  for(let attempt=0;attempt<2;attempt+=1){try{const response=await fetchImpl(`${githubApiBaseUrl()}${apiPath}`,{headers,signal:AbortSignal.timeout(15000)});updateHealth(response,authenticated);
-      if(response.status===304&&cached){health.cacheHits+=1;writeCache(file,{...cached,fetchedAt:new Date().toISOString()});return cached.data;}
-      if(optional&&response.status===404)return null;
-      if(response.ok){const data=await response.json();if(file)writeCache(file,{etag:header(response,'etag')||'',fetchedAt:new Date().toISOString(),data});return data;}
-      const message=`GitHub API ${response.status}: ${(await response.text()).slice(0,240)}`;lastError=new Error(message);const retryAfter=Number(header(response,'retry-after'))||0;if(attempt===0&&((response.status>=500)||(response.status===429&&retryAfter<=2))){await delay(Math.max(300,retryAfter*1000));continue;}throw lastError;
-    }catch(error){lastError=error;if(attempt===0&&cached){health={...health,status:'degraded',lastError:error.message,cacheHits:health.cacheHits+1};return cached.data;}if(attempt===0){await delay(300);continue;}}
+  for(let attempt=0;attempt<2;attempt+=1){
+    let response;
+    try{response=await fetchImpl(`${githubApiBaseUrl()}${apiPath}`,{headers,signal:AbortSignal.timeout(15000)});}
+    catch(error){
+      lastError=new Error(/timeout|aborted/i.test(String(error?.name||'')+' '+String(error?.message||error))?'TIMEOUT: GitHub API 请求超时':'NETWORK_ERROR: GitHub API 网络请求失败');
+      lastError.code=lastError.message.split(':')[0];lastError.retryable=true;
+      if(attempt===0){await delay(300);continue;}
+      break;
+    }
+    updateHealth(response,authenticated);
+    if(response.status===304&&cached){health.cacheHits+=1;writeCache(file,{...cached,fetchedAt:new Date().toISOString()});return cached.data;}
+    if(optional&&response.status===404)return null;
+    if(response.ok){const data=await response.json();if(file)writeCache(file,{etag:header(response,'etag')||'',fetchedAt:new Date().toISOString(),data});return data;}
+    const detail=response.status===403?await response.clone().text().catch(()=> ''):'';
+    lastError=githubError(response,detail);
+    const retryAfter=lastError.retryAfter;
+    if(attempt===0&&response.status>=500){await delay(300);continue;}
+    if(attempt===0&&lastError.code==='RATE_LIMITED'&&retryAfter>0&&retryAfter<=2){await delay(retryAfter*1000);continue;}
+    break;
   }
-  health={...health,status:'failed',lastError:lastError?.message||'GitHub API 请求失败'};throw lastError;
+  health={...health,status:'failed',lastError:lastError?.message||'NETWORK_ERROR: GitHub API 请求失败'};
+  if(lastError&&cached){health={...health,status:'degraded',cacheHits:health.cacheHits+1};return cached.data;}
+  throw lastError;
 }
 
 export function getGitHubApiHealth(){return {...health};}

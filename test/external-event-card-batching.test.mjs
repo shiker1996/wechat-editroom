@@ -72,15 +72,17 @@ test('直接外部研判按共享 v3 公式计分并只在报告顶层记录版�
   await handleTaskRoutes({ request: { method: 'POST' }, response: {},
     pathname: `/api/batches/${batch.id}/external/research`, store, config: { workspaceRoot: root },
     batchWorkdir: (item) => batchTopicsDir(root, item), batchMaxAgeHours: () => 168,
-    body: async () => ({ items: [{ eventId: events[0].event_id, hotspotIds: [Number(hotspot.id)], thesis: '工具改变开发流程', reason: '已有事实卡支持',
+    body: async () => ({ items: [{ eventId: events[0].event_id, hotspotIds: [Number(hotspot.id)], thesis: '工具改变开发流程', reason: '已有事实卡支持', materialStrategy: 'event_trigger', materialFit: 80, materialFitReason: '事实和影响链有研究材料支持',
       scoreInputs: { H: 70, B: 80, J: 60, saturationPenalty: 0, duplicatePenalty: 0 } }] }),
     json: (_response, status, data) => { result = { status, data }; } });
   assert.equal(result.status, 200);
   assert.equal(result.data.ranking[0].P, 25);
   assert.equal(result.data.ranking[0].DOM, 75);
+  assert.equal(result.data.ranking[0].M, 80);
+  assert.equal(result.data.ranking[0].formulaVersion, 'v4');
   assert.ok(result.data.ranking[0].scoreWeightWarnings.some((warning) => warning.includes('未配置 accountFit')));
-  assert.equal(Object.hasOwn(result.data.ranking[0], 'formulaVersion'), false);
+  assert.equal(result.data.ranking[0].formulaVersion, 'v4');
   const report = JSON.parse(fs.readFileSync(path.join(dir, 'external-research-report.json'), 'utf8'));
-  assert.equal(report.formulaVersion, 'v3');
-  assert.equal(Object.hasOwn(report.items[0].scoreBreakdown, 'formulaVersion'), false);
+  assert.equal(report.formulaVersion, 'v4');
+  assert.equal(report.items[0].scoreBreakdown.formulaVersion, 'v4');
 });

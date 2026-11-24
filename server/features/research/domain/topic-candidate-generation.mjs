@@ -1,5 +1,6 @@
 import { dimensionPartsOf } from './hotspot-dimensions.mjs';
 import { isRepositoryEvent, normalizeEditorialCategory } from './editorial-categories.mjs';
+import { isDirectPracticalProject } from './content-routing.mjs';
 
 const RELATION_LABELS = Object.freeze({
   same_subject_sequence: '同一主体连续动作',
@@ -188,6 +189,7 @@ function candidateFromEvents({ events, type, relation = null, ranking, scope, si
   const seed = context.topic_candidate;
   const articleList = allArticles(events);
   const primary = events[0] || {};
+  const directPracticalProject = isRepositoryEvent(primary) && isDirectPracticalProject(primary);
   const labels = labelsFor(events);
   const category = rankItems.map((item) => item.category).find(Boolean) || primary.topic_category || '';
   return {
@@ -208,8 +210,10 @@ function candidateFromEvents({ events, type, relation = null, ranking, scope, si
     eventHeatRank: Math.min(...rankItems.map((item) => finite(item.eventHeatRank, 999999)), 999999),
     eventHeatState: lead.eventHeatState || primary.eventHeatState || null, eventHistoryRepeatDays: finite(lead.eventHistoryRepeatDays, 0),
     editorialCategory: selectionCategory,
-    articleEligible: !isRepositoryEvent(primary),
-    articleEligibilityReason: isRepositoryEvent(primary) ? '纯 GitHub 项目默认只进入项目图文池' : '',
+    articleEligible: !isRepositoryEvent(primary) || directPracticalProject,
+    articleEligibilityReason: isRepositoryEvent(primary) && !directPracticalProject ? '纯 GitHub 项目默认只进入项目图文池' : '',
+    materialStrategy: directPracticalProject ? 'direct_practical' : '',
+    directUseCase: String(primary.repositoryMeta?.directUseCase || primary.repository_meta?.directUseCase || '').trim(),
     confirmedFactCount: events.reduce((sum, event) => sum + list(event.card?.confirmed_facts).length, 0),
     timelineCount: events.reduce((sum, event) => sum + list(event.card?.timeline).length, 0),
     disagreementCount: events.reduce((sum, event) => sum + list(event.card?.disagreements).length, 0),

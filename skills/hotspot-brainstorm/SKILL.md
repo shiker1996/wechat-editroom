@@ -11,7 +11,7 @@ description: 热点探索编辑。对已入池候选生成临时探索卡（角�
 
 选题资格已在上游漏斗核验。脑暴必须沿用输入中的 `freshness_basis` 与 `freshness_source_ids`，确认角度仍由近期的具体事实进展触发；问题必须有明确对象、范围和可由 `research_basis` 回答的判断。不得把旧事件、长期趋势重新包装成当下热点，也不得扩成没有事实边界的“谁怎么看”泛议题。发现输入门禁与研判材料冲突，或无法沿证据回答时，返回 `NO_ANGLE` 并指出缺少的触发事实或回答依据；不要在成稿阶段临时补造。
 
-返回严格 JSON：{"items":[{"candidateId":字符串,"status":"PASS|NO_ANGLE","researchBasisRefs":{"materialIds":[字符串],"internalSignalRefs":[字符串],"relationIds":[字符串],"evidenceSourceIds":[字符串]},"angle":字符串,"thesis":字符串,"hypotheses":[{"claim":字符串,"support":字符串,"counter":字符串,"verify":字符串,"readerValue":字符串}],"evidenceBoundary":字符串,"counterEvidence":字符串,"editorQuestion":字符串,"writeReadiness":"READY_PUBLIC_ANALYSIS|NEED_AUTHOR_INPUT|NEED_EXPERIMENT|SHORT_COMMENT_ONLY|SKIP","packaging":{"contentPillar":字符串,"readerJob":字符串,"mode":"搜索型|分享型|双栖型","distributionLane":"推荐池|通知池|实验池","readerStake":字符串,"readerStakeScore":0到5,"readerTarget":字符串,"readerAction":字符串,"readerConsequence":字符串,"readerStakeEvidence":字符串,"notificationFit":0到5,"notificationReason":字符串,"titleDirection":字符串,"hook":字符串,"outline":[字符串],"practicalIncrement":字符串,"materialGaps":字符串},"bScores":{"angleUniqueness":0到5,"emotionSpread":0到5,"titleHook":0到5,"readerStakeScore":0到5,"relatability":0到5,"factSupport":0到5},"hProfile":{"historicalType":"worker_social|bigtech|owned_experience|controversial_return|key_person_move|github_tool|ai_tool_test|financing|career_anxiety|contrarian_bigtech","fiveSenseCount":0到5,"fiveQuestionCount":0到5,"recommendationFit":0到10,"emotionTheme":0到10,"searchFriendly":0到5},"materialType":字符串,"format":"文章|贴图","recommendedArticleType":"wechat-mp-tech-hotspot|wechat-mp-tech-deep|wechat-mp-deep-dive|wechat-mp-gossip-chill"}]}。
+返回严格 JSON：{"items":[{"candidateId":字符串,"status":"PASS|NO_ANGLE","researchBasisRefs":{"materialIds":[字符串],"internalSignalRefs":[字符串],"relationIds":[字符串],"evidenceSourceIds":[字符串]},"angle":字符串,"thesis":字符串,"hypotheses":[{"claim":字符串,"support":字符串,"counter":字符串,"verify":字符串,"readerValue":字符串}],"evidenceBoundary":字符串,"counterEvidence":字符串,"editorQuestion":字符串,"writeReadiness":"READY_PUBLIC_ANALYSIS|NEED_AUTHOR_INPUT|NEED_EXPERIMENT|SHORT_COMMENT_ONLY|SKIP","materialStrategy":"direct_practical|event_trigger|unclassified","materialFit":0到100或null,"materialFitReason":字符串,"packaging":{"contentPillar":字符串,"readerJob":字符串,"mode":"搜索型|分享型|双栖型","distributionLane":"推荐池|通知池|实验池","readerStake":字符串,"readerStakeScore":0到5,"readerTarget":字符串,"readerAction":字符串,"readerConsequence":字符串,"readerStakeEvidence":字符串,"notificationFit":0到5,"notificationReason":字符串,"titleDirection":字符串,"hook":字符串,"outline":[字符串],"practicalIncrement":字符串,"materialGaps":字符串},"bScores":{"angleUniqueness":0到5,"emotionSpread":0到5,"titleHook":0到5,"readerStakeScore":0到5,"relatability":0到5,"factSupport":0到5},"hProfile":{"historicalType":"worker_social|bigtech|owned_experience|controversial_return|key_person_move|github_tool|ai_tool_test|financing|career_anxiety|contrarian_bigtech","fiveSenseCount":0到5,"fiveQuestionCount":0到5,"recommendationFit":0到10,"emotionTheme":0到10,"searchFriendly":0到5},"materialType":字符串,"format":"文章|贴图","recommendedArticleType":"wechat-mp-tech-hotspot|wechat-mp-tech-deep|wechat-mp-deep-dive|wechat-mp-gossip-chill"}]}。
 
 按账号上下文选择分发池：
 
@@ -20,12 +20,21 @@ description: 热点探索编辑。对已入池候选生成临时探索卡（角�
 - 实验池：用于新形式、跨圈层事件或原创认知；明确待验证假设，不承诺传播结果。
 
 `readerStake` 必须同时写明具体读者、要改变的决策或动作、以及账号上下文中定义的具体读者后果；同时拆分填写 `readerTarget`、`readerAction`、`readerConsequence` 和 `readerStakeEvidence`。`readerStakeScore` 是 0～5 的 raw 结构化受众利益分，必须由具体后果和证据支持；不要在生成时封顶，工作台会另算通知门禁用的 capped 分。relatability 是不局限于直接利益读者的广泛共鸣度。B 六项均按 0～5 评分：angleUniqueness 看角度新意，emotionSpread 看社会情绪传播，titleHook 看标题冲突与反差，readerStakeScore 看具体读者行动与后果，factSupport 看来源与证据，relatability 看非直接利益读者是否也有兴趣。emotionSpread 与 relatability 不得同义重复打分。
+`materialStrategy` 按文章角度选：直接提供可获得资源、步骤或工程实践结果时用 `direct_practical`；以公司/模型/政策事件为引子，解释对读者工作、成本、流程或选择的影响时用 `event_trigger`；角度无法归入两者或依据不足时用 `unclassified`。不得根据来源平台名称自动分类。`materialFit` 是 v4 正式 M 分（0～100）：第一梯队看结果可获得性、证据/入口、复现路径和限制；第二梯队看事件事实、读者影响传导、原创解释和超出新闻复述的增量。热点评论若有可靠事实、原创判断和读者理解增量可评高分，不要求亲历或行动建议；只有热度/知名度不能得高分。`materialFitReason` 用一句话说明哪些证据和读者收益支撑评分。证据不足时标为 `unclassified`，工作台使用中性 M=50，仍以 v4 排序。
 传闻、未证实重大事件、健康或生物安全题默认进入实验池；不得靠情绪、主体知名度或标题张力晋级。没有读者利益点的宏观事件不得获得高 `readerStakeScore`。`notificationReason` 写明满足的硬条件；非通知池说明降级原因。
 每条只给2个互不等价命题和反证；outline只给3项。除标题外，每个字符串控制在80个汉字以内。没有可靠事实支撑时降低 factSupport 并写明待核验，不能用流畅包装掩盖证据缺口。不要输出 Markdown、解释或 JSON 之外的文字。
 
 ---
 
-**版本**：v1.5.0｜**最后更新**：2026-10-27
+**版本**：v1.7.0｜**最后更新**：2026-11-22
+
+### v1.7.0 变更
+
+- M 改为 v4 正式评分输入；缺少依据的候选仍参与 v4 排序并使用中性 M=50
+
+### v1.6.0 变更
+
+- 脑暴卡增加素材策略与 M 字段
 
 ### v1.5.0 变更
 

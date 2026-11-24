@@ -1,7 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { discoverGitHubRepositories, repositoryFromUrl } from '../plugins/github-discovery/collector.mjs';
+import { createAdapter } from '../plugins/github-discovery/adapter.mjs';
 
 function response(data){return {status:200,ok:true,headers:{get(){return null;}},async json(){return data;},async text(){return JSON.stringify(data);}};}
 test('识别其他热点中提及的 GitHub 仓库',async()=>{const items=[{title:'新闻提到工具',url:'https://news.example/a',sourceName:'新闻',githubRepositories:['https://github.com/o/tool']}];const result=await discoverGitHubRepositories(items,{enabled:false});assert.equal(result.length,2);assert.equal(result.find((item)=>item.sourceGroup==='github').sourceType,'mentioned');assert.equal(repositoryFromUrl('https://github.com/o/tool/issues').repository,'o/tool');});
+test('GitHub Search 采集器提供轻量连接测试', async () => {
+  let requested = '';
+  const adapter = createAdapter({ config: { githubDiscovery: {}, workspaceRoot: '.' }, github: { requestGitHubJson: async (apiPath) => { requested = apiPath; return { items: [{ full_name: 'owner/repo' }] }; } } });
+  const result = await adapter.test({});
+  assert.match(requested, /^\/search\/repositories\?/);
+  assert.equal(result.ok, true);
+  assert.equal(result.itemCount, 1);
+});
 test('Search API 同时发现新、活跃和成熟项目',async()=>{const requests=[];const fetchImpl=async(url)=>{requests.push(decodeURIComponent(url));return response({items:[{full_name:'new/hot',html_url:'https://github.com/new/hot',description:'new tool',language:'TypeScript',stargazers_count:1500,topics:['ai'],created_at:'2026-07-10T00:00:00Z',updated_at:'2026-07-22T00:00:00Z'}]});};const result=await discoverGitHubRepositories([],{enabled:true,createdWithinDays:30,activeWithinDays:30,minStars:1000,activeMinStars:100,limit:10,fetchImpl,token:'x',cacheDir:null,searchMinIntervalMs:0});assert.ok(requests.some((query)=>/stars:>=1000 created:>=/.test(query)));assert.ok(requests.some((query)=>/stars:>=100 pushed:>=/.test(query)));assert.ok(requests.some((query)=>/stars:>=1000 pushed:>=/.test(query)));assert.equal(requests.length,3);assert.equal(result[0].sourceType,'search');assert.equal(result[0].stars,1500);assert.deepEqual(result[0].discoveryChannels,['search']);assert.equal(result[0].discoveryModes.length,3);assert.equal(result[0].discoveryContexts[0].channel,'search');assert.equal(result[0].discoveryContexts[0].mode,'new');assert.equal(result[0].projectType,'tool');});

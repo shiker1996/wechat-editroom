@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { computeFinalScore } from '../../server/shared/domain/topic-scoring.mjs';
+import { computeFinalScore, TOPIC_SCORING_FORMULA_VERSION } from '../../server/shared/domain/topic-scoring.mjs';
 
 const batchDirectory = process.argv[2];
 if (!batchDirectory) {
@@ -38,7 +38,8 @@ function scoreLegacyV2(inputs, configured = {}) {
 
 const items = replay.items.map((item) => {
   const inputs = item.inputs || {};
-  const v3 = computeFinalScore(inputs, scoring);
+  const v4 = computeFinalScore({ ...inputs, materialStrategy: item.materialStrategy,
+    materialFit: item.materialFit }, scoring);
   const v2Inputs = item.legacyInputs || inputs;
   return {
     candidateId: String(item.candidateId || ''),
@@ -46,8 +47,9 @@ const items = replay.items.map((item) => {
     category: String(item.category || ''),
     poolRole: String(item.poolRole || ''),
     v2: scoreLegacyV2(v2Inputs, replay.legacyScoring),
-    v3: { A: v3.A, DOM: v3.DOM, F: v3.F },
-    savedV3: item.output || null,
+    v4: { A: v4.A, DOM: v4.DOM, strategy: v4.materialStrategy, M: v4.M,
+      materialFitSource: v4.materialFitSource, reason: String(item.materialFitReason || ''), F: v4.F },
+    savedHistoricalScore: item.output || null,
     usesLegacyComponentSnapshot: Boolean(item.legacyInputs),
   };
 });
@@ -55,17 +57,18 @@ const rank = (key) => new Map(items.filter((item) => item[key].F != null)
   .sort((a, b) => b[key].F - a[key].F || a.candidateId.localeCompare(b.candidateId))
   .map((item, index) => [item.candidateId, index + 1]));
 const v2Ranks = rank('v2');
-const v3Ranks = rank('v3');
+const v4Ranks = rank('v4');
 for (const item of items) {
   item.v2.rank = v2Ranks.get(item.candidateId) ?? null;
-  item.v3.rank = v3Ranks.get(item.candidateId) ?? null;
-  item.rankChange = item.v2.rank == null || item.v3.rank == null ? null : item.v2.rank - item.v3.rank;
+  item.v4.rank = v4Ranks.get(item.candidateId) ?? null;
+  item.rankChange = item.v2.rank == null || item.v4.rank == null ? null : item.v2.rank - item.v4.rank;
 }
 const ranked = Array.isArray(preselection?.items) ? preselection.items : [];
 const report = {
   schemaVersion: 1,
-  formulaVersion: replay.formulaVersion || 'unknown',
-  comparisonBasis: 'When legacyInputs are present, v2 H/B/P are reconstructed from archived raw B scores, hProfile, capped reader score, and the v2 account scoring snapshot captured by the migration path. This compares formula inputs and outputs; it does not replay candidate-pool gates or model decisions.',
+  formulaVersion: TOPIC_SCORING_FORMULA_VERSION,
+  historicalFormulaVersion: replay.formulaVersion || 'unknown',
+  comparisonBasis: 'Recalculates all replay rows with the active v4 formula. Old replay rows without materialStrategy/materialFit use unclassified neutral M=50; this does not edit the archived batch or reconstruct editorial choices.',
   preselection: preselection ? {
     rankedEventCount: ranked.length,
     selectedEventCount: ranked.filter((item) => item.poolRole && item.poolRole !== '未入选').length,

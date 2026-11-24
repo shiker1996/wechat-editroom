@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "custom-card-storyboard",
   "name": "自定义图文故事板",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "kind": "storyboard",
   "entryPoints": [
     "custom-social"

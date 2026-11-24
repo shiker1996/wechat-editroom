@@ -50,6 +50,8 @@ test('自定义图文先搜索素材，再用表单工具更新，最后用结�
           { field: 'channel', op: 'replace', value: 'wechat' },
           { field: 'topic', op: 'replace', value: 'Agent 教程' },
           { field: 'audience', op: 'replace', value: '开发者' },
+          { field: 'thesis', op: 'replace', value: '读者可完成安装并核对运行结果' },
+          { field: 'limitations', op: 'replace', value: '适用于文档所述当前版本' },
           { field: 'points', op: 'append', values: ['【体验】官方文档给出安装方式', '【建议】先测试', '【建议】保留边界'] },
           { field: 'steps', op: 'append', values: ['安装', '运行'] },
           { field: 'expected_pages', op: 'set', value: 6 },

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "feed-collector",
   "name": "RSS / Atom 直连",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "kind": "collector",
   "entry": "./adapter.mjs",
   "riskLevel": "network-read",

@@ -11,7 +11,7 @@ const FORM_UPDATE_CAPABILITY = 'cap_agent_form_update';
 const CUSTOM_SOCIAL_FORM_FIELDS = Object.freeze({
   content_type: { kind: 'enum', normalize: (value) => ['tutorial', 'list', 'opinion'].includes(String(value)) ? String(value) : undefined, validate: (value) => ['tutorial', 'list', 'opinion'].includes(value), validationMessage: () => 'content_type 必须是 tutorial（教程）、list（清单）或 opinion（观点）', description: '图文内容类型：tutorial、list 或 opinion。' },
   channel: { kind: 'enum', normalize: (value) => ['wechat', 'xiaohongshu'].includes(String(value)) ? String(value) : undefined, validate: (value) => ['wechat', 'xiaohongshu'].includes(value), validationMessage: () => 'channel 必须是 wechat（公众号）或 xiaohongshu（小红书）', description: '发布渠道：wechat 或 xiaohongshu。' },
-  topic: { kind: 'text', description: '图文主题。' }, audience: { kind: 'text', description: '目标读者。' }, scenario: { kind: 'text', description: '读者使用场景或问题场景。' }, thesis: { kind: 'text', description: '核心观点或希望读者接受的结论。' }, limitations: { kind: 'text', description: '适用边界和不能外推的内容。' },
+  topic: { kind: 'text', description: '图文主题。' }, audience: { kind: 'text', description: '目标读者。' }, scenario: { kind: 'text', description: '读者使用场景或问题场景。' }, thesis: { kind: 'text', description: '教程写明读者完成后可核对的结果；其他类型填写核心观点或结论。' }, limitations: { kind: 'text', description: '适用边界和不能外推的内容；教程必须填写经核对的限制，若无额外限制需明确说明。' },
   points: { kind: 'list', description: '图文要展示的核心要点；至少一条应明确标注为【体验】或【素材】。' }, steps: { kind: 'list', description: '教程步骤；教程类型至少需要两步。' }, items: { kind: 'list', description: '清单条目；清单类型至少需要三项。' }, materialUrls: { kind: 'url-list', description: '公开素材或证据链接，只能使用 http/https 地址。' },
   expected_pages: { kind: 'number', normalize: (value) => { const pages = Number(value); return Number.isFinite(pages) ? Math.min(10, Math.max(4, Math.round(pages))) : undefined; }, validate: (value) => Number.isInteger(value) && value >= 4 && value <= 10, validationMessage: () => 'expected_pages 必须是 4 到 10 之间的整数', description: '预计页数，必须是 4–10 的整数。' },
 });
@@ -33,6 +33,8 @@ function evaluateCustomSocialReadiness(formState) {
   if (points.length < 3) missing.push('至少 3 条核心要点');
   if (!points.some((item) => /^【(?:体验|素材)】/.test(String(item)))) missing.push('至少一条作者体验或用户素材');
   if (state.content_type === 'tutorial' && steps.length < 2) missing.push('至少 2 个教程步骤');
+  if (state.content_type === 'tutorial' && !String(state.thesis || '').trim()) missing.push('教程完成后读者能得到的可核对结果');
+  if (state.content_type === 'tutorial' && !String(state.limitations || '').trim()) missing.push('教程适用边界或已核实的限制说明');
   if (state.content_type === 'list' && items.length < 3) missing.push('至少 3 个清单条目');
   if (state.content_type === 'opinion' && !String(state.thesis || '').trim()) missing.push('核心观点');
   return { ready: missing.length === 0, missing };

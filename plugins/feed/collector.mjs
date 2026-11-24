@@ -1,41 +1,11 @@
 import dns from 'node:dns/promises';
 import net from 'node:net';
 import { privateIp } from './network-safety.mjs';
-
-function decodeXml(value = '') {
-  return value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
-    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
-    .replace(/<[^>]+>/g, '').trim();
-}
-
-function field(block, names) {
-  for (const name of names) {
-    const match = block.match(new RegExp(`<${name}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${name}>`, 'i'));
-    if (match) return decodeXml(match[1]);
-  }
-  return null;
-}
-
-function normalizeDate(value) {
-  if (!value) return null;
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
-}
+import { feedDocumentTitle, parseFeedDocument } from '../shared/feed-normalization.mjs';
+import { fetchWithBoundedRetry } from '../shared/source-http.mjs';
 
 export function parseFeed(xml, source) {
-  const blocks = xml.match(/<item\b[\s\S]*?<\/item>|<entry\b[\s\S]*?<\/entry>/gi) ?? [];
-  return blocks.map((block, index) => ({
-    id: field(block, ['guid', 'id']) ?? `${source}-${index}`,
-    title: field(block, ['title']) ?? '无标题',
-    url: field(block, ['link']) ?? block.match(/<link[^>]+href=["']([^"']+)/i)?.[1] ?? null,
-    publishedAt: normalizeDate(field(block, ['pubDate', 'published', 'updated'])),
-    summary: field(block, ['description', 'summary', 'content']) || '',
-    githubRepositories: [...new Set([...block.matchAll(/https?:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+/gi)]
-      .map((match) => match[0].replace(/[),.;]+$/, '')))],
-    route: source,
-    rank: index + 1,
-  }));
+  return parseFeedDocument(xml, source).items;
 }
 
 export function filterRecentItems(items, config = {}, now = Date.now()) {
@@ -64,12 +34,15 @@ async function assertPublicFeedUrl(value) {
 
 export async function fetchDirectFeed(value, timeoutMs = 60000) {
   let url = await assertPublicFeedUrl(value);
+  const deadline = Date.now() + Math.max(1000, Number(timeoutMs) || 60000);
   for (let redirect = 0; redirect <= 4; redirect += 1) {
-    const response = await fetch(url, {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 1000) throw new Error('TIMEOUT: RSS/Atom 请求超过总时间预算');
+    const attemptTimeoutMs = Math.max(1000, Math.floor((remainingMs - 250) / 2));
+    const response = await fetchWithBoundedRetry(url, {
       redirect: 'manual',
       headers: { accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*;q=0.5', 'user-agent': 'WriteAssistant/1.0 RSS Reader' },
-      signal: AbortSignal.timeout(timeoutMs),
-    });
+    }, { timeoutMs: attemptTimeoutMs });
     if ([301, 302, 303, 307, 308].includes(response.status)) {
       const location = response.headers.get('location');
       if (!location) throw new Error(`订阅源重定向 ${response.status} 但没有 Location`);
@@ -80,17 +53,15 @@ export async function fetchDirectFeed(value, timeoutMs = 60000) {
     if (Number(response.headers.get('content-length') || 0) > 12_000_000) throw new Error('订阅源超过 12 MB 安全上限');
     const xml = await response.text();
     if (xml.length > 12_000_000) throw new Error('订阅源超过 12 MB 安全上限');
-    const items = parseFeed(xml, url.href);
-    if (!items.length) throw new Error('没有识别到 RSS/Atom 条目');
-    const root = xml.match(/<channel\b[\s\S]*?<\/channel>|<feed\b[\s\S]*?<\/feed>/i)?.[0] ?? xml;
-    return { url: url.href, title: field(root, ['title']) || url.hostname, items };
+    const parsed = parseFeedDocument(xml, url.href);
+    return { url: url.href, title: feedDocumentTitle(xml, url.hostname), ...parsed };
   }
   throw new Error('订阅源重定向次数过多');
 }
 
 export async function testFeedSubscription(value) {
   const feed = await fetchDirectFeed(value, 20000);
-  return { ok: true, title: feed.title, itemCount: feed.items.length, url: feed.url };
+  return { ok: true, title: feed.title, itemCount: feed.items.length, duplicateCount: feed.duplicateCount, droppedCount: feed.droppedCount, url: feed.url };
 }
 
 export async function collectFeed(source, config = {}, onProgress = () => {}, onSourceResult = () => {}) {
@@ -102,6 +73,9 @@ export async function collectFeed(source, config = {}, onProgress = () => {}, on
     const filtered = filterRecentItems(feed.items.slice(0, 30), config);
     if (filtered.stale.length) onProgress(`${sourceName} 已忽略 ${filtered.stale.length} 条过期内容`);
     if (filtered.undated.length) onProgress(`${sourceName} 有 ${filtered.undated.length} 条缺少有效发布时间`);
+    if (!filtered.kept.length) onProgress(`${sourceName} 本次没有可用的新条目`);
+    if (feed.duplicateCount) onProgress(`${sourceName} 已去重 ${feed.duplicateCount} 条重复链接`);
+    if (feed.droppedCount) onProgress(`${sourceName} 已忽略 ${feed.droppedCount} 条缺少有效标题或链接的条目`);
     const sourceKey = `direct:${url}`;
     const items = filtered.kept.map((item) => ({ ...item, route: url, feedLabel: sourceName, sourceKey, sourceType: 'direct', sourceName }));
     onSourceResult({ sourceGroup: 'rsshub', sourceType: 'direct', sourceKey, sourceName, status: 'success', itemCount: items.length, durationMs: Date.now() - started, startedAt, endedAt: new Date().toISOString() });

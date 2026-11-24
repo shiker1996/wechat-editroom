@@ -73,14 +73,18 @@ export function evaluateCustomCardGate(candidate, factSheet, editorial) {
   const steps=Array.isArray(fact.steps)?fact.steps:[];
   const items=Array.isArray(fact.items)?fact.items:[];
   const typeSpecific=contentType==='tutorial'
-    ? {key:'steps',label:'教程步骤至少 2 步',ok:steps.length>=2}
+    ? [
+      {key:'steps',label:'教程步骤至少 2 步',ok:steps.length>=2},
+      {key:'tutorial-outcome',label:'教程可核对结果已明确',ok:Boolean(String(fact.thesis||'').trim())},
+      {key:'tutorial-boundary',label:'教程适用边界或限制已说明',ok:Boolean(String(fact.limitations||'').trim())},
+    ]
     : contentType==='list'
-      ? {key:'items',label:'清单条目至少 3 条',ok:items.length>=3}
-      : {key:'thesis',label:'核心观点已明确',ok:Boolean(String(fact.thesis||'').trim())};
+      ? [{key:'items',label:'清单条目至少 3 条',ok:items.length>=3}]
+      : [{key:'thesis',label:'核心观点已明确',ok:Boolean(String(fact.thesis||'').trim())}];
   const checks=[
     {key:'facts',label:'自定义事实基座已生成',ok:fact.kind==='custom'&&Boolean(String(fact.topic||'').trim())},
     {key:'content-type',label:'内容类型为教程/清单/观点',ok:Boolean(CUSTOM_CONTENT_TYPES[contentType])},
-    typeSpecific,
+    ...typeSpecific,
     {key:'points',label:'核心要点至少 3 条',ok:points.length>=3},
     {key:'source-levels',label:'要点来源等级已完整标注',ok:points.length>0&&points.every((item)=>levels.has(item?.source_level))},
     {key:'non-model',label:'至少一条要点来自作者体验或用户素材',ok:points.some((item)=>item?.source_level&&item.source_level!=='model_suggestion')},

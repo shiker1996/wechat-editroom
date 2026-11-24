@@ -1,11 +1,13 @@
 import { dimensionPartsOf } from './hotspot-dimensions.mjs';
 import { EDITORIAL_CATEGORIES, isRepositoryEvent, normalizeEditorialCategory } from './editorial-categories.mjs';
+import { isDirectPracticalProject } from './content-routing.mjs';
 
 export const DISCUSSION_RESEARCH_SCHEMA_VERSION = 8;
 // 讨论研判按全局事件热度排序；类别只保留为选题标签，不参与范围配额。
 export const DISCUSSION_RESEARCH_TOP_K_OPTIONS = Object.freeze([5, 8, 10, 15]);
 export const DISCUSSION_RESEARCH_TOP_K = 15;
 export const DISCUSSION_RESEARCH_READER_RECALL_LIMIT = 5;
+export const DISCUSSION_RESEARCH_DIRECT_PROJECT_LIMIT = 3;
 export const DISCUSSION_RESEARCH_CATEGORIES = EDITORIAL_CATEGORIES;
 
 export function resolveDiscussionResearchTopK(value) {
@@ -332,6 +334,7 @@ function trendRelations(selected) {
 
 export function buildDiscussionResearch({ events = [], eventHeatRanking = {}, topK = DISCUSSION_RESEARCH_TOP_K,
   readerScreening = [], readerRecallLimit = DISCUSSION_RESEARCH_READER_RECALL_LIMIT,
+  directProjectLimit = DISCUSSION_RESEARCH_DIRECT_PROJECT_LIMIT,
   readerScreeningStatus = 'not_run', freshnessWindowHours = 168, batchId = '', generatedAt = new Date().toISOString(), categories = DISCUSSION_RESEARCH_CATEGORIES } = {}) {
   const heatByEvent = new Map(list(eventHeatRanking.items).map((item) => [String(item.eventId || item.event_id), item]));
   const boardHeatByEvent = new Map();
@@ -354,8 +357,6 @@ export function buildDiscussionResearch({ events = [], eventHeatRanking = {}, to
     return { event, heat, editorialCategory, accountAudience: accountAudienceOf(event), repository: isRepositoryEvent(event) };
   }).filter(({ event, heat }) => idOf(event) && heat && heat.state !== 'stale');
   const isBoardCategory = (category) => categories.includes(category);
-  const excluded = heatAvailable.filter(({ accountAudience, repository, editorialCategory }) =>
-    accountAudience === 0 || repository || !isBoardCategory(editorialCategory));
   const heatEligible = heatAvailable.filter(({ accountAudience, repository, editorialCategory }) =>
     accountAudience !== 0 && !repository && isBoardCategory(editorialCategory));
   const globalHeat = (entry) => finite(entry.heat?.scoreValue ?? entry.heat?.t ?? entry.heat?.eventValue ?? entry.event?.t, 0);
@@ -387,10 +388,35 @@ export function buildDiscussionResearch({ events = [], eventHeatRanking = {}, to
     .slice(0, Math.max(0, Number(readerRecallLimit) || 0))
     .map((entry) => ({ ...entry, inclusionType: 'reader_impact_recall' }));
   const selected = [...heatSelected, ...readerRecall];
+  const repositoryBoards = [...new Map([
+    ...list(eventHeatRanking?.rankings?.github_project?.items),
+    ...list(eventHeatRanking?.rankings?.repository_projects?.items),
+  ].map((item, index) => [
+    String(item?.eventId || item?.event_id || ''), finite(item?.rank ?? item?.boardRank, index + 1),
+  ]).filter(([eventId]) => eventId)).entries()]
+    .map(([eventId, rank]) => ({ eventId, rank }));
+  const repositoryRankByEvent = new Map(repositoryBoards.map((item) => [item.eventId, item.rank]));
+  const directProjects = heatAvailable
+    .filter(({ event, heat, repository, accountAudience, editorialCategory }) => repository
+      && accountAudience !== 0 && isBoardCategory(editorialCategory) && isDirectPracticalProject(event)
+      && Number(directProjectLimit) > 0)
+    .sort((a, b) => (repositoryRankByEvent.get(idOf(a.event)) ?? finite(a.heat?.rank, 999999))
+      - (repositoryRankByEvent.get(idOf(b.event)) ?? finite(b.heat?.rank, 999999))
+      || idOf(a.event).localeCompare(idOf(b.event)))
+    .slice(0, Math.max(0, Number(directProjectLimit) || 0))
+    .map((entry) => ({ ...entry, inclusionType: 'direct_practical_project' }));
+  const selectedIds = new Set(selected.map(({ event }) => idOf(event)));
+  const distinctDirectProjects = directProjects.filter(({ event }) => !selectedIds.has(idOf(event)));
+  selected.push(...distinctDirectProjects);
+  const includedDirectProjectIds = new Set(distinctDirectProjects.map(({ event }) => idOf(event)));
+  const excluded = heatAvailable.filter(({ event, accountAudience, repository, editorialCategory }) =>
+    accountAudience === 0 || (repository && !includedDirectProjectIds.has(idOf(event))) || !isBoardCategory(editorialCategory));
   const scope = selected.map(({ event, heat, editorialCategory, inclusionType, readerScreen, recallScore }, index) => eventScope(
     event, heat, finite(heat?.globalRank ?? heat?.rank, index + 1), index + 1,
     finite(heat?.boardRank ?? heat?.board_rank), editorialCategory,
-    inclusionType === 'global_heat'
+    inclusionType === 'direct_practical_project'
+      ? '第一梯队 direct_practical 项目独立补入文章深研范围'
+      : inclusionType === 'global_heat'
       ? `按全局热度排序第 ${index + 1} 名纳入研判范围`
       : `全量读者影响初筛补入；综合分 ${recallScore}/5；工作场景：${text(readerScreen?.work_scenario, 120)}；读者影响：${text(readerScreen?.reader_effect, 120)}`,
   ));
@@ -421,15 +447,17 @@ export function buildDiscussionResearch({ events = [], eventHeatRanking = {}, to
     mode: 'phase0_scope',
     policy: {
       top_k: topKLimit,
-      selection_policy: 'global_heat_top_k_plus_reader_impact_recall',
+      selection_policy: 'global_heat_top_k_plus_reader_impact_recall_plus_direct_practical_projects',
       reader_recall_limit: Math.max(0, Number(readerRecallLimit) || 0),
       reader_recall_selected: readerRecall.length,
+      direct_practical_project_limit: Math.max(0, Number(directProjectLimit) || 0),
+      direct_practical_project_selected: distinctDirectProjects.length,
       freshness_window_hours: Math.max(1, Number(freshnessWindowHours) || 168),
       reader_screening_status: readerScreeningStatus,
       included_categories: [...categories],
       excluded_reasons: {
         account_irrelevant: 'audience score is 0',
-        repository_project: 'project discovery remains in the project/social-card lane',
+        repository_project: 'unmarked projects remain in the project/social-card lane; explicitly tagged direct_practical projects may enter article research',
         unmapped_category: 'not assigned to an editorial board',
       },
       t_unchanged: true, f_unchanged: true, pool_unchanged: true,
@@ -442,6 +470,7 @@ export function buildDiscussionResearch({ events = [], eventHeatRanking = {}, to
       selected_count: selected.length,
       heat_selected_count: heatSelected.length,
       reader_recall_selected_count: readerRecall.length,
+      direct_practical_project_selected_count: distinctDirectProjects.length,
       excluded_account_irrelevant_count: excluded.filter((item) => item.accountAudience === 0).length,
       excluded_repository_project_count: excluded.filter((item) => item.repository).length,
       excluded_unmapped_category_count: excluded.filter((item) => !isBoardCategory(item.editorialCategory)).length,
@@ -466,8 +495,7 @@ export function discussionResearchMarkdown(report) {
   const lines = [
     '# 高热事件讨论研判报告',
     '',
-    `模式：${report?.mode || 'phase0_observation'}；范围：按全局热度选取 ${report?.policy?.top_k || DISCUSSION_RESEARCH_TOP_K} 个事件，题材类别仅作标签；GitHub 项目素材不自动进入文章研判；本次纳入 ${scope.length} 个事件。`,
-    `模式：${report?.mode || 'phase0_observation'}；范围：全局热度 Top-${report?.policy?.top_k || DISCUSSION_RESEARCH_TOP_K} 加全量读者影响初筛补入 ${report?.scope?.reader_recall_selected_count || 0} 个（上限 ${report?.policy?.reader_recall_limit ?? DISCUSSION_RESEARCH_READER_RECALL_LIMIT}）；GitHub 项目素材不自动进入文章研判；本次纳入 ${scope.length} 个事件。`,
+    `模式：${report?.mode || 'phase0_observation'}；范围：全局热度 Top-${report?.policy?.top_k || DISCUSSION_RESEARCH_TOP_K}、读者影响补入 ${report?.scope?.reader_recall_selected_count || 0} 个（上限 ${report?.policy?.reader_recall_limit ?? DISCUSSION_RESEARCH_READER_RECALL_LIMIT}），另补入第一梯队 direct_practical 项目 ${report?.scope?.direct_practical_project_selected_count || 0} 个（上限 ${report?.policy?.direct_practical_project_limit ?? 3}）；未标记的纯项目仍留在图文赛道；本次纳入 ${scope.length} 个事件。`,
     '',
     report?.research_source === 'model'
       ? '本报告由模型按事件逐个联网研判并直接返回 Markdown；程序只负责范围裁剪、调用审计、来源整理、结构索引和去重，研判价值 J 在候选评分阶段计算。'
