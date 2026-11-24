@@ -23,9 +23,8 @@ export {
 export async function runSocialCardAiVisualGenerationAgent(options = {}) {
   return runAiVisualDocumentAgent({
     ...options,
-    // 故事板页数是基准，不是视觉排版必须逐页复刻的硬模板；允许视觉 Agent
-    // 因内容拆分或合并产生少量页数变化，最终仍由交付门禁检查范围。
-    pageCountTolerance: 2,
+    // 两条生成路径共用同一视觉方案页序：拆分或合并要先回到故事板阶段处理。
+    pageCountTolerance: 0,
     auditCapability: AI_VISUAL_DOCUMENT_AUDIT,
     // 六页社交卡通常需要多次分块写入，再完成审计与 finish；使用视觉 Agent
     // 的 40 步专用上限，避免默认 28 步在 HTML 未收尾时提前熔断。

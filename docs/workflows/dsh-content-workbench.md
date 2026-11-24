@@ -23,12 +23,12 @@
 | 02 发现与选题 | 选题方向或补充要求、可选批次 ID | 复用/创建批次、采集、打标、事件与事实卡、研判管线；给用户候选排序，等待选择后再继续 | `jianzi_batches_list`、`jianzi_batch_create`、`jianzi_batch_collect`、`jianzi_job_wait`、`jianzi_batch_tags_submit`、`jianzi_batch_events`、`jianzi_batch_event_cards_submit`、`jianzi_research_stage_prepare/submit` |
 | 03 文章生产 | 用户选定的候选与补充要求 | 如有必要先加入文章候选；抓取来源、读取账号和材料，确认编辑角度，保存并回读文章草稿 | `jianzi_candidate_add`、`jianzi_candidate_source_fetch`、`jianzi_candidate_get`、`jianzi_article_document_save` |
 | 04 排版交付 | 用户确认的文章终稿 | 生成 HTML 并提交确定性排版，生成封面；返回排版与封面入口，不发布 | `jianzi_article_documents`、`jianzi_article_typeset_submit`、`jianzi_cover_submit` |
-| 05 图文 | 可选批次/候选与补充要求 | 从图文榜单选工具或事件候选；抓取关联原文，repository 类型先核验 GitHub 仓库事实，读取门禁并补齐故事板；外部 Agent 与工作台内部故事板生成共用 10 种内容块的字段格式、建议长度和事实要求；确认后锁定、生成并提交图文产物 | `jianzi_batch_social_ranking`、`jianzi_candidate_add`、`jianzi_candidate_source_fetch`、`jianzi_candidate_repository_inspect`、`jianzi_card_editorial_*`、`jianzi_card_lock`、`jianzi_card_visual_submit` |
+| 05 图文 | 可选批次/候选与补充要求 | 从图文榜单选工具或事件候选；抓取关联原文，repository 类型先核验 GitHub 仓库事实，读取门禁并补齐故事板；外部 Agent 与工作台内部故事板生成共用 10 种内容块的字段格式、建议长度和事实要求；用户确认故事板后，展示并保存视觉范式选择，再生成并提交图文产物 | `jianzi_batch_social_ranking`、`jianzi_candidate_add`、`jianzi_candidate_source_fetch`、`jianzi_candidate_repository_inspect`、`jianzi_card_editorial_*`、`jianzi_card_visual_paradigms`、`jianzi_card_visual_paradigm_select`、`jianzi_card_lock`、`jianzi_card_visual_submit` |
 | 06 内容反哺 | 必须有本轮上传的公众号导出表格 | 无附件时请用户上传并停止，不读取本地反馈/策略或现有草案；有附件时导入、匹配并关联该批次的本地正文/图文文案，再刷新快照；关联失败时停下说明，不生成旧数据草案 | `jianzi_content_feedback_import`、`jianzi_content_feedback_adjustment_generate` |
 
 内容块说明的内部提示源为 `server/features/social-cards/prompts/content-block-types.md`；外部 Agent 通过 `agent-integrations/skills/jianzi-social-cards/references/content-block-types.md` 读取同一份规范，WorkBuddy 分发副本位于 `agent-integrations/workbuddy/skills/jianzi-social-cards/references/content-block-types.md`。
 
-文章生产阶段仅保存 `draft`。用户确认已经生成的文章之后，Agent 才能保存 `final`；排版阶段检查到没有用户确认的终稿时必须停止。排版提交必须同时携带 tokens 和 HTML；服务端规范化 HTML 后通过 Chromium 核对计算样式是否实际使用方案色彩、字号、行高和间距。封面提交必须同时携带结构化方案和 HTML；服务端校验方案 schema，并通过 Chromium 核对方案标记组件实际可见、位置/字号/色彩兑现后才截图归档。上述用户确认由 DSH 会话中的交互完成。
+文章生产阶段仅保存 `draft`。用户确认已经生成的文章之后，Agent 才能保存 `final`；排版阶段检查到没有用户确认的终稿时必须停止。排版内部生成和外部 Agent 提交共用 `magazine-design-advisor` 的 `schema_version: 1` tokens 结构及 `validateTypesetDesignScheme` 校验；外部路径在结构校验后还会规范化 HTML，并通过 Chromium 核对计算样式是否实际使用方案色彩、字号、行高和间距。封面内部生成和外部提交共用封面方案核心（`schemaVersion: 1`、`semantic`、`designScheme.visualDirection/tokens/spec`）及同一主题、对比度、组件、布局骨架和标题校验；外部路径再通过 Chromium 核对方案标记组件实际可见、位置/字号/色彩兑现后截图归档。封面与排版各自保留专属方案结构。上述用户确认由 DSH 会话中的交互完成。
 
 面板只负责生成阶段任务草稿并调用 `uiWorkspace.startSession`；具体流程由项目技能 `jianzi-workbench-setup`、`jianzi-topic-to-article`、`jianzi-typeset-cover`、`jianzi-social-cards` 定义。
 

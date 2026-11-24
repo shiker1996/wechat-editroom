@@ -15,6 +15,7 @@ import { bindGenerationSnapshot, prepareSkillRun } from '../../../platform/skill
 import { parseModelJson } from '../../../platform/llm/model-json.mjs';
 import { enforceWechatFlowLayout, extractHtmlModelOutput, htmlPreservesStructure } from '../../../shared/rendering/typeset-output.mjs';
 import { markdownToHtml, normalizeDesignTokens } from '../../../shared/rendering/markdown-renderer.mjs';
+import { validateTypesetDesignScheme } from './typeset-design-scheme.mjs';
 import { visualDirectionReference } from '../../../shared/themes/visual-direction-catalog.mjs';
 import { getAccountContext } from '../../../platform/application/account-context-service.mjs';
 
@@ -124,6 +125,8 @@ export async function runTypesetPipeline({ gateway, store, batchId, candidateId,
       { role: 'user', protected: true, content: fs.readFileSync(renderedPath, 'utf8').slice(0, 16000) },
     ] });
   const design = parseJson(designResult, store);
+  const designCheck = validateTypesetDesignScheme(design.tokens);
+  if (!designCheck.valid) throw new Error(`排版设计方案未通过共享校验：${designCheck.issues.map((item) => `${item.field} ${item.message}`).join('；')}`);
   const schemePath = path.join(workdir, '09-FINAL.design-scheme.md');
   const tokensPath = path.join(workdir, 'magazine-design-tokens.json');
   writeFile(schemePath, design.schemeMarkdown || '# 杂志设计方案\n\n克制、清晰、移动端优先。');

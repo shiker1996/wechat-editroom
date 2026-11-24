@@ -2,7 +2,7 @@ import { applyWorkbenchSchema } from './workbench-schema.mjs';
 import { applyAgentHarnessSchema } from './agent-harness-schema.mjs';
 export { applyWorkbenchSchema };
 
-export const WORKBENCH_SCHEMA_VERSION = 47;
+export const WORKBENCH_SCHEMA_VERSION = 48;
 
 export function runDatabaseMigrations(db, migrateSchema) {
   if (!db || typeof db.exec !== 'function') throw new TypeError('数据库连接无效');
@@ -887,6 +887,15 @@ export function runDatabaseMigrations(db, migrateSchema) {
       const columns = new Set(db.prepare('PRAGMA table_info(card_editorial_sessions)').all().map((column) => column.name));
       if (!columns.has('storyboard_structure_snapshot_json')) db.exec("ALTER TABLE card_editorial_sessions ADD COLUMN storyboard_structure_snapshot_json TEXT NOT NULL DEFAULT '{}'");
       db.prepare('INSERT INTO schema_migrations(version,applied_at) VALUES(47,?)').run(new Date().toISOString());
+      db.exec('COMMIT');
+    } catch (error) { db.exec('ROLLBACK'); throw error; }
+  }
+  if (arguments.length < 2 && !db.prepare('SELECT 1 FROM schema_migrations WHERE version=48').get()) {
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      const columns = new Set(db.prepare('PRAGMA table_info(card_editorial_sessions)').all().map((column) => column.name));
+      if (!columns.has('visual_paradigm_json')) db.exec("ALTER TABLE card_editorial_sessions ADD COLUMN visual_paradigm_json TEXT NOT NULL DEFAULT '{}'");
+      db.prepare('INSERT INTO schema_migrations(version,applied_at) VALUES(48,?)').run(new Date().toISOString());
       db.exec('COMMIT');
     } catch (error) { db.exec('ROLLBACK'); throw error; }
   }
