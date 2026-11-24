@@ -71,8 +71,8 @@ export async function handleTaskRoutes({ request, response, pathname, searchPara
       if (!hotspot || ids.has(Number(item.id))) return respond(json, response, 422, { error: `热点 ID 无效或重复：${item?.id}` });
       const scores = item.preScores;
       const parts=normalizeEventParts(item.eventParts);
-      if (!parts || !item.category || !item.marketScope || !['低','中','高'].includes(item.riskLevel) || !item.relevanceReason || !Number.isFinite(Number(item.chinaRelevance)) || Number(item.chinaRelevance)<0 || Number(item.chinaRelevance)>12 || (item.domesticSubject!=null&&!['国内厂商','国内监管','国内市场','无'].includes(item.domesticSubject)) || (item.score!=null&&(!Number.isFinite(Number(item.score))||Number(item.score)<0||Number(item.score)>100)) || !scores || Object.entries(scoreRanges).some(([key,max]) => !Number.isFinite(Number(scores[key])) || Number(scores[key]) < 0 || Number(scores[key]) > max)) {
-        return respond(json, response, 422, { error: `热点 ${item.id} 缺少分类、市场范围、风险、事件主体/动作、相关性或有效评分` });
+      if (!parts || !item.category || !['国内','国外'].includes(item.marketScope) || !['低','中','高'].includes(item.riskLevel) || !item.relevanceReason || !Number.isFinite(Number(item.chinaRelevance)) || Number(item.chinaRelevance)<0 || Number(item.chinaRelevance)>12 || (item.domesticSubject!=null&&!['国内厂商','国内监管','国内市场','无'].includes(item.domesticSubject)) || (item.score!=null&&(!Number.isFinite(Number(item.score))||Number(item.score)<0||Number(item.score)>100)) || !scores || Object.entries(scoreRanges).some(([key,max]) => !Number.isFinite(Number(scores[key])) || Number(scores[key]) < 0 || Number(scores[key]) > max)) {
+        return respond(json, response, 422, { error: `热点 ${item.id} 的市场范围须为“国内”或“国外”，并需提供分类、风险、事件主体/动作、相关性和有效评分` });
       }
       ids.add(Number(item.id));
     }

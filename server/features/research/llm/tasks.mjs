@@ -5,6 +5,7 @@ import { parseModelJson } from '../../../platform/llm/model-json.mjs';
 import { formatAccountContext } from '../../../shared/domain/account-context-model.mjs';
 import { getAccountContext } from '../../../platform/application/account-context-service.mjs';
 import { editorialCategoryConfigFor } from '../domain/editorial-categories.mjs';
+import { normalizeMarketScope } from '../domain/hotspot-clustering.mjs';
 
 function accountAwareTagPrompt({ basePrompt, workspaceRoot }) {
   const context = getAccountContext({ workspaceRoot });
@@ -185,12 +186,14 @@ export async function tagBatch({ gateway, store, batchId, provider, limit, hotsp
     const returnedIds=new Set();
     for (const tag of Array.isArray(parsed.items)?parsed.items:[]) {
       if (!chunk.some((item) => item.id === Number(tag.id))) continue;
+      const marketScope = normalizeMarketScope(tag.marketScope);
       const eventParts = normalizeEventParts(tag.eventParts);
       const eventKey = eventParts ? `${eventParts.who}|${eventParts.what}` : String(tag.eventKey || '').trim();
-      if(!eventKey||!tag.preScores||typeof tag.preScores!=='object')continue;
+      if(!['国内','国外'].includes(marketScope)||!eventKey||!tag.preScores||typeof tag.preScores!=='object')continue;
       returnedIds.add(Number(tag.id));
       store.updateHotspotTags(Number(tag.id), {
         ...tag,
+        marketScope,
         editorialCategorySignature: categorySignature,
         eventKey,
         eventParts,

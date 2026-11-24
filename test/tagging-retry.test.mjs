@@ -48,8 +48,8 @@ test('打标保存时以规范化 who|what 生成 eventKey 并保留四要素', 
   };
   const gateway={config:{defaultProvider:'deepseek',providers:{deepseek:{maxOutputTokens:8192,taggingChunkSize:2}}},async complete(){
     return {callId:1,content:JSON.stringify({items:[
-      {id:1,eventParts:{who:'Moonshot AI',what:'发布开源模型 K3',where:'国内',when:'2026-07'},preScores:{conflict:10}},
-      {id:2,eventParts:{who:'moonshot ai',what:'发布开源模型K3。',where:'',when:''},preScores:{conflict:10}},
+      {id:1,marketScope:'国内',eventParts:{who:'Moonshot AI',what:'发布开源模型 K3',where:'国内',when:'2026-07'},preScores:{conflict:10}},
+      {id:2,marketScope:'国内',eventParts:{who:'moonshot ai',what:'发布开源模型K3。',where:'',when:''},preScores:{conflict:10}},
     ]}),finishReason:'stop',model:'test',context:{compressed:false,afterTokens:10},usage:{}};
   }};
   await tagBatch({gateway,store,batchId:'b1',provider:'deepseek'});
@@ -89,7 +89,7 @@ test('热点打标提示词注入当前账号上下文并约束受众判断', as
       config: { defaultProvider: 'deepseek', providers: { deepseek: { maxOutputTokens: 8192, taggingChunkSize: 1 } } },
       async complete(input) {
         systemPrompt = input.messages[0].content;
-        return { callId: 1, content: JSON.stringify({ items: [{ id: 1, eventKey: '主体|动作', preScores: { audience: 1 } }] }), finishReason: 'stop', model: 'test', context: {}, usage: {} };
+        return { callId: 1, content: JSON.stringify({ items: [{ id: 1, marketScope: '国内', eventKey: '主体|动作', preScores: { audience: 1 } }] }), finishReason: 'stop', model: 'test', context: {}, usage: {} };
       },
     };
     await tagBatch({ gateway, store, batchId: 'b1', provider: 'deepseek', workspaceRoot: root });
@@ -112,7 +112,7 @@ test('打标 JSON 截断时标记 invalid_output 并自动拆分重试', async (
   const gateway={config:{defaultProvider:'deepseek',providers:{deepseek:{maxOutputTokens:8192}}},async complete(input){
     calls+=1; const rows=JSON.parse(input.messages[1].content);
     if(rows.length>1)return {callId:1,content:'{"items":[',finishReason:'length',model:'test',context:{compressed:false,afterTokens:10},usage:{completion_tokens:5000}};
-    return {callId:calls,content:JSON.stringify({items:[{id:rows[0].id,category:'🤖 AI/技术动态',marketScope:'全球性',chinaRelevance:8,relevanceReason:'相关',riskLevel:'低',score:80,eventKey:`事件${rows[0].id}`,preScores:{conflict:10}}]}),finishReason:'stop',model:'test',context:{compressed:false,afterTokens:10},usage:{completion_tokens:100}};
+    return {callId:calls,content:JSON.stringify({items:[{id:rows[0].id,category:'🤖 AI/技术动态',marketScope:'国外',chinaRelevance:8,relevanceReason:'相关',riskLevel:'低',score:80,eventKey:`事件${rows[0].id}`,preScores:{conflict:10}}]}),finishReason:'stop',model:'test',context:{compressed:false,afterTokens:10},usage:{completion_tokens:100}};
   }};
   const thinkingCalls=[];
   const origComplete=gateway.complete.bind(gateway);
@@ -136,7 +136,7 @@ test('单条热点反复打标失败时跳过并记录，不拖垮整批', async
   const gateway={config:{defaultProvider:'deepseek',providers:{deepseek:{maxOutputTokens:8192,taggingChunkSize:1}}},async complete(input){
     const rows=JSON.parse(input.messages[1].content);
     if(rows[0].id===1)return {callId:1,content:'{"items":[',finishReason:'length',model:'test',context:{compressed:false,afterTokens:10},usage:{}};
-    return {callId:2,content:JSON.stringify({items:[{id:2,eventParts:{who:'主体',what:'动作'},preScores:{conflict:10}}]}),finishReason:'stop',model:'test',context:{compressed:false,afterTokens:10},usage:{}};
+    return {callId:2,content:JSON.stringify({items:[{id:2,marketScope:'国内',eventParts:{who:'主体',what:'动作'},preScores:{conflict:10}}]}),finishReason:'stop',model:'test',context:{compressed:false,afterTokens:10},usage:{}};
   }};
   const result=await tagBatch({gateway,store,batchId:'b1',provider:'deepseek'});
   assert.deepEqual(updated,[2]);
@@ -157,7 +157,7 @@ test('打标调用抛错（如空内容/超时）时翻转 thinking 重试，仍
     calls+=1; thinkingFlags.push(Boolean(input.thinking));
     const rows=JSON.parse(input.messages[1].content);
     if(rows.some((row)=>row.id===1))throw new Error('DeepSeek 未返回流式文本内容（finish=length，推理已产生 3000 字符后内容为空）');
-    return {callId:calls,content:JSON.stringify({items:rows.map((row)=>({id:row.id,eventKey:`事件${row.id}`,preScores:{conflict:10}}))}),finishReason:'stop',model:'test',context:{compressed:false,afterTokens:10},usage:{}};
+    return {callId:calls,content:JSON.stringify({items:rows.map((row)=>({id:row.id,marketScope:'国内',eventKey:`事件${row.id}`,preScores:{conflict:10}}))}),finishReason:'stop',model:'test',context:{compressed:false,afterTokens:10},usage:{}};
   }};
   const result=await tagBatch({gateway,store,batchId:'b1',provider:'deepseek'});
   assert.deepEqual(updated,[3,4]);
@@ -181,7 +181,7 @@ test('大批量打标使用持续补位工作池和服务商批次配置', async
     const rows=JSON.parse(input.messages[1].content);
     await new Promise((resolve)=>setTimeout(resolve,rows[0].id % 3 === 0 ? 12 : 3));
     active-=1;
-    return {callId:calls,content:JSON.stringify({items:rows.map((row)=>({id:row.id,eventKey:`事件${row.id}`,preScores:{conflict:10}}))}),finishReason:'stop',model:'test',context:{compressed:false,afterTokens:10},usage:{}};
+    return {callId:calls,content:JSON.stringify({items:rows.map((row)=>({id:row.id,marketScope:'国内',eventKey:`事件${row.id}`,preScores:{conflict:10}}))}),finishReason:'stop',model:'test',context:{compressed:false,afterTokens:10},usage:{}};
   }};
   const result=await tagBatch({gateway,store,batchId:'b1',provider:'deepseek'});
   assert.equal(calls,7);
@@ -206,7 +206,7 @@ test('超过有效时间窗口的旧闻跳过打标，不发送给模型', async
   const gateway={config:{defaultProvider:'deepseek',providers:{deepseek:{maxOutputTokens:8192}}},async complete(input){
     calls+=1;
     const rows=JSON.parse(input.messages[1].content);
-    return {callId:calls,content:JSON.stringify({items:rows.map((row)=>({id:row.id,eventKey:`事件${row.id}`,preScores:{conflict:10}}))}),finishReason:'stop',model:'test',context:{compressed:false,afterTokens:10},usage:{}};
+    return {callId:calls,content:JSON.stringify({items:rows.map((row)=>({id:row.id,marketScope:'国内',eventKey:`事件${row.id}`,preScores:{conflict:10}}))}),finishReason:'stop',model:'test',context:{compressed:false,afterTokens:10},usage:{}};
   }};
   const result=await tagBatch({gateway,store,batchId:'b1',provider:'deepseek',maxAgeHours:168,onProgress:(m)=>progress.push(m)});
   assert.equal(calls,1);
@@ -228,7 +228,7 @@ test('模型回显输入（0 条有效标注）时自动开启 thinking 重试',
     calls+=1; thinkingFlags.push(Boolean(input.thinking));
     const rows=JSON.parse(input.messages[1].content);
     if(!input.thinking)return {callId:calls,content:JSON.stringify({items:rows}),finishReason:'stop',model:'test',context:{compressed:false,afterTokens:10},usage:{}};
-    return {callId:calls,content:JSON.stringify({items:rows.map((row)=>({id:row.id,eventKey:`事件${row.id}`,preScores:{conflict:10}}))}),finishReason:'stop',model:'test',context:{compressed:false,afterTokens:10},usage:{}};
+    return {callId:calls,content:JSON.stringify({items:rows.map((row)=>({id:row.id,marketScope:'国内',eventKey:`事件${row.id}`,preScores:{conflict:10}}))}),finishReason:'stop',model:'test',context:{compressed:false,afterTokens:10},usage:{}};
   }};
   const result=await tagBatch({gateway,store,batchId:'b1',provider:'deepseek'});
   assert.equal(calls,2);

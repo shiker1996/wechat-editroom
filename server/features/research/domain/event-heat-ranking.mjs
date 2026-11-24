@@ -1,3 +1,5 @@
+import { normalizeMarketScope } from './hotspot-clustering.mjs';
+
 const HOUR = 60 * 60 * 1000;
 export const EVENT_HEAT_RANKING_VERSION = 8;
 
@@ -332,7 +334,7 @@ export function scoreEventHeat({ event, currentMemberships = [], historicalMembe
     lastSeenAt: latestSeenAt ? new Date(latestSeenAt).toISOString() : (event.last_seen_at || null),
     lastUpdateAt: lastUpdateAt ? new Date(lastUpdateAt).toISOString() : null,
     hotspotIds: currentMemberships.map((membership) => Number(membership.hotspot_id)).filter(Number.isFinite),
-    marketScopes: [...new Set(currentHotspots.map((hotspot) => hotspot.market_scope).filter(Boolean))],
+    marketScopes: [...new Set(currentHotspots.map((hotspot) => normalizeMarketScope(hotspot.market_scope)).filter(Boolean))],
     keywords: [...new Set(currentHotspots.flatMap((hotspot) => tagValue(hotspot, 'keywords') || []))].slice(0, 12),
     reason: reasonList({ state, newReportCount, sourceCount: sourceNames.size, repeatDays, currentCount: currentMemberships.length }),
   };

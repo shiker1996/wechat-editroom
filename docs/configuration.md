@@ -89,7 +89,7 @@
 - 常规文章最终分为 `F = A×(1-eventValueWeight-researchValueWeight) + T×eventValueWeight + J×researchValueWeight - C`，其中 `C = S + D`，S/D 仅作为内部扣分来源保留。
   - `accountFitBonus`（6）：命中 `contentPillars` 对应类目的维度组加分。
   - `categoryPreference`：按账号选题分类配置预排序偏好分。调低或调负可让泛热点沉底；未配置的分类默认 0 分。
-  - `marketScopeCategoryPreference`：按市场范围和账号分类配置额外预排序分，例如 `{ "国内": { "大厂与商业战略": 2 } }`；未配置范围或分类不加分。分类名须与账号的选题分类一致。
+  - `marketScopeCategoryPreference`：按国内/国外范围和账号分类配置额外预排序分，例如 `{ "国内": { "大厂与商业战略": 2 } }`；全球或跨境事件归为“国外”，未配置范围或分类不加分。为兼容旧账号，旧键“全球/全球性”仍按“国外”偏好读取。分类名须与账号的选题分类一致。
   - `pBase`：历史维度报告兼容字段，目前不参与最终 P 计算。
   - `hBase`：不同历史内容类型的 H 基准分。
   - 旧版 `toolEngineeringBonus`、`minimumToolCandidates` 不再参与当前评分，示例配置不再提供这两个字段。

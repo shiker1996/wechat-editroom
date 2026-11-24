@@ -18,7 +18,7 @@
 
 | 阶段 | 输入 | 输出/状态变化 | 实现位置 |
 | --- | --- | --- | --- |
-| 热点打标 | 热点标题、摘要、来源与账号上下文 | 分类、chinaRelevance、可选 domesticSubject、preScores 写入热点 raw_json.aiTags | skills/hotspot-tagging/SKILL.md；server/platform/http/routes/task-routes.mjs；server/platform/persistence/repositories/hotspot-repository.mjs |
+| 热点打标 | 热点标题、摘要、来源与账号上下文 | marketScope 只分国内/国外（全球归国外）；chinaRelevance 与 relevanceReason 单独记录国内影响及可核验传导路径；连同分类、可选 domesticSubject、preScores 写入热点 raw_json.aiTags | skills/hotspot-tagging/SKILL.md；server/platform/http/routes/task-routes.mjs；server/platform/persistence/repositories/hotspot-repository.mjs |
 | 事件热榜 | 已打标热点与事件历史 | T/eventValue、chinaRelevanceScore（审计字段）和排序；chinaRelevanceScore 不参与 T | server/features/research/domain/event-heat-ranking.mjs |
 | 事件候选池 | 稳定事件、事件热榜 | 按 T 选核心/黑马/候补；P 只影响同分优先级；含 developerImpact 保护位 | server/features/research/application/research-pipeline.mjs |
 | 研判依据门禁 | 入池事件、事件事实卡、研判素材与信号 | 无有效依据的候选不进入脑暴 | server/features/research/application/research-pipeline.mjs |

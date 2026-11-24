@@ -9,6 +9,12 @@ export function tagsOf(item) {
   try { return JSON.parse(item?.raw_json || '{}').aiTags ?? {}; } catch { return {}; }
 }
 
+export function normalizeMarketScope(value) {
+  if (value === '国内') return '国内';
+  if (value === '国外' || value === '全球性' || value === '全球') return '国外';
+  return '待标注';
+}
+
 function summaryOf(item, maxLength = 800) {
   let raw = {};
   try { raw = JSON.parse(item?.raw_json || '{}'); } catch {}
@@ -111,7 +117,7 @@ export function clusterItems(items = []) {
       event_id: `E${crypto.createHash('sha1').update(key).digest('hex').slice(0, 10).toUpperCase()}`,
       representative_title: lead.item.title,
       representativeHotspotId: lead.item.id,
-      market_scope: lead.item.market_scope,
+      market_scope: normalizeMarketScope(lead.item.market_scope),
       china_relevance_score: clamp(lead.tags.chinaRelevance, 0, 12),
       china_relevance_reason: lead.tags.relevanceReason || '模型未提供具体理由，需编辑核验',
       global_exception: Boolean(lead.tags.globalException),

@@ -118,7 +118,7 @@ test('编辑事实基座直接消费稳定事件卡', () => {
   const { root, store } = createStore();
   const batch = store.createBatch({ date: '2026-08-24', title: '稳定事件卡兼容' });
   store.addHotspots(batch.id, 'rsshub', [{
-    title: 'OpenAI Codex', url: 'https://example.com/codex', category: '🤖 AI/技术动态', marketScope: '全球性',
+    title: 'OpenAI Codex', url: 'https://example.com/codex', category: '🤖 AI/技术动态', marketScope: '国外',
     aiTags: { eventKey: 'OpenAI|Codex额度', keywords: ['Codex'] },
   }]);
   const hotspot = store.getBatch(batch.id).hotspots[0];

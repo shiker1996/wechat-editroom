@@ -96,7 +96,7 @@ test('单条打标重试成功后自动解决原失败记录',async t=>{
   const failure=store.recordPipelineFailure({batchId:batch.id,stage:'tag',objectType:'hotspot',objectKey:`hotspot:${hotspot.id}`,
     hotspotId:hotspot.id,title:hotspot.title,url:hotspot.url,errorMessage:'模型漏回'});
   const gateway={config:{defaultProvider:'deepseek',providers:{deepseek:{maxOutputTokens:8192,taggingChunkSize:1}}},async complete(){
-    return {callId:1,content:JSON.stringify({items:[{id:hotspot.id,eventParts:{who:'主体',what:'发布'},preScores:{conflict:1}}]}),
+    return {callId:1,content:JSON.stringify({items:[{id:hotspot.id,marketScope:'国内',eventParts:{who:'主体',what:'发布'},preScores:{conflict:1}}]}),
       finishReason:'stop',model:'test',context:{compressed:false,afterTokens:10},usage:{}};
   }};
   await retryPipelineFailure({failureId:failure.id,batchId:batch.id,provider:'deepseek',store,gateway,

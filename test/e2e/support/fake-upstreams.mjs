@@ -59,6 +59,10 @@ function hotspotTaggingJson(payload) {
     return {
       id: item.id,
       category: project ? '开源项目与开发者生态' : '产品与技术动态',
+      marketScope: '国内',
+      chinaRelevance: 8,
+      domesticSubject: '国内市场',
+      relevanceReason: '固定夹具用于验证国内主链路',
       eventKey: `${who}|${what}`,
       eventParts: { who, what, where: '固定测试', when: item.publishedAt || '2026-09-12', actionType: project ? '开源' : '发布', object: item.title, occasion: '主链路回归' },
       keywords: project ? ['开源工具', 'E2E'] : ['固定来源', 'E2E'],

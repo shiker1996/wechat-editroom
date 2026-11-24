@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { EVENT_RESOLUTION_POLICY, duplicatePenaltyForHeat } from './event-resolution-policy.mjs';
+import { normalizeMarketScope } from './hotspot-clustering.mjs';
 
 const ACTION_COMPATIBILITY = new Map([
   ['发布', new Set(['发布', '更新', '产品更新', '开源'])],
@@ -638,7 +639,7 @@ export function materializeStableEvents({ shadowEvents = [], hotspots = [], heat
     const latest = members.map((article) => article.time).filter(Boolean).sort().at(-1) || stableEvent.last_seen_at || null;
     const repositoryMeta = members.find((article) => article.repositoryMeta)?.repositoryMeta || null;
     return { event_id: stableEvent.event_id, stable_event_id: stableEvent.event_id, representative_title: stableEvent.title || '未命名事件',
-      representativeHotspotId: Number(lead.hotspot_id) || null, market_scope: leadHotspot?.market_scope || '待标注',
+      representativeHotspotId: Number(lead.hotspot_id) || null, market_scope: normalizeMarketScope(leadHotspot?.market_scope),
       china_relevance_score: Number(heat.chinaRelevanceScore ?? leadTags.chinaRelevance ?? 0), china_relevance_reason: leadTags.relevanceReason || '', global_exception: Boolean(leadTags.globalException),
       topic_category: heat.editorialCategory || leadHotspot?.category || '政策与公共议题', keywords: [...new Set(members.flatMap((article) => article.keywords || []).concat(leadTags.keywords || []))].slice(0, 12),
       source_count: sourceSet.size, report_count: members.length, peak_source_percentile: null, latest_time: latest, cluster_confidence: members.length > 1 ? 'medium' : 'low',
