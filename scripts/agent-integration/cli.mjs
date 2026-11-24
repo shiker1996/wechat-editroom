@@ -60,6 +60,7 @@ function print(value, asJson = false) {
 function help() {
   process.stdout.write(`见字 Agent CLI（jianzi）\n\n用法：\n  node scripts/agent-integration/cli.mjs doctor [--json]\n  node scripts/agent-integration/cli.mjs install --agent codex|workbuddy|both\n  node scripts/agent-integration/cli.mjs workbench-setup [--yes]\n  node scripts/agent-integration/cli.mjs workbench-start [--json]\n  node scripts/agent-integration/cli.mjs batch list|create|collect|auto|ranking|trace|candidates ...\n  node scripts/agent-integration/cli.mjs candidate add|get|update|lock ...\n  node scripts/agent-integration/cli.mjs article generate|documents|typeset ...\n  node scripts/agent-integration/cli.mjs cover generate ...\n  node scripts/agent-integration/cli.mjs account profile|update --file <json>\n  node scripts/agent-integration/cli.mjs collectors list|config-list|config-get|config-set|config-test ...\n  node scripts/agent-integration/cli.mjs sources list|capabilities|add|update|test ...\n  node scripts/agent-integration/cli.mjs card editorial|storyboard|update|lock|generate ...\n  node scripts/agent-integration/cli.mjs job get|wait ...\n  node scripts/agent-integration/cli.mjs mcp\n\n写操作和长任务返回 JSON；异步任务使用 job get/wait 查询。AI 成稿、排版、封面和图文命令会调用工作台内部模型。\n`);
   process.stdout.write('\n外部 Agent 研判：research prepare --batch <ID>；research submit --batch <ID> --task <ID> --file <JSON或Markdown文件>\n');
+  process.stdout.write('仓库工具图文：candidate repository-inspect --candidate <候选ID>\n');
 }
 
 async function dispatch(positional, options) {
@@ -108,6 +109,7 @@ async function dispatch(positional, options) {
     'candidate:add': ['jianzi_candidate_add', { batchId: options.batch, hotspotIds: jsonOption(options.hotspotIds, []), tracks: jsonOption(options.tracks, ['article']), socialMaterialType: options.materialType }],
     'candidate:get': ['jianzi_candidate_get', { candidateId: options.candidate }],
     'candidate:source': ['jianzi_candidate_source_fetch', { candidateId: options.candidate, hotspotId: options.hotspot ? Number(options.hotspot) : undefined, eventId: options.event, force: booleanOption(options.force, false) }],
+    'candidate:repository-inspect': ['jianzi_candidate_repository_inspect', { candidateId: options.candidate }],
     'candidate:update': ['jianzi_candidate_editorial_update', { candidateId: options.candidate, editorial: jsonOption(options.editorial, {}) }],
     'candidate:lock': ['jianzi_candidate_lock', { candidateId: options.candidate }],
     'article:generate': ['jianzi_article_generate', { candidateId: options.candidate, provider: options.provider, skillId: options.skill }],
