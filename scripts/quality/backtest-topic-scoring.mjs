@@ -16,7 +16,8 @@ if (!Array.isArray(replay.items)) throw new Error('topic-scoring-candidates.json
 const preselection = fs.existsSync(preselectionPath)
   ? JSON.parse(fs.readFileSync(preselectionPath, 'utf8'))
   : null;
-const scoring = replay.scoring || {};
+const savedFormula = replay.scoring?.articleWeights ? replay.scoring : null;
+const scoring = savedFormula ? { formulaConfig: savedFormula } : {};
 const clamp = (value, min, max) => Math.max(min, Math.min(max, Number(value) || 0));
 
 function scoreLegacyV2(inputs, configured = {}) {
@@ -68,7 +69,8 @@ const report = {
   schemaVersion: 1,
   formulaVersion: TOPIC_SCORING_FORMULA_VERSION,
   historicalFormulaVersion: replay.formulaVersion || 'unknown',
-  comparisonBasis: 'Recalculates all replay rows with the active v4 formula. Old replay rows without materialStrategy/materialFit use unclassified neutral M=50; this does not edit the archived batch or reconstruct editorial choices.',
+  formulaConfig: savedFormula,
+  comparisonBasis: 'Recalculates replay rows with the saved formulaConfig when available, otherwise the active v4 default. Old replay rows without materialStrategy/materialFit use unclassified neutral M=50; this does not edit the archived batch or reconstruct editorial choices.',
   preselection: preselection ? {
     rankedEventCount: ranked.length,
     selectedEventCount: ranked.filter((item) => item.poolRole && item.poolRole !== '未入选').length,

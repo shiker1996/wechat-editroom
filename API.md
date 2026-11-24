@@ -630,7 +630,7 @@ AI 规划配图占位
 读取已保存的外部 Agent 研判报告；尚未提交时返回 `exists: false`。
 
 ### POST /api/batches/:id/external/research
-提交外部 Agent 的事件研判与选题。items 为 1–200 项；每项须引用稳定 eventId 和属于该事件的一个或多个 hotspotIds，并提供 thesis、reason；可附标题、角度、读者收益、风险、推荐轨道、H/B/J/竞争扣分，以及素材策略 `direct_practical` / `event_trigger` 和 M（0–100）。T、P 与国内关联值由工作台读取事件和账号配置后计算；DOM 缺失时对 A/T/J/M 权重归一化。未分类或未提供 M 时仍使用 v4，M 取中性 50。提交前必须有覆盖全部已打标稳定事件的事件事实卡。报告保存至 sources/external-research-report.json 并登记为产物，顶层包含 formulaVersion=v4。
+提交外部 Agent 的事件研判与选题。items 为 1–200 项；每项须引用稳定 eventId 和属于该事件的一个或多个 hotspotIds，并提供 thesis、reason；可附标题、角度、读者收益、风险、推荐轨道、H/B/J/竞争扣分，以及素材策略 `direct_practical` / `event_trigger` 和 M（0–100）。T、P 与国内关联值由工作台读取事件和账号配置后计算；缺失值处理遵循账号公式配置的 v4 规则。提交前必须有覆盖全部已打标稳定事件的事件事实卡。报告保存至 sources/external-research-report.json 并登记为产物，顶层包含 `formulaVersion=v4` 与实际生效的 `formulaConfig` 快照。
 
 ### POST /api/batches/:id/external/research-stage/prepare
 外部 Agent 完成打标和事件卡后领取原研判流程的下一项模型任务；可传 `reset: true` 清除本批次外部阶段记录并重新开始。返回 `pending` 时包含任务 ID、消息和输出格式，返回 `completed` 时包含最终结果。
