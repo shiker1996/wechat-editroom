@@ -4,7 +4,7 @@ import { batchTopicsDir } from '../../../platform/core/workspace-paths.mjs';
 import { estimateTokens } from '../../../platform/llm/context-manager.mjs';
 import { formatAccountContext } from '../../../shared/domain/account-context-model.mjs';
 import { getAccountContext } from '../../../platform/application/account-context-service.mjs';
-import { computeFinalScore, TOPIC_SCORING_FORMULA_VERSION } from '../../../shared/domain/topic-scoring.mjs';
+import { computeFinalScore, DEFAULT_TOPIC_SCORING_FORMULA, resolveTopicScoringFormula, TOPIC_SCORING_FORMULA_VERSION } from '../../../shared/domain/topic-scoring.mjs';
 import { parseModelJson as parseSharedModelJson } from '../../../platform/llm/model-json.mjs';
 import { enforceNotificationQuota, isConcreteReaderStake, resolveDistributionDecision, resolveNotificationPolicy } from '../../../shared/domain/distribution-strategy.mjs';
 import { isResearchEligibleHotspot } from '../domain/hotspot-pipeline-scope.mjs';
@@ -67,6 +67,7 @@ const DEFAULT_SCORING = Object.freeze({
   pBase: Object.freeze({}),
   hBase: H_BASE,
   accountFitBonus: 6,
+  formulaConfig: DEFAULT_TOPIC_SCORING_FORMULA,
 });
 
 export function resolveScoring(ctx = getAccountContext()) {
@@ -82,6 +83,8 @@ export function resolveScoring(ctx = getAccountContext()) {
   const accountFitOverrides = scoring.accountFit && typeof scoring.accountFit === 'object' ? scoring.accountFit : {};
   const categories = editorialCategoriesFor(ctx);
   const warnings = [];
+  const formulaResult = resolveTopicScoringFormula(scoring.formula);
+  warnings.push(...formulaResult.warnings);
   if (Object.keys(scoring).length && scoring.formulaVersion !== TOPIC_SCORING_FORMULA_VERSION) {
     warnings.push('账号评分配置尚未升级到 v4；运行 npm run migrate:topic-scoring-v4 -- --write 更新配置');
   }
@@ -107,10 +110,11 @@ export function resolveScoring(ctx = getAccountContext()) {
   ]));
   return {
     weights: { ...DEFAULT_SCORING.weights },
-    eventValueWeight: 0.20,
-    researchValueWeight: 0.10,
-    domesticWeight: 0.10,
-    articleWeight: 0.50,
+    eventValueWeight: formulaResult.formula.finalWeights.eventValue,
+    researchValueWeight: formulaResult.formula.finalWeights.researchValue,
+    domesticWeight: formulaResult.formula.finalWeights.domestic,
+    articleWeight: formulaResult.formula.finalWeights.article,
+    formulaConfig: formulaResult.formula,
     scoringWarnings: warnings,
     categoryPreference: mergeTable(Object.fromEntries(editorialCategoriesFor(ctx).map((category) => [category, 0])), scoring.categoryPreference),
     marketScopeCategoryPreference: scoring.marketScopeCategoryPreference && typeof scoring.marketScopeCategoryPreference === 'object'
@@ -592,8 +596,8 @@ export function scoreCards(cards, synthesis, scoring = resolveScoring()) {
     const scoreWarnings = configuredP == null
       ? [`分类“${card.source?.category || '未分类'}”未配置 accountFit，P 使用 ${P} 兜底分`]
       : [];
-    const S = clamp(correction.saturationPenalty,0,15);
-    const D = clamp(Number(card.source?.duplicatePenalty || 0), 0, 20);
+    const S = clamp(correction.saturationPenalty,0,scoring.formulaConfig?.competition?.saturationCap ?? 15);
+    const D = clamp(Number(card.source?.duplicatePenalty || 0), 0, scoring.formulaConfig?.competition?.duplicateCap ?? 20);
     const research = researchValueForCandidate(card);
     const eventValue = scoreStatus.scoreStatus === 'needs_source_data'
       ? null
@@ -705,10 +709,15 @@ function markdownAgenda(scored) {
 
 export function markdownRanked(scored, synthesis, dimensionGroups = [], scoring = DEFAULT_SCORING) {
   const grade = (f) => f>=85?'S+':f>=70?'S':f>=55?'A+':f>=40?'A':f>=25?'B':'C';
+  const formula = scoring.formulaConfig || DEFAULT_TOPIC_SCORING_FORMULA;
+  const pct = (value) => `${Number((value * 100).toFixed(2))}%`;
+  const articleFormula = formula.articleWeights;
+  const finalFormula = formula.finalWeights;
+  const competition = formula.competition;
   const configWarnings = [...new Set(scored.flatMap((item) => item.scoreWeightWarnings || []))];
   const warningSection = configWarnings.length ? `> 配置提示：${configWarnings.join('；')}\n\n` : '';
   const topicSection = dimensionGroups.length ? `\n## 维度候选（早报）\n\n| 维度 | 选题 | 维度分 | 风险 | 覆盖事件 | 代表报道 |\n|---|---|---:|---|---:|---|\n${dimensionGroups.map((t)=>`| ${DIMENSION_POOL_ROLES[t.dimension] || t.dimension} | ${t.title.replace(/\|/g,'/')} | ${t.score} | ${t.riskLevel} | ${t.events.length} | ${t.leads.map((x)=>x.replace(/\|/g,'/')).join('、')} |`).join('\n')}\n` : '';
-  return `# 综合选题研判报告（临时排名，待编辑会确认）\n\n> 评分公式版本：v4\n\n${warningSection}## 爆款总榜\n\n| # | 身份 | 分发池 | 分类 | 选题 | T 热度 | J 研判 | A 文章 | DOM 国内 | M 素材 | C 竞争 | F 最终 | 等级 | 风险 |\n|---:|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|:---:|---|\n${scored.map((c)=>`| ${c.finalRank} | ${c.source.poolRole} | ${c.distributionLane} | ${editorialCategoryForCard(c)} | ${c.source.title.replace(/\|/g,'/')} | ${c.eventValue.toFixed(1)} | ${c.j} | ${c.a} | ${c.dom ?? '—'} | ${c.materialFit} (${c.materialStrategy}) | ${c.c} | ${c.f} | ${grade(c.f)} | ${c.source.riskLevel} |`).join('\n')}\n\n## 综合研判\n\n### 元叙事\n${(synthesis.metaNarratives||[]).map((x)=>`- ${x}`).join('\n') || '- 暂无明确跨题元叙事'}\n\n### 组合推荐\n- 主推：${synthesis.combination?.primary || '待定'}\n- 稳定：${synthesis.combination?.stable || '待定'}\n- 黑马：${synthesis.combination?.darkHorse || '待定'}\n- 理由：${synthesis.combination?.reason || ''}\n\n## 逐条评分\n\n${scored.map((c)=>`### #${c.finalRank} ${c.candidateId} · ${c.source.title}\n- 所属类别：${editorialCategoryForCard(c)}\n- T/J/A/DOM/M/C/F：${c.eventValue.toFixed(1)}/${c.j}/${c.a}/${c.dom ?? '缺失'}/${c.materialFit}（${c.materialStrategy}，${c.materialFitSource}）/${c.c}/${c.f}\n- M 评分依据：${c.materialFitReason || '未分类或缺少评分依据，使用中性 M=50'}\n- A 内部：H ${c.h} · B ${c.b} · P ${c.p.toFixed(1)}\n- J 内部：事件内 ${c.researchInternal} · 事件间 ${c.researchInterEvent}\n- 脑暴五项：${c.bParts.join('/')}\n- 核心角度：${c.angle}\n- 临时命题：${c.thesis}\n- 分发池：${c.distributionLane}\n- 读者利益：${c.readerStake || '待明确'}\n- 竞争扣分构成：同题饱和 ${c.s} · 重复 ${c.d}\n- 受众与竞争校正：${c.synthesisReason || '无额外校正'}\n- 合规风险：${c.source.riskLevel} ${c.source.riskReason || ''}\n- 推荐文章类型：${c.articleType || 'wechat-mp-deep-dive'}\n`).join('\n')}\n\n*评分公式：A = H×50% + B×30% + P×20%；F = A×50% + T×20% + J×10% + DOM×10% + M×10% - C（C = S + D）。DOM 缺失时对 A/T/J/M 归一化；素材策略未分类或 M 缺失时使用中性 M=50。\n${topicSection}`;
+  return `# 综合选题研判报告（临时排名，待编辑会确认）\n\n> 评分公式版本：v4\n\n${warningSection}## 爆款总榜\n\n| # | 身份 | 分发池 | 分类 | 选题 | T 热度 | J 研判 | A 文章 | DOM 国内 | M 素材 | C 竞争 | F 最终 | 等级 | 风险 |\n|---:|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|:---:|---|\n${scored.map((c)=>`| ${c.finalRank} | ${c.source.poolRole} | ${c.distributionLane} | ${editorialCategoryForCard(c)} | ${c.source.title.replace(/\|/g,'/')} | ${c.eventValue.toFixed(1)} | ${c.j} | ${c.a} | ${c.dom ?? '—'} | ${c.materialFit} (${c.materialStrategy}) | ${c.c} | ${c.f} | ${grade(c.f)} | ${c.source.riskLevel} |`).join('\n')}\n\n## 综合研判\n\n### 元叙事\n${(synthesis.metaNarratives||[]).map((x)=>`- ${x}`).join('\n') || '- 暂无明确跨题元叙事'}\n\n### 组合推荐\n- 主推：${synthesis.combination?.primary || '待定'}\n- 稳定：${synthesis.combination?.stable || '待定'}\n- 黑马：${synthesis.combination?.darkHorse || '待定'}\n- 理由：${synthesis.combination?.reason || ''}\n\n## 逐条评分\n\n${scored.map((c)=>`### #${c.finalRank} ${c.candidateId} · ${c.source.title}\n- 所属类别：${editorialCategoryForCard(c)}\n- T/J/A/DOM/M/C/F：${c.eventValue.toFixed(1)}/${c.j}/${c.a}/${c.dom ?? '缺失'}/${c.materialFit}（${c.materialStrategy}，${c.materialFitSource}）/${c.c}/${c.f}\n- M 评分依据：${c.materialFitReason || '未分类或缺少评分依据，使用中性 M=50'}\n- A 内部：H ${c.h} · B ${c.b} · P ${c.p.toFixed(1)}\n- J 内部：事件内 ${c.researchInternal} · 事件间 ${c.researchInterEvent}\n- 脑暴五项：${c.bParts.join('/')}\n- 核心角度：${c.angle}\n- 临时命题：${c.thesis}\n- 分发池：${c.distributionLane}\n- 读者利益：${c.readerStake || '待明确'}\n- 竞争扣分构成：同题饱和 ${c.s} · 重复 ${c.d}\n- 受众与竞争校正：${c.synthesisReason || '无额外校正'}\n- 合规风险：${c.source.riskLevel} ${c.source.riskReason || ''}\n- 推荐文章类型：${c.articleType || 'wechat-mp-deep-dive'}\n`).join('\n')}\n\n*评分公式：A = H×${pct(articleFormula.h)} + B×${pct(articleFormula.b)} + P×${pct(articleFormula.p)}；F = A×${pct(finalFormula.article)} + T×${pct(finalFormula.eventValue)} + J×${pct(finalFormula.researchValue)} + DOM×${pct(finalFormula.domestic)} + M×${pct(finalFormula.material)} - C（C = min(${competition.totalCap}, min(S, ${competition.saturationCap})×${competition.saturationWeight} + min(D, ${competition.duplicateCap})×${competition.duplicateWeight})）。DOM 缺失时对剩余分项归一化；素材策略未分类或 M 缺失时使用中性 M=50。\n${topicSection}`;
 }
 
 const GENERIC_WORDS_HOTWORD = new Set(['ai','公司','发布','消息','最新','回应','宣布','科技','行业','全球','技术','产品','平台','企业','市场','今日','新闻']);
@@ -1210,10 +1219,7 @@ export async function runResearchPipeline({ gateway, store, batchId, provider, w
     schemaVersion: 1,
     formulaVersion: TOPIC_SCORING_FORMULA_VERSION,
     generatedAt: new Date().toISOString(),
-    scoring: {
-      A: { h: 0.50, b: 0.30, p: 0.20 },
-      F: { article: 0.50, eventValue: 0.20, researchValue: 0.10, domestic: 0.10, material: 0.10 },
-    },
+    scoring: scoring.formulaConfig || DEFAULT_TOPIC_SCORING_FORMULA,
     legacyScoring: {
       formulaVersion: 'v2', weights: scoring.legacyV2.weights,
       eventValueWeight: scoring.legacyV2.eventValueWeight,
