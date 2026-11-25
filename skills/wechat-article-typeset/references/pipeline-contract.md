@@ -11,7 +11,7 @@ rendered → design → images → draft → normalized → gate
 | 阶段 ID | 执行技能 | 输入 | 规范输出 | 必须通过的门禁 |
 |---|---|---|---|---|
 | `rendered` | `wechat-md-render` | `09-FINAL.md` | `09-FINAL.rendered.md` | UTF-8、非空，正文和结构未丢失 |
-| `design` | `magazine-design-advisor` | rendered | `09-FINAL.design-scheme.md`、`magazine-design-tokens.json` | 方案非空，tokens 符合 schema 1 |
+| `design` | `magazine-design-advisor` | rendered | `09-FINAL.design-scheme.md`、`magazine-design-tokens.json` | 内部生成与外部 Agent 使用同一份 `schema_version: 1` tokens 契约和 `validateTypesetDesignScheme`；字段、范围校验通过 |
 | `images` | 总编排及条件转图子技能 | rendered、图片清单、tokens | `09-FINAL.images.md` | 正文未变化；未静默丢图；Mermaid/ECharts 围栏经确定性脚本转图，失败或无执行器的视觉模块必须阻断 |
 | `draft` | `wechat-md-to-draft` | images、scheme、tokens | `article.ai.draft.html` | 默认由模型按文章内容与设计方案灵活编排样式；标题、章节、链接和图片数量未减少。不合格时回退到使用同一设计 tokens 的确定性渲染 |
 | `normalized` | `wechat-html-normalizer` | draft | `article.ai.html` | AI 初稿执行规范化脚本，要求脚本成功、内容完整；确定性初稿已是内联样式，直接采用 |

@@ -257,28 +257,30 @@ test('AI 视觉截图门禁校验两位数页面文件、数量和空文件', ()
   fs.rmSync(workdir, { recursive: true, force: true });
 });
 
-test('AI 视觉生成以故事板页数为基准，允许上下浮动两页', () => {
+test('AI 视觉生成必须与锁定故事板页数完全一致', () => {
   assert.deepEqual(aiVisualPageCountPolicy(5), {
     expectedPageCount: 5,
-    pageCountTolerance: 2,
-    minPageCount: 3,
-    maxPageCount: 7,
+    pageCountTolerance: 0,
+    minPageCount: 5,
+    maxPageCount: 5,
   });
   assert.equal(validateAiVisualGenerationCompletion({
     agent: { type: 'final', documentFinished: true },
-    generatedPageCount: 6,
+    generatedPageCount: 5,
     requiredPageCount: 5,
   }).valid, true);
 
-  assert.equal(validateAiVisualGenerationCompletion({
+  const underCount = validateAiVisualGenerationCompletion({
     agent: { type: 'final', documentFinished: true },
-    generatedPageCount: 3,
+    generatedPageCount: 4,
     requiredPageCount: 5,
-  }).valid, true);
+  });
+  assert.equal(underCount.valid, false);
+  assert.match(underCount.issues.join('；'), /超出可接受范围/);
 
   const outOfRange = validateAiVisualGenerationCompletion({
     agent: { type: 'final', documentFinished: true },
-    generatedPageCount: 8,
+    generatedPageCount: 6,
     requiredPageCount: 5,
   });
   assert.equal(outOfRange.valid, false);

@@ -1,5 +1,4 @@
-import { validateThemeDefinition } from '../../../shared/themes/theme-validator.mjs';
-import { validateCoverSpec, checkCoverLayout } from '../../../shared/themes/cover-components.mjs';
+import { validateCoverDesignPayload } from './cover-design-contract.mjs';
 
 const clean = (value) => String(value ?? '').trim();
 const squash = (value) => clean(value).replace(/\s+/g, '');
@@ -28,38 +27,18 @@ function matchesPosition(component, rect, canvas = {}) {
   }
   return true;
 }
-
 export function validateExternalCoverDesignScheme({ designScheme, title = '' } = {}) {
   const issues = [];
   if (!designScheme || typeof designScheme !== 'object' || Array.isArray(designScheme)) {
     return { valid: false, issues: [{ code: 'DESIGN_SCHEME_REQUIRED', field: 'designScheme', message: '必须提交封面设计方案' }] };
   }
-  if (Number(designScheme.schemaVersion) !== 1) issues.push({ code: 'SCHEME_VERSION_INVALID', field: 'schemaVersion', message: 'designScheme.schemaVersion 必须为 1' });
   const design = designScheme.designScheme;
   if (!design || typeof design !== 'object' || Array.isArray(design)) {
     issues.push({ code: 'SCHEME_REQUIRED', field: 'designScheme.designScheme', message: '必须包含 tokens 和 spec' });
     return { valid: false, issues };
   }
-  const definition = {
-    schemaVersion: 1,
-    id: 'external-cover',
-    label: '外部 Agent 封面方案',
-    version: '1.0.0',
-    description: clean(design.visualDirection) || '外部 Agent 封面方案',
-    targets: ['cover'], status: 'draft', source: 'builtin', basedOn: null, tags: ['external-agent'],
-    tokens: design.tokens,
-    cover: { spec: design.spec },
-  };
-  try { validateThemeDefinition(definition, { expectedTarget: 'cover', expectedSource: 'builtin' }); }
-  catch (error) { issues.push(...(error.issues || [{ code: 'SCHEME_INVALID', field: 'designScheme', message: error.message }])); }
-  const spec = design.spec;
-  if (!spec || typeof spec !== 'object' || Array.isArray(spec)) {
-    issues.push({ code: 'COVER_SPEC_REQUIRED', field: 'designScheme.spec', message: '必须提供封面构图组件 spec' });
-  } else {
-    const checked = validateCoverSpec(spec, title);
-    issues.push(...checked.issues.map((item) => ({ code: 'COVER_SPEC_INVALID', ...item })));
-    issues.push(...checkCoverLayout(spec.components || [], spec.layout).map((item) => ({ code: 'COVER_LAYOUT_INVALID', ...item })));
-  }
+  const checked = validateCoverDesignPayload({ payload: designScheme, title, id: 'external-cover' });
+  issues.push(...checked.issues.map((item) => ({ code: item.code || 'COVER_DESIGN_INVALID', ...item })));
   return { valid: issues.length === 0, issues };
 }
 
