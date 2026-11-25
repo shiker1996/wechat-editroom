@@ -20,6 +20,7 @@ let storyboardReflowPreview=null;
 let storyboardRenderState=null;
 let currentContentPlanAdjustments=null;
 let currentFactIndex=null;
+let currentVisualParadigmSelection=null;
 let deliveryViewMode='beautified';
 const socialBeautifyJobs=new Map();
 // 故事板 <details> 编辑器存在未保存修改时置位；任何 renderCardPlan 重建都会丢失这些修改，
@@ -229,11 +230,12 @@ function syncBeautifyButton(){
   const active=job&&(job.status==='running'||job.status==='queued');
   const generate=document.getElementById('generate-social-card');
   const storyboardReady=generate?.dataset.ready==='true'&&storyboardStructureState?.status!=='needs-storyboard';
+  const paradigmReady=Boolean(currentVisualParadigmSelection?.id&&!currentVisualParadigmSelection?.stale);
   button.hidden=false;
-  button.disabled=Boolean(active)||!storyboardReady;
+  button.disabled=Boolean(active)||!storyboardReady||!paradigmReady;
   button.setAttribute('aria-busy',active?'true':'false');
   button.textContent=active?(job.status==='queued'?'排队等待执行…':socialBeautifyProgressLabel(job.progress)):delivery?.beautifiedHtmlUrl?'重新生成 AI 图文':'生成 AI 图文';
-  button.title=active?'正在根据本篇设计方案生成页面并截图…':storyboardReady?'根据当前故事板和本篇设计方案生成 AI 图文':'请先生成故事板';
+  button.title=active?'正在根据本篇设计方案生成页面并截图…':!storyboardReady?'请先生成并确认故事板':!paradigmReady?'请先选择当前故事板的视觉范式':'根据已选范式、当前故事板和本篇设计方案生成 AI 图文';
   const status=document.getElementById('social-beautify-status');
   const meta=document.getElementById('social-delivery-meta');
   const showAiStatus=Boolean(active||delivery?.beautifyReport||delivery?.beautifiedHtmlUrl);
@@ -331,11 +333,30 @@ function renderScore(score) {
 
 async function loadSimilarSocialCards(candidateId){const container=document.getElementById('similar-social-cards');if(!container)return;container.hidden=true;container.innerHTML='';try{const items=await request(`/api/candidates/${candidateId}/similar-social`);if(candidateId!==selectedId||!items.length)return;container.innerHTML=`<b>历史图文覆盖</b>${items.map((item)=>`<div><button type="button" class="inline-button" data-cal-social="${item.candidateRowId}" title="打开历史图文">${escapeHtml(item.title||item.candidateId)}</button> <small>${escapeHtml(item.batchDate||'')} · ${escapeHtml(item.reason||'相似内容')}</small></div>`).join('')}`;container.hidden=false;}catch{container.hidden=true;}}
 
+function renderVisualParadigms(data={}){
+  const section=document.getElementById('social-paradigm-section');const options=document.getElementById('social-paradigm-options');const status=document.getElementById('social-paradigm-status');
+  if(!section||!options)return;
+  const list=Array.isArray(data.options)?data.options:[];const hasPlan=Array.isArray(currentCardPlan)&&currentCardPlan.length>0;
+  section.hidden=!hasPlan;currentVisualParadigmSelection=data.selection||null;
+  if(!hasPlan){options.innerHTML='';return;}
+  const selected=data.selection?.id||'';const stale=data.selection?.stale===true;
+  if(status)status.textContent=!data.gateReady?'先补齐故事板门禁要求':selected?`已选择：${list.find((item)=>item.id===selected)?.name||selected}`:stale?'故事板已变化，请重新选择':'尚未选择';
+  options.innerHTML=list.map((item)=>`<button type="button" class="visual-paradigm-card${selected===item.id?' is-selected':''}" data-visual-paradigm="${escapeHtml(item.id)}" aria-pressed="${selected===item.id}"${data.gateReady?'':' disabled'}><span class="visual-paradigm-preview preview-${escapeHtml(item.id)}" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span class="visual-paradigm-copy"><b>${escapeHtml(item.name)}${item.recommended?' · 推荐':''}</b><small>${escapeHtml(item.summary)}</small><small><strong>适合：</strong>${escapeHtml(item.fit)}</small><small><strong>结构：</strong>${escapeHtml(item.layoutRule)}</small></span></button>`).join('');
+}
+
+async function loadVisualParadigms(candidateId=selectedId){
+  const section=document.getElementById('social-paradigm-section');if(!candidateId||!section)return;
+  try{const data=await request(`/api/candidates/${candidateId}/card-visual-paradigms`);if(Number(candidateId)!==Number(selectedId))return;renderVisualParadigms(data);syncBeautifyButton();}
+  catch{renderVisualParadigms({options:[],selection:null});}
+}
+
 function renderCardPlan(value,decisions=currentLayoutDecisions,layoutReportPages=currentLayoutReportPages,reflowPreview=undefined,renderState=undefined) {
   let plan=[];try{plan=Array.isArray(value)?value:JSON.parse(value||'[]');}catch{}
   currentCardPlan=plan;currentLayoutDecisions=Array.isArray(decisions)?decisions:[];currentLayoutReportPages=Array.isArray(layoutReportPages)?layoutReportPages:currentLayoutReportPages;storyboardDirty=false;
   if(reflowPreview!==undefined)storyboardReflowPreview=reflowPreview;
   if(renderState!==undefined)storyboardRenderState=renderState;
+  currentVisualParadigmSelection=null;
+  if(selectedId)loadVisualParadigms(selectedId);
   const options=(selected)=>Object.entries(CARD_LAYOUT_LABELS).map(([value,label])=>`<option value="${value}"${value===selected?' selected':''}>${label}</option>`).join('');
   const blockEditor=(block,blockIndex)=>cardBlockEditorHtml(block,blockIndex);
   const preview=storyboardReflowPreview?.type==='storyboard-restructure'?`<div class="storyboard-reflow-preview" role="status"><div><b>故事板已调整，等待整组重渲染</b><span>页面 ${storyboardReflowPreview.beforePageCount} → ${storyboardReflowPreview.afterPageCount}${storyboardReflowPreview.pageDelta>0?` · 新增 ${storyboardReflowPreview.pageDelta} 个续页`:''}。HTML 与 PNG 尚未更新。</span></div><div class="storyboard-reflow-preview-pages">${(storyboardReflowPreview.addedPages||[]).map((item)=>`<span>P${item.page} · ${escapeHtml(item.title||'续页')}</span>`).join('')}</div><button type="button" class="text-button" data-dismiss-storyboard-preview>知道了</button></div>`:'';
@@ -389,7 +410,7 @@ export async function openSocialEditor(id) {
   inspect.textContent='分析仓库';
   reanalyze.textContent=data.editorial?.card_plan_json?.length?'重新生成故事板':'生成故事板';
   reanalyze.hidden=false;
-  renderFacts(data.facts,data.eventAnalysis);renderScore(data.score);currentFactIndex=data.factIndex||null;currentContentPlanAdjustments=data.contentPlanAdjustments||null;currentLayoutReportPages=Array.isArray(data.layoutReport?.pages)?data.layoutReport.pages:[];renderCardPlan(data.editorial?.card_plan_json,data.layoutDecisions,currentLayoutReportPages,null,null);renderStoryboardStructureState(data.structureState);renderGate(data.gate);
+  renderFacts(data.facts,data.eventAnalysis);renderScore(data.score);currentFactIndex=data.factIndex||null;currentContentPlanAdjustments=data.contentPlanAdjustments||null;currentLayoutReportPages=Array.isArray(data.layoutReport?.pages)?data.layoutReport.pages:[];renderCardPlan(data.editorial?.card_plan_json,data.layoutDecisions,currentLayoutReportPages,null,null);renderStoryboardStructureState(data.structureState);renderGate(data.gate);await loadVisualParadigms(selectedId);
   syncStoryboardActionLabels();
   document.getElementById('social-channel').value=selectedChannelMode;document.getElementById('social-composition-mode').value=selectedCompositionMode;document.getElementById('social-layout-style').value=data.editorial?.layout_style||'auto';currentGroupLayout=data.editorial?.layout_style||'auto';syncCompositionControls();await Promise.all([loadSocialSkillControls(data),loadDelivery(selectedId),loadSimilarSocialCards(selectedId)]);
 }
@@ -760,6 +781,14 @@ inspectButton?.addEventListener("click",inspectRepository);
 const analyzeButton=freshButton("analyze-card-editorial");
 analyzeButton?.addEventListener("click",()=>runStoryboard());
 const beautifyButton=document.getElementById('ai-beautify-social-card');
+document.getElementById('social-paradigm-options')?.addEventListener('click',async(event)=>{
+  const button=event.target.closest('[data-visual-paradigm]');if(!button||!selectedId)return;
+  const candidateId=Number(selectedId);const paradigmId=button.dataset.visualParadigm;
+  button.disabled=true;
+  try{await request(`/api/candidates/${candidateId}/card-visual-paradigm`,{method:'PUT',body:JSON.stringify({paradigmId})});await loadVisualParadigms(candidateId);toast(`已选择「${button.querySelector('b')?.textContent?.replace(/ · 推荐$/,'')||paradigmId}」视觉范式`);}
+  catch(error){toast(error.message,'error');await loadVisualParadigms(candidateId);}
+  finally{button.disabled=false;}
+});
 beautifyButton?.addEventListener('click',async()=>{
   if(!selectedId)return;
   const candidateId=Number(selectedId);

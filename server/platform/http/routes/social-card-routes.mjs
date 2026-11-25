@@ -15,6 +15,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { resolveSkillFile } from '../../llm/skill-runtime.mjs';
 import { randomUUID } from 'node:crypto';
+import { rankSocialCardVisualParadigms, resolveSocialCardParadigmSelection, getSocialCardVisualParadigm, socialCardStoryboardFingerprint } from '../../../shared/domain/social-card-visual-paradigms.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -52,6 +53,8 @@ function invalidateSocialCardArtifacts({writeUtf8, workspaceDir, reason}) {
 export async function handleSocialCardRoutes(context) {
   const { request, response, pathname, searchParams, store, json, body, path, fs, root, resourceRoot, config, mime, models, aiJobs, socialCardFiles, isInsideRoots, createZip, socialContentType, resolveEventAnalysisFor, socialCardGate, socialChannelMode, describeCardLayouts, SOCIAL_CARD_LAYOUTS, SOCIAL_CARD_COMPOSITION_MODES, normalizeCardComposition, loadSkillBundle, fetchCandidateSource, candidateEventGroups, candidateRepositoryUrl, inspectRepository, socialCardWorkdir, writeUtf8, repositoryFactMarkdown, evaluateCardGate } = context;
   const cardEditorialMatch = pathname.match(/^\/api\/candidates\/(\d+)\/card-editorial$/);
+  const cardVisualParadigmsMatch = pathname.match(/^\/api\/candidates\/(\d+)\/card-visual-paradigms$/);
+  const cardVisualParadigmMatch = pathname.match(/^\/api\/candidates\/(\d+)\/card-visual-paradigm$/);
   const socialCardStageSkillsMatch=pathname.match(/^\/api\/creation-entry-points\/([^/]+)\/social-card-stage-skills$/);
   if(socialCardStageSkillsMatch&&request.method==='GET'){
     try{
@@ -89,6 +92,30 @@ export async function handleSocialCardRoutes(context) {
   }
   const externalSocialSubmitMatch = pathname.match(/^\/api\/candidates\/(\d+)\/social-cards\/external$/);
   const externalSocialAuditMatch = pathname.match(/^\/api\/candidates\/(\d+)\/social-cards\/external\/audit$/);
+  if (cardVisualParadigmsMatch && request.method === 'GET') {
+    const candidate=store.getCandidate(Number(cardVisualParadigmsMatch[1]));
+    if(!candidate)return json(response,404,{error:'候选不存在'});
+    const editorial=store.getCardEditorial(candidate.id);let pages=[];try{pages=JSON.parse(editorial.card_plan_json||'[]');}catch{}
+    if(!Array.isArray(pages))pages=[];
+    const selection=resolveSocialCardParadigmSelection(editorial,pages);
+    const contentType=socialContentType(candidate),facts=store.getRepositoryFactSheet(candidate.id);
+    const gate=socialCardGate(candidate,contentType,facts,editorial,eventBackedContentType(contentType)?resolveEventAnalysisFor(candidate):null);
+    return json(response,200,{candidateId:candidate.id,locked:editorial.status==='LOCKED',gateReady:gate.ready,gateIssues:gate.issues||[],storyboardFingerprint:socialCardStoryboardFingerprint(pages),selection,options:rankSocialCardVisualParadigms(pages,{selectedId:selection.id})});
+  }
+  if (cardVisualParadigmMatch && request.method === 'PUT') {
+    const candidate=store.getCandidate(Number(cardVisualParadigmMatch[1]));
+    if(!candidate)return json(response,404,{error:'候选不存在'});
+    const editorial=store.getCardEditorial(candidate.id);let pages=[];try{pages=JSON.parse(editorial.card_plan_json||'[]');}catch{}
+    if(!Array.isArray(pages)||!pages.length)return json(response,409,{error:'请先生成故事板，再选择视觉范式'});
+    const facts=store.getRepositoryFactSheet(candidate.id),contentType=socialContentType(candidate);
+    const gate=socialCardGate(candidate,contentType,facts,editorial,eventBackedContentType(contentType)?resolveEventAnalysisFor(candidate):null);
+    if(!gate.ready)return json(response,409,{error:`故事板门禁未通过：${gate.issues.join('；')}`,gate});
+    const input=await body(request);const paradigm=getSocialCardVisualParadigm(input.paradigmId);
+    if(!paradigm)return json(response,400,{error:'不支持的视觉范式'});
+    const visualParadigm={id:paradigm.id,storyboardFingerprint:socialCardStoryboardFingerprint(pages),selectedAt:new Date().toISOString()};
+    const updated=store.saveCardEditorial(candidate.id,{...editorial,visual_paradigm_json:JSON.stringify(visualParadigm)});
+    return json(response,200,{editorial:updated,selection:resolveSocialCardParadigmSelection(updated,pages),paradigm});
+  }
   if (externalSocialAuditMatch && request.method === 'POST') {
     const candidate=store.getCandidate(Number(externalSocialAuditMatch[1]));
     if(!candidate)return json(response,404,{error:'候选不存在'});
@@ -100,6 +127,8 @@ export async function handleSocialCardRoutes(context) {
     if(/<script\b|<iframe\b|<object\b|<embed\b|<form\b|\son[a-z]+\s*=|javascript:|@import|<link\b/i.test(html)||/(?:src|href)\s*=\s*["']https?:\/\//i.test(html))return json(response,422,{error:'图文 HTML 含脚本、事件处理器或外部资源'});
     const pageCount=[...html.matchAll(/class=["']([^"']+)["']/gi)].filter((match)=>match[1].split(/\s+/).includes('page')).length;
     const cardPlan=JSON.parse(editorial.card_plan_json||'[]');const policy=aiVisualPageCountPolicy(Array.isArray(cardPlan)?cardPlan.length:0);
+    const paradigmSelection=resolveSocialCardParadigmSelection(editorial,cardPlan);
+    if(!paradigmSelection.paradigm)return json(response,409,{error:paradigmSelection.stale?'故事板已变化，请先重新选择视觉范式':'请先选择视觉范式'});
     if(!pageCount||pageCount<policy.minPageCount||pageCount>policy.maxPageCount)return json(response,422,{error:`页面数量不符合故事板范围，应为 ${policy.minPageCount}–${policy.maxPageCount} 页，实际 ${pageCount} 页`});
     const batch=store.getBatch(candidate.batch_id);const workspace=socialCardFiles(batch,candidate);
     const tempPath=path.join(workspace.dir,`.external-visual-audit-${randomUUID()}.html`);
@@ -109,7 +138,7 @@ export async function handleSocialCardRoutes(context) {
       if(selectedPage!=null&&(!Number.isInteger(selectedPage)||selectedPage<1||selectedPage>pageCount))return json(response,400,{error:`page 必须是 1–${pageCount} 之间的整数`});
       const pageRoles=Array.isArray(cardPlan)?cardPlan.map((entry)=>entry?.role||entry?.kind||''):[];
       const listPageItemCounts=storyboardListPageItemCounts(cardPlan);
-      const report=await auditSocialCardHtmlFit({htmlPath:tempPath,width:375,height:667,page:selectedPage,pageRoles,listPageItemCounts,designScheme:input.designScheme,storyboardPages:cardPlan,requireDesignScheme:true,includeContactSheet:selectedPage==null});
+      const report=await auditSocialCardHtmlFit({htmlPath:tempPath,width:375,height:667,page:selectedPage,pageRoles,listPageItemCounts,designScheme:input.designScheme,storyboardPages:cardPlan,expectedParadigmId:paradigmSelection.id,requireDesignScheme:true,includeContactSheet:selectedPage==null});
       return json(response,report.valid?200:422,{candidateId:candidate.id,valid:report.valid,pageCount,checkedPage:selectedPage,canvas:report.canvas,issues:report.issues,pages:report.pages,designConformance:report.designConformance,previewImageBase64:report.previewImageBase64});
     } catch(error) { return json(response,422,{candidateId:candidate.id,valid:false,error:`图文浏览器审计失败：${error.message}`}); }
     finally { fs.rmSync(tempPath,{force:true}); }
@@ -131,6 +160,8 @@ export async function handleSocialCardRoutes(context) {
     if (!copyCheck.valid) return json(response,422,{error:'图文配套文案未通过门禁',issues:copyCheck.issues});
     const pageCount = [...html.matchAll(/class=["']([^"']+)["']/gi)].filter((match)=>match[1].split(/\s+/).includes('page')).length;
     const cardPlan = JSON.parse(editorial.card_plan_json || '[]');
+    const paradigmSelection=resolveSocialCardParadigmSelection(editorial,cardPlan);
+    if(!paradigmSelection.paradigm)return json(response,409,{error:paradigmSelection.stale?'故事板已变化，请先重新选择视觉范式':'请先选择视觉范式'});
     const policy = aiVisualPageCountPolicy(Array.isArray(cardPlan) ? cardPlan.length : 0);
     if (!pageCount || pageCount < policy.minPageCount || pageCount > policy.maxPageCount) return json(response,422,{error:`页面数量不符合故事板范围，应为 ${policy.minPageCount}–${policy.maxPageCount} 页，实际 ${pageCount} 页`});
     const batch = store.getBatch(candidate.batch_id);
@@ -141,7 +172,7 @@ export async function handleSocialCardRoutes(context) {
     try {
       const pageRoles = Array.isArray(cardPlan) ? cardPlan.map((entry) => entry?.role || entry?.kind || '') : [];
       const listPageItemCounts = storyboardListPageItemCounts(cardPlan);
-      const visualAudit = await auditSocialCardHtmlFit({htmlPath:tempHtmlPath,width:375,height:667,pageRoles,listPageItemCounts,designScheme:input.designScheme,storyboardPages:cardPlan,requireDesignScheme:true});
+      const visualAudit = await auditSocialCardHtmlFit({htmlPath:tempHtmlPath,width:375,height:667,pageRoles,listPageItemCounts,designScheme:input.designScheme,storyboardPages:cardPlan,expectedParadigmId:paradigmSelection.id,requireDesignScheme:true});
       if (!visualAudit.valid) return json(response,422,{error:'图文浏览器布局审计未通过',issues:visualAudit.issues});
       const screenshotSkill = resolveSkillFile({workspaceRoot:root,skillName:'html-pages-to-images',relativePath:'index.js'});
       const outputDir = path.join(workspace.dir,SOCIAL_CARD_BEAUTIFY_OUTPUT);
@@ -207,7 +238,8 @@ export async function handleSocialCardRoutes(context) {
     const gate=socialCardGate(candidate,contentType,facts,editorial,eventAnalysis);
     const cardPlan=JSON.parse(editorial.card_plan_json||'[]');const channelMode=socialChannelMode(candidate);
     const structureState=resolveSocialCardStructureState({editorial,channelMode,contentType});
-    return json(response,200,{candidate,editorial,facts,score,contentType,channelMode,eventAnalysis,gate,structureState,layoutReport,reflowState,contentPlanAdjustments,factIndex,layoutDecisions:describeCardLayouts(cardPlan,{layoutStyle:editorial.layout_style,compositionMode:editorial.composition_mode,channelMode})});
+    const paradigmSelection=resolveSocialCardParadigmSelection(editorial,cardPlan);
+    return json(response,200,{candidate,editorial,facts,score,contentType,channelMode,eventAnalysis,gate,structureState,layoutReport,reflowState,contentPlanAdjustments,factIndex,visualParadigmSelection:paradigmSelection,visualParadigms:rankSocialCardVisualParadigms(cardPlan,{selectedId:paradigmSelection.id}),layoutDecisions:describeCardLayouts(cardPlan,{layoutStyle:editorial.layout_style,compositionMode:editorial.composition_mode,channelMode})});
   }
   if(cardPageLayoutMatch&&request.method==='PUT'){
     const candidate=store.getCandidate(Number(cardPageLayoutMatch[1]));if(!candidate)return json(response,404,{error:'候选不存在'});

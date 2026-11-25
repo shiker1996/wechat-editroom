@@ -1,10 +1,10 @@
 import fs from 'node:fs';
 import { probeHtmlLayout } from '../../../platform/browser/html-layout-probe.mjs';
-import { compareExternalSocialCardDesignToMeasurements } from './social-card-external-visual-contract.mjs';
+import { compareSocialCardDesignToMeasurements } from './social-card-design-conformance.mjs';
 
 const AUDIT_SELECTORS = Object.freeze(['.page-body', '.page-content-stack']);
 
-export async function auditSocialCardHtmlFit({ htmlPath, width = 375, height = 667, tolerancePx = 2, page: selectedPage = null, pageRoles = [], listPageItemCounts = [], minimumContentUtilization = 0.6, minimumListItemHeight = 32, designScheme = null, storyboardPages = [], requireDesignScheme = false, includeContactSheet = false } = {}) {
+export async function auditSocialCardHtmlFit({ htmlPath, width = 375, height = 667, tolerancePx = 2, page: selectedPage = null, pageRoles = [], listPageItemCounts = [], minimumContentUtilization = 0.6, minimumListItemHeight = 32, designScheme = null, storyboardPages = [], expectedParadigmId = '', requireDesignScheme = false, includeContactSheet = false } = {}) {
   const result = {
     valid: false,
     status: 'error',
@@ -120,11 +120,12 @@ export async function auditSocialCardHtmlFit({ htmlPath, width = 375, height = 6
       result.pages.push(pageReport);
     }
     if (requireDesignScheme || designScheme) {
-      const designConformance = compareExternalSocialCardDesignToMeasurements({
+      const designConformance = compareSocialCardDesignToMeasurements({
         designScheme,
         storyboardPages,
         pageMeasurements: measurements,
         selectedPage,
+        expectedParadigmId,
       });
       result.designConformance = designConformance;
       result.issues.push(...designConformance.issues);

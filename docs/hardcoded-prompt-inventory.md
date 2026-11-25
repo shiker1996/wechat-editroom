@@ -110,7 +110,7 @@
 
 ## 4. 视觉方案生成
 
-- `server/features/social-cards/application/social-card-design-scheme.mjs`：按每篇图文的故事板生成视觉方案，校验页数、角色、版式、色彩对比和字号范围。
+- `server/features/social-cards/application/social-card-design-scheme.mjs`：按故事板生成视觉方案；统一结构定义见 `server/shared/domain/schemas/social-card-design-scheme.mjs`，内外部共享的字段/色彩/字号/分页校验见 `server/features/social-cards/application/social-card-design-scheme-contract.mjs`。
 - `server/features/articles/application/cover-semantics.mjs`：文章封面语义分析（见 1.5）。
 
 ## 5. 内容复盘与配置调整
@@ -252,7 +252,7 @@ wechat-mp-composite：围绕简报的共同命题组织多条材料，各事件�
 - 热点研判、选题探索、事件卡和讨论研判：`server/features/research/llm/tasks.mjs`、`server/features/research/application/event-research-analysis.mjs`、`server/features/research/application/research/event-card-stage.mjs`、`editorial-exploration.mjs`、`discussion-research-stage.mjs`、`project-reader-value-service.mjs`。
 - 素材主线简报与综合选题评分：`server/platform/http/routes/content-routes.mjs`、`candidate-routes.mjs`。
 - 采集来源字段识别、排序和 GitHub 仓库发现：`server/features/collection/llm/source-field-enricher.mjs`、`source-candidate-ranker.mjs`、`repo-discovery.mjs`。
-- 图文视觉方案：`server/features/social-cards/application/social-card-design-scheme.mjs`；文章封面方案：`server/features/articles/application/cover-design-scheme.mjs`。
+- 图文视觉方案：`server/shared/domain/schemas/social-card-design-scheme.mjs`、`server/features/social-cards/application/social-card-design-scheme.mjs`、`server/features/social-cards/application/social-card-design-scheme-contract.mjs`；文章封面方案：`server/features/articles/application/cover-design-scheme.mjs`。
 - 内容复盘配置调整：`server/features/content-feedback/application/feedback-adjustment-service.mjs`、`social-feedback-adjustment-service.mjs`。
 - 共用安全和探针指令：`server/platform/llm/context-safety.mjs`、`server/platform/agent/context.mjs`、`server/platform/http/routes/model-routes.mjs`。
 

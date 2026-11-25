@@ -121,7 +121,7 @@ function createTypesetFixture(t, markdown = '# 测试文章\n\n## 一个判断\n
     complete: async (request) => {
       modelRequests.push(request);
       return request.purpose === 'magazine-design'
-        ? ({ content:JSON.stringify({ schemeMarkdown:'# 设计方案', tokens:{ colors:{ background:'#FFFFFF', accent:'#C4473A', text:'#202522', muted:'#6C736E' }, typography:{ body_px:16, line_height:1.8, h2_px:22 }, spacing:{ section_px:30, paragraph_px:16 }, image:{ radius_px:0, caption_px:13 } } }), finishReason:'stop', callId:1 })
+        ? ({ content:JSON.stringify({ schemeMarkdown:'# 设计方案', tokens:{ schema_version:1, colors:{ background:'#FFFFFF', accent:'#C4473A', text:'#202522', muted:'#6C736E' }, typography:{ body_px:16, line_height:1.8, h2_px:22 }, spacing:{ section_px:30, paragraph_px:16 }, image:{ radius_px:0, caption_px:13 } } }), finishReason:'stop', callId:1 })
         : ({ content:'<!doctype html><html><head><style>article{width:720px;max-width:720px;margin:0 auto}</style></head><body><article><h1>测试文章</h1><h2>一个判断</h2><p>这是正文，包含<strong>重点</strong>。</p></article></body></html>', finishReason:'stop', callId:2 });
     },
   };

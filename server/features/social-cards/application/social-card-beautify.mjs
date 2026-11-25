@@ -16,6 +16,7 @@ import { formatSocialCardCopyArtifact, generateSocialCardCopy, validateSocialCar
 import { generateSocialCardDesignScheme } from './social-card-design-scheme.mjs';
 import { auditSocialCardHtmlFit } from './social-card-visual-audit.mjs';
 import { contentTypeForSocialRoute, socialStoryboardClassForMaterialType } from '../domain/social-routing.mjs';
+import { resolveSocialCardParadigmSelection } from '../../../shared/domain/social-card-visual-paradigms.mjs';
 
 const execFileAsync = promisify(execFile);
 export const SOCIAL_CARD_BEAUTIFY_HTML = 'ai-beautified.html';
@@ -26,7 +27,7 @@ const AI_VISUAL_SKILL_NAME = 'social-card-ai-visual-generator';
 const AI_INTERNAL_FIELDS = new Set(['source_refs', 'source_urls', 'source_url', 'fact_ids', 'evidence_refs']);
 const SOCIAL_CARD_PROJECT_READ_CAPABILITY = 'cap_filesystem_project_read';
 const AI_VISUAL_BUNDLED_REFERENCE_FILES = Object.freeze(['layout-guide.md', 'xhs-visual-contract.md', 'visual-component-mapping.md']);
-const AI_VISUAL_INPUT_INSTRUCTION = '必须先一次读取 workspace.files 中列出的全部本次运行输入，再开始视觉策划和写入。workspace.files 只包含 card-plan.json、ai-visual-card-plan.json、原始事实 JSON、本篇生成的 social-design-scheme.json 和 copy.txt；它们分别负责冻结故事板、视觉语义、事实核对、本次视觉方案和只读文案。layout-guide.md、xhs-visual-contract.md、visual-component-mapping.md 已随本技能作为内置参考注入，不属于 workspace.files。设计方案决定本次色彩、字阶、节奏和逐页视觉处理；固定页面骨架、容量、标题/正文边界和交付校验属于硬约束，必须遵守。生成中必须调用本地浏览器视觉审计工具检查整组页面，并按报告修正后复审。不得展示路径、来源 ID、技术字段或规范说明，不得新增事实或改变标题。';
+const AI_VISUAL_INPUT_INSTRUCTION = '必须先一次读取 workspace.files 中列出的全部本次运行输入，再开始视觉策划和写入。workspace.files 只包含 card-plan.json、ai-visual-card-plan.json、原始事实 JSON、本篇生成的 social-design-scheme.json 和 copy.txt；它们分别负责冻结故事板、视觉语义、事实核对、本篇统一 schema v4 视觉方案和只读文案。内外部 Agent 共用该方案结构与视觉兑现门禁。layout-guide.md、xhs-visual-contract.md、visual-component-mapping.md 已随本技能作为内置参考注入，不属于 workspace.files。用户已选择视觉范式，范式约束整组页面结构，不预设颜色、字体或视觉主题；设计方案独立决定本次色彩、字阶、节奏和逐页视觉处理。固定页面骨架、容量、标题/正文边界和交付校验属于硬约束，必须遵守。生成中必须调用本地浏览器视觉审计工具检查整组页面，并按报告修正后复审。不得展示路径、来源 ID、技术字段或规范说明，不得新增事实或改变标题。';
 const AI_VISUAL_THEME_LAYOUT_FIELDS = Object.freeze([
   'bodyPx', 'h1Px', 'h2Px', 'captionPx', 'codePx', 'lineHeight', 'letterSpacingEm',
   'articlePaddingPx', 'sectionPx', 'paragraphPx', 'cardGapPx',
@@ -36,7 +37,7 @@ const ENABLE_AI_VISUAL_SCREENSHOTS = true;
 // 只检查交付文件是否真实存在且完整。
 const ENABLE_AI_VISUAL_DELIVERY_GATE = true;
 // 故事板页数是视觉生成的基准；少量拆页或合页不应在截图前直接失败。
-export const AI_VISUAL_PAGE_COUNT_TOLERANCE = 2;
+export const AI_VISUAL_PAGE_COUNT_TOLERANCE = 0;
 
 function htmlPageCount(html) {
   return [...String(html || '').matchAll(/class=["']([^"']+)["']/gi)]
@@ -295,9 +296,9 @@ function buildAiVisualGenerationBrief({ context, workspaceFiles, styleBrief = ''
 ## 本次运行参数
 
 - 故事板页数基准：${pageCount}
-- 实际允许页数：${pagePolicy.minPageCount}–${pagePolicy.maxPageCount}（允许上下浮动最多 ${pagePolicy.pageCountTolerance} 页，仅用于确需拆分或合并内容的情况）
+- 实际页数：必须为 ${pagePolicy.expectedPageCount} 页，与锁定故事板和统一视觉方案一致；需拆分或合并时先返回故事板阶段处理
 - 冻结输入文件：${fileList}
-- 本次设计方案：social-design-scheme.json（每次生成重新制定，不能套用旧主题）
+  - 本次设计方案：social-design-scheme.json（统一 schema v4；必须遵循已选视觉范式；范式只定义结构，不定义视觉主题；逐页职责、标记和锚点通过共享兑现审计）
 - 页面结构与容量契约：${JSON.stringify(context?.structure || {})}
 - 额外设计意图：${brief || '无，按本次方案与参考排版规范执行。'}
 
@@ -678,6 +679,8 @@ export async function runSocialCardBeautify({ gateway, store, batchId, candidate
   let editorialPages = [];
   try { editorialPages = JSON.parse(editorial.card_plan_json || '[]'); } catch {}
   if (!Array.isArray(editorialPages) || !editorialPages.length) throw new Error('数据库故事板为空，请先重新生成故事板');
+  const paradigmSelection = resolveSocialCardParadigmSelection(editorial, editorialPages);
+  if (!paradigmSelection.paradigm) throw new Error(paradigmSelection.stale ? '故事板已变化，请重新选择视觉范式' : '请先在故事板后选择视觉范式');
   const sourcePlan = {
     schemaVersion: 1,
     topic: String(candidate?.angle || candidate?.thesis || ''),
@@ -747,6 +750,7 @@ export async function runSocialCardBeautify({ gateway, store, batchId, candidate
     channelMode: context.channelMode,
     contentType: context.contentType,
     pages: editorialPages,
+    paradigm: paradigmSelection.paradigm,
     references: referenceText,
     log: onProgress,
   });
@@ -756,7 +760,7 @@ export async function runSocialCardBeautify({ gateway, store, batchId, candidate
       || previousScheme.channelMode !== context.channelMode || previousScheme.input?.pageCount !== editorialPages.length) {
       throw new Error('AI 视觉恢复找不到与当前故事板匹配的设计方案，请重新生成图文');
     }
-    designScheme = previousScheme.schemaVersion === 2
+    designScheme = previousScheme.schemaVersion === 4 && previousScheme.designScheme?.schemaVersion === 4 && previousScheme.designScheme?.paradigmId === paradigmSelection.id
       ? { ...previousScheme, markdown: fs.existsSync(schemeMarkdownPath) ? fs.readFileSync(schemeMarkdownPath, 'utf8') : '' }
       : await createDesignScheme();
   } else {
@@ -896,7 +900,14 @@ export async function runSocialCardBeautify({ gateway, store, batchId, candidate
     return latestVisualAudit;
   };
   const executeVisualAudit = async ({ auditAttempt } = {}) => {
-    const report = await auditSocialCardHtmlFit({ htmlPath, width: 375, height: 667 });
+    const report = await auditSocialCardHtmlFit({
+      htmlPath,
+      width: 375,
+      height: 667,
+      designScheme: designScheme.designScheme,
+      storyboardPages: editorialPages,
+      requireDesignScheme: true,
+    });
     latestVisualAudit = { ...report, auditAttempt, documentDigest: currentHtmlDigest() };
     return { status: 'ok', data: { ...report, auditAttempt }, provenance: { provider: 'local-browser' } };
   };

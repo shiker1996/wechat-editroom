@@ -281,6 +281,7 @@ export function applyWorkbenchSchema(db) {
         output_mode TEXT NOT NULL DEFAULT 'wechat-tool-cards',
         composition_mode TEXT NOT NULL DEFAULT 'smart',
         layout_style TEXT NOT NULL DEFAULT 'auto',
+        visual_paradigm_json TEXT NOT NULL DEFAULT '{}',
         storyboard_structure_snapshot_json TEXT NOT NULL DEFAULT '{}',
         recommended_pages INTEGER NOT NULL DEFAULT 6,
         card_plan_json TEXT NOT NULL DEFAULT '[]',
@@ -818,6 +819,7 @@ export function applyWorkbenchSchema(db) {
     if(!cardEditorialColumns.has('card_plan_json'))db.exec("ALTER TABLE card_editorial_sessions ADD COLUMN card_plan_json TEXT NOT NULL DEFAULT '[]'");
     if(!cardEditorialColumns.has('layout_style'))db.exec("ALTER TABLE card_editorial_sessions ADD COLUMN layout_style TEXT NOT NULL DEFAULT 'auto'");
     if(!cardEditorialColumns.has('composition_mode'))db.exec("ALTER TABLE card_editorial_sessions ADD COLUMN composition_mode TEXT NOT NULL DEFAULT 'template'");
+    if(!cardEditorialColumns.has('visual_paradigm_json'))db.exec("ALTER TABLE card_editorial_sessions ADD COLUMN visual_paradigm_json TEXT NOT NULL DEFAULT '{}'");
     if(!cardEditorialColumns.has('storyboard_structure_snapshot_json'))db.exec("ALTER TABLE card_editorial_sessions ADD COLUMN storyboard_structure_snapshot_json TEXT NOT NULL DEFAULT '{}'");
     const artifactColumns=new Set(db.prepare('PRAGMA table_info(artifacts)').all().map((column)=>column.name));
     if(!artifactColumns.has('candidate_row_id'))db.exec('ALTER TABLE artifacts ADD COLUMN candidate_row_id INTEGER REFERENCES candidates(id) ON DELETE SET NULL');
