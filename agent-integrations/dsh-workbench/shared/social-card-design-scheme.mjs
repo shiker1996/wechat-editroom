@@ -1,4 +1,4 @@
-import { SOCIAL_CARD_VISUAL_PARADIGMS } from '../social-card-visual-paradigms.mjs';
+import { SOCIAL_CARD_VISUAL_PARADIGMS } from './social-card-visual-paradigms.mjs';
 
 export const SOCIAL_CARD_DESIGN_SCHEME_VERSION = 4;
 export const SOCIAL_CARD_PAGE_LAYOUTS = Object.freeze(['poster', 'editorial', 'data', 'checklist', 'steps', 'minimal', 'timeline', 'comparison', 'evidence', 'feature']);
