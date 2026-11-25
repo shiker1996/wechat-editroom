@@ -2,10 +2,11 @@ import { dimensionPartsOf } from './hotspot-dimensions.mjs';
 import { EDITORIAL_CATEGORIES, isRepositoryEvent, normalizeEditorialCategory } from './editorial-categories.mjs';
 import { isDirectPracticalProject } from './content-routing.mjs';
 
-export const DISCUSSION_RESEARCH_SCHEMA_VERSION = 8;
-// 讨论研判按全局事件热度排序；类别只保留为选题标签，不参与范围配额。
+export const DISCUSSION_RESEARCH_SCHEMA_VERSION = 9;
+// 深研范围为国内事件保留主体名额，海外事件按固定比例补充；类别只作标签。
 export const DISCUSSION_RESEARCH_TOP_K_OPTIONS = Object.freeze([5, 8, 10, 15]);
 export const DISCUSSION_RESEARCH_TOP_K = 15;
+export const DISCUSSION_RESEARCH_DOMESTIC_SHARE = 2 / 3;
 export const DISCUSSION_RESEARCH_READER_RECALL_LIMIT = 5;
 export const DISCUSSION_RESEARCH_DIRECT_PROJECT_LIMIT = 3;
 export const DISCUSSION_RESEARCH_CATEGORIES = EDITORIAL_CATEGORIES;
@@ -359,15 +360,51 @@ export function buildDiscussionResearch({ events = [], eventHeatRanking = {}, to
   const isBoardCategory = (category) => categories.includes(category);
   const heatEligible = heatAvailable.filter(({ accountAudience, repository, editorialCategory }) =>
     accountAudience !== 0 && !repository && isBoardCategory(editorialCategory));
+  const domesticRelevance = ({ event, heat }) => finite(
+    event.china_relevance_score ?? event.chinaRelevance ?? heat?.chinaRelevanceScore ?? heat?.chinaRelevance,
+    0,
+  );
+  const marketRelevanceEligible = ({ event, heat }) =>
+    text(event.market_scope || heat?.marketScope || heat?.market_scope, 20) !== '国外'
+      || domesticRelevance({ event, heat }) >= 4;
+  const marketEligible = heatEligible.filter(marketRelevanceEligible);
   const globalHeat = (entry) => finite(entry.heat?.scoreValue ?? entry.heat?.t ?? entry.heat?.eventValue ?? entry.event?.t, 0);
   heatEligible.sort((a, b) => globalHeat(b) - globalHeat(a)
     || finite(a.heat?.globalRank ?? a.heat?.rank, 999999) - finite(b.heat?.globalRank ?? b.heat?.rank, 999999)
     || idOf(a.event).localeCompare(idOf(b.event)));
   const topKLimit = Math.max(0, Number(topK) || DISCUSSION_RESEARCH_TOP_K);
-  const heatSelected = heatEligible.slice(0, topKLimit).map((entry) => ({ ...entry, inclusionType: 'global_heat' }));
+  const domesticHeat = marketEligible.filter(({ event, heat }) => text(event.market_scope || heat?.marketScope || heat?.market_scope, 20) === '国内');
+  const foreignHeat = marketEligible.filter(({ event, heat }) => text(event.market_scope || heat?.marketScope || heat?.market_scope, 20) === '国外');
+  const otherMarketHeat = marketEligible.filter(({ event, heat }) => !['国内', '国外'].includes(text(event.market_scope || heat?.marketScope || heat?.market_scope, 20)));
+  const domesticQuota = Math.ceil(topKLimit * DISCUSSION_RESEARCH_DOMESTIC_SHARE);
+  const foreignQuota = topKLimit - domesticQuota;
+  const domesticSelected = domesticHeat.slice(0, domesticQuota);
+  const foreignSelected = foreignHeat.slice(0, foreignQuota);
+  const otherMarketSelected = [];
+  let remainingSlots = topKLimit - domesticSelected.length - foreignSelected.length;
+  const domesticRemainder = domesticHeat.slice(domesticSelected.length);
+  const foreignRemainder = foreignHeat.slice(foreignSelected.length);
+  const otherMarketRemainder = [...otherMarketHeat];
+  while (remainingSlots > 0 && (domesticRemainder.length || foreignRemainder.length || otherMarketRemainder.length)) {
+    const nextDomestic = domesticRemainder[0];
+    const nextForeign = foreignRemainder[0];
+    if (nextDomestic && (!nextForeign || globalHeat(nextDomestic) >= globalHeat(nextForeign))) {
+      domesticSelected.push(domesticRemainder.shift());
+    } else if (nextForeign) {
+      foreignSelected.push(foreignRemainder.shift());
+    } else if (otherMarketRemainder.length) {
+      otherMarketSelected.push(otherMarketRemainder.shift());
+    }
+    remainingSlots -= 1;
+  }
+  const heatSelected = [
+    ...domesticSelected.map((entry) => ({ ...entry, inclusionType: 'domestic_heat_quota' })),
+    ...foreignSelected.map((entry) => ({ ...entry, inclusionType: 'foreign_heat_quota' })),
+    ...otherMarketSelected.map((entry) => ({ ...entry, inclusionType: 'unscoped_heat_spillover' })),
+  ];
   const heatSelectedIds = new Set(heatSelected.map(({ event }) => idOf(event)));
   const screeningByEvent = new Map(list(readerScreening).map((item) => [String(item?.event_id || ''), item]));
-  const readerRecall = heatEligible.filter(({ event }) => !heatSelectedIds.has(idOf(event)))
+  const readerRecall = marketEligible.filter(({ event }) => !heatSelectedIds.has(idOf(event)))
     .map((entry) => ({ ...entry, readerScreen: screeningByEvent.get(idOf(entry.event)) }))
     .filter(({ readerScreen }) => readerScreen?.eligible === true
       && finite(readerScreen.daily_work_fit, 0) >= 4
@@ -398,6 +435,7 @@ export function buildDiscussionResearch({ events = [], eventHeatRanking = {}, to
   const repositoryRankByEvent = new Map(repositoryBoards.map((item) => [item.eventId, item.rank]));
   const directProjects = heatAvailable
     .filter(({ event, heat, repository, accountAudience, editorialCategory }) => repository
+      && marketRelevanceEligible({ event, heat })
       && accountAudience !== 0 && isBoardCategory(editorialCategory) && isDirectPracticalProject(event)
       && Number(directProjectLimit) > 0)
     .sort((a, b) => (repositoryRankByEvent.get(idOf(a.event)) ?? finite(a.heat?.rank, 999999))
@@ -416,8 +454,12 @@ export function buildDiscussionResearch({ events = [], eventHeatRanking = {}, to
     finite(heat?.boardRank ?? heat?.board_rank), editorialCategory,
     inclusionType === 'direct_practical_project'
       ? '第一梯队 direct_practical 项目独立补入文章深研范围'
-      : inclusionType === 'global_heat'
-      ? `按全局热度排序第 ${index + 1} 名纳入研判范围`
+      : inclusionType === 'domestic_heat_quota'
+      ? `国内事件配额内按热度纳入（国内目标 ${domesticQuota}/${topKLimit}）`
+      : inclusionType === 'foreign_heat_quota'
+      ? `海外事件补充配额内按热度纳入（海外目标 ${foreignQuota}/${topKLimit}）`
+      : inclusionType === 'unscoped_heat_spillover'
+      ? '市场范围未标注，名额不足时按热度补入'
       : `全量读者影响初筛补入；综合分 ${recallScore}/5；工作场景：${text(readerScreen?.work_scenario, 120)}；读者影响：${text(readerScreen?.reader_effect, 120)}`,
   ));
   scope.forEach((item, index) => {
@@ -447,9 +489,17 @@ export function buildDiscussionResearch({ events = [], eventHeatRanking = {}, to
     mode: 'phase0_scope',
     policy: {
       top_k: topKLimit,
-      selection_policy: 'global_heat_top_k_plus_reader_impact_recall_plus_direct_practical_projects',
+      selection_policy: 'domestic_two_thirds_foreign_one_third_heat_quota_with_foreign_domestic_relevance_min_4_plus_reader_impact_recall_plus_direct_practical_projects',
+      foreign_domestic_relevance_minimum: 4,
+      foreign_market_relevance_excluded: heatEligible.filter(({ event, heat }) =>
+        text(event.market_scope || heat?.marketScope || heat?.market_scope, 20) === '国外' && domesticRelevance({ event, heat }) < 4).length,
       reader_recall_limit: Math.max(0, Number(readerRecallLimit) || 0),
       reader_recall_selected: readerRecall.length,
+      domestic_heat_quota: domesticQuota,
+      domestic_heat_selected: domesticSelected.length,
+      foreign_heat_quota: foreignQuota,
+      foreign_heat_selected: foreignSelected.length,
+      unscoped_heat_spillover_selected: otherMarketSelected.length,
       direct_practical_project_limit: Math.max(0, Number(directProjectLimit) || 0),
       direct_practical_project_selected: distinctDirectProjects.length,
       freshness_window_hours: Math.max(1, Number(freshnessWindowHours) || 168),
@@ -495,12 +545,12 @@ export function discussionResearchMarkdown(report) {
   const lines = [
     '# 高热事件讨论研判报告',
     '',
-    `模式：${report?.mode || 'phase0_observation'}；范围：全局热度 Top-${report?.policy?.top_k || DISCUSSION_RESEARCH_TOP_K}、读者影响补入 ${report?.scope?.reader_recall_selected_count || 0} 个（上限 ${report?.policy?.reader_recall_limit ?? DISCUSSION_RESEARCH_READER_RECALL_LIMIT}），另补入第一梯队 direct_practical 项目 ${report?.scope?.direct_practical_project_selected_count || 0} 个（上限 ${report?.policy?.direct_practical_project_limit ?? 3}）；未标记的纯项目仍留在图文赛道；本次纳入 ${scope.length} 个事件。`,
+    `模式：${report?.mode || 'phase0_observation'}；范围：国内热度名额 ${report?.policy?.domestic_heat_selected || 0}/${report?.policy?.domestic_heat_quota ?? 0}、海外补充名额 ${report?.policy?.foreign_heat_selected || 0}/${report?.policy?.foreign_heat_quota ?? 0}、读者影响补入 ${report?.scope?.reader_recall_selected_count || 0} 个（上限 ${report?.policy?.reader_recall_limit ?? DISCUSSION_RESEARCH_READER_RECALL_LIMIT}），另补入第一梯队 direct_practical 项目 ${report?.scope?.direct_practical_project_selected_count || 0} 个（上限 ${report?.policy?.direct_practical_project_limit ?? 3}）；未标记的纯项目仍留在图文赛道；本次纳入 ${scope.length} 个事件。`,
     '',
     report?.research_source === 'model'
       ? '本报告由模型按事件逐个联网研判并直接返回 Markdown；程序只负责范围裁剪、调用审计、来源整理、结构索引和去重，研判价值 J 在候选评分阶段计算。'
       : report?.mode === 'phase0_scope'
-        ? '阶段 0 只按全局热度冻结研判范围和来源指针；尚未进行事件内或事件间语义研判，页面不会在此阶段展示程序猜出的关系。'
+        ? '阶段 0 按国内/海外热度配额和读者影响补入冻结研判范围及来源指针；尚未进行事件内或事件间语义研判，页面不会在此阶段展示程序猜出的关系。'
         : '本报告只整理已有事件卡、事件维度和时间关系，不改变 T、F、候选池，也不把观察信号直接当作选题命题。',
     '',
     '## 深研范围',
