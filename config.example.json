@@ -32,7 +32,7 @@
     "cacheTtlMs": 1800000,
     "aiQueries": {
       "enabled": true,
-      "refreshDays": 7,
+        "refreshDays": 1,
       "maxQueries": 6,
       "perQueryLimit": 15,
       "relevanceFilter": true,

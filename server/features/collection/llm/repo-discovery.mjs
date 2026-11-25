@@ -13,7 +13,7 @@ import { resolvePrompt } from '../../../platform/llm/prompt-registry.mjs';
 import { GITHUB_PROJECT_TYPES, GITHUB_SCENARIO_LANES } from '../../../shared/domain/github-repository.mjs';
 
 const QUERIES_FILE = 'repo-discovery-queries.json';
-const QUERY_SCHEMA_VERSION = 5;
+const QUERY_SCHEMA_VERSION = 6;
 const BROAD_QUERY_TERMS = new Set(['ai', 'agent', 'agents', 'llm', 'prompt', 'framework', 'cli', 'rust', 'kubernetes']);
 const AI_LANES = new Set(['ai-utility', 'agent']);
 
@@ -105,7 +105,7 @@ function queriesPath(workspaceRoot) {
   return path.join(workspaceRoot, 'data', QUERIES_FILE);
 }
 
-export function loadCachedQueries(workspaceRoot, refreshDays = 7) {
+export function loadCachedQueries(workspaceRoot, refreshDays = 1) {
   try {
     const file = queriesPath(workspaceRoot);
     if (!fs.existsSync(file)) return null;
@@ -128,12 +128,26 @@ function accountInterestText(accountContext) {
 ${JSON.stringify(accountContext || {}, null, 2)}`;
 }
 
-export async function planRepoDiscoveryQueries({ workspaceRoot, gateway, accountContext, refreshDays = 7, maxQueries = 6, provider = '', log = () => {} }) {
+export async function planRepoDiscoveryQueries({ workspaceRoot, gateway, accountContext, refreshDays = 1, maxQueries = 6, provider = '', log = () => {} }) {
   const cached = loadCachedQueries(workspaceRoot, refreshDays);
   if (cached) return cached;
   if (!gateway) return { queries: builtInQueries(maxQueries), generatedAt: null, cached: false, fallback: true };
+  let recentQueries = [];
+  let previousHistory = [];
+  try {
+    const previous = JSON.parse(fs.readFileSync(queriesPath(workspaceRoot), 'utf8'));
+    previousHistory = Array.isArray(previous.history) ? previous.history : (previous.queries ? [{ generatedAt: previous.generatedAt, queries: previous.queries }] : []);
+    const cutoff = Date.now() - 7 * 86400000;
+    recentQueries = previousHistory
+      .filter((entry) => Date.parse(entry.generatedAt || previous.generatedAt || 0) >= cutoff)
+      .flatMap((entry) => Array.isArray(entry.queries) ? entry.queries : [])
+      .filter((entry) => entry?.label && entry?.query);
+  } catch {}
   const system = resolvePrompt('collection.repo-discovery-queries', { maxQueries }).text;
-  const user = accountInterestText(accountContext);
+  const recentText = recentQueries.length
+    ? `\n\n## 最近 7 天已使用的查询（请避开重复主题和关键词）\n${JSON.stringify(recentQueries.map(({ label, query }) => ({ label, query })), null, 2)}`
+    : '';
+  const user = `${accountInterestText(accountContext)}${recentText}`;
   try {
     const result = await gateway.complete({
       provider, purpose: 'repo-discovery-queries', jsonMode: true, maxOutputTokens: 2000,
@@ -143,7 +157,10 @@ export async function planRepoDiscoveryQueries({ workspaceRoot, gateway, account
     if (!queries.length) throw new Error('模型未返回可用查询组');
     const generatedAt = new Date().toISOString();
     fs.mkdirSync(path.dirname(queriesPath(workspaceRoot)), { recursive: true });
-    fs.writeFileSync(queriesPath(workspaceRoot), JSON.stringify({ schemaVersion: QUERY_SCHEMA_VERSION, generatedAt, queries }, null, 2), 'utf8');
+    const history = [...previousHistory, { generatedAt, queries }]
+      .filter((entry) => Date.parse(entry.generatedAt || 0) >= Date.now() - 7 * 86400000)
+      .slice(-7);
+    fs.writeFileSync(queriesPath(workspaceRoot), JSON.stringify({ schemaVersion: QUERY_SCHEMA_VERSION, generatedAt, queries, history }, null, 2), 'utf8');
     log(`AI 兴趣查询组已生成 ${queries.length} 组：${queries.map((q) => q.label).join('、')}`);
     return { queries, generatedAt, cached: false };
   } catch (error) {

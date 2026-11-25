@@ -27,7 +27,7 @@
         "title": "创建时间窗口（天）",
         "minimum": 1,
         "maximum": 365,
-        "default": 7
+        "default": 1
       },
       "activeSearchEnabled": {
         "type": "boolean",
