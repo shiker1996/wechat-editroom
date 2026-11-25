@@ -55,12 +55,15 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
+  align-items: stretch;
   overflow: hidden;
   padding: 4px 0 7px;
 }
 .page-content-stack {
   width: 100%;
   min-width: 0;
+  height: max-content;
+  align-self: stretch;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -69,7 +72,7 @@
 }
 ```
 
-内容页必须把所有纵向卡片、标题和辅助层放入 `.page-content-stack`，不要让多个卡片直接成为 `.page-body` 的兄弟元素。`.page-body` 负责页面可用区和垂直对齐，`.page-content-stack` 负责内容层的纵向排列和卡片间距；本篇方案可以调整 gap，但不能省略该布局职责。
+内容页必须把所有纵向卡片、标题和辅助层放入 `.page-content-stack`，不要让多个卡片直接成为 `.page-body` 的兄弟元素。`.page-body` 负责页面可用区和垂直对齐，`.page-content-stack` 负责内容层的纵向排列和卡片间距；本篇方案可以调整 gap，但不能省略该布局职责。内容栈保持自然高度，避免用 `height:100%` 撑满正文区；文字横向对齐按内容语义决定。
 
 不要使用 `space-between`、负 margin、内部滚动或裁切制造视觉密度；卡片之间必须保留可见间隔，内容密度应来自真实内容和组件表达。
 

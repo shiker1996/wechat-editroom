@@ -1,5 +1,5 @@
 import { colorContrast } from '../../../shared/themes/theme-validator.mjs';
-import { SOCIAL_CARD_DESIGN_SCHEME_SCHEMA, SOCIAL_CARD_DESIGN_SCHEME_VERSION } from '../../../shared/domain/schemas/social-card-design-scheme.mjs';
+import { SOCIAL_CARD_DESIGN_SCHEME_SCHEMA, SOCIAL_CARD_DESIGN_SCHEME_VERSION, SOCIAL_CARD_ORNAMENT_KINDS, SOCIAL_CARD_ORNAMENT_PLACEMENTS } from '../../../shared/domain/schemas/social-card-design-scheme.mjs';
 import { getSocialCardVisualParadigm } from '../../../shared/domain/social-card-visual-paradigms.mjs';
 export { SOCIAL_CARD_DESIGN_SCHEME_SCHEMA, SOCIAL_CARD_DESIGN_SCHEME_TOOL_SCHEMA, SOCIAL_CARD_DESIGN_SCHEME_VERSION } from '../../../shared/domain/schemas/social-card-design-scheme.mjs';
 
@@ -84,6 +84,13 @@ export function validateSocialCardDesignScheme({ designScheme, storyboardPages =
     const expectedRole = normalizedSocialCardRole(storyboardPages[index] || {});
     if (clean(page?.role) !== expectedRole) issues.push({ code: 'DESIGN_PAGE_ROLE_MISMATCH', page: index + 1, field: `${label}.role`, message: `第 ${index + 1} 页 role 必须为 ${expectedRole}` });
     if (paradigm && !paradigm.supportedLayouts.includes(page?.layout)) issues.push({ code: 'DESIGN_PARADIGM_LAYOUT_MISMATCH', page: index + 1, field: `${label}.layout`, message: `所选范式「${paradigm.name}」不支持 ${page?.layout} 版式` });
+    const ornaments = Array.isArray(page?.ornaments) ? page.ornaments : [];
+    const kinds = ornaments.map((ornament) => normalized(ornament?.kind)).filter(Boolean);
+    if (new Set(kinds).size !== kinds.length) issues.push({ code: 'DECORATION_PLAN_DUPLICATE', page: index + 1, field: `${label}.ornaments`, message: `第 ${index + 1} 页装饰类型不能重复` });
+    if (kinds.length < 2) issues.push({ code: 'DECORATION_PLAN_TOO_SMALL', page: index + 1, field: `${label}.ornaments`, message: `第 ${index + 1} 页至少规划 2 种不同的装饰` });
+    if (ornaments.some((ornament) => !SOCIAL_CARD_ORNAMENT_KINDS.includes(clean(ornament?.kind)) || !SOCIAL_CARD_ORNAMENT_PLACEMENTS.includes(clean(ornament?.placement)))) {
+      issues.push({ code: 'DECORATION_PLAN_INVALID', page: index + 1, field: `${label}.ornaments`, message: `第 ${index + 1} 页装饰类型或位置不在组件目录中` });
+    }
   });
 
   if (pages.length >= 5) {

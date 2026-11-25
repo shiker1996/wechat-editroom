@@ -3,6 +3,7 @@ import { probeHtmlLayout } from '../../../platform/browser/html-layout-probe.mjs
 import { compareSocialCardDesignToMeasurements } from './social-card-design-conformance.mjs';
 
 const AUDIT_SELECTORS = Object.freeze(['.page-body', '.page-content-stack']);
+const MAX_CONTENT_CENTER_OFFSET_PX = 18;
 
 export async function auditSocialCardHtmlFit({ htmlPath, width = 375, height = 667, tolerancePx = 2, page: selectedPage = null, pageRoles = [], listPageItemCounts = [], minimumContentUtilization = 0.6, minimumListItemHeight = 32, designScheme = null, storyboardPages = [], expectedParadigmId = '', requireDesignScheme = false, includeContactSheet = false } = {}) {
   const result = {
@@ -37,11 +38,36 @@ export async function auditSocialCardHtmlFit({ htmlPath, width = 375, height = 6
       const pageReport = { page: item.page, role: pageRole || undefined, valid: true, containers: [], listMetrics: item.listMetrics || { itemCount: 0, averageItemHeight: 0, totalHeight: 0 } };
       const pageStyle = item.pageStyle || {};
       const styleProblems = [];
+      const centerOffsetPx = Number(pageStyle.contentAlignment?.verticalCenterOffsetPx);
+      if (Number.isFinite(centerOffsetPx) && Math.abs(centerOffsetPx) > MAX_CONTENT_CENTER_OFFSET_PX) {
+        pageReport.valid = false;
+        result.issues.push({
+          code: 'CONTENT_NOT_CENTERED',
+          page: item.page,
+          actualOffsetPx: centerOffsetPx,
+          allowedOffsetPx: MAX_CONTENT_CENTER_OFFSET_PX,
+          message: `第 ${item.page} 页正文整体偏离可用区垂直中心 ${Math.round(Math.abs(centerOffsetPx))}px（允许 ${MAX_CONTENT_CENTER_OFFSET_PX}px）；请调整 page-body 或 page-content-stack 的垂直布局后复审`,
+        });
+      }
       if (Math.abs(Number(pageStyle.width) - result.canvas.width) > tolerancePx) styleProblems.push(`画布宽度应为 ${result.canvas.width}px，实测 ${Math.round(Number(pageStyle.width) || 0)}px`);
       if (Math.abs(Number(pageStyle.height) - result.canvas.height) > tolerancePx) styleProblems.push(`画布高度应为 ${result.canvas.height}px，实测 ${Math.round(Number(pageStyle.height) || 0)}px`);
       if (pageStyle.overflow !== 'hidden') styleProblems.push(`画布 overflow 应为 hidden，实测 ${pageStyle.overflow || '未设置'}`);
       if (pageStyle.innerDisplay !== 'flex') styleProblems.push(`页面内部布局应为 flex，实测 ${pageStyle.innerDisplay || '缺少 .page-inner'}`);
       pageReport.pageStyle = pageStyle;
+      if (!designScheme && !requireDesignScheme) {
+        const overlappingOrnaments = (Array.isArray(pageStyle.ornaments) ? pageStyle.ornaments : [])
+          .filter((ornament) => ornament.visible && ornament.textOverlaps?.length);
+        for (const ornament of overlappingOrnaments) {
+          pageReport.valid = false;
+          result.issues.push({
+            code: 'DECORATION_TEXT_OVERLAP',
+            page: item.page,
+            field: `ornaments.${ornament.kind}`,
+            actual: ornament.textOverlaps,
+            message: `第 ${item.page} 页 ${ornament.kind} 装饰与可见文字相交；请移入留白或调整内容构图后复审`,
+          });
+        }
+      }
       if (styleProblems.length) {
         pageReport.valid = false;
         result.issues.push({

@@ -202,6 +202,9 @@ test('主链路 E2E：采集、文章与图文产物均可从真实 HTTP 服务�
       assert.ok(fs.existsSync(artifact.file_path), `图文产物文件不存在：${name}`);
       assert.ok(Number(artifact.size) > 0, `图文产物为空：${name}`);
     }
+    const socialScheme = JSON.parse(fs.readFileSync(socialRows.find((item) => item.name === 'social-design-scheme.json').file_path, 'utf8'));
+    assert.equal(socialScheme.designScheme?.schemaVersion, 5, '图文生成应使用包含装饰计划的 v5 方案');
+    assert.ok(socialScheme.designScheme.pages.every((page) => Array.isArray(page.ornaments) && page.ornaments.length >= 2), '每一页都应规划至少两种不同类型的装饰');
     const socialView = await workbench.api(`/api/candidates/${socialCandidate.id}/social-cards`);
     const socialPages = Array.isArray(socialView.cardPlan) ? socialView.cardPlan : socialView.cardPlan?.pages;
     assert.equal(socialView.ready, true, '图文交付接口应报告 ready');

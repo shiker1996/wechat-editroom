@@ -1,7 +1,9 @@
 import { SOCIAL_CARD_VISUAL_PARADIGMS } from './social-card-visual-paradigms.mjs';
 
-export const SOCIAL_CARD_DESIGN_SCHEME_VERSION = 4;
+export const SOCIAL_CARD_DESIGN_SCHEME_VERSION = 5;
 export const SOCIAL_CARD_PAGE_LAYOUTS = Object.freeze(['poster', 'editorial', 'data', 'checklist', 'steps', 'minimal', 'timeline', 'comparison', 'evidence', 'feature']);
+export const SOCIAL_CARD_ORNAMENT_KINDS = Object.freeze(['frame', 'stamp', 'index', 'rail', 'timecode', 'badge', 'annotation', 'perforation', 'tape', 'motif']);
+export const SOCIAL_CARD_ORNAMENT_PLACEMENTS = Object.freeze(['corner', 'edge', 'header', 'footer', 'inline', 'behind-focus', 'margin']);
 
 const textSchema = (description, maxLength = 120) => ({ type: 'string', minLength: 1, maxLength, pattern: '\\S', description });
 const markerSchema = (description) => ({ type: 'string', pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$', description });
@@ -16,7 +18,7 @@ export const SOCIAL_CARD_DESIGN_SCHEME_SCHEMA = objectSchema({
     visualAnchor: textSchema('最值得视觉化的证据或结果。'),
   }),
   paradigmId: { type: 'string', enum: SOCIAL_CARD_VISUAL_PARADIGMS.map((paradigm) => paradigm.id), description: '用户选定的整组结构范式；范式只限定结构，不预设配色和字体。' },
-  visualDirection: textSchema('基于内容判断说明整组视觉方向。', 100),
+  visualDirection: textSchema('说明本篇选定的具体创意概念，以及它如何把内容对象转成可见的主视觉和整体造型。', 220),
   palette: objectSchema({
     background: { type: 'string', pattern: '^#[0-9a-fA-F]{6}$', description: '画布背景色。' },
     surface: { type: 'string', pattern: '^#[0-9a-fA-F]{6}$', description: '内容表面颜色。' },
@@ -62,11 +64,20 @@ export const SOCIAL_CARD_DESIGN_SCHEME_SCHEMA = objectSchema({
       primaryVisual: markerSchema('页面主视觉标记。'),
       backgroundMode: markerSchema('页面背景/表面标记。'),
       accentPlacement: markerSchema('强调元素位置标记。'),
+      ornaments: {
+        type: 'array', minItems: 2, maxItems: 4,
+        description: '本页必须实际绘制的装饰清单；每页选择 2–4 种不同类型，避免只靠提示词描述。',
+        items: objectSchema({
+          kind: { type: 'string', enum: SOCIAL_CARD_ORNAMENT_KINDS, description: '复用装饰组件类型。' },
+          placement: { type: 'string', enum: SOCIAL_CARD_ORNAMENT_PLACEMENTS, description: '组件实际所在区域。' },
+          purpose: textSchema('装饰如何呼应本页对象或层级，不能新增事实。', 60),
+        }),
+      },
     }),
   },
 });
 
 export const SOCIAL_CARD_DESIGN_SCHEME_TOOL_SCHEMA = {
   ...SOCIAL_CARD_DESIGN_SCHEME_SCHEMA,
-  description: '公众号/小红书图文统一视觉方案 v4。内外部生成路径共用用户选择的 paradigmId、内容判断、视觉令牌、系列锚点和分页字段；范式约束版式结构，不预设颜色或字体。HTML 每页须以 data-page、data-page-role、data-visual-composition、data-primary-visual、data-background-mode、data-accent-placement 回填同值，并在每页放置全部 data-shared-anchor 标记。',
+  description: '公众号/小红书图文统一视觉方案 v5。内外部生成路径共用用户选择的 paradigmId、内容判断、视觉令牌、系列锚点、分页字段和逐页 ornaments。每个 ornament 都须由页面内可见的 data-ornament 与 data-ornament-placement 元素兑现。HTML 每页须以 data-page、data-page-role、data-visual-composition、data-primary-visual、data-background-mode、data-accent-placement 回填同值，并在每页放置全部 data-shared-anchor 标记。',
 };

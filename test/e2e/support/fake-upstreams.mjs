@@ -187,13 +187,20 @@ function fixtureVisualAppend(request, { includePageInner = false } = {}) {
     ['page-ending', 'ending', 'minimal', 'conclusion', 'solid', 'bottom', '完成标准', '页面结构完整，事实边界清晰，交付可以复核。'],
   ];
   const html = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>
-*{box-sizing:border-box}html,body{margin:0;padding:0;background:#102018;color:#f4f0e5;font-family:Arial,"Microsoft YaHei",sans-serif}.page{position:relative;width:375px;height:667px;overflow:hidden;padding:28px;background:#102018;display:flex;flex-direction:column;gap:20px}.page-cover{background:linear-gradient(145deg,#102018,#1a2b23)}.page-inner{display:flex;flex:1;min-height:0;flex-direction:column;gap:20px;overflow:hidden}.page-body{height:520px;min-height:0;overflow:hidden}.page-content-stack{height:100%;overflow:hidden;display:flex;flex-direction:column;gap:18px}.eyebrow{color:#39c98a;font-size:12px;letter-spacing:.16em}.page h1{font-size:34px;line-height:1.2;margin:0}.page h2{font-size:25px;line-height:1.25;margin:0}.page p{font-size:14px;line-height:1.55;margin:0;color:#f4f0e5}.bottom-strip{margin-top:auto;border-top:1px solid #496052;padding-top:12px;color:#b0c0b5;font-size:12px}
+*{box-sizing:border-box}html,body{margin:0;padding:0;background:#102018;color:#f4f0e5;font-family:Arial,"Microsoft YaHei",sans-serif}.page{position:relative;width:375px;height:667px;overflow:hidden;padding:28px;background:#102018;display:flex;flex-direction:column;gap:20px}.page-cover{background:linear-gradient(145deg,#102018,#1a2b23)}.page-inner{display:flex;flex:1;min-height:0;flex-direction:column;gap:20px;overflow:hidden}.page-body{height:520px;min-height:0;overflow:hidden}.page-content-stack{height:100%;overflow:hidden;display:flex;flex-direction:column;gap:18px}.eyebrow{color:#39c98a;font-size:12px;letter-spacing:.16em}.page h1{font-size:34px;line-height:1.2;margin:0}.page h2{font-size:25px;line-height:1.25;margin:0}.page p{font-size:14px;line-height:1.55;margin:0;color:#f4f0e5}.bottom-strip{margin-top:auto;border-top:1px solid #496052;padding-top:12px;color:#b0c0b5;font-size:12px}.ornament{position:absolute;z-index:2;pointer-events:none}.ornament-frame{inset:12px;border:1px dashed #39c98a}.ornament-stamp{top:12px;right:18px;width:28px;height:24px;border:1px solid #d98253;background:#1a2b23}.ornament-rail{left:12px;top:180px;width:6px;height:92px;background:repeating-linear-gradient(to bottom,#39c98a 0 5px,transparent 5px 12px)}.ornament-index{right:16px;top:68px;width:18px;height:18px;border:1px solid #d98253;border-radius:50%;background:#102018}.ornament-tape{left:140px;top:15px;width:66px;height:10px;background:#39c98a;transform:rotate(-4deg)}.ornament-badge{right:14px;bottom:48px;width:22px;height:22px;border:1px solid #39c98a;border-radius:50%}.ornament-perforation{right:8px;top:180px;width:8px;height:100px;background:radial-gradient(circle,#39c98a 2px,transparent 3px) 0 0/8px 14px}.ornament-annotation{left:50px;top:120px;width:26px;height:18px;border-bottom:1px solid #d98253;border-left:1px solid #d98253;transform:rotate(-12deg)}
 </style></head><body>${pages.map(([kind,role,composition,primaryVisual,backgroundMode,accentPlacement,title,body],index)=>{
     const eyebrow = `<div class="eyebrow">${String(index+1).padStart(2,'0')} · E2E FIXTURE</div>`;
     const pageBody = `<div class="page-body"><div class="page-content-stack"><h${index===0?'1':'2'}>${title}</h${index===0?'1':'2'}><p>${body}</p></div></div>`;
     const footer = `<footer class="bottom-strip">固定测试 · ${index+1} / ${pages.length}</footer>`;
     const anchors = `<span class="eyebrow" data-shared-anchor="page-rail">E2E</span><span class="eyebrow" data-shared-anchor="series-dot">●</span>`;
-    return `<!-- CARD-PAGE:${index + 1}:START -->\n<section class="page ${kind}" data-page="${index + 1}" data-page-role="${role}" data-visual-composition="${composition}" data-primary-visual="${primaryVisual}" data-background-mode="${backgroundMode}" data-accent-placement="${accentPlacement}">${includePageInner ? `<div class="page-inner">${anchors}${eyebrow}${pageBody}${footer}</div>` : `${anchors}${eyebrow}${pageBody}${footer}`}</section>\n<!-- CARD-PAGE:${index + 1}:END -->`;
+    const ornamentSets = [
+      [['frame','edge'],['stamp','corner']],
+      [['rail','edge'],['index','header']],
+      [['tape','header'],['badge','corner']],
+      [['perforation','edge'],['annotation','inline']],
+    ];
+    const ornaments = ornamentSets[index % ornamentSets.length].map(([ornament,placement]) => `<span aria-hidden="true" class="ornament ornament-${ornament}" data-ornament="${ornament}" data-ornament-placement="${placement}"></span>`).join('');
+    return `<!-- CARD-PAGE:${index + 1}:START -->\n<section class="page ${kind}" data-page="${index + 1}" data-page-role="${role}" data-visual-composition="${composition}" data-primary-visual="${primaryVisual}" data-background-mode="${backgroundMode}" data-accent-placement="${accentPlacement}">${ornaments}${includePageInner ? `<div class="page-inner">${anchors}${eyebrow}${pageBody}${footer}</div>` : `${anchors}${eyebrow}${pageBody}${footer}`}</section>\n<!-- CARD-PAGE:${index + 1}:END -->`;
   }).join('')}</body></html>`;
   return request('cap_filesystem_project_document_write', { operation: 'append', content: html }, '写入四页固定测试视觉 HTML');
 }
@@ -208,7 +215,7 @@ function jsonForRequest(payload, visualState) {
       .find((value) => Array.isArray(value?.pages)) || {};
     const pages = Array.isArray(input.pages) ? input.pages : [];
     return { designScheme: {
-      schemaVersion: 4,
+      schemaVersion: 5,
       paradigmId: 'index-atlas',
       contentReading: { subject: '固定测试内容', narrative: '按故事板顺序解释信息', readerFeeling: '清楚、可信、易读', visualAnchor: '绿色节点串联每页核心信息' },
       visualDirection: '以清晰的信息层级和克制的绿色强调呈现固定测试内容',
@@ -217,7 +224,7 @@ function jsonForRequest(payload, visualState) {
       composition: { grid: '单列信息网格', density: '中等', rhythm: '标题后接短段和重点块', motif: '细线与绿色节点' },
       designLanguage: { colorLogic: '以深绿衬托绿色节点，保持正文对比清晰', shape: '规整直角卡片与圆形节点', surface: '深色纯色表面，不使用模拟纸纹', graphics: '用细线连接内容节点', imageTreatment: '以流程示意图替代外部照片' },
       sharedAnchors: [{ id: 'page-rail', description: '页眉中的章节标识' }, { id: 'series-dot', description: '每页的绿色小圆点' }],
-      pages: pages.map((page, index) => ({ page: index + 1, role: page.role, layout: ['poster', 'data', 'checklist', 'comparison'][index], visualPurpose: `让读者理解第 ${index + 1} 页在整组中的作用`, focus: `突出第 ${index + 1} 页的核心信息`, treatment: '保留清晰标题、正文和页脚边界', composition: ['poster', 'editorial', 'timeline', 'minimal'][index], primaryVisual: ['cover-title', 'key-fact', 'process-rail', 'conclusion'][index], backgroundMode: 'solid', accentPlacement: ['center', 'top', 'left-rail', 'bottom'][index] })),
+      pages: pages.map((page, index) => ({ page: index + 1, role: page.role, layout: ['poster', 'data', 'checklist', 'comparison'][index], visualPurpose: `让读者理解第 ${index + 1} 页在整组中的作用`, focus: `突出第 ${index + 1} 页的核心信息`, treatment: '保留清晰标题、正文和页脚边界', composition: ['poster', 'editorial', 'timeline', 'minimal'][index], primaryVisual: ['cover-title', 'key-fact', 'process-rail', 'conclusion'][index], backgroundMode: 'solid', accentPlacement: ['center', 'top', 'left-rail', 'bottom'][index], ornaments: (index % 4 === 0 ? [['frame','edge'],['stamp','corner']] : index % 4 === 1 ? [['rail','edge'],['index','header']] : index % 4 === 2 ? [['tape','header'],['badge','corner']] : [['perforation','edge'],['annotation','inline']]).map(([kind,placement]) => ({ kind, placement, purpose: '强化页面的场记层级' })) })),
     } };
   }
   if (/为这篇公众号文章生成\s*5 个发布标题|生成 5 个发布标题|唯一推荐标题/.test(text)) return {
