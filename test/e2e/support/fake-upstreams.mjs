@@ -202,10 +202,14 @@ function jsonForRequest(payload, visualState) {
   const text = JSON.stringify(payload.messages || []);
   if (/当前 Agent 阶段：单一 AI 视觉生成/.test(text)) return aiVisualAgentJson(payload, visualState);
   if (/你是公众号与小红书图文设计师/.test(text)) {
-    const input = parseEmbeddedJson(userContent(payload)) || {};
+    const input = (payload.messages || [])
+      .filter((message) => message?.role === 'user')
+      .map((message) => parseEmbeddedJson(message.content))
+      .find((value) => Array.isArray(value?.pages)) || {};
     const pages = Array.isArray(input.pages) ? input.pages : [];
     return { designScheme: {
-      schemaVersion: 3,
+      schemaVersion: 4,
+      paradigmId: 'index-atlas',
       contentReading: { subject: '固定测试内容', narrative: '按故事板顺序解释信息', readerFeeling: '清楚、可信、易读', visualAnchor: '绿色节点串联每页核心信息' },
       visualDirection: '以清晰的信息层级和克制的绿色强调呈现固定测试内容',
       palette: { background: '#102018', surface: '#1A2B23', text: '#F4F0E5', muted: '#B0C0B5', accent: '#39C98A', accentSecondary: '#D98253' },
@@ -213,7 +217,7 @@ function jsonForRequest(payload, visualState) {
       composition: { grid: '单列信息网格', density: '中等', rhythm: '标题后接短段和重点块', motif: '细线与绿色节点' },
       designLanguage: { colorLogic: '以深绿衬托绿色节点，保持正文对比清晰', shape: '规整直角卡片与圆形节点', surface: '深色纯色表面，不使用模拟纸纹', graphics: '用细线连接内容节点', imageTreatment: '以流程示意图替代外部照片' },
       sharedAnchors: [{ id: 'page-rail', description: '页眉中的章节标识' }, { id: 'series-dot', description: '每页的绿色小圆点' }],
-      pages: pages.map((page, index) => ({ page: index + 1, role: page.role, layout: page.role === 'cover' ? 'poster' : page.role === 'ending' ? 'minimal' : 'editorial', visualPurpose: `让读者理解第 ${index + 1} 页在整组中的作用`, focus: `突出第 ${index + 1} 页的核心信息`, treatment: '保留清晰标题、正文和页脚边界', composition: ['poster', 'editorial', 'timeline', 'minimal'][index], primaryVisual: ['cover-title', 'key-fact', 'process-rail', 'conclusion'][index], backgroundMode: 'solid', accentPlacement: ['center', 'top', 'left-rail', 'bottom'][index] })),
+      pages: pages.map((page, index) => ({ page: index + 1, role: page.role, layout: ['poster', 'data', 'checklist', 'comparison'][index], visualPurpose: `让读者理解第 ${index + 1} 页在整组中的作用`, focus: `突出第 ${index + 1} 页的核心信息`, treatment: '保留清晰标题、正文和页脚边界', composition: ['poster', 'editorial', 'timeline', 'minimal'][index], primaryVisual: ['cover-title', 'key-fact', 'process-rail', 'conclusion'][index], backgroundMode: 'solid', accentPlacement: ['center', 'top', 'left-rail', 'bottom'][index] })),
     } };
   }
   if (/为这篇公众号文章生成\s*5 个发布标题|生成 5 个发布标题|唯一推荐标题/.test(text)) return {

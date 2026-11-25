@@ -133,7 +133,7 @@ test('主链路 E2E：采集、文章与图文产物均可从真实 HTTP 服务�
     const browserFlow = await runBrowserMainlineFlow({ baseUrl: workbench.baseUrl, socialCandidateId: socialCandidate.id, factsText: '固定仓库分析 Fixture 工具', diagnosticsDir: path.join(root, 'diagnostics'), visualBaselinePath: path.join(projectRoot, 'test/e2e/fixtures/social-card-plan.sha256'), waitForJob: (jobId, options) => waitForJob(workbench.api, jobId, options), readServerLogs: () => workbench.logs.join('') });
     timings.browserSocialFlowMs = Math.round(performance.now() - browserFlowStartedAt);
     assert.ok(timings.browserSocialFlowMs <= PERFORMANCE_THRESHOLDS.browserSocialFlowMs, `图文浏览器主链路超出性能阈值：${timings.browserSocialFlowMs}ms > ${PERFORMANCE_THRESHOLDS.browserSocialFlowMs}ms`);
-    assert.deepEqual(browserFlow.actions, ['打开工具图文', '选择图文候选', '分析仓库', '生成故事板', '生成 AI 图文并等待交付']);
+    assert.deepEqual(browserFlow.actions, ['打开工具图文', '选择图文候选', '分析仓库', '生成故事板', '选择视觉范式', '生成 AI 图文并等待交付']);
     assert.match(browserFlow.deliveryMeta, /\d+ 张/);
     assert.match(browserFlow.visualSignature, /^[a-f0-9]{64}$/, '图文视觉回归未生成有效签名');
     assert.deepEqual(github.requests.sort(), ['/repos/example/e2e-tool', '/repos/example/e2e-tool/license', '/repos/example/e2e-tool/readme', '/repos/example/e2e-tool/releases/latest'].sort(), `仓库分析必须通过固定 GitHub API 完成：${github.requests.join(', ')}`);

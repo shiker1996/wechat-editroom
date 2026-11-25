@@ -124,7 +124,10 @@ export async function runBrowserMainlineFlow({ baseUrl, socialCandidateId, facts
     await page.click('#inspect-repository');
     await page.waitForFunction((expected) => document.querySelector('#repository-facts')?.innerText.includes(expected), { timeout: 30000 }, factsText);
     await page.click('#analyze-card-editorial');
-    await page.waitForFunction(() => document.querySelectorAll('#card-plan-preview [data-card-page]').length >= 4 && document.querySelector('#ai-beautify-social-card')?.disabled === false && !document.querySelector('#ai-beautify-social-card')?.hidden, { timeout: 120000 });
+    await page.waitForFunction(() => document.querySelectorAll('#card-plan-preview [data-card-page]').length >= 4, { timeout: 120000 });
+    await page.waitForFunction(() => document.querySelector('#social-paradigm-section:not([hidden]) [data-visual-paradigm]'), { timeout: 30000 });
+    await page.click('#social-paradigm-section [data-visual-paradigm]');
+    await page.waitForFunction(() => document.querySelector('#ai-beautify-social-card')?.disabled === false && !document.querySelector('#ai-beautify-social-card')?.hidden, { timeout: 30000 });
     await page.evaluate(async () => { if (document.fonts?.ready) await document.fonts.ready; });
     await delay(100);
     const preview = await page.$('#card-plan-preview');
@@ -209,7 +212,7 @@ export async function runBrowserMainlineFlow({ baseUrl, socialCandidateId, facts
     assert.deepEqual(pageErrors, [], `主链路浏览器操作出现页面异常：${pageErrors.join(' | ')}`);
     assert.deepEqual(failedRequests, [], `主链路浏览器操作关键资源加载失败：${failedRequests.join(' | ')}`);
     assert.deepEqual(badResponses, [], `主链路浏览器操作返回服务端错误：${badResponses.join(' | ')}`);
-    return { actions: ['打开工具图文', '选择图文候选', '分析仓库', '生成故事板', '生成 AI 图文并等待交付'], deliveryMeta: await page.$eval('#social-delivery-meta', (node) => node.textContent.trim()), generationJob, generationJobResult, visualSignature };
+    return { actions: ['打开工具图文', '选择图文候选', '分析仓库', '生成故事板', '选择视觉范式', '生成 AI 图文并等待交付'], deliveryMeta: await page.$eval('#social-delivery-meta', (node) => node.textContent.trim()), generationJob, generationJobResult, visualSignature };
   } catch (error) {
     if (diagnosticsDir) {
       try {
