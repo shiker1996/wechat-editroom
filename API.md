@@ -589,6 +589,12 @@ AI 规划配图占位
 ### PUT /api/candidates/:id/card-editorial
 保存图文编辑决策与完整故事板。
 
+### GET /api/candidates/:id/card-visual-paradigms
+根据当前故事板读取可选视觉范式、推荐顺序和已保存的选择；故事板变化后，旧选择标记为过期。
+
+### PUT /api/candidates/:id/card-visual-paradigm
+保存用户选择的视觉范式。正文为 `{ "paradigmId": "目录中的范式 ID" }`；选择绑定当前故事板指纹，后续故事板变化会使选择失效。
+
 ### PUT /api/candidates/:id/card-pages/:page
 只更新指定页的标题、正文和结构化内容块，不触发渲染。
 
