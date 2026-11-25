@@ -24,7 +24,7 @@ const defaults = {
   githubDiscovery:{enabled:true,createdWithinDays:30,activeSearchEnabled:true,activeWithinDays:30,activeMinStars:100,evergreenSearchEnabled:true,evergreenWithinDays:180,evergreenMinStars:500,minStars:1000,limit:30,cacheTtlMs:1800000,
     // AI 兴趣仓库发现：LLM 按账号内容支柱生成 Search 查询组（refreshDays 内复用缓存），
     // 搜到的仓库再经兴趣相关性打分过滤；任一环节失败自动退化为纯规则发现
-    aiQueries:{enabled:true,refreshDays:7,maxQueries:6,perQueryLimit:15,relevanceFilter:true,minInterestScore:6}},
+    aiQueries:{enabled:true,refreshDays:1,maxQueries:6,perQueryLimit:15,relevanceFilter:true,minInterestScore:6}},
   llm: {
     defaultProvider: 'deepseek',
     // 页面只配置三个模型档位；deterministic 为固定的程序化档位。

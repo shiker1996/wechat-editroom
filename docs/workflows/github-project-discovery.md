@@ -13,7 +13,7 @@
 | --- | --- | --- |
 | 采集批次 | `server/features/collection/application/collection-job-manager.mjs` | 生成/读取兴趣主题，调用统一采集器，执行筛选和历史覆盖过滤后入批次 |
 | GitHub 采集插件 | `plugins/github-discovery/adapter.mjs`、`plugins/github-discovery/collector.mjs` | 调用 GitHub Search、三类查询展开、仓库去重和命中元数据归并 |
-| 兴趣查询规划 | `server/features/collection/llm/repo-discovery.mjs`、`prompts/collection/repo-discovery-queries.md` | 只规划主题、关键词、场景、项目类型、用途和可选语言；按 7 天默认缓存 |
+| 兴趣查询规划 | `server/features/collection/llm/repo-discovery.mjs`、`prompts/collection/repo-discovery-queries.md` | 只规划主题、关键词、场景、项目类型、用途和可选语言；按 1 天默认缓存，生成时参考缓存中的最近 7 天查询历史避重 |
 
 ## 阶段与数据流
 

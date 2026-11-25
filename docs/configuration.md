@@ -65,7 +65,7 @@
 - `reddit`：Reddit 采集连接参数。`cdpUrl`、`navigationTimeoutMs`。具体分区来源在「采集源」页面维护（存入 `collection_sources` 表），不再由配置文件声明。
 - `rsshub`：RSSHub 采集连接参数。`baseUrl`、`maxAgeHours`（168，旧闻窗口）、`concurrency`（5）、`keepAlive`、`startupTimeoutMs`。具体路由 / 直连 Feed 来源在「采集源」页面维护（存入 `collection_sources` 表）。
 - `githubDiscovery`：GitHub 项目发现采集器参数。`createdWithinDays`（30，新项目窗口）、`minStars`（1000）、`limit`、`cacheTtlMs`；`activeSearchEnabled`、`activeWithinDays`（30）、`activeMinStars`（100）用于近期活跃项目；`evergreenSearchEnabled`、`evergreenWithinDays`（180）、`evergreenMinStars`（500）用于成熟项目。`github:search` 采集源实例在「采集源」页面维护（存入 `collection_sources` 表）。
-  - `aiQueries`：AI 兴趣仓库发现。`enabled`、`refreshDays`（7，查询组缓存天数，缓存文件 `data/repo-discovery-queries.json`，可手工编辑）、`maxQueries`（6）、`perQueryLimit`（15）、`relevanceFilter`、`minInterestScore`（6，兴趣分阈值）。LLM 按 `account-context.json` 内容支柱生成主题和关键词，每个主题使用 GitHub Search 分别发现新项目、活跃项目和成熟项目；三类的日期窗口与 Star 门槛沿用上方 GitHub 项目发现配置，查询组每周刷新、日期窗口按每次采集滚动。批次会按仓库去重并记录命中的主题/类型，完成相关度和已发布历史过滤后写入本次批次汇总。若查询规划失败则使用内置场景查询组；若兴趣过滤模型不可用则保留候选仓库。
+  - `aiQueries`：AI 兴趣仓库发现。`enabled`、`refreshDays`（1，查询组缓存天数，缓存文件 `data/repo-discovery-queries.json`，可手工编辑；缓存同时保留最近 7 天查询历史供规划避重）、`maxQueries`（6）、`perQueryLimit`（15）、`relevanceFilter`、`minInterestScore`（6，兴趣分阈值）。LLM 按 `account-context.json` 内容支柱生成主题和关键词，每天刷新并避开最近 7 天已用查询；每个主题使用 GitHub Search 分别发现新项目、活跃项目和成熟项目，三类的日期窗口与 Star 门槛沿用上方 GitHub 项目发现配置。批次会按仓库去重并记录命中的主题/类型，完成相关度和已发布历史过滤后写入本次批次汇总。若查询规划失败则使用内置场景查询组；若兴趣过滤模型不可用则保留候选仓库。
 - `llm`：模型网关运行参数。
   - `requestTimeoutMs`、`safetyReserveTokens`、`recentMessageCount`。
   - 模型提供商列表、默认模型、Base URL、协议、模型能力开关、吞吐参数和 API Key 均由配置中心管理：普通字段存入 `extension_settings`，默认模型存入 `system:llm-runtime`，API Key 存入隔离凭据 Profile。启动时会自动把旧 `config.local.json` 的 `llm.providers` / `llm.defaultProvider` 和 `.env` 中的模型密钥迁移，然后清理这些旧字段。
