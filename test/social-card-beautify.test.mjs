@@ -169,7 +169,7 @@ test('AI 请求只保留创作与安全校验所需字段', () => {
   assert.deepEqual(Object.keys(request), ['workspace', 'channelMode', 'requiredPageCount']);
   assert.equal(request.workspace.resourceId, 'project:current');
   assert.deepEqual(request.workspace.files, ['card-plan.json', 'ai-visual-card-plan.json', 'event-analysis.json', 'social-design-scheme.json', 'copy.txt']);
-  assert.match(request.workspace.instruction, /social-design-scheme\.json/);
+  assert.match(request.workspace.instruction, /workspace\.files.*全部文件/);
   assert.equal(request.channelMode, 'wechat');
   assert.equal('bodyClass' in request, false);
   assert.equal('componentVocabulary' in request, false);
@@ -185,8 +185,8 @@ test('AI 请求可以追加当前主题的 Markdown 设计规范', () => {
     workspaceFiles: ['fact-sheet.md', 'ai-visual-card-plan.json', 'social-theme-design-spec.md'],
   });
   assert.deepEqual(request.workspace.files, ['fact-sheet.md', 'ai-visual-card-plan.json', 'social-theme-design-spec.md']);
-  assert.match(request.workspace.instruction, /workspace\.files.*本次运行输入/);
-  assert.match(request.workspace.instruction, /内置参考注入/);
+  assert.match(request.workspace.instruction, /workspace\.files.*全部文件/);
+  assert.match(request.workspace.instruction, /技能中的布局指南/);
 });
 
 test('AI 视觉故事板只保留内容语义并移除预设视觉和程序化构图字段', () => {

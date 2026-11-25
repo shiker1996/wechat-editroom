@@ -27,7 +27,7 @@ const AI_VISUAL_SKILL_NAME = 'social-card-ai-visual-generator';
 const AI_INTERNAL_FIELDS = new Set(['source_refs', 'source_urls', 'source_url', 'fact_ids', 'evidence_refs']);
 const SOCIAL_CARD_PROJECT_READ_CAPABILITY = 'cap_filesystem_project_read';
 const AI_VISUAL_BUNDLED_REFERENCE_FILES = Object.freeze(['layout-guide.md', 'xhs-visual-contract.md', 'visual-component-mapping.md']);
-const AI_VISUAL_INPUT_INSTRUCTION = '必须先一次读取 workspace.files 中列出的全部本次运行输入，再开始视觉策划和写入。workspace.files 只包含 card-plan.json、ai-visual-card-plan.json、原始事实 JSON、本篇生成的 social-design-scheme.json 和 copy.txt；它们分别负责冻结故事板、视觉语义、事实核对、本篇统一 schema v4 视觉方案和只读文案。内外部 Agent 共用该方案结构与视觉兑现门禁。layout-guide.md、xhs-visual-contract.md、visual-component-mapping.md 已随本技能作为内置参考注入，不属于 workspace.files。用户已选择视觉范式，范式约束整组页面结构，不预设颜色、字体或视觉主题；设计方案独立决定本次色彩、字阶、节奏和逐页视觉处理。固定页面骨架、容量、标题/正文边界和交付校验属于硬约束，必须遵守。生成中必须调用本地浏览器视觉审计工具检查整组页面，并按报告修正后复审。不得展示路径、来源 ID、技术字段或规范说明，不得新增事实或改变标题。';
+const AI_VISUAL_INPUT_INSTRUCTION = '先读取 workspace.files 全部文件再策划和写入，按故事板、视觉语义、事实、schema v5 方案及只读文案正确使用输入。遵循技能中的布局指南、视觉契约和组件映射。用户选的是结构范式；视觉须依内容与方案设计，避免套用主题或空泛描述。逐项实现装饰并避开所有文字；对整组页面运行浏览器审计、按报告修复复审。遵守页面骨架、容量及标题/正文边界；不得泄露技术信息、增添事实或改标题。';
 const AI_VISUAL_THEME_LAYOUT_FIELDS = Object.freeze([
   'bodyPx', 'h1Px', 'h2Px', 'captionPx', 'codePx', 'lineHeight', 'letterSpacingEm',
   'articlePaddingPx', 'sectionPx', 'paragraphPx', 'cardGapPx',
@@ -298,7 +298,7 @@ function buildAiVisualGenerationBrief({ context, workspaceFiles, styleBrief = ''
 - 故事板页数基准：${pageCount}
 - 实际页数：必须为 ${pagePolicy.expectedPageCount} 页，与锁定故事板和统一视觉方案一致；需拆分或合并时先返回故事板阶段处理
 - 冻结输入文件：${fileList}
-  - 本次设计方案：social-design-scheme.json（统一 schema v4；必须遵循已选视觉范式；范式只定义结构，不定义视觉主题；逐页职责、标记和锚点通过共享兑现审计）
+  - 本次设计方案：social-design-scheme.json（统一 schema v5；必须遵循已选视觉范式；范式只定义结构，不定义视觉主题；逐页职责、标记、锚点和 2–4 个装饰组件通过共享兑现审计）
 - 页面结构与容量契约：${JSON.stringify(context?.structure || {})}
 - 额外设计意图：${brief || '无，按本次方案与参考排版规范执行。'}
 
@@ -760,7 +760,7 @@ export async function runSocialCardBeautify({ gateway, store, batchId, candidate
       || previousScheme.channelMode !== context.channelMode || previousScheme.input?.pageCount !== editorialPages.length) {
       throw new Error('AI 视觉恢复找不到与当前故事板匹配的设计方案，请重新生成图文');
     }
-    designScheme = previousScheme.schemaVersion === 4 && previousScheme.designScheme?.schemaVersion === 4 && previousScheme.designScheme?.paradigmId === paradigmSelection.id
+    designScheme = previousScheme.schemaVersion === 5 && previousScheme.designScheme?.schemaVersion === 5 && previousScheme.designScheme?.paradigmId === paradigmSelection.id
       ? { ...previousScheme, markdown: fs.existsSync(schemeMarkdownPath) ? fs.readFileSync(schemeMarkdownPath, 'utf8') : '' }
       : await createDesignScheme();
   } else {
@@ -848,7 +848,8 @@ export async function runSocialCardBeautify({ gateway, store, batchId, candidate
       const operation = String(documentArgs.operation || '');
       const audit = getCurrentVisualAudit();
       const scopedAuditFailure = audit?.valid === false && !audit.stale;
-      const allIssuesScoped = (audit?.issues || []).length > 0 && (audit?.issues || []).every((issue) => issue.code === 'CONTENT_OVERFLOW' && Number.isInteger(Number(issue.page)) && Number(issue.page) > 0);
+      const pageRepairIssueCodes = new Set(['CONTENT_OVERFLOW', 'CONTENT_NOT_CENTERED']);
+      const allIssuesScoped = (audit?.issues || []).length > 0 && (audit?.issues || []).every((issue) => pageRepairIssueCodes.has(issue.code) && Number.isInteger(Number(issue.page)) && Number(issue.page) > 0);
       const failedPages = allIssuesScoped ? [...new Set((audit?.issues || []).map((issue) => Number(issue.page)))] : [];
       if (operation === 'replace-page' && (!scopedAuditFailure || !failedPages.includes(Number(documentArgs.page)))) {
         throw new Error('replace-page 只能用于最近一次未通过的程序审计明确指出的页码；先审计当前完整 HTML');

@@ -4,6 +4,29 @@ export { validateSocialCardDesignScheme };
 const clean = (value) => String(value ?? '').trim();
 const normalized = (value) => clean(value).toLowerCase();
 
+function ornamentPlacementMatches(ornament, pageWidth, pageHeight) {
+  const rect = ornament?.rect || {};
+  const x = Number(rect.x) || 0;
+  const y = Number(rect.y) || 0;
+  const width = Number(rect.width) || 0;
+  const height = Number(rect.height) || 0;
+  if (!(pageWidth > 0 && pageHeight > 0 && width > 0 && height > 0)) return false;
+  const nearLeft = x <= pageWidth * 0.12;
+  const nearRight = x + width >= pageWidth * 0.88;
+  const nearTop = y <= pageHeight * 0.12;
+  const nearBottom = y + height >= pageHeight * 0.88;
+  switch (normalized(ornament?.placement)) {
+    case 'corner': return (nearLeft || nearRight) && (nearTop || nearBottom);
+    case 'edge': return nearLeft || nearRight || nearTop || nearBottom;
+    case 'header': return y + height <= pageHeight * 0.28;
+    case 'footer': return y >= pageHeight * 0.72;
+    case 'inline': return x >= pageWidth * 0.1 && x + width <= pageWidth * 0.9 && y >= pageHeight * 0.15 && y + height <= pageHeight * 0.85;
+    case 'behind-focus': return x >= pageWidth * 0.15 && x + width <= pageWidth * 0.85 && y >= pageHeight * 0.15 && y + height <= pageHeight * 0.85;
+    case 'margin': return nearLeft || nearRight || nearTop || nearBottom;
+    default: return false;
+  }
+}
+
 export function compareSocialCardDesignToMeasurements({ designScheme, storyboardPages = [], pageMeasurements = [], selectedPage = null, expectedParadigmId = '' } = {}) {
   const contract = validateSocialCardDesignScheme({ designScheme, storyboardPages, expectedParadigmId });
   const issues = [...contract.issues];
@@ -20,6 +43,7 @@ export function compareSocialCardDesignToMeasurements({ designScheme, storyboard
     const plan = planPages[index];
     const actual = measurement.pageStyle || {};
     const pageIssues = [];
+    let ornamentSummary = { planned: 0, rendered: 0, distinctRenderedKinds: 0 };
     if (!plan) {
       pageIssues.push({ code: 'DESIGN_PAGE_MISSING', page: measurement.page, message: `第 ${measurement.page} 页没有对应的视觉规划` });
     } else {
@@ -48,9 +72,51 @@ export function compareSocialCardDesignToMeasurements({ designScheme, storyboard
       for (const anchorId of anchors) {
         if (!presentAnchors.has(normalized(anchorId))) pageIssues.push({ code: 'SHARED_ANCHOR_MISSING', page: measurement.page, field: `sharedAnchors.${anchorId}`, message: `第 ${measurement.page} 页缺少共用视觉元素 ${anchorId}` });
       }
+      const plannedOrnaments = Array.isArray(plan.ornaments) ? plan.ornaments : [];
+      const renderedOrnaments = Array.isArray(actual.ornaments) ? actual.ornaments : [];
+      const visibleOrnaments = renderedOrnaments.filter((ornament) => ornament.visible === true);
+      const renderedKeys = new Set(visibleOrnaments.map((ornament) => `${normalized(ornament.kind)}|${normalized(ornament.placement)}`));
+      ornamentSummary = {
+        planned: plannedOrnaments.length,
+        rendered: visibleOrnaments.length,
+        distinctRenderedKinds: new Set(visibleOrnaments.map((ornament) => normalized(ornament.kind)).filter(Boolean)).size,
+      };
+      for (const ornament of plannedOrnaments) {
+        const key = `${normalized(ornament.kind)}|${normalized(ornament.placement)}`;
+        const rendered = visibleOrnaments.find((item) => `${normalized(item.kind)}|${normalized(item.placement)}` === key);
+        if (!renderedKeys.has(key)) pageIssues.push({
+          code: 'DECORATION_PLAN_NOT_RENDERED',
+          page: measurement.page,
+          field: `pages[${index}].ornaments.${ornament.kind}`,
+          expected: { kind: ornament.kind, placement: ornament.placement },
+          message: `第 ${measurement.page} 页方案中的 ${ornament.kind} 装饰未以可见的 data-ornament / data-ornament-placement 元素呈现`,
+        });
+        else if (!ornamentPlacementMatches(rendered, Number(actual.width) || 0, Number(actual.height) || 0)) pageIssues.push({
+          code: 'DECORATION_PLACEMENT_MISMATCH',
+          page: measurement.page,
+          field: `pages[${index}].ornaments.${ornament.kind}.placement`,
+          expected: ornament.placement,
+          actual: rendered.rect,
+          message: `第 ${measurement.page} 页 ${ornament.kind} 装饰的实际位置不符合 ${ornament.placement} 区域；请按页面边缘、页眉、页脚或正文带重新布置`,
+        });
+        else if (rendered.textOverlaps?.length) pageIssues.push({
+          code: 'DECORATION_TEXT_OVERLAP',
+          page: measurement.page,
+          field: `pages[${index}].ornaments.${ornament.kind}`,
+          actual: rendered.textOverlaps,
+          message: `第 ${measurement.page} 页 ${ornament.kind} 装饰与正文文字发生重叠；请移到留白区域，保证标题、正文和注释清晰可读`,
+        });
+      }
+      if (visibleOrnaments.length < 2 || ornamentSummary.distinctRenderedKinds < 2) pageIssues.push({
+        code: 'VISIBLE_DECORATION_COVERAGE_LOW',
+        page: measurement.page,
+        renderedCount: visibleOrnaments.length,
+        distinctKinds: ornamentSummary.distinctRenderedKinds,
+        message: `第 ${measurement.page} 页至少需要 2 种真实可见的装饰组件；装饰须落在页面范围内且不能只用隐藏标记代替`,
+      });
     }
     issues.push(...pageIssues);
-    pageResults.push({ page: measurement.page, valid: pageIssues.length === 0, issues: pageIssues });
+    pageResults.push({ page: measurement.page, valid: pageIssues.length === 0, ornaments: ornamentSummary, issues: pageIssues });
   }
 
   if (!selectedPage && pageMeasurements.length === planPages.length && pageMeasurements.length >= 5) {

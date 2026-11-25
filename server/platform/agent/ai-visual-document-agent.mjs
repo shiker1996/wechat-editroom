@@ -36,9 +36,10 @@ function visualAuditInstruction(auditCapability, report) {
   if (report.stale) return `HTML 在最近一次审计后又有修改；用 {"auditAttempt":${Number(report.auditAttempt || 1) + 1}} 重新调用 ${auditCapability} 审计当前完整文档，审计通过前不要 finish。`;
   if (report.valid) return `${auditCapability} 最近一次审计已通过；若此后未追加或改写 HTML，现在用 cap_filesystem_project_document_write 的 finish 完成文档。`;
   const issues = (report.issues || []).map((issue) => issue.message).filter(Boolean).join('；') || '页面尺寸检查未通过';
-  const allIssuesScoped = (report.issues || []).length > 0 && (report.issues || []).every((issue) => issue.code === 'CONTENT_OVERFLOW' && Number.isInteger(Number(issue.page)) && Number(issue.page) > 0);
+  const pageRepairIssueCodes = new Set(['CONTENT_OVERFLOW', 'CONTENT_NOT_CENTERED']);
+  const allIssuesScoped = (report.issues || []).length > 0 && (report.issues || []).every((issue) => pageRepairIssueCodes.has(issue.code) && Number.isInteger(Number(issue.page)) && Number(issue.page) > 0);
   const pages = [...new Set((report.issues || []).map((issue) => Number(issue.page)).filter((page) => Number.isInteger(page) && page > 0))];
-  if (allIssuesScoped && pages.length) return `最近一次 ${auditCapability} 审计未通过：${issues}。这些都是带页码的 CONTENT_OVERFLOW 问题，失败页码为 ${pages.join('、')}（按 .page 页面顺序编号）。只用 operation=replace-page 替换其中一页，page 填页码，content 只包含该页完整根元素 <section class="page" data-page="页码">…</section>；保留该页全部事实、原角色和顺序，并保留页面外的 CSS、主题和其他页原样不动。一次只修一页；改完后用 {"auditAttempt":${Number(report.auditAttempt || 1) + 1}} 重新审计整份 HTML，再处理仍失败的页。禁止 abort 或重写其他页面；只有写入器明确报告锚点或页面根结构无法局部替换时，才 abort 后完整重建。`;
+  if (allIssuesScoped && pages.length) return `最近一次 ${auditCapability} 审计未通过：${issues}。这些都是带页码的内容溢出或正文未居中问题，失败页码为 ${pages.join('、')}（按 .page 页面顺序编号）。只用 operation=replace-page 替换其中一页，page 填页码，content 只包含该页完整根元素 <section class="page" data-page="页码">…</section>；保留该页全部事实、原角色和顺序，并保留页面外的 CSS、主题和其他页原样不动。一次只修一页；改完后用 {"auditAttempt":${Number(report.auditAttempt || 1) + 1}} 重新审计整份 HTML，再处理仍失败的页。禁止 abort 或重写其他页面；只有写入器明确报告锚点或页面根结构无法局部替换时，才 abort 后完整重建。`;
   return `最近一次 ${auditCapability} 审计未通过：${issues}。报告没有可定位页码，无法安全局部修复；先 abort 当前文档，再 begin 并完整重写修正版，保留所有事实，之后用 {"auditAttempt":${Number(report.auditAttempt || 1) + 1}} 重新调用 ${auditCapability} 审计。`;
 }
 
@@ -67,7 +68,7 @@ function generationStageOverride({ requiredPageCount, pageCountTolerance, canvas
 - 当前只允许调用 cap_filesystem_project_read、cap_filesystem_project_document_write${auditCapability ? ` 和 ${auditCapability}` : ''}。
 - 只使用 cap_filesystem_project_document_write 写入文件；不要输出完整 HTML/CSS 到 final 或普通回答。
 - 写入目标固定为 project:current 下的 ${outputPath}；resourceId、path 和 sessionId 由服务端自动注入。
-- 第一次写入必须是 operation=begin；之后使用 operation=append 原样追加 HTML/CSS 分块。${auditCapability ? '每页必须按 DOM 顺序从 1 开始编号，并使用唯一边界注释 <!-- CARD-PAGE:N:START --> 与 <!-- CARD-PAGE:N:END --> 包住唯一根元素 <section class="page" data-page="N">…</section>。完整 HTML 草稿写完后、finish 前，必须审计全部页面；只有所有问题都是带页码的 CONTENT_OVERFLOW 时，才用 replace-page 一次修改其中一页并重新审计整份 HTML；其他样式/结构错误无法由单页内容安全定位，应 abort 后完整重建。写入器明确拒绝锚点结构时也可全量重建。' : '所有内容写完后使用 operation=finish。'} finish 成功后才能返回 final。
+- 第一次写入必须是 operation=begin；之后使用 operation=append 原样追加 HTML/CSS 分块。${auditCapability ? '每页必须按 DOM 顺序从 1 开始编号，并使用唯一边界注释 <!-- CARD-PAGE:N:START --> 与 <!-- CARD-PAGE:N:END --> 包住唯一根元素 <section class="page" data-page="N">…</section>。完整 HTML 草稿写完后、finish 前，必须审计全部页面；只有所有问题都是带页码的 CONTENT_OVERFLOW 或 CONTENT_NOT_CENTERED 时，才用 replace-page 一次修改其中一页并重新审计整份 HTML；其他样式/结构错误无法由单页内容安全定位，应 abort 后完整重建。写入器明确拒绝锚点结构时也可全量重建。' : '所有内容写完后使用 operation=finish。'} finish 成功后才能返回 final。
 - append 的 content 是原始 HTML/CSS，不要让程序替你拼接、改写、补 CSS、补结构或插入主题装饰。每块不超过 ${AI_VISUAL_DOCUMENT_CHUNK_MAX_CHARS} 字符，并为每块使用唯一 requestId；能填写时使用上一次结果中的 expectedRevision。
 - 不要假设程序会保留预置页面壳，最终文件必须由你的分块内容本身构成完整 HTML。
 - 写入前逐页估算正文、标题和页脚的垂直容量；如果内容放不进固定画布，优先在允许范围内拆成新页（最多比故事板多 ${tolerance} 页），完整保留事实、限制和观察点。不得靠删事实、压成不可读小字、遮挡或裁切来满足页数。
@@ -338,7 +339,8 @@ export async function runAiVisualDocumentAgent({
         }
         const operation = String(request.arguments?.operation || '');
         const currentAudit = getVisualAuditResult();
-        const allIssuesScoped = (currentAudit?.issues || []).length > 0 && (currentAudit?.issues || []).every((issue) => issue.code === 'CONTENT_OVERFLOW' && Number.isInteger(Number(issue.page)) && Number(issue.page) > 0);
+        const pageRepairIssueCodes = new Set(['CONTENT_OVERFLOW', 'CONTENT_NOT_CENTERED']);
+        const allIssuesScoped = (currentAudit?.issues || []).length > 0 && (currentAudit?.issues || []).every((issue) => pageRepairIssueCodes.has(issue.code) && Number.isInteger(Number(issue.page)) && Number(issue.page) > 0);
         const failedPages = allIssuesScoped ? [...new Set((currentAudit?.issues || []).map((issue) => Number(issue.page)))] : [];
         const pageRepairAllowed = operation === 'replace-page' && failedPages.includes(Number(request.arguments?.page));
         if (pageRepairAllowed) pageRepairAttempted = true;

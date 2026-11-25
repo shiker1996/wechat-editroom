@@ -189,6 +189,12 @@
 
 自定义组件（例如 `.card`）必须达到相同的结构语义；生成 Agent 仍要按上面的语义映射实现，并按 `layout-guide.md` 为不同文本职责选择字号和字重。
 
+## 3.3 逐页装饰组件契约
+
+`social-design-scheme.json` 的每页 `ornaments` 是必做清单，不是风格建议。每个装饰都要有独立且可见的 DOM 元素，并以 `data-ornament="<kind>"` 和 `data-ornament-placement="<placement>"` 对应方案；实际坐标必须落在所规划的页面区域。允许类型：`frame`、`stamp`、`index`、`rail`、`timecode`、`badge`、`annotation`、`perforation`、`tape`、`motif`；允许位置：`corner`、`edge`、`header`、`footer`、`inline`、`behind-focus`、`margin`。每页落实 2–4 个不同类型，至少 6×6px，并与页面边界有可见交集。不要仅给内容容器加属性；属性元素本身必须承担轮廓、纹样、贴签、轨道或类似的明确装饰职责。避免装饰承载未核实文字、遮挡正文或只靠低透明度伪元素。
+
+示例：`<span class="film-notch" data-ornament="perforation" data-ornament-placement="edge" aria-hidden="true"></span>`。每页具体用哪些形状、色彩、表面和大小仍由本篇方案决定；这个契约保证组件有可核对的实体，并不规定统一皮肤。装饰必须落在预留留白中，与标题、正文、注释、页码和来源文字保持净空；视觉审计按浏览器实际字行位置拒绝与可见文本相交的装饰。装饰层应置于内容层后方，避让规则与区域位置门禁同时生效。
+
 ## 4. 内容层组合基线
 
 普通内容页优先按照以下顺序组织，不要求每页机械重复，但不能退化成单一卡片堆叠：

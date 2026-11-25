@@ -12,7 +12,37 @@ export async function probeHtmlLayout({ html, width = 375, height = 667, pageSel
 
     const measurements = await page.evaluate(({ pageSelector, selectors, selectedPage, includeDesignMetrics }) => {
       const pages = [...document.querySelectorAll(pageSelector)];
-      return pages.map((pageElement, pageIndex) => ({
+      return pages.map((pageElement, pageIndex) => {
+        const pageRect = pageElement.getBoundingClientRect();
+        const textRuns = [];
+        const contentTextRuns = [];
+        const contentStackElement = pageElement.querySelector('.page-content-stack');
+        const walker = document.createTreeWalker(pageElement, NodeFilter.SHOW_TEXT);
+        while (walker.nextNode()) {
+          const textNode = walker.currentNode;
+          const text = String(textNode.textContent || '').replace(/\s+/g, ' ').trim();
+          if (!text || textNode.parentElement?.closest('[data-ornament],[aria-hidden="true"],script,style')) continue;
+          let hidden = false;
+          for (let element = textNode.parentElement; element && element !== pageElement; element = element.parentElement) {
+            const style = getComputedStyle(element);
+            if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) <= 0) { hidden = true; break; }
+          }
+          if (hidden) continue;
+          const range = document.createRange();
+          range.selectNodeContents(textNode);
+          for (const rect of range.getClientRects()) {
+            if (rect.width > 0 && rect.height > 0) {
+              const textRun = {
+                text: text.slice(0, 90),
+                rect: { x: rect.x - pageRect.x, y: rect.y - pageRect.y, width: rect.width, height: rect.height },
+              };
+              textRuns.push(textRun);
+              if (contentStackElement?.contains(textNode.parentElement)) contentTextRuns.push(textRun);
+            }
+          }
+          range.detach?.();
+        }
+        return ({
         page: pageIndex + 1,
         pageStyle: (() => {
           const style = getComputedStyle(pageElement);
@@ -38,6 +68,70 @@ export async function probeHtmlLayout({ html, width = 375, height = 667, pageSel
               const anchorRect = element.getBoundingClientRect();
               return anchorStyle.display !== 'none' && anchorStyle.visibility !== 'hidden' && Number(anchorStyle.opacity) > 0 && anchorRect.width > 0 && anchorRect.height > 0;
             }).map((element) => element.dataset.sharedAnchor || '').filter(Boolean),
+            ornaments: [...pageElement.querySelectorAll('[data-ornament]')].map((element) => {
+              const ornamentStyle = getComputedStyle(element);
+              const ornamentRect = element.getBoundingClientRect();
+              const left = Math.max(rect.left, ornamentRect.left);
+              const top = Math.max(rect.top, ornamentRect.top);
+              const right = Math.min(rect.right, ornamentRect.right);
+              const bottom = Math.min(rect.bottom, ornamentRect.bottom);
+              const hasOpaqueColor = (color) => color !== 'transparent' && !/^rgba\([^)]*,\s*0(?:\.0+)?\)$/i.test(color);
+              const hasVisibleBorder = ['Top', 'Right', 'Bottom', 'Left'].some((side) => Number.parseFloat(ornamentStyle[`border${side}Width`]) > 0
+                && ornamentStyle[`border${side}Style`] !== 'none'
+                && hasOpaqueColor(ornamentStyle[`border${side}Color`]));
+              const hasVisualTreatment = hasVisibleBorder
+                || hasOpaqueColor(ornamentStyle.backgroundColor)
+                || ornamentStyle.backgroundImage !== 'none'
+                || ornamentStyle.boxShadow !== 'none'
+                || Boolean((element.innerText || element.textContent || '').trim() && hasOpaqueColor(ornamentStyle.color));
+              const visible = ornamentStyle.display !== 'none'
+                && ornamentStyle.visibility !== 'hidden'
+                && Number(ornamentStyle.opacity) > 0
+                && hasVisualTreatment
+                && right - left >= 6
+                && bottom - top >= 6;
+              const relativeRect = { x: ornamentRect.x - rect.x, y: ornamentRect.y - rect.y, width: ornamentRect.width, height: ornamentRect.height };
+              const borderWidth = Math.max(0, ...['Top', 'Right', 'Bottom', 'Left'].map((side) => Number.parseFloat(ornamentStyle[`border${side}Width`]) || 0));
+              const frameLike = element.dataset.ornament === 'frame';
+              const textOverlaps = visible ? textRuns.filter((run) => {
+                const regions = frameLike && borderWidth > 0
+                  ? [
+                    { x: relativeRect.x, y: relativeRect.y, width: relativeRect.width, height: borderWidth + 2 },
+                    { x: relativeRect.x, y: relativeRect.y + relativeRect.height - borderWidth - 2, width: relativeRect.width, height: borderWidth + 2 },
+                    { x: relativeRect.x, y: relativeRect.y, width: borderWidth + 2, height: relativeRect.height },
+                    { x: relativeRect.x + relativeRect.width - borderWidth - 2, y: relativeRect.y, width: borderWidth + 2, height: relativeRect.height },
+                  ]
+                  : [relativeRect];
+                return regions.some((region) => Math.min(region.x + region.width, run.rect.x + run.rect.width) - Math.max(region.x, run.rect.x) > 1
+                  && Math.min(region.y + region.height, run.rect.y + run.rect.height) - Math.max(region.y, run.rect.y) > 1);
+              }).map((run) => run) : [];
+              return {
+                kind: element.dataset.ornament || '',
+                placement: element.dataset.ornamentPlacement || '',
+                visible,
+                hasVisualTreatment,
+                rect: relativeRect,
+                textOverlaps,
+              };
+            }),
+            contentAlignment: (() => {
+              const body = pageElement.querySelector('.page-body');
+              const bodyRect = body?.getBoundingClientRect();
+              if (!bodyRect || !contentTextRuns.length) return null;
+              const bodyStyle = getComputedStyle(body);
+              const availableTop = bodyRect.top + (Number.parseFloat(bodyStyle.paddingTop) || 0) - rect.top;
+              const availableBottom = bodyRect.bottom - (Number.parseFloat(bodyStyle.paddingBottom) || 0) - rect.top;
+              const contentTop = Math.min(...contentTextRuns.map((run) => run.rect.y));
+              const contentBottom = Math.max(...contentTextRuns.map((run) => run.rect.y + run.rect.height));
+              const bodyCenterY = (availableTop + availableBottom) / 2;
+              const contentCenterY = (contentTop + contentBottom) / 2;
+              return {
+                verticalCenterOffsetPx: Number((contentCenterY - bodyCenterY).toFixed(1)),
+                bodyCenterY: Number(bodyCenterY.toFixed(1)),
+                contentCenterY: Number(contentCenterY.toFixed(1)),
+                contentBounds: { top: Number(contentTop.toFixed(1)), bottom: Number(contentBottom.toFixed(1)) },
+              };
+            })(),
             listItemCount: Number(pageElement.dataset.listItemCount) || 0,
             innerDisplay: innerStyle?.display || null,
             innerHeight: inner?.getBoundingClientRect().height ?? null,
@@ -110,7 +204,8 @@ export async function probeHtmlLayout({ html, width = 375, height = 667, pageSel
             clientHeight: element.clientHeight,
           };
         })),
-      })).filter((item) => !selectedPage || item.page === selectedPage);
+      });
+      }).filter((item) => !selectedPage || item.page === selectedPage);
     }, { pageSelector, selectors, selectedPage: Number(selectedPage) || null, includeDesignMetrics });
 
     if (includeContactSheet && !selectedPage) {
