@@ -27,7 +27,7 @@ const AI_VISUAL_SKILL_NAME = 'social-card-ai-visual-generator';
 const AI_INTERNAL_FIELDS = new Set(['source_refs', 'source_urls', 'source_url', 'fact_ids', 'evidence_refs']);
 const SOCIAL_CARD_PROJECT_READ_CAPABILITY = 'cap_filesystem_project_read';
 const AI_VISUAL_BUNDLED_REFERENCE_FILES = Object.freeze(['layout-guide.md', 'xhs-visual-contract.md', 'visual-component-mapping.md']);
-const AI_VISUAL_INPUT_INSTRUCTION = '必须先一次读取 workspace.files 中列出的全部本次运行输入，再开始视觉策划和写入。workspace.files 只包含 card-plan.json、ai-visual-card-plan.json、原始事实 JSON、本篇生成的 social-design-scheme.json 和 copy.txt；它们分别负责冻结故事板、视觉语义、事实核对、本篇统一 schema v5 视觉方案和只读文案。内外部 Agent 共用该方案结构与视觉兑现门禁。layout-guide.md、xhs-visual-contract.md、visual-component-mapping.md 已随本技能作为内置参考注入，不属于 workspace.files。用户已选择的是页面结构范式，不是审美风格；颜色、字体、材质和图形必须来自本篇设计方案。先读懂内容，再把方案转成可见的层级、主视觉和页面节奏；不要用抽象风格词代替具体视觉对象，也不要默认复用主题皮肤或卡片壳。装饰需逐项兑现方案且与标题、正文、注释、页码、来源文字保持净空；按整组审计报告修复并复审。固定页面骨架、容量、标题/正文边界和交付校验属于硬约束，必须遵守。生成中必须调用本地浏览器视觉审计工具检查整组页面，并按报告修正后复审。不得展示路径、来源 ID、技术字段或规范说明，不得新增事实或改变标题。';
+const AI_VISUAL_INPUT_INSTRUCTION = '先读取 workspace.files 全部文件再策划和写入，按故事板、视觉语义、事实、schema v5 方案及只读文案正确使用输入。遵循技能中的布局指南、视觉契约和组件映射。用户选的是结构范式；视觉须依内容与方案设计，避免套用主题或空泛描述。逐项实现装饰并避开所有文字；对整组页面运行浏览器审计、按报告修复复审。遵守页面骨架、容量及标题/正文边界；不得泄露技术信息、增添事实或改标题。';
 const AI_VISUAL_THEME_LAYOUT_FIELDS = Object.freeze([
   'bodyPx', 'h1Px', 'h2Px', 'captionPx', 'codePx', 'lineHeight', 'letterSpacingEm',
   'articlePaddingPx', 'sectionPx', 'paragraphPx', 'cardGapPx',
