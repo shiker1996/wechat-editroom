@@ -827,7 +827,7 @@ export async function runResearchPipeline({ gateway, store, batchId, provider, w
   clusters = resolvedEvents.filter((event) => !skippedEventIds.has(event.event_id));
   writeFile(path.join(sourcesDir,'event-clusters.json'),JSON.stringify({ generated_at:new Date().toISOString(), total_articles:researchHotspots.length,excluded_stale_count:staleCount,excluded_skipped_event_count:skippedEvents.length,total_events:clusters.length,events:clusters },null,2));
   writeFile(path.join(workdir,'hotspot-overview.html'),overviewHtml(clusters));
-  // 阶段 0 按全局热度冻结总 Top-K；语义研判交给模型，题材只作标签。
+  // 阶段 0 按国内 2/3、海外 1/3 配额冻结 Top-K；海外候选先过国内相关度门槛。
   const configuredDiscussionResearchTopK = store.getExtensionSetting?.('system', 'workbench')?.value?.discussionResearchTopK;
   const discussionResearchTopK = resolveDiscussionResearchTopK(configuredDiscussionResearchTopK);
   const stage3CheckpointPath = path.join(sourcesDir, 'discussion-research-stage3-input.json');
@@ -884,7 +884,7 @@ export async function runResearchPipeline({ gateway, store, batchId, provider, w
     purpose: 'discussion-research',
     provider,
     phases: discussionResearchModelRequests,
-    note: '每个深研范围事件执行一次完整模型研判交互；范围包含全局热度 Top-K 与最多 5 条全量读者影响补入。模型在同一次交互中完成事件内和事件外研判并返回 Markdown。程序记录模型输入、原生联网调用和响应审计；正文抓取延迟到编辑室。第 3 阶段关闭联网，只读取研判报告。',
+    note: '每个深研范围事件执行一次完整模型研判交互；范围包含国内约 2/3、海外约 1/3 的热度配额（海外事件国内相关度至少 4 分），最多 5 条全量读者影响补入及 direct_practical 项目。模型在同一次交互中完成事件内和事件外研判并返回 Markdown。程序记录模型输入、原生联网调用和响应审计；正文抓取延迟到编辑室。第 3 阶段关闭联网，只读取研判报告。',
   }, null, 2));
   const recordDiscussionResearchModelRequest = (pass, request) => {
     const modelMessages = Array.isArray(request.messages?.messages) ? request.messages.messages : [];

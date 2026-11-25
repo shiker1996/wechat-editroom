@@ -20,7 +20,7 @@
 | --- | --- | --- | --- |
 | 热点打标 | 热点标题、摘要、来源与账号上下文 | marketScope 只分国内/国外（全球归国外）；chinaRelevance 与 relevanceReason 单独记录国内影响及可核验传导路径；连同分类、可选 domesticSubject、preScores 写入热点 raw_json.aiTags | skills/hotspot-tagging/SKILL.md；server/platform/http/routes/task-routes.mjs；server/platform/persistence/repositories/hotspot-repository.mjs |
 | 事件热榜 | 已打标热点与事件历史 | T/eventValue、chinaRelevanceScore（审计字段）和排序；chinaRelevanceScore 不参与 T | server/features/research/domain/event-heat-ranking.mjs |
-| 事件候选池 | 稳定事件、事件热榜 | 按 T 选核心/黑马/候补；P 只影响同分优先级；含 developerImpact 保护位 | server/features/research/application/research-pipeline.mjs |
+| 事件候选池 | 稳定事件、事件热榜 | 文章深研 Top-K 按国内约 2/3、海外约 1/3 配额分选；海外事件需 chinaRelevance≥4 才可进入海外配额或读者影响补入，未达门槛的空位由合格候选按热度补足；另有 direct_practical 项目名额。最终文章核心/黑马/候补仍按研判评分选取 | server/features/research/domain/discussion-research.mjs；server/features/research/application/research-pipeline.mjs |
 | 研判依据门禁 | 入池事件、事件事实卡、研判素材与信号 | 无有效依据的候选不进入脑暴 | server/features/research/application/research-pipeline.mjs |
 | 脑暴与综合 | 研判依据、候选卡 | 生成 H/B 原始子项；综合阶段可校正 raw readerStakeScore 和饱和扣分 | skills/hotspot-brainstorm/SKILL.md；skills/hotspot-synthesis/SKILL.md；server/features/research/application/research/editorial-exploration.mjs |
 | 最终评分 | H/B/P/T/J/S/D、chinaRelevance、materialStrategy、materialFit 与账号公式配置 | resolveScoring 解析和校验 `scoring.formula`；computeFinalScore 对所有候选统一计算 A、DOM、M、C、F 并排序。未分类或缺少 M 时 M 取中性 50；T 缺失时 F 为 null；DOM 缺失时对其余有效分项归一化 | server/shared/domain/topic-scoring.mjs；server/features/research/application/research-pipeline.mjs |
@@ -33,6 +33,7 @@
 - `GET /api/batches/:id/selection-trace?track=all|article|social_cards&hotspotId=<id>` 将热点与事件、预选、深研覆盖、评分榜单和持久化候选产物关联，返回每个阶段的状态与原因。`not_reached` 表示前置条件未满足或阶段未运行，`not_selected` 表示执行过筛选但未入选；最终接口显示赛道自己的入池状态与最后可归因原因。
   - 组合候选的持久化成员热点会逐一关联到候选，因此成员热点的轨迹会显示已入池。若评分产物声明入选、却未匹配到持久化候选，最终阶段标记为 `unreported`（界面显示“待核对”），避免把评分记录误报为实际入池。
 - 当前轨迹从批次已持久化产物重建，不新增数据库列或迁移。产物缺失时会明确显示未运行/未记录，不能据此推断为已筛选淘汰。
+- 深研范围 Top-K 不再按国内外混排：默认国内目标约占 2/3、海外补充约占 1/3；海外事件只有 chinaRelevance≥4 才可占海外名额或进入读者影响补入。明确不可用且没有其他已核实国内传导的海外产品按标签规则应为 0–3 分，因此被排除。某一侧合格候选不足时，空位按剩余合格候选热度补齐。全量读者影响补入仍独立最多 5 条，因而最终深研范围中读者补入可使实际占比偏离目标配额。该配额只影响进入深研的机会，不给最终文章池强制国内/海外比例。
 - 内部与外部 Agent 分阶段路径共用讨论深研与评分 pipeline，因此适用同一分流与轨迹；外部 Agent 直接提交评分不运行这套阶段 pipeline，其最终候选状态可显示，但没有发生的上游阶段会标记为未执行。
 
 实现入口：`server/features/research/application/batch-selection-trace.mjs`、`server/features/research/domain/discussion-research.mjs`、`server/features/research/application/research-pipeline.mjs`、`server/platform/http/routes/batch-routes.mjs`、`scripts/agent-integration/tools.mjs`。
