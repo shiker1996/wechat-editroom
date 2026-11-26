@@ -4,6 +4,23 @@ export { validateSocialCardDesignScheme };
 const clean = (value) => String(value ?? '').trim();
 const normalized = (value) => clean(value).toLowerCase();
 
+function placementGuide(placement, pageWidth, pageHeight) {
+  const x15 = Math.round(pageWidth * 0.15);
+  const x85 = Math.round(pageWidth * 0.85);
+  const y15 = Math.round(pageHeight * 0.15);
+  const y85 = Math.round(pageHeight * 0.85);
+  switch (normalized(placement)) {
+    case 'behind-focus': return `整块元素须位于画布中心区：左边缘不小于 ${x15}px、右边缘不大于 ${x85}px、上边缘不小于 ${y15}px、下边缘不大于 ${y85}px`;
+    case 'inline': return '整块元素须位于正文带：左右边缘在画布宽度 10%–90% 内，上下边缘在画布高度 15%–85% 内';
+    case 'header': return `整块元素须位于画布顶部 28% 范围内（底边不超过 ${Math.round(pageHeight * 0.28)}px）`;
+    case 'footer': return `整块元素须位于画布底部 28% 范围内（顶边不低于 ${Math.round(pageHeight * 0.72)}px）`;
+    case 'corner': return '元素须靠近画布任一角落，距对应两条边均不超过画布尺寸的 12%';
+    case 'edge':
+    case 'margin': return '元素须靠近画布任一边缘，距对应边不超过画布尺寸的 12%';
+    default: return '';
+  }
+}
+
 function ornamentPlacementMatches(ornament, pageWidth, pageHeight) {
   const rect = ornament?.rect || {};
   const x = Number(rect.x) || 0;
@@ -29,6 +46,7 @@ function ornamentPlacementMatches(ornament, pageWidth, pageHeight) {
 
 export function compareSocialCardDesignToMeasurements({ designScheme, storyboardPages = [], pageMeasurements = [], selectedPage = null, expectedParadigmId = '' } = {}) {
   const contract = validateSocialCardDesignScheme({ designScheme, storyboardPages, expectedParadigmId });
+  contract.warnings ||= [];
   const issues = [...contract.issues];
   const anchors = (Array.isArray(designScheme?.sharedAnchors) ? designScheme.sharedAnchors : []).map((anchor) => clean(anchor?.id)).filter(Boolean);
   const planPages = Array.isArray(designScheme?.pages) ? designScheme.pages : [];
@@ -97,7 +115,7 @@ export function compareSocialCardDesignToMeasurements({ designScheme, storyboard
           field: `pages[${index}].ornaments.${ornament.kind}.placement`,
           expected: ornament.placement,
           actual: rendered.rect,
-          message: `第 ${measurement.page} 页 ${ornament.kind} 装饰的实际位置不符合 ${ornament.placement} 区域；请按页面边缘、页眉、页脚或正文带重新布置`,
+          message: `第 ${measurement.page} 页 ${ornament.kind} 装饰实际坐标 x=${Math.round(Number(rendered.rect?.x) || 0)}、y=${Math.round(Number(rendered.rect?.y) || 0)}、宽=${Math.round(Number(rendered.rect?.width) || 0)}、高=${Math.round(Number(rendered.rect?.height) || 0)}，不符合 ${ornament.placement} 区域；${placementGuide(ornament.placement, Number(actual.width) || 0, Number(actual.height) || 0)}`,
         });
         else if (rendered.textOverlaps?.length) pageIssues.push({
           code: 'DECORATION_TEXT_OVERLAP',
@@ -107,13 +125,6 @@ export function compareSocialCardDesignToMeasurements({ designScheme, storyboard
           message: `第 ${measurement.page} 页 ${ornament.kind} 装饰与正文文字发生重叠；请移到留白区域，保证标题、正文和注释清晰可读`,
         });
       }
-      if (visibleOrnaments.length < 2 || ornamentSummary.distinctRenderedKinds < 2) pageIssues.push({
-        code: 'VISIBLE_DECORATION_COVERAGE_LOW',
-        page: measurement.page,
-        renderedCount: visibleOrnaments.length,
-        distinctKinds: ornamentSummary.distinctRenderedKinds,
-        message: `第 ${measurement.page} 页至少需要 2 种真实可见的装饰组件；装饰须落在页面范围内且不能只用隐藏标记代替`,
-      });
     }
     issues.push(...pageIssues);
     pageResults.push({ page: measurement.page, valid: pageIssues.length === 0, ornaments: ornamentSummary, issues: pageIssues });
@@ -123,7 +134,7 @@ export function compareSocialCardDesignToMeasurements({ designScheme, storyboard
     const backgrounds = pageMeasurements.map(({ pageStyle = {} }) => `${normalized(pageStyle.backgroundColor)}|${normalized(pageStyle.backgroundImage)}`);
     const renderedBackgroundCount = new Set(backgrounds).size;
     if (renderedBackgroundCount < 2) {
-      issues.push({ code: 'RENDERED_BACKGROUND_DIVERSITY_LOW', field: 'pages', message: 'HTML 实际渲染的页面背景/表面少于 2 种；仅在方案里标不同背景不算落实' });
+      contract.warnings.push({ code: 'RENDERED_BACKGROUND_DIVERSITY_LOW', field: 'pages', message: 'HTML 实际渲染的页面背景/表面少于 2 种；仅在方案里标不同背景不算落实。此项为设计建议，不阻断交付' });
     }
     contract.diversity.renderedBackgrounds = renderedBackgroundCount;
   }
@@ -131,6 +142,7 @@ export function compareSocialCardDesignToMeasurements({ designScheme, storyboard
   return {
     valid: issues.length === 0,
     issues,
+    warnings: contract.warnings,
     diversity: contract.diversity,
     pages: pageResults,
     checkedPage: selectedPage || null,

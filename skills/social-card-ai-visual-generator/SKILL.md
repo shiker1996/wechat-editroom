@@ -48,7 +48,7 @@ Pipeline 每次运行只把候选专属资料放入 `render_request.workspace.fi
 | `references/layout-guide.md` | 375×667 画布、尺寸、安全区、字号、间距、对齐和视觉占用目标 |
 | `references/visual-component-mapping.md` | 事实语义到主组件和辅助组件的选择建议 |
 
-文件缺失或内容冲突时，以 `card-plan.json` 的页序、页面职责和事实为准；`social-design-scheme.json` 负责本次视觉方向，不能改动故事板内容。内外部路径使用同一份 schema v5：除 `contentReading`、`visualDirection`、`palette`、结构化 `typography`、组级 `composition`、`designLanguage`、`sharedAnchors` 和逐页 `pages` 外，还必须包含用户选择的 `paradigmId`。范式只约束页面结构和允许版式，不预设配色、字体和视觉主题。逐页方案包含 `visualPurpose`、`layout`、`focus`、`treatment`、四种视觉兑现标记，以及 2–4 个不同类型的 `ornaments`（`kind`、`placement`、`purpose`）；实现时必须严格遵循范式并保留故事板页数、顺序、归一职责和标记值。不得添加空白页、重复文案或虚构事实，不得从候选目录外读取文件。内置参考只指导实现，不能变成页面正文。不要通过 `cap_filesystem_project_read` 重复读取内置参考。
+文件缺失或内容冲突时，以 `card-plan.json` 的页序、页面职责和事实为准；`social-design-scheme.json` 负责本次视觉方向，不能改动故事板内容。内外部路径使用同一份 schema v5：除 `contentReading`、`visualDirection`、`palette`、结构化 `typography`、组级 `composition`、`designLanguage`、`sharedAnchors` 和逐页 `pages` 外，还必须包含用户选择的 `paradigmId`。范式只约束页面结构和允许版式，不预设配色、字体和视觉主题。逐页可选包含 `ornaments` 意图（`kind`、`placement`、`purpose`）；缺少装饰规划不阻止方案或生成。若提供装饰意图，浏览器审计会检查实际页面，并将未呈现、位置错误或遮挡文字的问题交给该页 `replace-page` 修复。不得添加空白页、重复文案或虚构事实，不得从候选目录外读取文件。内置参考只指导实现，不能变成页面正文。不要通过 `cap_filesystem_project_read` 重复读取内置参考。
 
 视觉方案以 `contentReading` 为内容依据、以 `designLanguage` 为元素选择。先识别本篇具体主题对象、读者痛点、叙事转折和最值得看见的证据/结果；在内部提出 2–3 个彼此有明显差异、且能由本篇事实解释的视觉概念，比较贴合度、记忆点和可执行性，再选一个作为本篇 art direction。将选中的概念落实为可画出的主视觉母题、视觉隐喻、色彩依据、形状/材质和页面节奏，避免只写“科技感、简洁、高级、编辑风”等抽象标签。`contentType`（工具/事件/自定义）只是流程元数据，不代表视觉风格；不得因同属一种内容类型而重复套用同一配色、卡片皮肤或装饰。每页的 layout、focus、treatment 决定局部表达；主视觉必须表达本页事实或关系，背景和构图变化要服务叙事，不能为了满足多样性检查而机械换色。
 
@@ -76,7 +76,7 @@ Pipeline 每次运行只把候选专属资料放入 `render_request.workspace.fi
 
 以上是整组的最低视觉振幅，不是固定页面模板。若某种组件不适合当前事实，换用同等视觉强度且语义匹配的视觉组件；不得为了满足数量虚构内容。
 
-每个 `.page` 根元素还必须包含与 `social-design-scheme.json` 对应页完全一致的 `data-page`、`data-page-role`、`data-visual-composition`、`data-primary-visual`、`data-background-mode`、`data-accent-placement`；每个 `sharedAnchors` ID 必须在每页对应一个真实可见的 `data-shared-anchor` 元素。每页 `ornaments` 清单中的每项都要由一个真实可见、至少 6×6px 且位于画布内的 HTML 元素兑现：`data-ornament="kind"`、`data-ornament-placement="placement"` 必须与方案完全一致，实际坐标也要落在对应的角落、边缘、页眉、页脚、正文带或边距区域；每页至少有两种可见装饰。装饰可以是边框角标、印章、编号、轨道、时间码、徽记、注释线、胶片孔、贴纸或主题纹样；实际类型和样式由本篇方案决定，不得把同一套装饰皮肤套给所有内容。审计会逐项检查方案、可见元素和实际位置，不能只通过设置标记、隐藏元素或伪元素伪造视觉实现。
+每个 `.page` 根元素还必须包含与 `social-design-scheme.json` 对应页完全一致的 `data-page`、`data-page-role`、`data-visual-composition`、`data-primary-visual`、`data-background-mode`、`data-accent-placement`；每个 `sharedAnchors` ID 必须在每页对应一个真实可见的 `data-shared-anchor` 元素。若该页方案包含 `ornaments`，每项都应由真实可见的 HTML 元素兑现，并匹配 `data-ornament="kind"`、`data-ornament-placement="placement"` 及规划区域。审计发现未呈现、位置错误或遮挡文字时，只用 `replace-page` 修复对应页，再审计整组；不要求固定装饰数量，也不得为装饰全量重写文档。
 
 ## 内容区视觉占用
 
@@ -125,7 +125,7 @@ begin → append（多个原始 HTML/CSS 分块）→ 整份浏览器逐页审�
 <!-- CARD-PAGE:1:END -->
 ```
 
-完整 HTML 草稿写完后、`finish` 前必须调用 `cap_social_card_visual_audit` 审计全部页面，首次 `auditAttempt` 为 1。只有报告中的所有问题都是带页码的 `CONTENT_OVERFLOW` 或 `CONTENT_NOT_CENTERED` 时，才一次使用 `replace-page` 修复一页：`page` 填审计返回的页码，`content` 只放该页完整 `.page` 根元素，不带锚点；其他页面、全局 CSS、事实与页序保持不变。替换后对整份 HTML 递增 `auditAttempt` 重新审计；若仍有问题，继续按页修复。出现样式/结构错误或报告没有可定位页码时，使用 `abort` 并完整重建；写入器明确拒绝锚点/页面根结构、确实无法局部替换时也可全量重建。只有审计通过、所有页面和闭合标签写完并成功 `finish` 后，才能返回：
+完整 HTML 草稿写完后、`finish` 前必须调用 `cap_social_card_visual_audit` 审计全部页面，首次 `auditAttempt` 为 1。工具返回 `status=ok` 仅表示审计成功执行，必须继续读取报告中的 `valid` 和 `issues`；`valid=false` 是正常审计结果，不代表工具调用失败。不得对未修改的同一 HTML 重复相同 `auditAttempt`。带页码的内容溢出、居中、密度、列表、装饰及页面方案标记问题都应使用 `replace-page` 逐页修复：`page` 填审计返回的页码，`content` 只放该页完整 `.page` 根元素，不带锚点；其他页面、全局 CSS、事实与页序保持不变。位置问题按审计返回的实际坐标和期望区域调整；同一页完全相同的替换内容不得重复提交。替换后对整份 HTML 递增 `auditAttempt` 重新审计。只有问题无法定位到页，或页面锚点/根结构损坏时，才 `abort` 并完整重建。装饰方案是可选意图，不要求固定数量，也不得仅因装饰不足而重建整份文档。只有审计通过、所有页面和闭合标签写完并成功 `finish` 后，才能返回：
 
 ```json
 {"type":"final","assistantReply":"已完成 AI 视觉 HTML 生成"}

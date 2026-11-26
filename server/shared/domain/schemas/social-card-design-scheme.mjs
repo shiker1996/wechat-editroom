@@ -65,19 +65,19 @@ export const SOCIAL_CARD_DESIGN_SCHEME_SCHEMA = objectSchema({
       backgroundMode: markerSchema('页面背景/表面标记。'),
       accentPlacement: markerSchema('强调元素位置标记。'),
       ornaments: {
-        type: 'array', minItems: 2, maxItems: 4,
-        description: '本页必须实际绘制的装饰清单；每页选择 2–4 种不同类型，避免只靠提示词描述。装饰须放在预留留白中，不得与标题、正文、注释、页码或来源文字相交。',
+        type: 'array', maxItems: 4,
+        description: '可选的本页装饰意图清单；若提供，浏览器审计会检查其是否可见、位置是否匹配且不遮挡文字。未提供装饰意图不阻止方案或生成流程。',
         items: objectSchema({
           kind: { type: 'string', enum: SOCIAL_CARD_ORNAMENT_KINDS, description: '复用装饰组件类型。' },
           placement: { type: 'string', enum: SOCIAL_CARD_ORNAMENT_PLACEMENTS, description: '组件实际所在区域。' },
           purpose: textSchema('装饰如何呼应本页对象或层级，不能新增事实。', 60),
         }),
       },
-    }),
+    }, ['page', 'role', 'visualPurpose', 'layout', 'focus', 'treatment', 'composition', 'primaryVisual', 'backgroundMode', 'accentPlacement']),
   },
 });
 
 export const SOCIAL_CARD_DESIGN_SCHEME_TOOL_SCHEMA = {
   ...SOCIAL_CARD_DESIGN_SCHEME_SCHEMA,
-  description: '公众号/小红书图文统一视觉方案 v5。内外部生成路径共用用户选择的 paradigmId、内容判断、视觉令牌、系列锚点、分页字段和逐页 ornaments。每个 ornament 都须由页面内可见的 data-ornament 与 data-ornament-placement 元素兑现，并与标题、正文、注释、页码或来源文字保持间距。HTML 每页须以 data-page、data-page-role、data-visual-composition、data-primary-visual、data-background-mode、data-accent-placement 回填同值，并在每页放置全部 data-shared-anchor 标记。',
+  description: '公众号/小红书图文统一视觉方案 v5。内外部生成路径共用用户选择的 paradigmId、内容判断、视觉令牌、系列锚点、分页字段和可选逐页 ornaments。若方案提供装饰意图，浏览器审计会检查可见呈现、位置和文字避让，并允许按失败页修复；缺少装饰规划本身不阻止生成。HTML 每页须以 data-page、data-page-role、data-visual-composition、data-primary-visual、data-background-mode、data-accent-placement 回填同值，并在每页放置全部 data-shared-anchor 标记。',
 };

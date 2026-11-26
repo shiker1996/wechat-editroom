@@ -84,12 +84,18 @@ export async function probeHtmlLayout({ html, width = 375, height = 667, pageSel
                 || ornamentStyle.backgroundImage !== 'none'
                 || ornamentStyle.boxShadow !== 'none'
                 || Boolean((element.innerText || element.textContent || '').trim() && hasOpaqueColor(ornamentStyle.color));
+              const clippedWidth = right - left;
+              const clippedHeight = bottom - top;
+              // Rails and rules are intentionally narrow in one dimension; requiring
+              // 6px on both axes incorrectly marks visible line ornaments as missing.
+              const visibleLinearOrnament = Math.min(clippedWidth, clippedHeight) >= 2
+                && Math.max(clippedWidth, clippedHeight) >= 24;
+              const visibleBlockOrnament = clippedWidth >= 6 && clippedHeight >= 6;
               const visible = ornamentStyle.display !== 'none'
                 && ornamentStyle.visibility !== 'hidden'
                 && Number(ornamentStyle.opacity) > 0
                 && hasVisualTreatment
-                && right - left >= 6
-                && bottom - top >= 6;
+                && (visibleBlockOrnament || visibleLinearOrnament);
               const relativeRect = { x: ornamentRect.x - rect.x, y: ornamentRect.y - rect.y, width: ornamentRect.width, height: ornamentRect.height };
               const borderWidth = Math.max(0, ...['Top', 'Right', 'Bottom', 'Left'].map((side) => Number.parseFloat(ornamentStyle[`border${side}Width`]) || 0));
               const frameLike = element.dataset.ornament === 'frame';

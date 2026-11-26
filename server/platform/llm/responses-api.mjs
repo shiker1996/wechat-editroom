@@ -19,30 +19,59 @@ function messageContent(message) {
 // 而是 function_call/function_call_output input item。普通消息仍保持 message item。
 export function wireResponsesInput(messages = [], { nativeTools = false } = {}) {
   const output = [];
-  for (const message of messages) {
+  const source = Array.isArray(messages) ? messages : [];
+  // DeepSeek Responses requires each function_call to be immediately followed
+  // by its matching function_call_output. History compaction can insert a
+  // system notice between the two, so collect the outputs by call_id first and
+  // emit each call/result pair together at the original assistant turn.
+  const toolOutputs = new Map();
+  if (nativeTools) {
+    for (const message of source) {
+      if (message?.role === 'tool' && message.tool_call_id) {
+        const id = String(message.tool_call_id);
+        const values = toolOutputs.get(id) || [];
+        values.push(message);
+        toolOutputs.set(id, values);
+      }
+    }
+  }
+  const emittedToolOutputs = new Set();
+  for (const message of source) {
     const { protected: _protected, tool_calls: toolCalls, tool_call_id: toolCallId, ...rest } = message || {};
     if (rest.role === 'tool' && nativeTools && toolCallId) {
-      output.push({ type: 'function_call_output', call_id: String(toolCallId), output: String(rest.content ?? '') });
+      // Outputs are emitted beside their call below.
       continue;
     }
     if (rest.role === 'assistant' && nativeTools && Array.isArray(toolCalls) && toolCalls.length) {
       if (String(rest.content ?? '').trim()) output.push({ type: 'message', role: 'assistant', content: messageContent(rest) });
       for (const call of toolCalls) {
         const functionCall = call?.function || call || {};
+        const callId = String(call?.id || call?.call_id || `call_${output.length + 1}`);
         output.push({
           type: 'function_call',
-          call_id: String(call?.id || call?.call_id || `call_${output.length + 1}`),
+          call_id: callId,
           name: String(functionCall.name || ''),
           arguments: typeof functionCall.arguments === 'string' ? functionCall.arguments : JSON.stringify(functionCall.arguments || {}),
         });
+        for (const result of toolOutputs.get(callId) || []) {
+          output.push({ type: 'function_call_output', call_id: callId, output: String(result.content ?? '') });
+          emittedToolOutputs.add(result);
+        }
       }
       continue;
     }
+    if (rest.role === 'tool' && nativeTools && toolCallId) continue;
     if (rest.role === 'tool') {
       output.push({ role: 'user', content: String(rest.content ?? '') });
       continue;
     }
     output.push({ role: rest.role, content: messageContent(rest) });
+  }
+  // Preserve legacy conversion for unmatched tool results rather than silently
+  // dropping them; valid native histories should have emitted every result.
+  for (const message of source) {
+    if (message?.role !== 'tool' || !nativeTools || !message.tool_call_id || emittedToolOutputs.has(message)) continue;
+    output.push({ type: 'function_call_output', call_id: String(message.tool_call_id), output: String(message.content ?? '') });
   }
   return output;
 }

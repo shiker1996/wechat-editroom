@@ -8,6 +8,27 @@ export const AI_VISUAL_DOCUMENT_WRITE = 'cap_filesystem_project_document_write';
 export const AI_VISUAL_DOCUMENT_AUDIT = 'cap_social_card_visual_audit';
 export const AI_VISUAL_DOCUMENT_CHUNK_MAX_CHARS = 8_000;
 export const AI_VISUAL_AGENT_OUTPUT_MAX_TOKENS = 5_000;
+export const AI_VISUAL_PAGE_REPAIR_ISSUE_CODES = new Set([
+  'CONTENT_OVERFLOW', 'CONTENT_NOT_CENTERED', 'CONTENT_DENSITY_LOW',
+  'LIST_ITEMS_UNMEASURED', 'LIST_ITEMS_TOO_DENSE', 'PAGE_STYLE_DEGRADED',
+  'DECORATION_PLAN_NOT_RENDERED', 'DECORATION_PLACEMENT_MISMATCH', 'DECORATION_TEXT_OVERLAP',
+  'DESIGN_PAGE_MISSING', 'DESIGN_PAGE_MARKER_MISMATCH', 'SHARED_ANCHOR_MISSING',
+]);
+
+function nativeRequestId(call, index = 0) {
+  const value = String(call?.id || `call_${index + 1}`).replace(/[^A-Za-z0-9_-]/g, '_');
+  return `tr_native_${value}_${index + 1}`.slice(0, 63);
+}
+
+function compactAuditDetail(value) {
+  if (typeof value === 'string') return value.slice(0, 120);
+  if (typeof value === 'number' || typeof value === 'boolean') return value;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const allowed = ['kind', 'placement', 'x', 'y', 'width', 'height'];
+  const compact = Object.fromEntries(Object.entries(value).filter(([key, item]) => allowed.includes(key)
+    && (typeof item === 'string' || Number.isFinite(item))));
+  return Object.keys(compact).length ? compact : undefined;
+}
 
 function countAiVisualPages(html) {
   return [...String(html || '').matchAll(/\bclass\s*=\s*(["'])(.*?)\1/gi)]
@@ -32,15 +53,24 @@ function readRequest(requestId, workspaceFiles, reason = '读取 AI 视觉生成
 
 function visualAuditInstruction(auditCapability, report) {
   if (!auditCapability) return '';
-  if (!report) return `完整 HTML 草稿已写完后，必须先调用 ${auditCapability}，参数为 {"auditAttempt":1}，审计全部页面；审计通过前不要 finish。`;
-  if (report.stale) return `HTML 在最近一次审计后又有修改；用 {"auditAttempt":${Number(report.auditAttempt || 1) + 1}} 重新调用 ${auditCapability} 审计当前完整文档，审计通过前不要 finish。`;
-  if (report.valid) return `${auditCapability} 最近一次审计已通过；若此后未追加或改写 HTML，现在用 cap_filesystem_project_document_write 的 finish 完成文档。`;
-  const issues = (report.issues || []).map((issue) => issue.message).filter(Boolean).join('；') || '页面尺寸检查未通过';
-  const pageRepairIssueCodes = new Set(['CONTENT_OVERFLOW', 'CONTENT_NOT_CENTERED']);
-  const allIssuesScoped = (report.issues || []).length > 0 && (report.issues || []).every((issue) => pageRepairIssueCodes.has(issue.code) && Number.isInteger(Number(issue.page)) && Number(issue.page) > 0);
+  const resultSemantics = `注意：${auditCapability} 返回工具 status=ok 只表示检查已执行；必须读取审计报告 valid 和 issues。valid=false 是正常检查结果，不是工具调用失败。不得对未修改的 HTML 重复相同 auditAttempt；修改或重建后才递增序号重审。`;
+  if (!report) return `完整 HTML 草稿已写完后，必须先调用 ${auditCapability}，参数为 {"auditAttempt":1}，审计全部页面；审计通过前不要 finish。${resultSemantics}`;
+  if (report.stale) return `HTML 在最近一次审计后又有修改；用 {"auditAttempt":${Number(report.auditAttempt || 1) + 1}} 重新调用 ${auditCapability} 审计当前完整文档，审计通过前不要 finish。${resultSemantics}`;
+  if (report.valid) return `${auditCapability} 最近一次审计已通过；若此后未追加或改写 HTML，现在用 cap_filesystem_project_document_write 的 finish 完成文档。${resultSemantics}`;
+  const issues = (report.issues || []).map((issue) => {
+    const details = [
+      compactAuditDetail(issue.expected) !== undefined ? `期望=${JSON.stringify(compactAuditDetail(issue.expected))}` : '',
+      compactAuditDetail(issue.actual) !== undefined ? `实测=${JSON.stringify(compactAuditDetail(issue.actual))}` : '',
+    ].filter(Boolean).join('，');
+    return [issue.message, details].filter(Boolean).join('（') + (details ? '）' : '');
+  }).filter(Boolean).join('；') || '页面尺寸检查未通过';
+  const repeatedRepairHint = Number(report.repeatedRepairPage) > 0
+    ? `第 ${Number(report.repeatedRepairPage)} 页刚提交过完全相同的替换内容，服务端已拒绝重复写入；本次必须改变实现，或先处理其他失败页。`
+    : '';
+  const allIssuesScoped = (report.issues || []).length > 0 && (report.issues || []).every((issue) => AI_VISUAL_PAGE_REPAIR_ISSUE_CODES.has(issue.code) && Number.isInteger(Number(issue.page)) && Number(issue.page) > 0);
   const pages = [...new Set((report.issues || []).map((issue) => Number(issue.page)).filter((page) => Number.isInteger(page) && page > 0))];
-  if (allIssuesScoped && pages.length) return `最近一次 ${auditCapability} 审计未通过：${issues}。这些都是带页码的内容溢出或正文未居中问题，失败页码为 ${pages.join('、')}（按 .page 页面顺序编号）。只用 operation=replace-page 替换其中一页，page 填页码，content 只包含该页完整根元素 <section class="page" data-page="页码">…</section>；保留该页全部事实、原角色和顺序，并保留页面外的 CSS、主题和其他页原样不动。一次只修一页；改完后用 {"auditAttempt":${Number(report.auditAttempt || 1) + 1}} 重新审计整份 HTML，再处理仍失败的页。禁止 abort 或重写其他页面；只有写入器明确报告锚点或页面根结构无法局部替换时，才 abort 后完整重建。`;
-  return `最近一次 ${auditCapability} 审计未通过：${issues}。报告没有可定位页码，无法安全局部修复；先 abort 当前文档，再 begin 并完整重写修正版，保留所有事实，之后用 {"auditAttempt":${Number(report.auditAttempt || 1) + 1}} 重新调用 ${auditCapability} 审计。`;
+  if (allIssuesScoped && pages.length) return `最近一次 ${auditCapability} 审计未通过：${issues}。问题均定位到页码：${pages.join('、')}（按 .page 页面顺序编号）。${repeatedRepairHint}只用 operation=replace-page 替换其中一页，page 填审计返回的页码，content 只包含该页完整根元素 <section class="page" data-page="页码">…</section>；保留该页全部事实、原角色和顺序，并保留页面外 CSS、主题和其他页原样不动。内容溢出、未居中、密度偏低或列表难以扫读时调整该页内容布局；装饰或页面标记问题只修该页。一次只修一页；改完后用 {"auditAttempt":${Number(report.auditAttempt || 1) + 1}} 重新审计整份 HTML，再处理仍失败的页。禁止 abort 或重写其他页面；只有写入器明确报告锚点或页面根结构无法局部替换时，才 abort 后完整重建。${resultSemantics}`;
+  return `最近一次 ${auditCapability} 审计未通过：${issues}。报告没有可定位页码，无法安全局部修复；先 abort 当前文档，再 begin 并完整重写修正版，保留所有事实，之后用 {"auditAttempt":${Number(report.auditAttempt || 1) + 1}} 重新调用 ${auditCapability} 审计，审计通过前不要 finish。${resultSemantics}`;
 }
 
 function generationInstruction({ sourceRead, documentStarted, documentFinished, pageCount, targetPageCount, minPages, maxPages, outputPath, documentLabel, auditCapability = '', auditReport = null }) {
@@ -68,7 +98,7 @@ function generationStageOverride({ requiredPageCount, pageCountTolerance, canvas
 - 当前只允许调用 cap_filesystem_project_read、cap_filesystem_project_document_write${auditCapability ? ` 和 ${auditCapability}` : ''}。
 - 只使用 cap_filesystem_project_document_write 写入文件；不要输出完整 HTML/CSS 到 final 或普通回答。
 - 写入目标固定为 project:current 下的 ${outputPath}；resourceId、path 和 sessionId 由服务端自动注入。
-- 第一次写入必须是 operation=begin；之后使用 operation=append 原样追加 HTML/CSS 分块。${auditCapability ? '每页必须按 DOM 顺序从 1 开始编号，并使用唯一边界注释 <!-- CARD-PAGE:N:START --> 与 <!-- CARD-PAGE:N:END --> 包住唯一根元素 <section class="page" data-page="N">…</section>。完整 HTML 草稿写完后、finish 前，必须审计全部页面；只有所有问题都是带页码的 CONTENT_OVERFLOW 或 CONTENT_NOT_CENTERED 时，才用 replace-page 一次修改其中一页并重新审计整份 HTML；其他样式/结构错误无法由单页内容安全定位，应 abort 后完整重建。写入器明确拒绝锚点结构时也可全量重建。' : '所有内容写完后使用 operation=finish。'} finish 成功后才能返回 final。
+- 第一次写入必须是 operation=begin；之后使用 operation=append 原样追加 HTML/CSS 分块。${auditCapability ? '每页必须按 DOM 顺序从 1 开始编号，并使用唯一边界注释 <!-- CARD-PAGE:N:START --> 与 <!-- CARD-PAGE:N:END --> 包住唯一根元素 <section class="page" data-page="N">…</section>。完整 HTML 草稿写完后、finish 前，必须审计全部页面；带页码的内容溢出/居中/密度/列表问题、装饰问题及页级方案标记问题都使用 replace-page 一次修复一页并重新审计整份 HTML。仅无法定位到具体页或页面锚点/根结构损坏时，才 abort 后完整重建。装饰清单是可选意图，不得为满足装饰数量而重写页面。' : '所有内容写完后使用 operation=finish。'} finish 成功后才能返回 final。
 - append 的 content 是原始 HTML/CSS，不要让程序替你拼接、改写、补 CSS、补结构或插入主题装饰。每块不超过 ${AI_VISUAL_DOCUMENT_CHUNK_MAX_CHARS} 字符，并为每块使用唯一 requestId；能填写时使用上一次结果中的 expectedRevision。
 - 不要假设程序会保留预置页面壳，最终文件必须由你的分块内容本身构成完整 HTML。
 - 写入前逐页估算正文、标题和页脚的垂直容量；如果内容放不进固定画布，优先在允许范围内拆成新页（最多比故事板多 ${tolerance} 页），完整保留事实、限制和观察点。不得靠删事实、压成不可读小字、遮挡或裁切来满足页数。
@@ -235,13 +265,13 @@ export async function runAiVisualDocumentAgent({
     ...(resumeFrom ? { resumeFrom: String(resumeFrom) } : {}),
     budget: {
       // 视觉文档按分块写入：读取、begin、多个 append、审计及必要的修复都各占 Agent step；
-      // 视觉文档单独允许到 40 步，其他 Agent 仍受通用 24 步熔断上限约束。
+      // 社交卡路径不按步数/调用数截断，仍受运行超时与结果/历史字符预算约束。
       maxModelSteps: Number(budget.maxModelSteps) || Math.max(auditCapability ? 28 : 18, maxPages + (auditCapability ? 18 : 12)),
       maxToolCalls: Number(budget.maxToolCalls) || Math.max(auditCapability ? 28 : 18, maxPages + (auditCapability ? 18 : 12)),
       maxParallelToolCalls: 1,
       maxToolResultChars: Number(budget.maxToolResultChars) || 80_000,
-      maxTotalToolResultChars: Number(budget.maxTotalToolResultChars) || 220_000,
-      maxHistoryChars: Number(budget.maxHistoryChars) || 220_000,
+      maxTotalToolResultChars: Number(budget.maxTotalToolResultChars) || 320_000,
+      maxHistoryChars: Number(budget.maxHistoryChars) || 300_000,
       timeoutMs: Number(budget.timeoutMs) || 300_000,
     },
     toolContext: { ...toolContext, skillId, generationPhase: 'generation', allowedCapabilities },
@@ -290,7 +320,19 @@ export async function runAiVisualDocumentAgent({
         const call = result.toolCalls[0];
         const capability = capabilityForToolName(call.name, generationCatalog);
         const operation = String(call.input?.operation || '');
-        if (capability === documentWriteCapability && ['begin', 'append', 'replace-page', 'finish', 'abort'].includes(operation)) pendingOperation = operation;
+        if (capability === documentWriteCapability && ['begin', 'append', 'replace-page', 'finish', 'abort'].includes(operation)) {
+          // Native tool calls bypass the JSON-envelope normalization below.
+          // Pin document identity here so a model-supplied sessionId cannot
+          // abort another session while local state treats this one as aborted.
+          call.input = {
+            ...(call.input || {}),
+            resourceId: 'project:current',
+            path: outputPath,
+            sessionId: documentWriteSessionId,
+            requestId: nativeRequestId(call, 0),
+          };
+          pendingOperation = operation;
+        }
         if (capability === auditCapability) pendingOperation = 'audit';
         return { nativeTools: true, content: result.content || '', toolCalls: result.toolCalls };
       }
@@ -339,8 +381,7 @@ export async function runAiVisualDocumentAgent({
         }
         const operation = String(request.arguments?.operation || '');
         const currentAudit = getVisualAuditResult();
-        const pageRepairIssueCodes = new Set(['CONTENT_OVERFLOW', 'CONTENT_NOT_CENTERED']);
-        const allIssuesScoped = (currentAudit?.issues || []).length > 0 && (currentAudit?.issues || []).every((issue) => pageRepairIssueCodes.has(issue.code) && Number.isInteger(Number(issue.page)) && Number(issue.page) > 0);
+        const allIssuesScoped = (currentAudit?.issues || []).length > 0 && (currentAudit?.issues || []).every((issue) => AI_VISUAL_PAGE_REPAIR_ISSUE_CODES.has(issue.code) && Number.isInteger(Number(issue.page)) && Number(issue.page) > 0);
         const failedPages = allIssuesScoped ? [...new Set((currentAudit?.issues || []).map((issue) => Number(issue.page)))] : [];
         const pageRepairAllowed = operation === 'replace-page' && failedPages.includes(Number(request.arguments?.page));
         if (pageRepairAllowed) pageRepairAttempted = true;

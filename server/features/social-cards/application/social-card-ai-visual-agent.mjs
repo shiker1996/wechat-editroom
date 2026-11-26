@@ -1,6 +1,7 @@
 import {
   AI_VISUAL_DOCUMENT_AUDIT,
   AI_VISUAL_DOCUMENT_WRITE,
+  AI_VISUAL_PAGE_REPAIR_ISSUE_CODES,
   filterAiVisualGenerationCatalog,
   runAiVisualDocumentAgent,
   shouldUseAiVisualPlanningThinking,
@@ -9,6 +10,7 @@ import {
 export {
   AI_VISUAL_DOCUMENT_AUDIT,
   AI_VISUAL_DOCUMENT_WRITE,
+  AI_VISUAL_PAGE_REPAIR_ISSUE_CODES,
   filterAiVisualGenerationCatalog,
   shouldUseAiVisualPlanningThinking,
 };
@@ -26,11 +28,8 @@ export async function runSocialCardAiVisualGenerationAgent(options = {}) {
     // 两条生成路径共用同一视觉方案页序：拆分或合并要先回到故事板阶段处理。
     pageCountTolerance: 0,
     auditCapability: AI_VISUAL_DOCUMENT_AUDIT,
-    // 六页社交卡通常需要多次分块写入，再完成审计与 finish；使用视觉 Agent
-    // 的 40 步专用上限，避免默认 28 步在 HTML 未收尾时提前熔断。
+    // 社交卡视觉生成按运行时长和结果字符预算结束，不按步骤或工具调用次数截断。
     budget: {
-      maxModelSteps: 40,
-      maxToolCalls: 40,
       ...(options.budget || {}),
     },
     entryPoint: 'social-card-ai-visual-generation',

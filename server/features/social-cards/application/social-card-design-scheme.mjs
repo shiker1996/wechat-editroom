@@ -6,7 +6,7 @@ import { visualDirectionReference } from '../../../shared/themes/visual-directio
 import { SOCIAL_CARD_DESIGN_SCHEME_VERSION, normalizedSocialCardRole, validateSocialCardDesignScheme } from './social-card-design-scheme-contract.mjs';
 
 const COLOR_MOOD_PROMPT = '先根据具体主题对象、叙事方式、读者感受和要展示的证据/结果选择颜色；contentType 只是流程元数据，不得用它直接套风格。独立判断明暗（明亮/深沉）、冷暖（暖/冷/中性）和饱和度，三者不能绑定推断。将选择写进 contentReading、designLanguage 和 palette。不要把技术、数据、工具或事件类别直接等同于某种颜色；同类内容应按具体对象和表达目的产生不同方案。无论选择何种气质，都必须保证文字清晰可读并通过对比度校验。';
-const ORNAMENT_PLAN_PROMPT = '装饰规范是方案必填项：每个 pages[i] 添加 ornaments 数组，选 2–4 种不同的装饰，且每项有 kind、placement、purpose。字段形状示例："ornaments":[{"kind":"frame","placement":"edge","purpose":"呼应页面边界"},{"kind":"stamp","placement":"corner","purpose":"标出章节位置"}]。kind 仅可从 frame、stamp、index、rail、timecode、badge、annotation、perforation、tape、motif 选；placement 仅可从 corner、edge、header、footer、inline、behind-focus、margin 选。装饰组合按每页对象和叙事各自设计，至少让两种不同组件/位置形成层次；不要六页都复制同一组合。此清单供 HTML 生成与浏览器审计逐项核对。装饰只做视觉层，不新增事实或伪造标签文字。';
+const ORNAMENT_PLAN_PROMPT = '可选提供 ornaments 数组表达本页装饰意图；每项可含 kind、placement、purpose，字段形状示例："ornaments":[{"kind":"frame","placement":"edge","purpose":"呼应页面边界"}]。kind 仅可从 frame、stamp、index、rail、timecode、badge、annotation、perforation、tape、motif 选；placement 仅可从 corner、edge、header、footer、inline、behind-focus、margin 选。若提供，HTML 生成后由浏览器审计检查是否呈现及是否遮挡文字，并按页修复；不要求每页固定数量，缺少装饰规划不得阻断主流程。装饰只做视觉层，不新增事实或伪造标签文字。';
 
 function writeJson(filePath, value) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -16,7 +16,7 @@ function writeJson(filePath, value) {
 function validateScheme(raw, pages, expectedParadigmId) {
   const scheme = raw?.designScheme;
   const result = validateSocialCardDesignScheme({ designScheme: scheme, storyboardPages: pages, expectedParadigmId });
-  return { issues: result.issues, scheme };
+  return { issues: result.issues, warnings: result.warnings || [], scheme };
 }
 
 function asMarkdown({ title, channelMode, scheme, audit }) {
@@ -35,7 +35,7 @@ function asMarkdown({ title, channelMode, scheme, audit }) {
     `- 图形与图像：${scheme.designLanguage.graphics}；${scheme.designLanguage.imageTreatment}`,
     `- 系列锚点：${scheme.sharedAnchors.map((anchor) => `${anchor.id}（${anchor.description}）`).join('；')}`,
     '', '## 分页安排', '',
-    ...scheme.pages.map((page) => `${page.page}. ${page.role} / ${page.layout} / ${page.composition}：${page.visualPurpose}；焦点 ${page.focus}；${page.treatment}；装饰 ${page.ornaments.map((ornament) => `${ornament.kind}@${ornament.placement}（${ornament.purpose}）`).join('、')}`),
+    ...scheme.pages.map((page) => `${page.page}. ${page.role} / ${page.layout} / ${page.composition}：${page.visualPurpose}；焦点 ${page.focus}；${page.treatment}${page.ornaments?.length ? `；装饰 ${page.ornaments.map((ornament) => `${ornament.kind}@${ornament.placement}（${ornament.purpose}）`).join('、')}` : ''}`),
     '', '## 校验', '',
     `- 方案校验：${audit.valid ? '通过' : '未通过'}；页数、色彩对比、字阶范围和允许版式均已检查。`, '',
   ].join('\n');
@@ -54,7 +54,8 @@ export async function generateSocialCardDesignScheme({ gateway, store = null, pr
   }));
   if (!story.length) throw new Error('无法为没有页面的故事板生成设计方案');
   const input = { title, channelMode, contentType, canvas: { width: 375, height: 667 }, pages: story };
-  const system = `你是公众号与小红书图文设计师。针对当前内容独立制定统一视觉方案 v${SOCIAL_CARD_DESIGN_SCHEME_VERSION}。用户已选择结构范式「${paradigm.name}」（${paradigm.id}）：${paradigm.summary}；结构规则：${paradigm.layoutRule}；仅可使用版式 ${paradigm.supportedLayouts.join('|')}。范式只决定页面如何组织，绝不代表颜色、字体、材质或美术风格；必须原样返回 paradigmId=${paradigm.id}，并让页级 layout、composition 和节奏体现该结构。\n\n视觉策划必须先于字段填充：完整阅读锁定故事板和事实；提炼本篇独有的内容对象、读者痛点、叙事转折和最值得看见的证据；在内部提出 2–3 个彼此有明显差异、且能由本篇事实解释的视觉概念，比较它们与内容的贴合度、记忆点和可执行性，再选一个作为本篇 art direction。不要把这些备选写入输出。把选中的概念写成具体、可画出来的 visualDirection：说清主视觉母题、视觉隐喻、色彩依据、形状/材质和页面节奏如何一起讲内容；避免只写“科技感、简洁、高级、编辑风”等抽象标签。\n\n再从这个概念推导 palette、typography、composition、designLanguage、2–3 个 sharedAnchors 和逐页方案。主视觉必须表达本页事实或关系；构图可用不对称、尺度反差、叠压、跨页延续等方法，但每项都要服务阅读层级。背景与表面随叙事变化，不能为通过多样性门槛而机械换色。工具/事件/自定义仅是流程元数据，不直接映射风格；不能因同属数据分析、技术、工具或事件就复用方向。事实只能来自输入；不得更改页序、职责和容量，不得虚构产品界面、截图、人物或使用效果。\n\n只返回紧凑 JSON，形状：{"designScheme":{"schemaVersion":${SOCIAL_CARD_DESIGN_SCHEME_VERSION},"contentReading":{"subject":"","narrative":"","readerFeeling":"","visualAnchor":""},"paradigmId":"${paradigm.id}","visualDirection":"","palette":{"background":"#RRGGBB","surface":"#RRGGBB","text":"#RRGGBB","muted":"#RRGGBB","accent":"#RRGGBB","accentSecondary":"#RRGGBB"},"typography":{"family":"sans|serif|mono","titlePx":34,"bodyPx":14,"captionPx":12,"lineHeight":1.55},"composition":{"grid":"","density":"","rhythm":"","motif":""},"designLanguage":{"colorLogic":"","shape":"","surface":"","graphics":"","imageTreatment":""},"sharedAnchors":[{"id":"series-mark","description":""},{"id":"page-rail","description":""}],"pages":[{"page":1,"role":"cover|content|ending","visualPurpose":"","layout":"poster|editorial|data|checklist|steps|minimal|timeline|comparison|evidence|feature","focus":"","treatment":"","composition":"split-panel","primaryVisual":"large-stat","backgroundMode":"solid-surface","accentPlacement":"left-rail"}]}}。所有必填文本按字段长度上限填写。pages 必须逐页匹配故事板并使用归一职责 cover/content/ending。标记必须是 kebab-case。5页及以上至少3种构图、至少2种背景，且相邻页构图和主视觉都不同。每页 HTML 后续会用标记兑现方案，不能只改标记而不改视觉。标题/正文颜色对比度至少4.5:1，强调色与背景至少3:1，辅助文字与表面至少3:1。字号范围：标题30–40px，正文13–16px，注释12–14px，行高1.45–1.7。\n\n## 参考排版规范\n${String(references || '').slice(0, 16000)}`;
+  const allowedLayouts = paradigm.supportedLayouts.join('|');
+  const system = `你是公众号与小红书图文设计师。针对当前内容独立制定统一视觉方案 v${SOCIAL_CARD_DESIGN_SCHEME_VERSION}。用户已选择结构范式「${paradigm.name}」（${paradigm.id}）：${paradigm.summary}；结构规则：${paradigm.layoutRule}。每页 layout 只能从此列表选择：${allowedLayouts}。封面 role 不代表必须使用 poster；若 poster 不在列表中，必须为封面选择一个允许的版式。范式只决定页面如何组织，绝不代表颜色、字体、材质或美术风格；必须原样返回 paradigmId=${paradigm.id}，并让页级 layout、composition 和节奏体现该结构。\n\n视觉策划必须先于字段填充：完整阅读锁定故事板和事实；提炼本篇独有的内容对象、读者痛点、叙事转折和最值得看见的证据；在内部提出 2–3 个彼此有明显差异、且能由本篇事实解释的视觉概念，比较它们与内容的贴合度、记忆点和可执行性，再选一个作为本篇 art direction。不要把这些备选写入输出。把选中的概念写成具体、可画出来的 visualDirection：说清主视觉母题、视觉隐喻、色彩依据、形状/材质和页面节奏如何一起讲内容；避免只写“科技感、简洁、高级、编辑风”等抽象标签。\n\n再从这个概念推导 palette、typography、composition、designLanguage、2–3 个 sharedAnchors 和逐页方案。主视觉必须表达本页事实或关系；构图可用不对称、尺度反差、叠压、跨页延续等方法，但每项都要服务阅读层级。背景、表面和构图按叙事自然变化；多样性只作设计建议，不能为满足数量机械换色或阻断方案。工具/事件/自定义仅是流程元数据，不直接映射风格；不能因同属数据分析、技术、工具或事件就复用方向。事实只能来自输入；不得更改页序、职责和容量，不得虚构产品界面、截图、人物或使用效果。\n\n只返回紧凑 JSON，形状：{"designScheme":{"schemaVersion":${SOCIAL_CARD_DESIGN_SCHEME_VERSION},"contentReading":{"subject":"","narrative":"","readerFeeling":"","visualAnchor":""},"paradigmId":"${paradigm.id}","visualDirection":"","palette":{"background":"#RRGGBB","surface":"#RRGGBB","text":"#RRGGBB","muted":"#RRGGBB","accent":"#RRGGBB","accentSecondary":"#RRGGBB"},"typography":{"family":"sans|serif|mono","titlePx":34,"bodyPx":14,"captionPx":12,"lineHeight":1.55},"composition":{"grid":"","density":"","rhythm":"","motif":""},"designLanguage":{"colorLogic":"","shape":"","surface":"","graphics":"","imageTreatment":""},"sharedAnchors":[{"id":"series-mark","description":""},{"id":"page-rail","description":""}],"pages":[{"page":1,"role":"cover|content|ending","visualPurpose":"","layout":"${allowedLayouts}","focus":"","treatment":"","composition":"split-panel","primaryVisual":"large-stat","backgroundMode":"solid-surface","accentPlacement":"left-rail"}]}}。所有必填文本按字段长度上限填写。pages 必须逐页匹配故事板并使用归一职责 cover/content/ending。标记必须是 kebab-case。每页可选提供 0–4 个 ornaments 意图；缺少装饰规划不阻断方案。每页 HTML 后续会由视觉审计检查实际兑现，页级装饰问题交给 HTML 修复。标题/正文颜色对比度至少4.5:1，强调色与背景至少3:1，辅助文字与表面至少3:1。字号范围：标题30–40px，正文13–16px，注释12–14px，行高1.45–1.7。\n\n## 参考排版规范\n${String(references || '').slice(0, 16000)}`;
   const messages = [
     { role: 'system', protected: true, content: `${system}\n\n${COLOR_MOOD_PROMPT}\n\n${ORNAMENT_PLAN_PROMPT}\n\n${visualDirectionReference('social')}` },
     { role: 'user', protected: true, content: JSON.stringify(input) },
@@ -91,7 +92,7 @@ export async function generateSocialCardDesignScheme({ gateway, store = null, pr
     error.issues = checked.issues;
     throw error;
   }
-  const audit = { valid: true, id: runId, attempts: outputs.length, generatedAt: new Date().toISOString(), checks: ['unified-schema-v5', 'selected-visual-paradigm', 'content-reading-fields', 'shared-anchors', 'storyboard-page-fidelity', 'page-layout-and-visual-markers', 'per-page-ornament-plan', 'token-ranges', 'color-contrast', 'visual-diversity'], issues: [] };
+  const audit = { valid: true, id: runId, attempts: outputs.length, generatedAt: new Date().toISOString(), checks: ['unified-schema-v5', 'selected-visual-paradigm', 'content-reading-fields', 'shared-anchors', 'storyboard-page-fidelity', 'page-layout-and-visual-markers', 'token-ranges', 'color-contrast'], issues: [], warnings: checked.warnings };
   const scheme = { schemaVersion: SOCIAL_CARD_DESIGN_SCHEME_VERSION, id: runId, title, channelMode, contentType, input: { canvas: input.canvas, pageCount: story.length }, designScheme: checked.scheme, audit };
   scheme.markdown = asMarkdown({ title, channelMode, scheme: checked.scheme, audit });
   if (workdir) {

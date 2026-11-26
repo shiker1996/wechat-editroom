@@ -1,5 +1,5 @@
 import { colorContrast } from '../../../shared/themes/theme-validator.mjs';
-import { SOCIAL_CARD_DESIGN_SCHEME_SCHEMA, SOCIAL_CARD_DESIGN_SCHEME_VERSION, SOCIAL_CARD_ORNAMENT_KINDS, SOCIAL_CARD_ORNAMENT_PLACEMENTS } from '../../../shared/domain/schemas/social-card-design-scheme.mjs';
+import { SOCIAL_CARD_DESIGN_SCHEME_SCHEMA, SOCIAL_CARD_DESIGN_SCHEME_VERSION } from '../../../shared/domain/schemas/social-card-design-scheme.mjs';
 import { getSocialCardVisualParadigm } from '../../../shared/domain/social-card-visual-paradigms.mjs';
 export { SOCIAL_CARD_DESIGN_SCHEME_SCHEMA, SOCIAL_CARD_DESIGN_SCHEME_TOOL_SCHEMA, SOCIAL_CARD_DESIGN_SCHEME_VERSION } from '../../../shared/domain/schemas/social-card-design-scheme.mjs';
 
@@ -57,9 +57,10 @@ export function normalizedSocialCardRole(page = {}) {
 
 export function validateSocialCardDesignScheme({ designScheme, storyboardPages = [], expectedParadigmId = '' } = {}) {
   const issues = [];
+  const warnings = [];
   const scheme = designScheme;
   if (!scheme || typeof scheme !== 'object' || Array.isArray(scheme)) {
-    return { valid: false, issues: [{ code: 'DESIGN_SCHEME_REQUIRED', field: 'designScheme', message: '必须提交统一的结构化视觉方案' }] };
+    return { valid: false, issues: [{ code: 'DESIGN_SCHEME_REQUIRED', field: 'designScheme', message: '必须提交统一的结构化视觉方案' }], warnings: [], diversity: { pageCount: 0, distinctCompositions: 0, distinctPrimaryVisuals: 0, distinctBackgroundModes: 0, sharedAnchorCount: 0 } };
   }
   validateSchema(SOCIAL_CARD_DESIGN_SCHEME_SCHEMA, scheme, 'designScheme', issues);
   const paradigm = getSocialCardVisualParadigm(scheme.paradigmId);
@@ -84,27 +85,21 @@ export function validateSocialCardDesignScheme({ designScheme, storyboardPages =
     const expectedRole = normalizedSocialCardRole(storyboardPages[index] || {});
     if (clean(page?.role) !== expectedRole) issues.push({ code: 'DESIGN_PAGE_ROLE_MISMATCH', page: index + 1, field: `${label}.role`, message: `第 ${index + 1} 页 role 必须为 ${expectedRole}` });
     if (paradigm && !paradigm.supportedLayouts.includes(page?.layout)) issues.push({ code: 'DESIGN_PARADIGM_LAYOUT_MISMATCH', page: index + 1, field: `${label}.layout`, message: `所选范式「${paradigm.name}」不支持 ${page?.layout} 版式` });
-    const ornaments = Array.isArray(page?.ornaments) ? page.ornaments : [];
-    const kinds = ornaments.map((ornament) => normalized(ornament?.kind)).filter(Boolean);
-    if (new Set(kinds).size !== kinds.length) issues.push({ code: 'DECORATION_PLAN_DUPLICATE', page: index + 1, field: `${label}.ornaments`, message: `第 ${index + 1} 页装饰类型不能重复` });
-    if (kinds.length < 2) issues.push({ code: 'DECORATION_PLAN_TOO_SMALL', page: index + 1, field: `${label}.ornaments`, message: `第 ${index + 1} 页至少规划 2 种不同的装饰` });
-    if (ornaments.some((ornament) => !SOCIAL_CARD_ORNAMENT_KINDS.includes(clean(ornament?.kind)) || !SOCIAL_CARD_ORNAMENT_PLACEMENTS.includes(clean(ornament?.placement)))) {
-      issues.push({ code: 'DECORATION_PLAN_INVALID', page: index + 1, field: `${label}.ornaments`, message: `第 ${index + 1} 页装饰类型或位置不在组件目录中` });
-    }
   });
 
   if (pages.length >= 5) {
-    if (new Set(pages.map((page) => normalized(page?.composition))).size < 3) issues.push({ code: 'DESIGN_COMPOSITION_DIVERSITY_LOW', field: 'pages', message: '5 页及以上至少需要 3 种不同构图' });
-    if (new Set(pages.map((page) => normalized(page?.backgroundMode))).size < 2) issues.push({ code: 'DESIGN_BACKGROUND_DIVERSITY_LOW', field: 'pages', message: '5 页及以上至少需要 2 种背景或表面处理' });
+    if (new Set(pages.map((page) => normalized(page?.composition))).size < 3) warnings.push({ code: 'DESIGN_COMPOSITION_DIVERSITY_LOW', field: 'pages', message: '5 页及以上建议使用 3 种或更多构图；按内容需要决定，不作为生成阻断条件' });
+    if (new Set(pages.map((page) => normalized(page?.backgroundMode))).size < 2) warnings.push({ code: 'DESIGN_BACKGROUND_DIVERSITY_LOW', field: 'pages', message: '5 页及以上可考虑变化背景或表面处理；按内容需要决定，不作为生成阻断条件' });
     for (let index = 1; index < pages.length; index += 1) {
-      if (normalized(pages[index - 1]?.composition) === normalized(pages[index]?.composition)) issues.push({ code: 'ADJACENT_COMPOSITION_REPEATED', page: index + 1, field: `pages[${index}].composition`, message: `第 ${index + 1} 页与上一页重复同一构图标记` });
-      if (normalized(pages[index - 1]?.primaryVisual) === normalized(pages[index]?.primaryVisual)) issues.push({ code: 'ADJACENT_PRIMARY_VISUAL_REPEATED', page: index + 1, field: `pages[${index}].primaryVisual`, message: `第 ${index + 1} 页与上一页重复同一主视觉标记` });
+      if (normalized(pages[index - 1]?.composition) === normalized(pages[index]?.composition)) warnings.push({ code: 'ADJACENT_COMPOSITION_REPEATED', page: index + 1, field: `pages[${index}].composition`, message: `第 ${index + 1} 页与上一页重复构图，可结合叙事考虑变化` });
+      if (normalized(pages[index - 1]?.primaryVisual) === normalized(pages[index]?.primaryVisual)) warnings.push({ code: 'ADJACENT_PRIMARY_VISUAL_REPEATED', page: index + 1, field: `pages[${index}].primaryVisual`, message: `第 ${index + 1} 页与上一页重复主视觉，可结合内容考虑变化` });
     }
   }
 
   return {
     valid: issues.length === 0,
     issues,
+    warnings,
     diversity: {
       pageCount: pages.length,
       distinctCompositions: new Set(pages.map((page) => normalized(page?.composition)).filter(Boolean)).size,
