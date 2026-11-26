@@ -153,33 +153,40 @@ function aiVisualAgentJson(payload, state) {
     assistant_note: '执行固定 E2E 的 AI 视觉生成步骤',
     requests: [{ requestId, capability, arguments: args, reason }],
   });
+  const audit = (args, reason) => request('cap_social_card_visual_audit', { auditAttempt: state.auditAttempt++, ...args }, reason);
   // Keep explicit fixture state: chat history may be compacted between tool
   // turns, so inferring the recovery phase from assistant messages is brittle.
+  // 顺序必须与门禁一致：整组结构审计通过后才逐页测量，全部页面处理完才 finish。
+  // 首次写入故意缺少第 2 页结束锚点，覆盖“整组审计拒绝 → abort → begin → 重建”的恢复路径。
   switch (state.phase) {
     case 'start':
-      state.phase = 'written-invalid';
-      return fixtureVisualAppend(request);
-    case 'written-invalid':
-      state.phase = 'audited-invalid';
-      return request('cap_social_card_visual_audit', { auditAttempt: 1 }, '检查固定视觉页面的纵向容量');
-    case 'audited-invalid':
+      state.phase = 'group-audit-invalid';
+      return fixtureVisualAppend(request, { includePageInner: true, omitEndMarkerFor: 2 });
+    case 'group-audit-invalid':
       state.phase = 'aborted';
-      return request('cap_filesystem_project_document_write', { operation: 'abort' }, '中止未通过视觉审计的文档');
+      return audit({}, '检查整份固定视觉 HTML 的页数、页序和页面锚点');
     case 'aborted':
       state.phase = 'rewritten';
-      return fixtureVisualAppend(request, { includePageInner: true });
+      return request('cap_filesystem_project_document_write', { operation: 'abort' }, '整份文档结构未通过，按恢复流程重建');
     case 'rewritten':
-      state.phase = 'audited-valid';
-      return request('cap_social_card_visual_audit', { auditAttempt: 2 }, '复审重写后的固定视觉页面');
-    case 'audited-valid':
+      state.phase = 'group-audit';
+      return fixtureVisualAppend(request, { includePageInner: true });
+    case 'group-audit':
+      state.phase = 'page-audits';
+      return audit({}, '确认整份固定视觉 HTML 的页数、页序和页面锚点');
+    case 'page-audits':
+      if (state.page <= 4) {
+        const page = state.page++;
+        return audit({ page }, `逐页检查固定视觉页面第 ${page} 页`);
+      }
       state.phase = 'finished';
-      return request('cap_filesystem_project_document_write', { operation: 'finish' }, '完成通过复审的视觉 HTML 写入');
+      return request('cap_filesystem_project_document_write', { operation: 'finish' }, '完成逐页审计后的视觉 HTML 写入');
     default:
       return { type: 'final', assistantReply: '已完成 AI 视觉 HTML 生成' };
   }
 }
 
-function fixtureVisualAppend(request, { includePageInner = false } = {}) {
+function fixtureVisualAppend(request, { includePageInner = false, omitEndMarkerFor = 0 } = {}) {
   const pages = [
     ['page-cover', 'cover', 'poster', 'cover-title', 'solid', 'center', 'E2E 主链路测试', '固定输入与可追踪输出'],
     ['page-content', 'content', 'editorial', 'key-fact', 'solid', 'top', '为什么需要', '每次改动都应确认采集、文章与图文产物保持连通。'],
@@ -202,7 +209,8 @@ function fixtureVisualAppend(request, { includePageInner = false } = {}) {
     const ornaments = ornamentSets[index % ornamentSets.length].map(([ornament,placement]) => `<span aria-hidden="true" class="ornament ornament-${ornament}" data-ornament="${ornament}" data-ornament-placement="${placement}"></span>`).join('');
     return `<!-- CARD-PAGE:${index + 1}:START -->\n<section class="page ${kind}" data-page="${index + 1}" data-page-role="${role}" data-visual-composition="${composition}" data-primary-visual="${primaryVisual}" data-background-mode="${backgroundMode}" data-accent-placement="${accentPlacement}">${ornaments}${includePageInner ? `<div class="page-inner">${anchors}${eyebrow}${pageBody}${footer}</div>` : `${anchors}${eyebrow}${pageBody}${footer}`}</section>\n<!-- CARD-PAGE:${index + 1}:END -->`;
   }).join('')}</body></html>`;
-  return request('cap_filesystem_project_document_write', { operation: 'append', content: html }, '写入四页固定测试视觉 HTML');
+  const content = omitEndMarkerFor ? html.replace(`<!-- CARD-PAGE:${omitEndMarkerFor}:END -->`, '') : html;
+  return request('cap_filesystem_project_document_write', { operation: 'append', content }, '写入四页固定测试视觉 HTML');
 }
 
 function jsonForRequest(payload, visualState) {
@@ -369,7 +377,7 @@ export async function startFakeGitHub() {
 
 export async function startFakeModel({ mode = 'normal' } = {}) {
   const requests = [];
-  const visualState = { phase: 'start' };
+  const visualState = { phase: 'start', auditAttempt: 1, page: 1 };
   const server = http.createServer(async (request, response) => {
     if (request.method !== 'POST' || !request.url?.endsWith('/chat/completions')) { response.writeHead(404); response.end(); return; }
     const payload = await readJson(request);

@@ -206,8 +206,16 @@ function aiVisualStatusHtml(report,stages){
   const stageItems=Array.isArray(stages?.stages)?stages.stages:[];
   const stageText=stageItems.map((stage)=>`${aiVisualStageLabel(stage.stage)}：${stage.status==='completed'?'完成':stage.status==='running'?'进行中':stage.status==='blocked'?'未通过':stage.status==='failed'?'失败':'等待'}`).join(' · ');
   const status=String(report?.status||'').trim();
-  const statusText=status==='screenshots-failed'?'AI 视觉页面已生成，PNG 截图失败':status==='delivery-blocked'?'AI 视觉交付门禁未通过':'';
-  const detail=report?.screenshots?.issues?.length?report.screenshots.issues.slice(0,4).join('；'):report?.deliveryGate?.reason||'';
+  const warningText=(list)=>{
+    if(!Array.isArray(list))return '';
+    return list.map((warning)=>typeof warning==='string'?warning:String(warning?.message||'')).filter(Boolean).slice(0,2).map((message)=>message.slice(0,160)).join('；');
+  };
+  const pageWarning=warningText(report?.deliveryGate?.warnings)
+    ||(report?.visualAudit?.status==='completed-with-page-failures'
+      ?(warningText(report?.visualAudit?.issues)||`第 ${(report?.visualAudit?.exhaustedPages||[]).join('、')||'若干'} 页修复后仍未通过，审计结果已保存`)
+      :'');
+  const statusText=status==='screenshots-failed'?'AI 视觉页面已生成，PNG 截图失败':status==='delivery-blocked'?'AI 视觉交付门禁未通过':pageWarning?'AI 视觉已交付，部分页面审计未通过':'';
+  const detail=[report?.screenshots?.issues?.length?report.screenshots.issues.slice(0,4).join('；'):'',report?.deliveryGate?.reason||'',pageWarning].filter(Boolean).join('；');
   return `${statusText?`<span>${escapeHtml(statusText)}</span>`:''}${stageText?`<span>${escapeHtml(stageText)}</span>`:''}${detail?`<small>${escapeHtml(detail)}</small>`:''}`;
 }
 

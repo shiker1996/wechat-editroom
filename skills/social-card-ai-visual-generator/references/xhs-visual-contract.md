@@ -191,9 +191,9 @@
 
 ## 3.3 逐页装饰组件契约
 
-`social-design-scheme.json` 的每页 `ornaments` 是必做清单，不是风格建议。每个装饰都要有独立且可见的 DOM 元素，并以 `data-ornament="<kind>"` 和 `data-ornament-placement="<placement>"` 对应方案；实际坐标必须落在所规划的页面区域。允许类型：`frame`、`stamp`、`index`、`rail`、`timecode`、`badge`、`annotation`、`perforation`、`tape`、`motif`；允许位置：`corner`、`edge`、`header`、`footer`、`inline`、`behind-focus`、`margin`。每页落实 2–4 个不同类型，至少 6×6px，并与页面边界有可见交集。不要仅给内容容器加属性；属性元素本身必须承担轮廓、纹样、贴签、轨道或类似的明确装饰职责。避免装饰承载未核实文字、遮挡正文或只靠低透明度伪元素。
+`social-design-scheme.json` 可选提供每页 `ornaments` 意图。若提供，每项应由独立可见的 DOM 元素兑现，并以 `data-ornament="<kind>"` 和 `data-ornament-placement="<placement>"` 对应方案；实际坐标应落在所规划的页面区域。允许类型：`frame`、`stamp`、`index`、`rail`、`timecode`、`badge`、`annotation`、`perforation`、`tape`、`motif`；允许位置：`corner`、`edge`、`header`、`footer`、`inline`、`behind-focus`、`margin`。整组页序每页最多显示一次：若共享锚点或页脚已显示 `02/06`，其他锚点和 `index` 装饰不得再重复；步骤/卡片编号仅在内容确有顺序时作为本页内部编号保留。审计发现未呈现、位置不符或与文字重叠时，按报告页码使用 `replace-page` 修复并复审，不要求每页固定数量，也不因此全量重建。不要仅给内容容器加属性；属性元素本身必须承担轮廓、纹样、贴签、轨道或类似的明确装饰职责。避免装饰承载未核实文字、遮挡正文或只靠低透明度伪元素。
 
-示例：`<span class="film-notch" data-ornament="perforation" data-ornament-placement="edge" aria-hidden="true"></span>`。每页具体用哪些形状、色彩、表面和大小仍由本篇方案决定；这个契约保证组件有可核对的实体，并不规定统一皮肤。装饰必须落在预留留白中，与标题、正文、注释、页码和来源文字保持净空；视觉审计按浏览器实际字行位置拒绝与可见文本相交的装饰。装饰层应置于内容层后方，避让规则与区域位置门禁同时生效。
+示例：`<span class="film-notch" data-ornament="perforation" data-ornament-placement="edge" aria-hidden="true"></span>`。若本篇方案提供装饰意图，具体形状、色彩、表面和大小由方案决定；此契约不规定统一皮肤或固定装饰数量。装饰应落在预留留白中，与标题、正文、注释、页码和来源文字保持净空；视觉审计按浏览器实际字行位置检查，出现页级问题时通过 `replace-page` 修复对应页面。装饰层应置于内容层后方。
 
 ## 4. 内容层组合基线
 

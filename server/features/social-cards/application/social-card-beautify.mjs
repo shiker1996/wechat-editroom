@@ -11,10 +11,10 @@ import { getToolRegistry } from '../../../platform/tools/index.mjs';
 import { applyCatalogSchemas, registerProjectResource, resolveResourceArguments, sanitizeCapabilityResult } from '../../../platform/agent/resource-adaptation.mjs';
 import { writeSocialCardAiVisualBaseline } from './social-card-ai-visual-baseline.mjs';
 import { createSocialCardAiVisualStageRecorder, writeSocialCardAiVisualSkillManifest } from './social-card-ai-visual-pipeline.mjs';
-import { AI_VISUAL_DOCUMENT_AUDIT, AI_VISUAL_DOCUMENT_WRITE, runSocialCardAiVisualGenerationAgent } from './social-card-ai-visual-agent.mjs';
+import { AI_VISUAL_DOCUMENT_AUDIT, AI_VISUAL_DOCUMENT_WRITE, AI_VISUAL_PAGE_REPAIR_ISSUE_CODES, runSocialCardAiVisualGenerationAgent } from './social-card-ai-visual-agent.mjs';
 import { formatSocialCardCopyArtifact, generateSocialCardCopy, validateSocialCardCopy } from './social-card-copy.mjs';
 import { generateSocialCardDesignScheme } from './social-card-design-scheme.mjs';
-import { auditSocialCardHtmlFit } from './social-card-visual-audit.mjs';
+import { auditSocialCardHtmlFit, auditSocialCardHtmlGroup } from './social-card-visual-audit.mjs';
 import { contentTypeForSocialRoute, socialStoryboardClassForMaterialType } from '../domain/social-routing.mjs';
 import { resolveSocialCardParadigmSelection } from '../../../shared/domain/social-card-visual-paradigms.mjs';
 
@@ -23,11 +23,13 @@ export const SOCIAL_CARD_BEAUTIFY_HTML = 'ai-beautified.html';
 export const SOCIAL_CARD_BEAUTIFY_OUTPUT = 'ai-beautified-output';
 export const SOCIAL_CARD_BEAUTIFY_REPORT = 'ai-beautify-report.json';
 export const SOCIAL_CARD_BEAUTIFY_DELIVERY_GATE = 'ai-beautified-delivery-gate.json';
+export const SOCIAL_CARD_BEAUTIFY_PAGE_AUDITS = 'ai-visual-page-audit-results.json';
+export const AI_VISUAL_MAX_PAGE_REPAIR_ATTEMPTS = 3;
 const AI_VISUAL_SKILL_NAME = 'social-card-ai-visual-generator';
 const AI_INTERNAL_FIELDS = new Set(['source_refs', 'source_urls', 'source_url', 'fact_ids', 'evidence_refs']);
 const SOCIAL_CARD_PROJECT_READ_CAPABILITY = 'cap_filesystem_project_read';
 const AI_VISUAL_BUNDLED_REFERENCE_FILES = Object.freeze(['layout-guide.md', 'xhs-visual-contract.md', 'visual-component-mapping.md']);
-const AI_VISUAL_INPUT_INSTRUCTION = '先读取 workspace.files 全部文件再策划和写入，按故事板、视觉语义、事实、schema v5 方案及只读文案正确使用输入。遵循技能中的布局指南、视觉契约和组件映射。用户选的是结构范式；视觉须依内容与方案设计，避免套用主题或空泛描述。逐项实现装饰并避开所有文字；对整组页面运行浏览器审计、按报告修复复审。遵守页面骨架、容量及标题/正文边界；不得泄露技术信息、增添事实或改标题。';
+const AI_VISUAL_INPUT_INSTRUCTION = '先读取 workspace.files 全部文件再策划和写入，按故事板、视觉语义、事实、schema v5 方案及只读文案正确使用输入。遵循技能中的布局指南、视觉契约和组件映射。用户选的是结构范式；视觉须依内容与方案设计，避免套用主题或空泛描述。逐项实现装饰并避开所有文字；先做整份文档结构审计，通过后再逐页运行浏览器测量和方案兑现审计，每页最多修复 3 次；仍失败则保存最终审计结果、跳过该页并继续下一页，不能因此中止整组生成。遵守页面骨架、容量及标题/正文边界；不得泄露技术信息、增添事实或改标题。';
 const AI_VISUAL_THEME_LAYOUT_FIELDS = Object.freeze([
   'bodyPx', 'h1Px', 'h2Px', 'captionPx', 'codePx', 'lineHeight', 'letterSpacingEm',
   'articlePaddingPx', 'sectionPx', 'paragraphPx', 'cardGapPx',
@@ -38,6 +40,18 @@ const ENABLE_AI_VISUAL_SCREENSHOTS = true;
 const ENABLE_AI_VISUAL_DELIVERY_GATE = true;
 // 故事板页数是视觉生成的基准；少量拆页或合页不应在截图前直接失败。
 export const AI_VISUAL_PAGE_COUNT_TOLERANCE = 0;
+
+function compactVisualAuditValue(value) {
+  if (typeof value === 'string') return value.slice(0, 120);
+  if (typeof value === 'number' || typeof value === 'boolean') return value;
+  if (Array.isArray(value)) return value.slice(0, 3).map(compactVisualAuditValue).filter((item) => item !== undefined);
+  if (!value || typeof value !== 'object') return undefined;
+  const allowed = ['kind', 'placement', 'x', 'y', 'width', 'height', 'pageCount', 'pageOrder', 'pageAnchors', 'pageOrderValid', 'pageAnchorsValid', 'candidateCount', 'candidates', 'ornamentsOnPage', 'tag', 'className', 'visible', 'hasVisualTreatment', 'ancestorsVisible', 'display', 'visibility', 'opacity', 'rect', 'clippedRect', 'contentRegion', 'body', 'stack', 'textBounds', 'textRunCount', 'spaceOptions', 'contentRect', 'obstacleRect', 'intersectionRect', 'gapPx', 'options', 'left', 'right', 'above', 'below', 'overlapCount', 'overlaps', 'ornament'];
+  const compact = Object.fromEntries(Object.entries(value).filter(([key]) => allowed.includes(key))
+    .map(([key, item]) => [key, compactVisualAuditValue(item)])
+    .filter(([, item]) => item !== undefined));
+  return Object.keys(compact).length ? compact : undefined;
+}
 
 function htmlPageCount(html) {
   return [...String(html || '').matchAll(/class=["']([^"']+)["']/gi)]
@@ -298,7 +312,7 @@ function buildAiVisualGenerationBrief({ context, workspaceFiles, styleBrief = ''
 - 故事板页数基准：${pageCount}
 - 实际页数：必须为 ${pagePolicy.expectedPageCount} 页，与锁定故事板和统一视觉方案一致；需拆分或合并时先返回故事板阶段处理
 - 冻结输入文件：${fileList}
-  - 本次设计方案：social-design-scheme.json（统一 schema v5；必须遵循已选视觉范式；范式只定义结构，不定义视觉主题；逐页职责、标记、锚点和 2–4 个装饰组件通过共享兑现审计）
+  - 本次设计方案：social-design-scheme.json（统一 schema v5；必须遵循已选视觉范式；范式只定义结构，不定义视觉主题；逐页职责、标记和锚点通过共享兑现审计；可选装饰意图在页面审计中按页检查与修复）
 - 页面结构与容量契约：${JSON.stringify(context?.structure || {})}
 - 额外设计意图：${brief || '无，按本次方案与参考排版规范执行。'}
 
@@ -437,6 +451,7 @@ async function runAiVisualScreenshotDeliveryOnly({
 }) {
   const generatedHtml = fs.existsSync(htmlPath) ? fs.readFileSync(htmlPath, 'utf8') : '';
   const pageCount = htmlPageCount(generatedHtml);
+  const pageAuditResults = readJsonFile(path.join(workdir, SOCIAL_CARD_BEAUTIFY_PAGE_AUDITS), { pages: [] });
   const pagePolicy = aiVisualPageCountPolicy(context.requiredPageCount);
   const screenshotsStage = stageRecorder.start('screenshots', {
     skill: 'html-pages-to-images',
@@ -506,10 +521,34 @@ async function runAiVisualScreenshotDeliveryOnly({
     screenshotCheck.status = 'passed';
   }
 
+  const generationVisualAudit = generationAgent?.visualAudit || {};
+  const checkedPages = new Set((generationVisualAudit.checkedPages || []).map(Number));
+  const exhaustedPages = new Set([...(generationVisualAudit.exhaustedPages || []), ...(pageAuditResults.exhaustedPages || [])].map(Number));
+  const allPagesPassed = pageCount > 0 && Array.from({ length: pageCount }, (_, index) => checkedPages.has(index + 1)).every(Boolean);
+  const allPagesProcessed = pageCount > 0 && Array.from({ length: pageCount }, (_, index) => checkedPages.has(index + 1) || exhaustedPages.has(index + 1)).every(Boolean);
+  const visualAuditComplete = generationVisualAudit.groupAuditPassed === true
+    && Number(generationVisualAudit.pageCount) === pageCount
+    && allPagesProcessed;
+  const unresolvedAuditIssues = (pageAuditResults.pages || [])
+    .filter((page) => page.status === 'exhausted' || exhaustedPages.has(Number(page.page)))
+    .flatMap((page) => page.audits?.at(-1)?.report?.issues || []);
+  const visualAuditPassed = visualAuditComplete && allPagesPassed && generationVisualAudit.valid === true;
   const visualAudit = enableScreenshots
-    ? await auditSocialCardHtmlFit({ htmlPath, width: 375, height: 667 })
-    : { valid: true, status: 'skipped', canvas: { width: 375, height: 667 }, pageCount: 0, checkedSelectors: [], issues: [] };
-  if (!visualAudit.valid) onProgress(`视觉适配审计未通过：${visualAudit.issues.map((issue) => issue.message).join('；')}`);
+    ? {
+      ...generationVisualAudit,
+      valid: visualAuditPassed,
+      complete: visualAuditComplete,
+      status: visualAuditPassed ? 'passed' : visualAuditComplete ? 'completed-with-page-failures' : 'blocked',
+      pageCount,
+      checkedPages: [...checkedPages].sort((a, b) => a - b),
+      exhaustedPages: [...exhaustedPages].sort((a, b) => a - b),
+      maxRepairAttemptsPerPage: AI_VISUAL_MAX_PAGE_REPAIR_ATTEMPTS,
+      repairAttemptsByPage: pageAuditResults.repairAttemptsByPage || generationVisualAudit.repairAttemptsByPage || {},
+      auditResultsFile: SOCIAL_CARD_BEAUTIFY_PAGE_AUDITS,
+      issues: visualAuditPassed ? [] : unresolvedAuditIssues.length ? unresolvedAuditIssues : (generationVisualAudit.issues || [{ code: 'PRE_FINISH_AUDIT_INCOMPLETE', message: 'finish 前的整组审计和逐页检查未全部通过' }]),
+      auditTiming: 'before-finish',
+    }
+    : { valid: true, complete: true, status: 'skipped', canvas: { width: 375, height: 667 }, pageCount: 0, checkedSelectors: [], issues: [] };
 
   const htmlCheck = {
     valid: fs.existsSync(htmlPath) && pagePolicy.minPageCount <= pageCount && pageCount <= pagePolicy.maxPageCount,
@@ -527,14 +566,16 @@ async function runAiVisualScreenshotDeliveryOnly({
     inputArtifacts: [SOCIAL_CARD_BEAUTIFY_HTML, 'copy.txt', SOCIAL_CARD_BEAUTIFY_OUTPUT],
     outputArtifact: SOCIAL_CARD_BEAUTIFY_DELIVERY_GATE,
   });
-  const deliveryValid = htmlCheck.valid && copyCheck.valid && (!enableScreenshots || (screenshotCheck.valid && visualAudit.valid));
+  const deliveryValid = htmlCheck.valid && copyCheck.valid && (!enableScreenshots || (screenshotCheck.valid && visualAudit.complete));
+  const visualAuditWarnings = visualAudit.status === 'completed-with-page-failures' ? visualAudit.issues : [];
   const deliveryGate = {
     schemaVersion: 1,
     status: enableDeliveryGate ? (deliveryValid ? 'passed' : 'blocked') : 'skipped',
     registered: false,
     checkedAt: new Date().toISOString(),
     checks: { html: htmlCheck, copy: copyCheck, screenshots: screenshotCheck, visualAudit },
-    ...(visualAudit.valid ? {} : { reason: visualAudit.issues.map((issue) => issue.message).join('；') }),
+    ...(visualAuditWarnings.length ? { warnings: { visualAudit: visualAuditWarnings } } : {}),
+    ...(!visualAudit.complete ? { reason: visualAudit.issues.map((issue) => issue.message).join('；') } : {}),
     artifacts: { html: SOCIAL_CARD_BEAUTIFY_HTML, copy: 'copy.txt', screenshots: SOCIAL_CARD_BEAUTIFY_OUTPUT },
   };
   writeFile(deliveryGatePath, JSON.stringify(deliveryGate, null, 2));
@@ -565,7 +606,8 @@ async function runAiVisualScreenshotDeliveryOnly({
       status: enableDeliveryGate ? (deliveryValid ? 'passed' : 'blocked') : 'skipped',
       registered: false,
       path: path.basename(deliveryGatePath),
-      ...(!visualAudit.valid ? { reason: visualAudit.issues.map((issue) => issue.message).join('；') } : {}),
+      ...(visualAuditWarnings.length ? { warnings: visualAuditWarnings } : {}),
+      ...(!visualAudit.complete ? { reason: visualAudit.issues.map((issue) => issue.message).join('；') } : {}),
     },
     model: { provider: lastModelResult?.provider || provider || '', model: lastModelResult?.model || resolvedModel, callId: lastModelResult?.callId || null },
     skillManifest: path.basename(skillManifest.path),
@@ -585,9 +627,14 @@ async function runAiVisualScreenshotDeliveryOnly({
   } else {
     deliveryGate.registered = true;
     writeFile(deliveryGatePath, JSON.stringify(deliveryGate, null, 2));
-    report.deliveryGate = { status: 'passed', registered: true, path: path.basename(deliveryGatePath) };
+    report.deliveryGate = {
+      status: 'passed',
+      registered: true,
+      path: path.basename(deliveryGatePath),
+      ...(visualAuditWarnings.length ? { warnings: visualAuditWarnings } : {}),
+    };
     writeFile(path.join(workdir, SOCIAL_CARD_BEAUTIFY_REPORT), JSON.stringify(report, null, 2));
-    deliveryStage.finish({ detail: 'AI 视觉 HTML、发布文案、PNG 和交付门禁已登记', metadata: { imageCount: imagePaths.length, deliveryGate: path.basename(deliveryGatePath), copy: 'copy.txt', registered: true } });
+    deliveryStage.finish({ detail: visualAuditWarnings.length ? 'AI 视觉 HTML、发布文案和 PNG 已登记；未通过的页面审计结果已随报告保存' : 'AI 视觉 HTML、发布文案、PNG 和交付门禁已登记', metadata: { imageCount: imagePaths.length, deliveryGate: path.basename(deliveryGatePath), copy: 'copy.txt', registered: true, exhaustedPages: visualAudit.exhaustedPages || [] } });
   }
   const registerArtifact = (kind, name, artifactPath) => {
     if (!fs.existsSync(artifactPath)) return;
@@ -596,7 +643,7 @@ async function runAiVisualScreenshotDeliveryOnly({
   };
   registerArtifact('AI 视觉 HTML', SOCIAL_CARD_BEAUTIFY_HTML, htmlPath);
   registerArtifact('图文配套文案', 'copy.txt', copyPath);
-  for (const artifactPath of [skillManifest.path, stageRecorder.path, deliveryGatePath]) registerArtifact('AI 视觉运行记录', path.basename(artifactPath), artifactPath);
+  for (const artifactPath of [skillManifest.path, stageRecorder.path, deliveryGatePath, path.join(workdir, SOCIAL_CARD_BEAUTIFY_PAGE_AUDITS)]) registerArtifact('AI 视觉运行记录', path.basename(artifactPath), artifactPath);
   for (const imagePath of imagePaths) registerArtifact('AI 视觉 PNG', path.join(SOCIAL_CARD_BEAUTIFY_OUTPUT, path.basename(imagePath)), imagePath);
   return { html: SOCIAL_CARD_BEAUTIFY_HTML, outputDir: SOCIAL_CARD_BEAUTIFY_OUTPUT, images: imagePaths.map((item) => path.basename(item)), status: report.status };
 }
@@ -633,8 +680,8 @@ function aiVisualDocumentWriteCatalogItem(registry) {
 function aiVisualDocumentAuditCatalogItem() {
   return {
     capability: AI_VISUAL_DOCUMENT_AUDIT,
-    name: '浏览器逐页视觉适配审计',
-    description: '在 375×667 本地 Chromium 中渲染当前 AI 图文 HTML，检查每页正文区域的纵横向溢出；返回页码、容器和超出像素。完成整份 HTML 草稿后、finish 前调用；修改 HTML 后必须重新审计。',
+    name: '图文整组结构与逐页视觉审计',
+    description: '分两阶段审计当前 HTML。省略 page 时只检查整份文档的页数、DOM 页序、data-page 和页面起止锚点，不运行浏览器布局测量或逐页方案兑现检查；整组结构有问题时修正/重建整份文档，不得按页 replace-page。整组通过后，从第 1 页开始在 375×667 本地 Chromium 中逐页检查布局、装饰和方案兑现；当前页失败时只修当前页，最多成功 replace-page 3 次，每次后复审同一页。第三次修复后仍失败，保存该页完整审计结果并跳到下一页；所有页面都通过或已记录耗尽结果后允许 finish 和生成 PNG。装饰与正文冲突时 issue.actual 提供正文/文字/装饰矩形和 spaceOptions，按其收窄或偏移正文容器并重排。逐页报告的装饰问题会提供候选元素标记、CSS 可见性、视觉样式和画布内矩形。返回 status=ok 只表示检查已执行，必须读取 data.valid、groupAuditPassed、scopePage、checkedPages、exhaustedPages、repairAttempts 和 issues；valid=false 是正常审计结果，不是工具执行失败。每次调用 auditAttempt 都须递增。',
     riskLevel: 'read-only',
     sideEffect: 'none',
     idempotent: false,
@@ -645,7 +692,8 @@ function aiVisualDocumentAuditCatalogItem() {
       additionalProperties: false,
       required: ['auditAttempt'],
       properties: {
-        auditAttempt: { type: 'integer', minimum: 1, description: '本次审计序号，从 1 开始；重写后递增，保证每次都重新执行浏览器检查。' },
+        auditAttempt: { type: 'integer', minimum: 1, description: '本次审计序号，从 1 开始。相同 HTML 不得重复相同序号；修复或重建 HTML 后必须递增，保证浏览器重新检查。审计工具 status=ok 不等于 valid=true，必须读取报告的 valid 和 issues。' },
+        page: { type: 'integer', minimum: 1, maximum: 100, description: '整组审计通过后用于逐页检查的页码；从 1 开始按序调用。省略 page 表示先做整组审计。' },
       },
     },
     outputSchema: { type: 'object' },
@@ -833,7 +881,7 @@ export async function runSocialCardBeautify({ gateway, store, batchId, candidate
   }
   if (!resuming) {
     fs.rmSync(outputDir, { recursive: true, force: true });
-    for (const staleReport of [path.join(workdir, SOCIAL_CARD_BEAUTIFY_REPORT), path.join(workdir, SOCIAL_CARD_BEAUTIFY_DELIVERY_GATE)]) {
+    for (const staleReport of [path.join(workdir, SOCIAL_CARD_BEAUTIFY_REPORT), path.join(workdir, SOCIAL_CARD_BEAUTIFY_DELIVERY_GATE), path.join(workdir, SOCIAL_CARD_BEAUTIFY_PAGE_AUDITS)]) {
       fs.rmSync(staleReport, { force: true });
     }
     writeFile(htmlPath, aiHtmlScaffold(context));
@@ -841,6 +889,37 @@ export async function runSocialCardBeautify({ gateway, store, batchId, candidate
   const workspaceFiles = canonicalAiVisualWorkspaceFiles(factFile);
   // 文案生成完成后再构造 render_request，确保模型首条消息与实际读取清单完全一致。
   const renderRequest = buildAiRenderRequest(context, { workspaceResourceId: 'project:current', workspaceFiles });
+  const pageRepairContentDigests = new Map();
+  const pendingPageRepairDigests = new Map();
+  const successfulPageRepairCounts = new Map();
+  const exhaustedPages = new Set();
+  const pageAuditHistory = new Map();
+  const pageRepairHistory = [];
+  const visuallyPassedPages = new Set();
+  let groupAuditPassed = false;
+  let lastVisualAuditAttempt = 0;
+  const savePageAuditResults = () => {
+    const currentHtml = fs.existsSync(htmlPath) ? fs.readFileSync(htmlPath, 'utf8') : '';
+    const auditResultsPath = path.join(workdir, SOCIAL_CARD_BEAUTIFY_PAGE_AUDITS);
+    writeFile(auditResultsPath, JSON.stringify({
+      schemaVersion: 1,
+      updatedAt: new Date().toISOString(),
+      maxRepairAttemptsPerPage: AI_VISUAL_MAX_PAGE_REPAIR_ATTEMPTS,
+      pageCount: htmlPageCount(currentHtml),
+      groupAuditPassed,
+      repairAttemptsByPage: Object.fromEntries(successfulPageRepairCounts),
+      exhaustedPages: [...exhaustedPages].sort((a, b) => a - b),
+      pages: [...pageAuditHistory.entries()].sort(([a], [b]) => a - b).map(([page, audits]) => ({
+        page,
+        repairAttempts: successfulPageRepairCounts.get(page) || 0,
+        status: exhaustedPages.has(page) ? 'exhausted' : visuallyPassedPages.has(page) ? 'passed' : 'pending',
+        audits,
+      })),
+      repairs: pageRepairHistory,
+    }, null, 2));
+    const stat = fs.statSync(auditResultsPath);
+    store.upsertArtifact?.({ batchId, candidateId, track: 'social_cards', kind: 'AI 视觉逐页审计结果', name: SOCIAL_CARD_BEAUTIFY_PAGE_AUDITS, path: auditResultsPath, size: stat.size, modifiedAt: stat.mtime.toISOString() });
+  };
   const resolveAiArguments = async (argumentsValue, request) => {
     const args = argumentsValue && typeof argumentsValue === 'object' ? argumentsValue : {};
     if (request.capability === AI_VISUAL_DOCUMENT_WRITE) {
@@ -848,18 +927,39 @@ export async function runSocialCardBeautify({ gateway, store, batchId, candidate
       const operation = String(documentArgs.operation || '');
       const audit = getCurrentVisualAudit();
       const scopedAuditFailure = audit?.valid === false && !audit.stale;
-      const pageRepairIssueCodes = new Set(['CONTENT_OVERFLOW', 'CONTENT_NOT_CENTERED']);
-      const allIssuesScoped = (audit?.issues || []).length > 0 && (audit?.issues || []).every((issue) => pageRepairIssueCodes.has(issue.code) && Number.isInteger(Number(issue.page)) && Number(issue.page) > 0);
+      const allIssuesScoped = (audit?.issues || []).length > 0 && (audit?.issues || []).every((issue) => AI_VISUAL_PAGE_REPAIR_ISSUE_CODES.has(issue.code) && Number.isInteger(Number(issue.page)) && Number(issue.page) > 0);
       const failedPages = allIssuesScoped ? [...new Set((audit?.issues || []).map((issue) => Number(issue.page)))] : [];
-      if (operation === 'replace-page' && (!scopedAuditFailure || !failedPages.includes(Number(documentArgs.page)))) {
+      const requestedPage = Number(documentArgs.page);
+      if (operation === 'replace-page' && (exhaustedPages.has(requestedPage) || (successfulPageRepairCounts.get(requestedPage) || 0) >= AI_VISUAL_MAX_PAGE_REPAIR_ATTEMPTS)) {
+        throw new Error(`第 ${requestedPage} 页已达到最多 ${AI_VISUAL_MAX_PAGE_REPAIR_ATTEMPTS} 次成功修复；审计结果已保存，请跳过该页并继续下一页`);
+      }
+      if (operation === 'abort' && exhaustedPages.has(Number(audit?.scopePage))) {
+        throw new Error(`第 ${Number(audit.scopePage)} 页已封存为修复耗尽；不得因该页 abort 整份文档，请继续审计下一页`);
+      }
+      if (operation === 'replace-page' && (!scopedAuditFailure || !(Number(audit?.scopePage) > 0) || !failedPages.includes(Number(documentArgs.page)))) {
         throw new Error('replace-page 只能用于最近一次未通过的程序审计明确指出的页码；先审计当前完整 HTML');
       }
-      if (operation === 'finish' && (audit?.valid !== true || Number(audit.pageCount) !== htmlPageCount(fs.existsSync(htmlPath) ? fs.readFileSync(htmlPath, 'utf8') : ''))) {
-        throw new Error('整份 HTML 的当前版本尚未通过逐页审计，不能 finish；请先修复并重新审计');
+      const currentPageCount = htmlPageCount(fs.existsSync(htmlPath) ? fs.readFileSync(htmlPath, 'utf8') : '');
+      const allPagesProcessed = currentPageCount > 0
+        && Array.from({ length: currentPageCount }, (_, index) => index + 1).every((page) => visuallyPassedPages.has(page) || exhaustedPages.has(page));
+      const finishAuditReady = audit?.groupAuditPassed === true && !audit?.stale && allPagesProcessed && Number(audit.pageCount) === currentPageCount;
+      if (operation === 'finish' && !finishAuditReady) {
+        throw new Error('文档尚未完成整组审计和全部页面审计（通过或修复耗尽并保存结果），不能 finish；继续处理下一页');
+      }
+      if (operation === 'append' && groupAuditPassed) throw new Error('整组审计已通过，之后只能按页 replace-page 修复，不得再 append 改写文档');
+      if (operation === 'replace-page') {
+        const page = Number(documentArgs.page);
+        const contentDigest = createHash('sha256').update(String(documentArgs.content || '')).digest('hex');
+        if (pageRepairContentDigests.get(page) === contentDigest) {
+          latestVisualAudit = { ...latestVisualAudit, repeatedRepairPage: page };
+          throw new Error(`第 ${page} 页刚提交过完全相同的替换内容，本次未写入；请根据当前审计反馈实质修改该页，或先修复其他失败页`);
+        }
+        pendingPageRepairDigests.set(String(request.requestId || ''), { page, contentDigest });
       }
       if (scopedAuditFailure && failedPages.length) {
-        const rebuildingAfterRejectedRepair = operation === 'abort' && failedPages.some((page) => pageRepairAttempts.includes(page));
-        if ((operation !== 'replace-page' || !failedPages.includes(Number(documentArgs.page))) && !rebuildingAfterRejectedRepair) {
+        const rebuildingAfterRejectedRepair = operation === 'abort' && !(Number(audit?.scopePage) > 0) && failedPages.some((page) => pageRepairAttempts.includes(page));
+        const finishingAfterPageExhaustion = operation === 'finish' && finishAuditReady && failedPages.every((page) => exhaustedPages.has(page));
+        if ((operation !== 'replace-page' || !failedPages.includes(Number(documentArgs.page))) && !rebuildingAfterRejectedRepair && !finishingAfterPageExhaustion) {
           throw new Error(`程序审计仅指出第 ${failedPages.join('、')} 页有问题；只允许 replace-page 替换其中一页，然后重新审计整份 HTML。写入器明确报告该页锚点或根结构无效时，才可 abort 后完整重建`);
         }
       } else if (scopedAuditFailure && !['abort'].includes(operation)) {
@@ -896,21 +996,104 @@ export async function runSocialCardBeautify({ gateway, store, batchId, candidate
     if (!latestVisualAudit) return null;
     const currentDigest = currentHtmlDigest();
     if (!currentDigest || latestVisualAudit.documentDigest !== currentDigest) {
-      return { ...latestVisualAudit, valid: false, status: 'stale', stale: true, issues: [{ code: 'STALE_AUDIT', message: 'HTML 在上次审计后已修改，必须重新审计' }] };
+      return { ...latestVisualAudit, valid: false, status: 'stale', stale: true, groupAuditPassed, checkedPages: [...visuallyPassedPages].sort((a, b) => a - b), exhaustedPages: [...exhaustedPages].sort((a, b) => a - b), issues: [{ code: 'STALE_AUDIT', message: 'HTML 在上次审计后已修改，必须重新审计当前阶段' }] };
     }
-    return latestVisualAudit;
+    return { ...latestVisualAudit, groupAuditPassed, checkedPages: [...visuallyPassedPages].sort((a, b) => a - b), exhaustedPages: [...exhaustedPages].sort((a, b) => a - b) };
   };
-  const executeVisualAudit = async ({ auditAttempt } = {}) => {
-    const report = await auditSocialCardHtmlFit({
-      htmlPath,
-      width: 375,
-      height: 667,
-      designScheme: designScheme.designScheme,
-      storyboardPages: editorialPages,
-      requireDesignScheme: true,
-    });
-    latestVisualAudit = { ...report, auditAttempt, documentDigest: currentHtmlDigest() };
-    return { status: 'ok', data: { ...report, auditAttempt }, provenance: { provider: 'local-browser' } };
+  const executeVisualAudit = async ({ auditAttempt, page } = {}) => {
+    const attempt = Number(auditAttempt);
+    if (!Number.isInteger(attempt) || attempt <= lastVisualAuditAttempt) {
+      throw new Error(`auditAttempt 必须递增；上一次为 ${lastVisualAuditAttempt}，本次收到 ${String(auditAttempt)}`);
+    }
+    lastVisualAuditAttempt = attempt;
+    const scopePage = Number.isInteger(Number(page)) && Number(page) > 0 ? Number(page) : null;
+    const totalPageCount = htmlPageCount(fs.existsSync(htmlPath) ? fs.readFileSync(htmlPath, 'utf8') : '');
+    const nextUncheckedPage = Array.from({ length: totalPageCount }, (_, index) => index + 1).find((pageNumber) => !visuallyPassedPages.has(pageNumber) && !exhaustedPages.has(pageNumber));
+    if (scopePage && !groupAuditPassed) {
+      throw new Error('必须先完成并通过整组审计，之后才能按页进行浏览器测量和方案兑现检查');
+    }
+    if (scopePage && exhaustedPages.has(scopePage)) {
+      throw new Error(`第 ${scopePage} 页已达到最多 ${AI_VISUAL_MAX_PAGE_REPAIR_ATTEMPTS} 次修复且审计结果已保存；请跳过该页并继续第 ${nextUncheckedPage || '—'} 页`);
+    }
+    if (scopePage && scopePage !== nextUncheckedPage) {
+      throw new Error(`请按页序审计；当前应审第 ${nextUncheckedPage || 1} 页，收到第 ${scopePage} 页`);
+    }
+    if (!scopePage && (totalPageCount === 0 || groupAuditPassed || visuallyPassedPages.size > 0)) {
+      throw new Error('整组审计只能先于逐页审计执行；整组通过后按页检查，所有页面通过后直接 finish');
+    }
+    const report = scopePage
+      ? await auditSocialCardHtmlFit({
+        htmlPath,
+        width: 375,
+        height: 667,
+        page: scopePage,
+        designScheme: designScheme.designScheme,
+        storyboardPages: editorialPages,
+        requireDesignScheme: true,
+      })
+      : auditSocialCardHtmlGroup({
+        htmlPath,
+        expectedPageCount: designScheme.designScheme.pages?.length || editorialPages.length,
+      });
+    if (scopePage) {
+      if (report.valid) {
+        visuallyPassedPages.add(scopePage);
+        exhaustedPages.delete(scopePage);
+      } else {
+        visuallyPassedPages.delete(scopePage);
+        if ((successfulPageRepairCounts.get(scopePage) || 0) >= AI_VISUAL_MAX_PAGE_REPAIR_ATTEMPTS) exhaustedPages.add(scopePage);
+      }
+    } else if (report.valid) {
+      groupAuditPassed = true;
+    } else {
+      groupAuditPassed = false;
+      for (const issue of report.issues || []) {
+        const issuePage = Number(issue.page);
+        if (Number.isInteger(issuePage) && issuePage > 0) visuallyPassedPages.delete(issuePage);
+      }
+    }
+    const checkedPages = [...visuallyPassedPages].sort((a, b) => a - b);
+    if (scopePage) {
+      const { previewImageBase64: _previewImageBase64, ...savedReport } = report;
+      const pageHistory = pageAuditHistory.get(scopePage) || [];
+      pageHistory.push({
+        auditAttempt: attempt,
+        checkedAt: new Date().toISOString(),
+        repairAttempts: successfulPageRepairCounts.get(scopePage) || 0,
+        valid: report.valid === true,
+        exhausted: exhaustedPages.has(scopePage),
+        documentDigest: currentHtmlDigest(),
+        report: savedReport,
+      });
+      pageAuditHistory.set(scopePage, pageHistory);
+      savePageAuditResults();
+    }
+    const repairAttempts = scopePage ? (successfulPageRepairCounts.get(scopePage) || 0) : 0;
+    latestVisualAudit = {
+      ...report,
+      pageCount: totalPageCount,
+      scopePage,
+      checkedPages,
+      groupAuditPassed,
+      auditAttempt: attempt,
+      repairAttempts,
+      maxRepairAttemptsPerPage: AI_VISUAL_MAX_PAGE_REPAIR_ATTEMPTS,
+      exhaustedPages: [...exhaustedPages].sort((a, b) => a - b),
+      documentDigest: currentHtmlDigest(),
+    };
+    const issues = (report.issues || []).map(({ code, page, field, message, expected, actual }) => ({
+      ...(code ? { code } : {}),
+      ...(Number.isInteger(Number(page)) && Number(page) > 0 ? { page: Number(page) } : {}),
+      ...(field ? { field } : {}),
+      ...(message ? { message: String(message).slice(0, 1_200) } : {}),
+      ...(compactVisualAuditValue(expected) !== undefined ? { expected: compactVisualAuditValue(expected) } : {}),
+      ...(compactVisualAuditValue(actual) !== undefined ? { actual: compactVisualAuditValue(actual) } : {}),
+    }));
+    return {
+      status: 'ok',
+      data: { valid: report.valid === true, status: report.status, pageCount: totalPageCount, scopePage, checkedPages, groupAuditPassed, issues, auditAttempt: attempt, repairAttempts, maxRepairAttemptsPerPage: AI_VISUAL_MAX_PAGE_REPAIR_ATTEMPTS, exhaustedPages: [...exhaustedPages].sort((a, b) => a - b) },
+      provenance: { provider: 'local-browser' },
+    };
   };
   const generationSystem = `${buildAiVisualSkillPrompt({ workspaceRoot, requiredPageCount: context.requiredPageCount, styleBrief, skillBundle: skillRuntime.bundles.find((bundle) => bundle.skillName === AI_VISUAL_SKILL_NAME) || visualSkillBundle })}${buildAiVisualGenerationBrief({ context, workspaceFiles, styleBrief })}\n\n当前可用工具目录：${JSON.stringify(generationCatalog)}`;
   const generationStage = stageRecorder.start('generation', {
@@ -954,13 +1137,51 @@ export async function runSocialCardBeautify({ gateway, store, batchId, candidate
       maxOutputTokens: providerMaxOutputTokens,
       onProgress,
       onEvent: (event) => {
+        const pendingRepair = pendingPageRepairDigests.get(String(event?.requestId || ''));
+        if (pendingRepair && event?.capability === AI_VISUAL_DOCUMENT_WRITE) {
+          if (event.type === 'tool.completed') {
+            const repairAttempt = (successfulPageRepairCounts.get(pendingRepair.page) || 0) + 1;
+            successfulPageRepairCounts.set(pendingRepair.page, repairAttempt);
+            exhaustedPages.delete(pendingRepair.page);
+            pageRepairHistory.push({ page: pendingRepair.page, attempt: repairAttempt, requestId: event.requestId || null, completedAt: new Date().toISOString(), status: 'written' });
+            pageRepairContentDigests.set(pendingRepair.page, pendingRepair.contentDigest);
+            visuallyPassedPages.delete(pendingRepair.page);
+            latestVisualAudit = latestVisualAudit ? { ...latestVisualAudit, valid: false, status: 'stale', stale: true } : null;
+            savePageAuditResults();
+          }
+          if (event.type === 'tool.completed' || event.type === 'tool.failed') {
+            pendingPageRepairDigests.delete(String(event.requestId));
+          }
+        }
         if (event?.capability === AI_VISUAL_DOCUMENT_WRITE && abortPending) {
-          if (event.type === 'tool.completed') latestVisualAudit = null;
+          if (event.type === 'tool.completed') {
+            latestVisualAudit = null;
+            groupAuditPassed = false;
+            visuallyPassedPages.clear();
+            exhaustedPages.clear();
+            successfulPageRepairCounts.clear();
+            pageAuditHistory.clear();
+            pageRepairHistory.length = 0;
+            lastVisualAuditAttempt = 0;
+            pageRepairContentDigests.clear();
+            pendingPageRepairDigests.clear();
+            savePageAuditResults();
+          }
           if (event.type === 'tool.completed' || event.type === 'tool.failed') abortPending = false;
         }
         onEvent?.(event);
       },
     });
+    generationAgent = {
+      ...generationAgent,
+      visualAudit: {
+        ...(generationAgent?.visualAudit || {}),
+        maxRepairAttemptsPerPage: AI_VISUAL_MAX_PAGE_REPAIR_ATTEMPTS,
+        repairAttemptsByPage: Object.fromEntries(successfulPageRepairCounts),
+        exhaustedPages: [...exhaustedPages].sort((a, b) => a - b),
+        auditResultsFile: SOCIAL_CARD_BEAUTIFY_PAGE_AUDITS,
+      },
+    };
     const generatedHtml = fs.existsSync(htmlPath) ? fs.readFileSync(htmlPath, 'utf8') : '';
     const generatedPageCount = htmlPageCount(generatedHtml);
     const generationCheck = validateAiVisualGenerationCompletion({
@@ -980,6 +1201,7 @@ export async function runSocialCardBeautify({ gateway, store, batchId, candidate
           pageCount: generatedPageCount,
           documentFinished: generationAgent?.documentFinished === true,
           visualAudit: generationAgent?.visualAudit || null,
+          pageAuditResultsFile: SOCIAL_CARD_BEAUTIFY_PAGE_AUDITS,
           pageRepairAttempts: [...pageRepairAttempts],
         },
       });
@@ -996,6 +1218,7 @@ export async function runSocialCardBeautify({ gateway, store, batchId, candidate
         pageCount: generatedPageCount,
         documentFinished: generationAgent.documentFinished === true,
         visualAudit: generationAgent.visualAudit || null,
+        pageAuditResultsFile: SOCIAL_CARD_BEAUTIFY_PAGE_AUDITS,
         pageRepairAttempts: [...pageRepairAttempts],
       },
     });

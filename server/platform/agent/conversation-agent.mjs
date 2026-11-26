@@ -10,11 +10,20 @@ import { registerAgentRun, unregisterAgentRun } from './run-control.mjs';
 
 function budgets(input={},entryPoint=''){
   const visualDocumentAgent=String(entryPoint).includes('ai-visual');
+  const unboundedSocialCardVisual=String(entryPoint)==='social-card-ai-visual-generation';
   const limits=visualDocumentAgent
     ? {...CONVERSATION_AGENT_BUDGET_LIMITS,maxModelSteps:40,maxToolCalls:40}
     : CONVERSATION_AGENT_BUDGET_LIMITS;
   const out={};
   for(const [key,value] of Object.entries(CONVERSATION_AGENT_BUDGET_DEFAULTS))out[key]=Math.min(limits[key],Math.max(1,Number(input[key])||value));
+  if(unboundedSocialCardVisual){
+    out.maxModelSteps=null;
+    out.maxToolCalls=null;
+    out.maxToolResultChars=null;
+    out.maxTotalToolResultChars=null;
+    out.maxHistoryChars=null;
+    out.timeoutMs=null;
+  }
   return Object.freeze(out);
 }
 function runId(){return `agent-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,9)}`;}
@@ -55,7 +64,7 @@ export async function runConversationAgent({entryPoint,modelStep,messages=[],reg
   let toolCalls=resumeState ? 0 : Number(resumeState?.toolCalls)||0;
   let totalResultChars=resumeState ? 0 : Number(resumeState?.totalResultChars)||0;
   let modelSteps=Number(resumeState?.modelSteps)||resumeStart;
-  const stepLimit=resumeState ? resumeStart+limits.maxModelSteps : limits.maxModelSteps;
+  const stepLimit=limits.maxModelSteps==null ? Number.POSITIVE_INFINITY : (resumeState ? resumeStart+limits.maxModelSteps : limits.maxModelSteps);
   // Every run belongs to a stable trace tree. A standalone run is its own
   // root/workflow; resumed runs inherit the checkpoint association.
   const traceContext = Object.freeze({
@@ -90,10 +99,11 @@ export async function runConversationAgent({entryPoint,modelStep,messages=[],reg
   try{
     for(let step=resumeStart;step<stepLimit;step+=1){
       if(runSignal.aborted)throw new AgentContractError('AGENT_ABORTED','Agent 已取消');
-      if(Date.now()-started>limits.timeoutMs)throw new AgentContractError('AGENT_BUDGET_EXCEEDED',`Agent 已超过总耗时预算（${limits.timeoutMs}ms）`);
-      const remaining=Math.max(1,limits.timeoutMs-(Date.now()-started));
-      const modelHistory=compactAgentHistory(history,limits.maxHistoryChars);
-      const modelEnvelope=normalizeModelTurn(await withTimeout(modelStep({entryPoint,messages:modelHistory,catalog,step,signal:runSignal,emit,agentRunId:id,...traceContext}),remaining));
+      if(Number.isFinite(limits.timeoutMs)&&Date.now()-started>limits.timeoutMs)throw new AgentContractError('AGENT_BUDGET_EXCEEDED',`Agent 已超过总耗时预算（${limits.timeoutMs}ms）`);
+      const remaining=Number.isFinite(limits.timeoutMs)?Math.max(1,limits.timeoutMs-(Date.now()-started)):Infinity;
+      const modelHistory=Number.isFinite(limits.maxHistoryChars)?compactAgentHistory(history,limits.maxHistoryChars):history;
+      const pendingModelTurn=modelStep({entryPoint,messages:modelHistory,catalog,step,signal:runSignal,emit,agentRunId:id,...traceContext});
+      const modelEnvelope=normalizeModelTurn(await (Number.isFinite(remaining)?withTimeout(pendingModelTurn,remaining):pendingModelTurn));
       modelSteps=step+1;
       checkpoint('model_completed',step,{modelTurn:modelEnvelope});
       // 原生 function calling 可能在同一个模型响应里返回超过本地并行度的调用。
@@ -136,10 +146,12 @@ export async function runConversationAgent({entryPoint,modelStep,messages=[],reg
           store?.startAgentToolCall?.({agentRunId:id,request,...traceContext});let result;
           if(count>=limits.maxDuplicateCalls&&!confirmedRetry)result=toolError(request,'AGENT_BUDGET_EXCEEDED','相同工具与参数在本轮中不得重复调用',false);
           else if(!(catalog||[]).some((item)=>item.capability===request.capability))result=toolError(request,'CAPABILITY_NOT_VISIBLE',`当前对话未授权能力：${request.capability}`,false);
-          else if(toolCalls>=limits.maxToolCalls)result=toolError(request,'AGENT_BUDGET_EXCEEDED','已达到工具调用预算',false);
-          else {toolCalls+=1;result=await executeConversationTool(request,{registry,catalog,context:{...runContext,store,signal:runSignal,agentRunId:id,agentToolCallId:`${id}:${request.requestId}`,idempotencyKey:fingerprint,timeoutMs:Math.max(1,limits.timeoutMs-(Date.now()-started))},resolveArguments,cacheLookup,onEvent:(type,payload)=>emit(type,payload)});result=await sanitizeToolResult(result,request,{agentRunId:id});}
+          else if(Number.isFinite(limits.maxToolCalls)&&toolCalls>=limits.maxToolCalls)result=toolError(request,'AGENT_BUDGET_EXCEEDED','已达到工具调用预算',false);
+          else {toolCalls+=1;result=await executeConversationTool(request,{registry,catalog,context:{...runContext,store,signal:runSignal,agentRunId:id,agentToolCallId:`${id}:${request.requestId}`,idempotencyKey:fingerprint,timeoutMs:Number.isFinite(limits.timeoutMs)?Math.max(1,limits.timeoutMs-(Date.now()-started)):undefined},resolveArguments,cacheLookup,onEvent:(type,payload)=>emit(type,payload)});result=await sanitizeToolResult(result,request,{agentRunId:id});}
           if(documentWriteScope&&requestArguments.operation==='abort'&&result.status==='ok')documentWriteGenerations.set(documentWriteScope,generation+1);
-          result=compactToolResult(result,Math.min(limits.maxToolResultChars,Math.max(256,limits.maxTotalToolResultChars-totalResultChars)));totalResultChars+=JSON.stringify(result).length;store?.finishAgentToolCall?.({agentRunId:id,request,result});
+          const perToolResultLimit=Number.isFinite(limits.maxToolResultChars)?limits.maxToolResultChars:Infinity;
+          const remainingResultLimit=Number.isFinite(limits.maxTotalToolResultChars)?Math.max(256,limits.maxTotalToolResultChars-totalResultChars):Infinity;
+          result=compactToolResult(result,Math.min(perToolResultLimit,remainingResultLimit));totalResultChars+=JSON.stringify(result).length;store?.finishAgentToolCall?.({agentRunId:id,request,result});
           emit(result.status==='ok'?'tool.completed':'tool.failed',{requestId:request.requestId,capability:request.capability,status:result.status,error:result.error,...(result.status==='ok'?completedEvent(result):{})});return result;
         }));
         results.push(...groupResults);
@@ -163,7 +175,7 @@ export async function runConversationAgent({entryPoint,modelStep,messages=[],reg
       else history.push({role:'assistant',content:JSON.stringify(envelope),protected:true},{role:'tool',content:JSON.stringify(results),protected:true});
       const waitingConfirmation=results.some((result)=>result.error?.code==='TOOL_CONFIRMATION_REQUIRED');
       checkpoint(waitingConfirmation?'waiting_confirmation':'tools_completed',step,{nextStep:step+1});
-      if(totalResultChars>=limits.maxTotalToolResultChars){return finishLimit('达到工具结果字符预算');}
+      if(Number.isFinite(limits.maxTotalToolResultChars)&&totalResultChars>=limits.maxTotalToolResultChars){return finishLimit('达到工具结果字符预算');}
     }
     modelSteps = stepLimit;
     return finishLimit('达到模型步骤预算');

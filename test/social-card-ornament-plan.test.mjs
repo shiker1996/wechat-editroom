@@ -49,14 +49,18 @@ const pageStyle = (page, ornaments) => ({
   sharedAnchorIds: ['time-rail', 'field-stamp'], ornaments,
 });
 
-test('v5 视觉方案要求每页规划不同类型装饰', () => {
+test('v5 视觉方案允许装饰规划可选并校验已规划项', () => {
   const scheme = designScheme();
   const initial = validateSocialCardDesignScheme({ designScheme: scheme, storyboardPages, expectedParadigmId: 'continuous-scroll' });
   assert.equal(initial.valid, true, JSON.stringify(initial.issues));
 
-  scheme.pages[0].ornaments = [scheme.pages[0].ornaments[0]];
-  const missing = validateSocialCardDesignScheme({ designScheme: scheme, storyboardPages, expectedParadigmId: 'continuous-scroll' });
-  assert.ok(missing.issues.some((issue) => issue.code === 'DECORATION_PLAN_TOO_SMALL'));
+  delete scheme.pages[0].ornaments;
+  const omitted = validateSocialCardDesignScheme({ designScheme: scheme, storyboardPages, expectedParadigmId: 'continuous-scroll' });
+  assert.equal(omitted.valid, true, JSON.stringify(omitted.issues));
+
+  scheme.pages[0].ornaments = [pageSpecs[0].ornaments[0]].map(([kind, placement]) => ({ kind, placement, purpose: '呼应本页内容层级' }));
+  const single = validateSocialCardDesignScheme({ designScheme: scheme, storyboardPages, expectedParadigmId: 'continuous-scroll' });
+  assert.equal(single.valid, true, JSON.stringify(single.issues));
 
   scheme.pages[0].ornaments = [
     { kind: 'frame', placement: 'edge', purpose: '边界' },
@@ -127,16 +131,20 @@ test('Chromium 探针只将有真实样式且位于画布内的装饰标为可�
     .good{left:12px;top:12px}.hidden{left:42px;top:12px;opacity:0}
     .blank{left:72px;top:12px;border:0;background:transparent}
     .outside{left:390px;top:12px}
+    .group{position:absolute;left:100px;top:50px;width:120px;height:16px;display:flex;align-items:flex-end;gap:3px}
+    .group span{display:block;width:3px;height:8px;background:#111}
   </style></head><body><section class="page"><p class="copy">Readable heading</p>
     <span class="ornament good" data-ornament="frame" data-ornament-placement="corner"></span>
     <span class="ornament hidden" data-ornament="stamp" data-ornament-placement="corner"></span>
     <span class="ornament blank" data-ornament="badge" data-ornament-placement="inline"></span>
     <span class="ornament outside" data-ornament="motif" data-ornament-placement="edge"></span>
+    <div class="group" data-ornament="motif" data-ornament-placement="behind-focus"><span></span><span></span><span></span></div>
   </section></body></html>`;
   const [measurement] = await probeHtmlLayout({ html, pageSelector: '.page' });
   const ornaments = measurement.pageStyle.ornaments;
-  assert.equal(ornaments.length, 4);
-  assert.deepEqual(ornaments.map((ornament) => ornament.visible), [true, false, false, false]);
+  assert.equal(ornaments.length, 5);
+  assert.deepEqual(ornaments.map((ornament) => ornament.visible), [true, false, false, false, true]);
+  assert.equal(ornaments[4].hasVisualTreatment, true, '组装装饰可由子元素绘制');
   assert.ok(ornaments[0].textOverlaps.some((run) => run.text.includes('Readable heading')));
 });
 
@@ -208,6 +216,19 @@ test('整组浏览器审计可验证 v5 装饰清单并生成联系表', async (
     assert.equal(report.valid, true, JSON.stringify(report.issues));
     assert.ok(report.previewImageBase64?.length > 1000, '整组审计应返回联系表');
     assert.ok(report.designConformance.pages.every((page) => page.ornaments.rendered >= 2));
+
+    const pageReport = await auditSocialCardHtmlFit({
+      htmlPath,
+      page: 2,
+      designScheme: designScheme(),
+      storyboardPages,
+      expectedParadigmId: 'continuous-scroll',
+      requireDesignScheme: true,
+    });
+    assert.equal(pageReport.valid, true, JSON.stringify(pageReport.issues));
+    assert.equal(pageReport.pageCount, 1, '单页审计只测量所选页面');
+    assert.deepEqual(pageReport.pages.map((page) => page.page), [2]);
+    assert.deepEqual(pageReport.designConformance.pages.map((page) => page.page), [2]);
   } finally {
     await fs.rm(workdir, { recursive: true, force: true });
   }
