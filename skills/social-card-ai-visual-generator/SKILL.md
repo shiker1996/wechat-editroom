@@ -48,7 +48,7 @@ Pipeline 每次运行只把候选专属资料放入 `render_request.workspace.fi
 | `references/layout-guide.md` | 375×667 画布、尺寸、安全区、字号、间距、对齐和视觉占用目标 |
 | `references/visual-component-mapping.md` | 事实语义到主组件和辅助组件的选择建议 |
 
-文件缺失或内容冲突时，以 `card-plan.json` 的页序、页面职责和事实为准；`social-design-scheme.json` 负责本次视觉方向，不能改动故事板内容。内外部路径使用同一份 schema v5：除 `contentReading`、`visualDirection`、`palette`、结构化 `typography`、组级 `composition`、`designLanguage`、`sharedAnchors` 和逐页 `pages` 外，还必须包含用户选择的 `paradigmId`。范式只约束页面结构和允许版式，不预设配色、字体和视觉主题。逐页可选包含 `ornaments` 意图（`kind`、`placement`、`purpose`）；缺少装饰规划不阻止方案或生成。若提供装饰意图，浏览器审计会检查实际页面，并将未呈现、位置错误或遮挡文字的问题交给该页 `replace-page` 修复。不得添加空白页、重复文案或虚构事实，不得从候选目录外读取文件。内置参考只指导实现，不能变成页面正文。不要通过 `cap_filesystem_project_read` 重复读取内置参考。
+文件缺失或内容冲突时，以 `card-plan.json` 的页序、页面职责和事实为准；`social-design-scheme.json` 负责本次视觉方向，不能改动故事板内容。内外部路径使用同一份 schema v5：除 `contentReading`、`visualDirection`、`palette`、结构化 `typography`、组级 `composition`、`designLanguage`、`sharedAnchors` 和逐页 `pages` 外，还必须包含用户选择的 `paradigmId`。范式只约束页面结构和允许版式，不预设配色、字体和视觉主题。逐页可选包含 `ornaments` 意图（`kind`、`placement`、`purpose`）；缺少装饰规划不阻止方案或生成。页序每页最多在一个稳定位置出现一次；若共享锚点或页脚已经显示 `02/06`，其他共享锚点和 `index` 装饰不得重复同一页序。内容步骤号、卡片序号只在语义需要时保留，并明确是本页内部编号。若提供装饰意图，浏览器审计会检查实际页面，并将未呈现、位置错误或遮挡文字的问题交给该页 `replace-page` 修复。不得添加空白页、重复文案或虚构事实，不得从候选目录外读取文件。内置参考只指导实现，不能变成页面正文。不要通过 `cap_filesystem_project_read` 重复读取内置参考。
 
 视觉方案以 `contentReading` 为内容依据、以 `designLanguage` 为元素选择。先识别本篇具体主题对象、读者痛点、叙事转折和最值得看见的证据/结果；在内部提出 2–3 个彼此有明显差异、且能由本篇事实解释的视觉概念，比较贴合度、记忆点和可执行性，再选一个作为本篇 art direction。将选中的概念落实为可画出的主视觉母题、视觉隐喻、色彩依据、形状/材质和页面节奏，避免只写“科技感、简洁、高级、编辑风”等抽象标签。`contentType`（工具/事件/自定义）只是流程元数据，不代表视觉风格；不得因同属一种内容类型而重复套用同一配色、卡片皮肤或装饰。每页的 layout、focus、treatment 决定局部表达；主视觉必须表达本页事实或关系，背景和构图变化要服务叙事，不能为了满足多样性检查而机械换色。
 
@@ -76,7 +76,7 @@ Pipeline 每次运行只把候选专属资料放入 `render_request.workspace.fi
 
 以上是整组的最低视觉振幅，不是固定页面模板。若某种组件不适合当前事实，换用同等视觉强度且语义匹配的视觉组件；不得为了满足数量虚构内容。
 
-每个 `.page` 根元素还必须包含与 `social-design-scheme.json` 对应页完全一致的 `data-page`、`data-page-role`、`data-visual-composition`、`data-primary-visual`、`data-background-mode`、`data-accent-placement`；每个 `sharedAnchors` ID 必须在每页对应一个真实可见的 `data-shared-anchor` 元素。若该页方案包含 `ornaments`，每项都应由真实可见的 HTML 元素兑现，并匹配 `data-ornament="kind"`、`data-ornament-placement="placement"` 及规划区域。审计发现未呈现、位置错误或遮挡文字时，只用 `replace-page` 修复对应页，再审计整组；不要求固定装饰数量，也不得为装饰全量重写文档。
+每个 `.page` 根元素还必须包含与 `social-design-scheme.json` 对应页完全一致的 `data-page`、`data-page-role`、`data-visual-composition`、`data-primary-visual`、`data-background-mode`、`data-accent-placement`；每个 `sharedAnchors` ID 必须在每页对应一个真实可见的 `data-shared-anchor` 元素。共享锚点是视觉识别元素，不代表都要显示页码；整组页序每页最多只显示一次。若该页方案包含 `ornaments`，每项都应由真实可见的 HTML 元素兑现，并匹配 `data-ornament="kind"`、`data-ornament-placement="placement"` 及规划区域；`index` 若是整组页码，不能与共享锚点/页脚重复。仅有 data 属性不代表装饰已呈现：元素必须有非零画布内矩形和可见视觉样式，且不得被祖先隐藏。审计发现未呈现、位置错误或遮挡文字时，只用 `replace-page` 修复对应页，再审计整组；不要求固定装饰数量，也不得为装饰全量重写文档。
 
 ## 内容区视觉占用
 
@@ -84,6 +84,7 @@ Pipeline 每次运行只把候选专属资料放入 `render_request.workspace.fi
 
 - 主组件应成为足够大的视觉块，至少承担一段完整的首要事实，而不是只放一个小标签或短句；
 - 3–4 个内容层要通过组件高度、层级、分组和留白形成连续节奏，并尽量使用内容区宽度；
+- 排版前按方案为横条、方框、侧边轨道等装饰估算实际占用矩形；装饰在侧边时同步收窄或偏移 `.page-content-stack`，在顶部/底部时为正文留出高度，让文字在剩余版心中重新换行。装饰与正文至少留 8px 间隔，不能一边放置占宽装饰、一边继续使用全宽正文容器；
 - 写入前估算每页的真实内容高度；多组长列表、结论和观察点无法放入同一画布时，优先在故事板页数上下 2 页范围内拆页，并完整保留事实、限制和观察点；
 - 低信息量页面可以保留呼吸感，但不要让整组页面都只占内容区的一小条；应优先放大真实焦点、展开已有关系或使用更有承载力的语义组件，不能添加空白卡或重复文案；
 - 最终生成后按浏览器审计数据逐页复核：以 `.page-content-stack` 实际高度除以 `.page-body` 可用主体高度作为页面利用率参考；审计 `passed` 只说明结构与溢出门禁通过，不代表密度已达标。逐页报告内容页利用率；低于 60% 时，在事实允许的范围内补充故事板已有内容、展开关系图解或调整组件承载，无法安全提高时说明原因；
@@ -105,7 +106,7 @@ Pipeline 每次运行只把候选专属资料放入 `render_request.workspace.fi
 - `paper-offset` 应有可辨认的纸张错位或印刷阴影；
 - `circle` 应有明确的圆弧或圆形轮廓。
 
-装饰应服务于信息层级，在原尺寸可见但不遮挡文字；先为装饰预留留白，装饰层置于正文和标题层下方，并确保装饰与标题、正文、注释、页码、来源文字之间没有相交。页面背景、伪元素或视觉组件都可实现装饰，使用本篇方案变量和 `pointer-events:none`。浏览器审计会逐行检查装饰与可见文字的交叠；报告出现 `DECORATION_TEXT_OVERLAP` 时，移动装饰或重排留白后复审。不能只留下纯色背景，也不能把装饰降到放大后才看见的透明度。
+装饰应服务于信息层级，在原尺寸可见但不遮挡文字；先按装饰的真实宽高为正文版心预留空间，装饰层置于正文和标题层下方，并确保装饰与标题、正文、注释、页码、来源文字之间没有相交。页面背景、伪元素或视觉组件都可实现装饰，使用本篇方案变量和 `pointer-events:none`。浏览器审计会测量正文容器、可见文字范围和装饰矩形，并逐行检查装饰与文字的交叠；报告出现 `DECORATION_TEXT_OVERLAP` 或 `spaceOptions` 时，按测量值收窄/偏移正文容器并重排内容，再复审。不能只移动装饰到其他文字上，也不能只留下纯色背景或把装饰降到放大后才看见的透明度。
 
 ## 单 Agent 分块写入
 
@@ -114,7 +115,7 @@ Pipeline 每次运行只把候选专属资料放入 `render_request.workspace.fi
 写入协议：
 
 ```text
-begin → append（多个原始 HTML/CSS 分块）→ 整份浏览器逐页审计 →（按页码 replace-page 局部修复并复审，可重复）→ finish → final
+begin → append（多个原始 HTML/CSS 分块）→ 整组审计/修复至通过 → 按页序测量与方案审计/修复 → finish → PNG
 ```
 
 分块只解决模型单次输出长度，不改变整份文档的设计责任。每个 `append` 原样写入不超过工具上限的 HTML/CSS；不要输出完整 HTML JSON，不要依赖程序拼接、补 CSS、补布局结构或补装饰。每个页面都必须有稳定页码锚点，且页码与 `.page` 在 DOM 中的顺序一致：
@@ -125,7 +126,7 @@ begin → append（多个原始 HTML/CSS 分块）→ 整份浏览器逐页审�
 <!-- CARD-PAGE:1:END -->
 ```
 
-完整 HTML 草稿写完后、`finish` 前必须调用 `cap_social_card_visual_audit` 审计全部页面，首次 `auditAttempt` 为 1。工具返回 `status=ok` 仅表示审计成功执行，必须继续读取报告中的 `valid` 和 `issues`；`valid=false` 是正常审计结果，不代表工具调用失败。不得对未修改的同一 HTML 重复相同 `auditAttempt`。带页码的内容溢出、居中、密度、列表、装饰及页面方案标记问题都应使用 `replace-page` 逐页修复：`page` 填审计返回的页码，`content` 只放该页完整 `.page` 根元素，不带锚点；其他页面、全局 CSS、事实与页序保持不变。位置问题按审计返回的实际坐标和期望区域调整；同一页完全相同的替换内容不得重复提交。替换后对整份 HTML 递增 `auditAttempt` 重新审计。只有问题无法定位到页，或页面锚点/根结构损坏时，才 `abort` 并完整重建。装饰方案是可选意图，不要求固定数量，也不得仅因装饰不足而重建整份文档。只有审计通过、所有页面和闭合标签写完并成功 `finish` 后，才能返回：
+完整 HTML 草稿写完后、`finish` 前先省略 `page` 调用 `cap_social_card_visual_audit` 做整组结构审计，每次 `auditAttempt` 递增，首次为 1。该阶段只检查整份文档的页数、DOM 页序、`data-page` 与页面起止锚点，不运行浏览器布局测量或逐页方案兑现检查。工具返回 `status=ok` 仅表示检查已执行，必须读取 `valid`、`groupAuditPassed` 和 `issues`；`valid=false` 是正常检查结果，不代表工具调用失败。整组结构未通过时，修正或重建整份文档后重做整组审计，不得按页 `replace-page`。整组通过后才开始逐页检查：按 DOM 页序从 `page=1` 调用审计，逐页执行浏览器测量和方案兑现检查。只有带 `page` 的逐页报告明确指出当前页失败时，才用 `replace-page` 修复该页：`content` 只放该页完整 `.page` 根元素，不带锚点；其他页面、全局 CSS、事实与页序保持不变。每页最多成功替换 3 次；每次修复后递增 `auditAttempt` 并复审同一页。第三次修复后仍失败时，保存该页完整审计结果到 `ai-visual-page-audit-results.json`、封存该页并继续下一页；不得重试该页或 abort 整份文档。所有页面通过或已封存审计结果后直接 `finish`；封存失败页作为交付警告保留，不阻断 finish、PNG 生成和后续交付。finish 成功后编排器生成 PNG。位置问题按审计返回的实际坐标和期望区域调整；同一页完全相同的替换内容不得重复提交。装饰未呈现时，依据逐页 `issues[].actual.candidates` 判断是缺少标记、placement 不符，还是元素不可见；不可见候选须按实测的可见性、视觉样式和画布内矩形修复。单页替换不能改全局 CSS，因此沿用已有样式类或使用页内行内样式，不要添加无样式 class 或空占位元素。装饰方案是可选意图，不要求固定数量，也不得仅因装饰不足而重建整份文档。所有页面和闭合标签写完、整组结构审计通过、逐页全部审计或封存并成功 `finish` 后，才能返回：
 
 ```json
 {"type":"final","assistantReply":"已完成 AI 视觉 HTML 生成"}

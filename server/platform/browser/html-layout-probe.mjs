@@ -49,6 +49,18 @@ export async function probeHtmlLayout({ html, width = 375, height = 667, pageSel
           const rect = pageElement.getBoundingClientRect();
           const inner = pageElement.querySelector('.page-inner');
           const innerStyle = inner ? getComputedStyle(inner) : null;
+          const regionRect = (element) => {
+            if (!element) return null;
+            const bounds = element.getBoundingClientRect();
+            return { x: bounds.x - rect.x, y: bounds.y - rect.y, width: bounds.width, height: bounds.height };
+          };
+          const textBounds = contentTextRuns.length ? (() => {
+            const left = Math.min(...contentTextRuns.map((run) => run.rect.x));
+            const top = Math.min(...contentTextRuns.map((run) => run.rect.y));
+            const right = Math.max(...contentTextRuns.map((run) => run.rect.x + run.rect.width));
+            const bottom = Math.max(...contentTextRuns.map((run) => run.rect.y + run.rect.height));
+            return { x: left, y: top, width: right - left, height: bottom - top };
+          })() : null;
           return {
             width: rect.width,
             height: rect.height,
@@ -63,6 +75,12 @@ export async function probeHtmlLayout({ html, width = 375, height = 667, pageSel
             backgroundMode: pageElement.dataset.backgroundMode || '',
             accentPlacement: pageElement.dataset.accentPlacement || '',
             coverLayout: pageElement.dataset.coverLayout || '',
+            contentRegion: {
+              body: regionRect(pageElement.querySelector('.page-body')),
+              stack: regionRect(contentStackElement),
+              textBounds,
+              textRunCount: contentTextRuns.length,
+            },
             sharedAnchorIds: [...pageElement.querySelectorAll('[data-shared-anchor]')].filter((element) => {
               const anchorStyle = getComputedStyle(element);
               const anchorRect = element.getBoundingClientRect();
@@ -71,6 +89,15 @@ export async function probeHtmlLayout({ html, width = 375, height = 667, pageSel
             ornaments: [...pageElement.querySelectorAll('[data-ornament]')].map((element) => {
               const ornamentStyle = getComputedStyle(element);
               const ornamentRect = element.getBoundingClientRect();
+              let ancestorsVisible = true;
+              for (let ancestor = element; ancestor && ancestor !== pageElement.parentElement; ancestor = ancestor.parentElement) {
+                const ancestorStyle = getComputedStyle(ancestor);
+                if (ancestorStyle.display === 'none' || ancestorStyle.visibility === 'hidden' || Number(ancestorStyle.opacity) <= 0) {
+                  ancestorsVisible = false;
+                  break;
+                }
+                if (ancestor === pageElement) break;
+              }
               const left = Math.max(rect.left, ornamentRect.left);
               const top = Math.max(rect.top, ornamentRect.top);
               const right = Math.min(rect.right, ornamentRect.right);
@@ -79,11 +106,34 @@ export async function probeHtmlLayout({ html, width = 375, height = 667, pageSel
               const hasVisibleBorder = ['Top', 'Right', 'Bottom', 'Left'].some((side) => Number.parseFloat(ornamentStyle[`border${side}Width`]) > 0
                 && ornamentStyle[`border${side}Style`] !== 'none'
                 && hasOpaqueColor(ornamentStyle[`border${side}Color`]));
-              const hasVisualTreatment = hasVisibleBorder
+              const hasDirectVisualTreatment = (target, targetStyle) => {
+                const hasBorder = ['Top', 'Right', 'Bottom', 'Left'].some((side) => Number.parseFloat(targetStyle[`border${side}Width`]) > 0
+                  && targetStyle[`border${side}Style`] !== 'none'
+                  && hasOpaqueColor(targetStyle[`border${side}Color`]));
+                return hasBorder
+                  || hasOpaqueColor(targetStyle.backgroundColor)
+                  || targetStyle.backgroundImage !== 'none'
+                  || targetStyle.boxShadow !== 'none'
+                  || Boolean((target.innerText || target.textContent || '').trim() && hasOpaqueColor(targetStyle.color));
+              };
+              const hasOwnVisualTreatment = hasVisibleBorder
                 || hasOpaqueColor(ornamentStyle.backgroundColor)
                 || ornamentStyle.backgroundImage !== 'none'
                 || ornamentStyle.boxShadow !== 'none'
                 || Boolean((element.innerText || element.textContent || '').trim() && hasOpaqueColor(ornamentStyle.color));
+              const hasVisibleDescendantTreatment = !hasOwnVisualTreatment && [...element.querySelectorAll('*')].some((child) => {
+                const childRect = child.getBoundingClientRect();
+                const intersectsPage = childRect.right > rect.left && childRect.left < rect.right
+                  && childRect.bottom > rect.top && childRect.top < rect.bottom;
+                if (!intersectsPage || !hasDirectVisualTreatment(child, getComputedStyle(child))) return false;
+                for (let ancestor = child; ancestor && ancestor !== element.parentElement; ancestor = ancestor.parentElement) {
+                  const ancestorStyle = getComputedStyle(ancestor);
+                  if (ancestorStyle.display === 'none' || ancestorStyle.visibility === 'hidden' || Number(ancestorStyle.opacity) <= 0) return false;
+                  if (ancestor === element) break;
+                }
+                return true;
+              });
+              const hasVisualTreatment = hasOwnVisualTreatment || hasVisibleDescendantTreatment;
               const clippedWidth = right - left;
               const clippedHeight = bottom - top;
               // Rails and rules are intentionally narrow in one dimension; requiring
@@ -94,9 +144,11 @@ export async function probeHtmlLayout({ html, width = 375, height = 667, pageSel
               const visible = ornamentStyle.display !== 'none'
                 && ornamentStyle.visibility !== 'hidden'
                 && Number(ornamentStyle.opacity) > 0
+                && ancestorsVisible
                 && hasVisualTreatment
                 && (visibleBlockOrnament || visibleLinearOrnament);
               const relativeRect = { x: ornamentRect.x - rect.x, y: ornamentRect.y - rect.y, width: ornamentRect.width, height: ornamentRect.height };
+              const clippedRect = { x: left - rect.x, y: top - rect.y, width: clippedWidth, height: clippedHeight };
               const borderWidth = Math.max(0, ...['Top', 'Right', 'Bottom', 'Left'].map((side) => Number.parseFloat(ornamentStyle[`border${side}Width`]) || 0));
               const frameLike = element.dataset.ornament === 'frame';
               const textOverlaps = visible ? textRuns.filter((run) => {
@@ -114,9 +166,16 @@ export async function probeHtmlLayout({ html, width = 375, height = 667, pageSel
               return {
                 kind: element.dataset.ornament || '',
                 placement: element.dataset.ornamentPlacement || '',
+                tag: element.tagName.toLowerCase(),
+                className: String(element.getAttribute('class') || '').slice(0, 120),
                 visible,
                 hasVisualTreatment,
+                ancestorsVisible,
+                display: ornamentStyle.display,
+                visibility: ornamentStyle.visibility,
+                opacity: Number(ornamentStyle.opacity),
                 rect: relativeRect,
+                clippedRect,
                 textOverlaps,
               };
             }),

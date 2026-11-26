@@ -6,6 +6,7 @@ export { SOCIAL_CARD_DESIGN_SCHEME_SCHEMA, SOCIAL_CARD_DESIGN_SCHEME_TOOL_SCHEMA
 const HEX = /^#[0-9a-f]{6}$/i;
 const clean = (value) => String(value ?? '').trim();
 const normalized = (value) => clean(value).toLowerCase();
+const explicitPageSequenceCue = /(?:页码|页序|页号|页脚.{0,16}(?:索引|编号)|每页.{0,16}(?:编号|索引)|本页.{0,16}(?:编号|索引|位置)|(?:索引|编号).{0,16}(?:每页|页码|页序|收尾|位置|封面)|(?:封面|结尾|收尾).{0,12}索引|\b0x\s*\/\s*\d{1,2}\b)/i;
 
 function validateSchema(schema, value, field, issues) {
   const fail = (message) => issues.push({ code: 'DESIGN_SCHEME_SCHEMA_INVALID', field, message });
@@ -78,6 +79,23 @@ export function validateSocialCardDesignScheme({ designScheme, storyboardPages =
   if (new Set(anchorIds).size !== anchorIds.length) issues.push({ code: 'SHARED_ANCHOR_ID_DUPLICATE', field: 'sharedAnchors', message: 'sharedAnchors id 不能重复' });
 
   const pages = Array.isArray(scheme.pages) ? scheme.pages : [];
+  const sharedPageSequenceLocations = [];
+  anchors.forEach((anchor, index) => {
+    if (explicitPageSequenceCue.test(clean(anchor?.description))) sharedPageSequenceLocations.push(`sharedAnchors[${index}].description`);
+  });
+  const ornamentPageSequenceLocations = [];
+  pages.forEach((page, index) => {
+    (Array.isArray(page?.ornaments) ? page.ornaments : []).forEach((ornament, ornamentIndex) => {
+      if (normalized(ornament?.kind) === 'index' && explicitPageSequenceCue.test(clean(ornament?.purpose))) {
+        ornamentPageSequenceLocations.push(`pages[${index}].ornaments[${ornamentIndex}].purpose`);
+      }
+    });
+  });
+  if (sharedPageSequenceLocations.length > 1 || (sharedPageSequenceLocations.length > 0 && ornamentPageSequenceLocations.length > 0)) warnings.push({
+    code: 'PAGE_NUMBERING_REDUNDANT',
+    field: 'sharedAnchors',
+    message: `页面序号同时出现在多个实际组件位置（${[...sharedPageSequenceLocations, ...ornamentPageSequenceLocations].join('、')}）；整组页序最多只在一个稳定位置显示，其他共享锚点改为无编号的视觉标识，内容步骤编号与页序分开。此项是自动修正建议，不作为生成门禁`,
+  });
   if (!Array.isArray(storyboardPages) || pages.length !== storyboardPages.length) issues.push({ code: 'DESIGN_PAGE_COUNT_MISMATCH', field: 'pages', message: `pages 必须与锁定故事板页数一致（${storyboardPages.length} 页）` });
   pages.forEach((page, index) => {
     const label = `pages[${index}]`;

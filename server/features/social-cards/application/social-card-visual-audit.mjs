@@ -5,6 +5,88 @@ import { compareSocialCardDesignToMeasurements } from './social-card-design-conf
 const AUDIT_SELECTORS = Object.freeze(['.page-body', '.page-content-stack']);
 const MAX_CONTENT_CENTER_OFFSET_PX = 18;
 
+function inspectDocumentStructure(html, expectedPageCount) {
+  const source = String(html || '');
+  const pageRoots = [...source.matchAll(/<(section|div)\b[^>]*>/gi)]
+    .filter(([tag]) => (tag.match(/\bclass\s*=\s*(["'])(.*?)\1/i)?.[2] || '').split(/\s+/).includes('page'))
+    .map((match) => ({ tag: match[0], tagName: match[1], offset: match.index }));
+  const actualPageCount = pageRoots.length;
+  const pageNumbers = pageRoots.map(({ tag }) => tag.match(/\bdata-page\s*=\s*(["'])(.*?)\1/i)?.[2] || null);
+  const markerMatches = [...source.matchAll(/<!--\s*CARD-PAGE:(\d+):(START|END)\s*-->/g)];
+  const markers = markerMatches.map(([, page, edge]) => `${page}:${edge}`);
+  const expectedMarkers = Array.from({ length: actualPageCount }, (_, index) => [`${index + 1}:START`, `${index + 1}:END`]).flat();
+  const expectedCount = Number(expectedPageCount) || 0;
+  const pageOrderValid = pageNumbers.every((page, index) => String(page) === String(index + 1));
+  const markerSequenceValid = markers.length === expectedMarkers.length
+    && expectedMarkers.every((marker, index) => markers[index] === marker);
+  let previousPageEnd = -1;
+  const pageAnchorsValid = markerSequenceValid && pageRoots.every(({ tagName, offset, tag }, index) => {
+    const start = markerMatches[index * 2];
+    const end = markerMatches[index * 2 + 1];
+    const elementTags = new RegExp(`<\\/?${tagName}\\b[^>]*>`, 'gi');
+    elementTags.lastIndex = offset + tag.length;
+    let depth = 1;
+    let elementEnd = -1;
+    let elementTag;
+    while ((elementTag = elementTags.exec(source))) {
+      if (/^<\//.test(elementTag[0])) depth -= 1;
+      else if (!/\/>$/.test(elementTag[0])) depth += 1;
+      if (depth === 0) {
+        elementEnd = elementTags.lastIndex;
+        break;
+      }
+    }
+    // 相邻页面的 END 与下一页 START 可以首尾相接，位置相同也算按序包裹。
+    const wrapped = start?.index >= previousPageEnd
+      && start?.index < offset
+      && elementEnd > offset
+      && end?.index >= elementEnd;
+    if (wrapped) previousPageEnd = end.index + end[0].length;
+    return wrapped;
+  });
+  const countValid = actualPageCount > 0 && (!expectedCount || actualPageCount === expectedCount);
+  return {
+    actualPageCount,
+    expectedPageCount: expectedCount || undefined,
+    pageOrderValid,
+    markerSequenceValid,
+    pageAnchorsValid,
+    countValid,
+  };
+}
+
+export function auditSocialCardHtmlGroup({ htmlPath, expectedPageCount = 0 } = {}) {
+  const result = {
+    valid: false,
+    status: 'error',
+    pageCount: 0,
+    pages: [],
+    issues: [],
+  };
+  if (!htmlPath || !fs.existsSync(htmlPath)) {
+    result.issues.push({ code: 'HTML_MISSING', message: '找不到待审计的 AI 图文 HTML' });
+    return result;
+  }
+  try {
+    const structure = inspectDocumentStructure(fs.readFileSync(htmlPath, 'utf8'), expectedPageCount);
+    result.pageCount = structure.actualPageCount;
+    if (!structure.countValid || !structure.pageOrderValid || !structure.markerSequenceValid || !structure.pageAnchorsValid) {
+      result.issues.push({
+        code: 'DOCUMENT_STRUCTURE_INVALID',
+        expected: { pageCount: structure.expectedPageCount, pageOrder: 'DOM 顺序与 data-page 一致', pageAnchors: '每页恰有一组有序起止锚点' },
+        actual: { pageCount: structure.actualPageCount, pageOrderValid: structure.pageOrderValid, pageAnchorsValid: structure.pageAnchorsValid },
+        message: '整份 HTML 的页面数量、页序或页面锚点结构不符合文档要求；此阶段不定位单页，也不做浏览器布局与方案兑现检查。请修正整份文档结构后重新做整组审计。',
+      });
+    }
+    result.valid = result.issues.length === 0;
+    result.status = result.valid ? 'passed' : 'blocked';
+    return result;
+  } catch (error) {
+    result.issues.push({ code: 'AUDIT_FAILED', message: `整组文档结构审计失败：${error.message}` });
+    return result;
+  }
+}
+
 export async function auditSocialCardHtmlFit({ htmlPath, width = 375, height = 667, tolerancePx = 2, page: selectedPage = null, pageRoles = [], listPageItemCounts = [], minimumContentUtilization = 0.6, minimumListItemHeight = 32, designScheme = null, storyboardPages = [], expectedParadigmId = '', requireDesignScheme = false, includeContactSheet = false } = {}) {
   const result = {
     valid: false,
