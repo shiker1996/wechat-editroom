@@ -49,14 +49,18 @@ const pageStyle = (page, ornaments) => ({
   sharedAnchorIds: ['time-rail', 'field-stamp'], ornaments,
 });
 
-test('v5 视觉方案要求每页规划不同类型装饰', () => {
+test('v5 视觉方案允许装饰规划可选并校验已规划项', () => {
   const scheme = designScheme();
   const initial = validateSocialCardDesignScheme({ designScheme: scheme, storyboardPages, expectedParadigmId: 'continuous-scroll' });
   assert.equal(initial.valid, true, JSON.stringify(initial.issues));
 
-  scheme.pages[0].ornaments = [scheme.pages[0].ornaments[0]];
-  const missing = validateSocialCardDesignScheme({ designScheme: scheme, storyboardPages, expectedParadigmId: 'continuous-scroll' });
-  assert.ok(missing.issues.some((issue) => issue.code === 'DECORATION_PLAN_TOO_SMALL'));
+  delete scheme.pages[0].ornaments;
+  const omitted = validateSocialCardDesignScheme({ designScheme: scheme, storyboardPages, expectedParadigmId: 'continuous-scroll' });
+  assert.equal(omitted.valid, true, JSON.stringify(omitted.issues));
+
+  scheme.pages[0].ornaments = [pageSpecs[0].ornaments[0]].map(([kind, placement]) => ({ kind, placement, purpose: '呼应本页内容层级' }));
+  const single = validateSocialCardDesignScheme({ designScheme: scheme, storyboardPages, expectedParadigmId: 'continuous-scroll' });
+  assert.equal(single.valid, true, JSON.stringify(single.issues));
 
   scheme.pages[0].ornaments = [
     { kind: 'frame', placement: 'edge', purpose: '边界' },
