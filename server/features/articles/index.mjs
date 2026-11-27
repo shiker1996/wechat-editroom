@@ -39,7 +39,7 @@ export { mapBreakingArticleScore, normalizeScore, routeBreakingAnalysis, runBrea
 export { dailyFocusOptions, dailyVisibleChars, normalizeDailyQuality, runDailyPipeline, selectDailyEvents } from './llm/daily-pipeline.mjs';
 export { runTutorialPipeline, tutorialVisibleChars } from './llm/tutorial-pipeline.mjs';
 export { analyzeVisualComplexity, normalizeVisualPlan, planArticleVisuals, insertVisualFences } from './llm/visual-planner.mjs';
-export { imageManifestFile, planImagePlaceholders, registerGeneratedImageAssets, uploadImageToCdn, buildImagesMarkdown, applyImagePlan, parseImagePlaceholders, saveImageMetadata, registerGeneratedSlotImage, getImageWorkspace, saveLocalImage } from './application/image-workflow.mjs';
+export { imageManifestFile, clearImagePlan, validateExternalImagePlan, planImagePlaceholders, registerGeneratedImageAssets, uploadImageToCdn, buildImagesMarkdown, applyImagePlan, parseImagePlaceholders, saveImageMetadata, registerGeneratedSlotImage, getImageWorkspace, saveLocalImage } from './application/image-workflow.mjs';
 export { generateArticleImage } from './application/article-image-generator.mjs';
 export { createArticleImageAsset } from './application/article-image-create.mjs';
 export { collectCandidateImageSources } from './application/article-image-sources.mjs';

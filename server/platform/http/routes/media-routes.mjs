@@ -1,6 +1,6 @@
 import { executeCapability } from '../../tools/capability-runtime.mjs';
 import { createStoreExecutionLogger } from '../../tools/execution-log.mjs';
-import { auditExternalArticleLocally, collectCandidateImageSources, createArticleImageAsset, generateArticleImage, registerGeneratedSlotImage, renderCover, validateGeneratedCoverHtml } from '../../../features/articles/index.mjs';
+import { applyImagePlan, clearImagePlan, validateExternalImagePlan, auditExternalArticleLocally, collectCandidateImageSources, createArticleImageAsset, generateArticleImage, registerGeneratedSlotImage, renderCover, validateGeneratedCoverHtml } from '../../../features/articles/index.mjs';
 import { pipeFile } from '../route-helpers.mjs';
 import { createRequestHarnessGateway } from '../../skills/pipeline-runtime.mjs';
 import { deriveWritingStance, visualPolicyForStance } from '../../../shared/domain/writing-stance.mjs';
@@ -156,7 +156,8 @@ export async function handleMediaRoutes(context) {
     const batch = store.getBatch(candidate.batch_id); const workdir = articleWorkdir(batch, candidate);
     if (!fs.existsSync(path.join(workdir,'09-FINAL.md'))) return json(response, 409, { error:'缺少 09-FINAL.md，请先完成成稿链' });
     const input = await body(request) || {};
-    return json(response, 202, aiJobs.start({batchId:batch.id,candidateId:candidate.id,provider:input.provider||null,type:'article-image-pipeline',replan:input.replan!==false,restartFromStart:input.restartFromStart===true}));
+    if (input.requirePlanned && !getImageWorkspace(workdir).planned) return json(response, 409, {error:'请先提交外部 Agent 配图规划'});
+    return json(response, 202, aiJobs.start({batchId:batch.id,candidateId:candidate.id,provider:input.provider||null,type:'article-image-pipeline',replan:input.requirePlanned ? false : input.replan!==false,restartFromStart:input.requirePlanned ? false : input.restartFromStart===true}));
   }
   const imagePlanMatch = pathname.match(/^\/api\/candidates\/(\d+)\/images\/plan$/);
   if (imagePlanMatch && request.method === 'POST') {
@@ -165,13 +166,18 @@ export async function handleMediaRoutes(context) {
     const batch = store.getBatch(candidate.batch_id); const workdir = articleWorkdir(batch, candidate);
     const finalPath = path.join(workdir, '09-FINAL.md');
     if (!fs.existsSync(finalPath)) return json(response, 409, { error:'缺少 09-FINAL.md，请先完成成稿链' });
-    const input = await body(request); const provider = input.provider || models.config.defaultProvider;
-    const providerConfig = models.config.providers[provider];
-    if (!providerConfig) return json(response, 400, { error:'未知模型服务商' });
+    const input = await body(request) || {};
     const original = fs.readFileSync(finalPath, 'utf8');
-    const harness=createRequestHarnessGateway({gateway:models,store,entryPoint:'article-image-plan',skillId:'article-image-plan',provider,batchId:batch.id,candidateId:candidate.id,stageId:'article-image-plan'});
-    let content; try { content=await planImagePlaceholders({ gateway:harness.gateway, store, batchId:batch.id, candidateId:candidate.id,
-      provider, markdown:original, maxOutputTokens:Math.min(3000, providerConfig.maxOutputTokens) }); harness.finish('completed'); } catch (error) { harness.finish('failed',error.message); throw error; }
+    if (!Object.hasOwn(input, 'placements')) {
+      const skill = loadSkillBundle({workspaceRoot:root, skillName:'article-image-placeholders'});
+      return json(response, 200, { candidateId:candidate.id, skill:skill.prompt, markdown:original, instructions:'依据 Skill 和终稿提交 placements 数组；空数组表示无需配图。' });
+    }
+    const current = getImageWorkspace(workdir);
+    if (current.items.some((item) => item.status === 'local' || item.status === 'cdn')) return json(response, 409, {error:'已有配图，请先处理现有图片后再重新规划'});
+    const clean = clearImagePlan(original);
+    try { validateExternalImagePlan(clean, input.placements); }
+    catch (error) { return json(response, 422, {error:error.message}); }
+    const content = applyImagePlan(clean, input.placements);
     const file = writeUtf8(finalPath, content);
     const existing = store.listDocuments(batch.id).find((item) => item.candidate_row_id === candidate.id && item.kind === 'final');
     store.saveDocument({ batchId:batch.id, candidateId:candidate.id, kind:'final', title:existing?.title || candidate.hotspot_title,

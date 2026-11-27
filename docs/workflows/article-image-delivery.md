@@ -2,7 +2,7 @@
 
 ## 用户目标与范围
 
-- 工作台 UI 与外部 Agent 均可读取文章配图占位、按需规划或创建（自动匹配选题采集来源并截图、时间轴、数据卡、受来源原文约束的关系示意图、ECharts）本地图片，并在用户明确要求时上传到已配置 CDN。
+- 工作台 UI 与外部 Agent 均可读取文章配图占位、创建（自动匹配选题采集来源并截图、时间轴、数据卡、受来源原文约束的关系示意图、ECharts）本地图片，并在用户明确要求时上传到已配置 CDN。
 - 占位只描述配图目标和可搜索的来源方向；流水线负责公开来源的联网发现、核验与呈现选择。只有私有材料、作者真实实测或指定授权原图无法由公开来源替代时才要求人工提供。
 - 本流程覆盖普通文章候选配图；批次早报配图仍只通过工作台 API/UI 操作。
 
@@ -22,7 +22,8 @@
 | --- | --- | --- | --- |
 | 查看 | `candidateId` | 返回配图占位、本地/CDN 状态和 CDN 是否已配置 | `GET /api/candidates/:id/images` |
 | 启动 | `candidateId`、可选 provider、可选 `restartFromStart` | 要求已有 `09-FINAL.md`；创建候选级异步任务。默认续跑缺失项；显式从占位重跑时先归档旧图片、清单和检查点 | `POST /api/candidates/:id/images/run` |
-| 规划（按需/重规划） | 终稿 Markdown、`replan`、`restartFromStart` | 默认保留已完成图片并只处理缺失项；显式从占位重跑时重新规划，并将旧图片、资产清单和检查点归档到 `.image-history/` | `article-image-pipeline.mjs`、`image-workflow.mjs` |
+| 外部规划 | 终稿和配图 Skill；外部 Agent 提交 placements | 工作台校验并保存占位；已有图片时拒绝重规划；外部流水线要求已规划并保留方案 | `media-routes.mjs`、`image-workflow.mjs` |
+| 工作台规划 | 终稿 Markdown、`replan`、`restartFromStart` | 工作台模型按需规划；显式重跑时归档旧图片与检查点 | `article-image-pipeline.mjs` |
 | 来源发现与匹配 | 待配图占位、候选已采集来源、已启用的 web-search 槽位 | 工作台为占位检索公开页面；Agent 只能选输入中的 sourceId。搜索结果仅作候选，不算已核验事实 | `article-image-pipeline.mjs`、`article-image-agent/SKILL.md`、`capability-slots.mjs` |
 | 来源核验与呈现选择 | 已选公开来源、终稿、搜索摘要 | capture 选择直接相关页面；datacard 仅可使用终稿数字并要求数字同时出现在重新抓取的来源正文；diagram 可组合 1–3 个来源，并要求每条原文摘录绑定对应来源、逐字出现在重新抓取的正文；不满足时转人工确认。长文来源会优先向规划 Agent 提供与占位相关的段落 | `article-image-pipeline.mjs`、`article-image-create.mjs` |
 | 逐项生成 | 已核验的截图/数据卡/示意图方案 | 生成来源页面截图、数据卡或由受限节点与连线规格绘制的机制图，并附来源 URL、核验日期；单项失败不阻塞其他图片；逐项更新资产清单和流水线检查点 | `article-image-pipeline.mjs`、`article-image-create.mjs`、`article-image-generator.mjs` |
@@ -38,7 +39,7 @@ HTTP 层验证候选、终稿和可生成占位；底层保存流程限制 PNG/J
 
 - MCP 与工作台候选图片接口共用同一业务逻辑和上传门控。早报图片没有暴露为 MCP 工具。
 - 两份外部 Agent 工具注册表都把自动配图入口映射到同一流水线 API，单项重做仍映射到配图创建接口；流水线搜索复用工作台已启用的 `web-search` 能力，来源抓取复用 `web-page` 能力。流水线将受校验的来源 ID 交给图片服务，截图使用独立 `article-image-capture` Profile，不复用 Reddit Profile。
-- 工作台按钮和外部 Agent 均调用同一候选级流水线，默认重规划未完成占位、优先生成可处理图片、记录检查点并重试缺失项。外部 Agent 调用 `jianzi_article_images_run` 后通过 `jianzi_job_wait` 等待；逐占位生成/创建接口保留为人工单项重做入口。
+- 工作台按钮和外部 Agent 调用同一候选级流水线；外部 Agent 提交占位后运行时禁止内部重规划，工作台按钮保留内部规划。两者均记录检查点并重试缺失项。外部 Agent 调用 `jianzi_article_images_run` 后通过 `jianzi_job_wait` 等待；逐占位生成/创建接口保留为人工单项重做入口。
 - 手动调用单项 `create` 的 `mode:auto` 仍使用确定性相关度排序；批量流水线规划 Agent 可选输入中已采集或联网搜索得到的 sourceId，不得自造 URL。联网搜索能力不可用时仍尝试已采集来源；没有足够证据的占位标记待人工确认。示意图由固定 HTML 模板按白名单规格绘制，不接受模型生成 HTML/SVG。
 - CDN 上传会产生外部写入；MCP 描述和 Skill 要求只有用户明确要求时才调用。
 

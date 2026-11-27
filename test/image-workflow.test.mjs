@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { applyImagePlan, parseImagePlaceholders, getImageWorkspace, saveLocalImage,
+import { applyImagePlan, validateExternalImagePlan, parseImagePlaceholders, getImageWorkspace, saveLocalImage,
   saveImageMetadata, buildImagesMarkdown, registerGeneratedImageAssets, registerGeneratedSlotImage } from '../server/features/articles/application/image-workflow.mjs';
 
 test('配图规划只插入结构化注释且不改写正文', () => {
@@ -158,4 +158,15 @@ test('批次早报从 03-FINAL.md 读取人工配图占位', () => {
     assert.equal(workspace.items[0].id, '资料:01');
     assert.deepEqual(workspace.manualUnresolved, ['资料:01']);
   } finally { fs.rmSync(root, { recursive:true, force:true }); }
+});
+
+
+test('外部配图方案校验锚点和正文数据，空方案有效', () => {
+  const text = '# 标题\n\n第一段有 10 人。\n\n第二段有 20 人。';
+  const item = {type:'资料', afterExact:'第一段有 10 人。', content:'人数对比', ratio:'16:9', suggestedSource:'官方统计', copyrightAction:'标注来源', generate:{kind:'datacard', title:'人数', items:[{label:'第一段',value:'10 人'},{label:'第二段',value:'20 人'}]}};
+  assert.doesNotThrow(() => validateExternalImagePlan(text, [item]));
+  assert.doesNotThrow(() => validateExternalImagePlan(text, []));
+  assert.throws(() => validateExternalImagePlan(text, [{...item, afterExact:'不存在'}]), /逐字/);
+  assert.throws(() => validateExternalImagePlan(text, [{...item, generate:{...item.generate, items:[{label:'第一段',value:'99 人'},{label:'第二段',value:'20 人'}]}}]), /逐字/);
+  assert.throws(() => validateExternalImagePlan(text, Array(5).fill(item)), /最多 4/);
 });
