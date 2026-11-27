@@ -489,7 +489,7 @@ AI 起草（单步）{ provider, instructions, existingDraft }
 → 排版预览
 
 ### POST /api/candidates/:id/images/plan
-AI 规划配图占位
+不传 placements 时返回终稿与配图规划 Skill；外部 Agent 自行规划后提交 placements 数组，工作台校验并保存。已有本地或 CDN 图片时拒绝重规划。
 → 排版预览
 
 ### POST /api/candidates/:id/images/run

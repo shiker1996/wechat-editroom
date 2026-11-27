@@ -122,6 +122,29 @@ export function clearImagePlan(markdown) {
     .trim();
 }
 
+export function validateExternalImagePlan(markdown, placements) {
+  if (!Array.isArray(placements) || placements.length > 4) throw new Error('placements 必须是最多 4 项的数组');
+  for (const [index, item] of placements.entries()) {
+    const fail = (message) => { throw new Error(`第 ${index + 1} 项：${message}`); };
+    if (!item || !TYPES.has(item.type)) fail('类型须为来源、资料或参考');
+    for (const key of ['afterExact', 'content', 'ratio', 'suggestedSource', 'copyrightAction']) {
+      if (typeof item[key] !== 'string' || !item[key].trim() || item[key].length > 500 || /[|\r\n]|--!?>/.test(item[key])) fail(`${key} 须为不含换行或占位分隔符的非空文本`);
+    }
+    if (!markdown.includes(item.afterExact)) fail('afterExact 必须逐字出现在终稿中');
+    if (markdown.indexOf(item.afterExact) !== markdown.lastIndexOf(item.afterExact)) fail('afterExact 必须唯一定位正文位置');
+    const prefix = markdown.slice(0, markdown.indexOf(item.afterExact));
+    if ((prefix.match(/^\s*```/gm) || []).length % 2) fail('不能将配图锚定在代码块中');
+    if (item.generate != null) {
+      const g = item.generate;
+      if (!g || !['timeline', 'datacard'].includes(g.kind) || typeof g.title !== 'string' || g.title.length > 60 || !Array.isArray(g.items) || g.items.length < 2 || g.items.length > 8) fail('generate 规格无效');
+      for (const row of g.items) {
+        if (!row || typeof row.label !== 'string' || typeof row.value !== 'string' || !row.label.trim() || !row.value.trim() || row.label.length > 40 || row.value.length > 80 || !markdown.includes(row.label) || !markdown.includes(row.value) || /--!?>/.test(row.label + row.value)) fail('数据图的每项标签和值须逐字出现在终稿中且符合长度限制');
+      }
+    }
+  }
+  return placements;
+}
+
 export async function planImagePlaceholders({ gateway, store, batchId, candidateId, provider, markdown, maxOutputTokens = 5000, skillPrompt = '' }) {
   const result = await gateway.complete({ provider, purpose:'article-image-plan', batchId, candidateId, jsonMode:true, maxOutputTokens,
     messages:[{ role:'system', content:`${skillPrompt ? `${skillPrompt}\n\n` : ''}${IMAGE_PLAN_SYSTEM}`, protected:true }, { role:'user', content:String(markdown), protected:true }] });
