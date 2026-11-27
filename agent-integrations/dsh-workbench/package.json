@@ -1,6 +1,6 @@
 {
   "name": "jianzi-content-workbench",
-  "version": "1.0.19",
+  "version": "1.1.1",
   "icon": "./icon.svg",
   "description": "见字工作台：面向微信公众号创作者的内容创作平台，覆盖热点采集、选题研判、文章创作、排版与封面制作。",
   "repository": {

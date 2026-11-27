@@ -169,4 +169,8 @@ test('外部配图方案校验锚点和正文数据，空方案有效', () => {
   assert.throws(() => validateExternalImagePlan(text, [{...item, afterExact:'不存在'}]), /逐字/);
   assert.throws(() => validateExternalImagePlan(text, [{...item, generate:{...item.generate, items:[{label:'第一段',value:'99 人'},{label:'第二段',value:'20 人'}]}}]), /逐字/);
   assert.throws(() => validateExternalImagePlan(text, Array(5).fill(item)), /最多 4/);
+  for (const end of ['-->', '--!>']) {
+    assert.throws(() => validateExternalImagePlan(text, [{...item, content:`图片${end}<script>`}]), /分隔符/);
+    assert.throws(() => validateExternalImagePlan(text + ` 第一段${end}`, [{...item, generate:{...item.generate, items:[{label:`第一段${end}`,value:'10 人'},{label:'第二段',value:'20 人'}]}}]), /逐字/);
+  }
 });

@@ -128,7 +128,7 @@ export function validateExternalImagePlan(markdown, placements) {
     const fail = (message) => { throw new Error(`第 ${index + 1} 项：${message}`); };
     if (!item || !TYPES.has(item.type)) fail('类型须为来源、资料或参考');
     for (const key of ['afterExact', 'content', 'ratio', 'suggestedSource', 'copyrightAction']) {
-      if (typeof item[key] !== 'string' || !item[key].trim() || item[key].length > 500 || /[|\r\n]|-->/.test(item[key])) fail(`${key} 须为不含换行或占位分隔符的非空文本`);
+      if (typeof item[key] !== 'string' || !item[key].trim() || item[key].length > 500 || /[|\r\n]|--!?>/.test(item[key])) fail(`${key} 须为不含换行或占位分隔符的非空文本`);
     }
     if (!markdown.includes(item.afterExact)) fail('afterExact 必须逐字出现在终稿中');
     if (markdown.indexOf(item.afterExact) !== markdown.lastIndexOf(item.afterExact)) fail('afterExact 必须唯一定位正文位置');
@@ -138,7 +138,7 @@ export function validateExternalImagePlan(markdown, placements) {
       const g = item.generate;
       if (!g || !['timeline', 'datacard'].includes(g.kind) || typeof g.title !== 'string' || g.title.length > 60 || !Array.isArray(g.items) || g.items.length < 2 || g.items.length > 8) fail('generate 规格无效');
       for (const row of g.items) {
-        if (!row || typeof row.label !== 'string' || typeof row.value !== 'string' || !row.label.trim() || !row.value.trim() || row.label.length > 40 || row.value.length > 80 || !markdown.includes(row.label) || !markdown.includes(row.value) || /-->/.test(row.label + row.value)) fail('数据图的每项标签和值须逐字出现在终稿中且符合长度限制');
+        if (!row || typeof row.label !== 'string' || typeof row.value !== 'string' || !row.label.trim() || !row.value.trim() || row.label.length > 40 || row.value.length > 80 || !markdown.includes(row.label) || !markdown.includes(row.value) || /--!?>/.test(row.label + row.value)) fail('数据图的每项标签和值须逐字出现在终稿中且符合长度限制');
       }
     }
   }
