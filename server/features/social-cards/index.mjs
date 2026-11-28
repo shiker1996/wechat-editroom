@@ -14,7 +14,7 @@ export {
 } from './application/social-card-pipeline.mjs';
 export { AI_VISUAL_PAGE_COUNT_TOLERANCE, SOCIAL_CARD_BEAUTIFY_DELIVERY_GATE, SOCIAL_CARD_BEAUTIFY_HTML, SOCIAL_CARD_BEAUTIFY_OUTPUT, SOCIAL_CARD_BEAUTIFY_REPORT, aiVisualPageCountPolicy, runSocialCardBeautify, validateAiVisualScreenshotSet } from './application/social-card-beautify.mjs';
 export { auditSocialCardHtmlFit } from './application/social-card-visual-audit.mjs';
-export { buildSocialCardCopyInput, buildSocialCardCopySkillPrompt, buildSocialCardCopySystemPrompt, generateSocialCardCopy, validateSocialCardCopy } from './application/social-card-copy.mjs';
+export { buildSocialCardCopyInput, buildSocialCardCopySkillPrompt, buildSocialCardCopySystemPrompt, generateSocialCardCopy, validateSocialCardCopy, validateSocialCardPublishTitle } from './application/social-card-copy.mjs';
 export { SOCIAL_CARD_AI_VISUAL_ARTIFACTS, SOCIAL_CARD_AI_VISUAL_FAILURE_CODES, classifySocialCardAiVisualFailure, collectSocialCardAiVisualArtifacts, writeSocialCardAiVisualBaseline } from './application/social-card-ai-visual-baseline.mjs';
 export { SOCIAL_CARD_AI_VISUAL_STAGE_CONTRACT, createSocialCardAiVisualStageRecorder, writeSocialCardAiVisualSkillManifest } from './application/social-card-ai-visual-pipeline.mjs';
 export { AI_VISUAL_DOCUMENT_WRITE, filterAiVisualGenerationCatalog, runSocialCardAiVisualGenerationAgent } from './application/social-card-ai-visual-agent.mjs';

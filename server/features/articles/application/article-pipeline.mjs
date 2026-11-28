@@ -442,6 +442,9 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
     'article-image-placeholders':loadSkillBundle({workspaceRoot,skillName:'article-image-placeholders'}),
     'article-visual-planner':loadSkillBundle({workspaceRoot,skillName:'article-visual-planner'}),
   };
+  const writingSkillRoot=`${path.resolve(workspaceRoot,'writing-skills')}${path.sep}`.toLowerCase();
+  const selectedTitleSkill=stageSkills['title-generator'];
+  const hasUserTitleSkill=selectedStageIds.title!=='title-generator'||selectedTitleSkill.files.some((file)=>path.resolve(file).toLowerCase().startsWith(writingSkillRoot));
   const runtime=await prepareSkillRun({gateway,store,batchId,candidateId,purpose:'article',bundles:[orchestratorSkill,...Object.values(stageSkills)],provider,snapshotId,
     selection:{entryPoint:'hotspot-article',articleType,stages:stageSelections||historicalStages}});
   gateway=bindGenerationSnapshot(gateway,runtime.snapshotId);
@@ -483,7 +486,7 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   const researchSelectionPath=path.join(workdir,'editorial-research-selection.json');
   writeFile(researchSelectionPath,JSON.stringify({candidate_id:candidate.candidate_id,selected:brief.adoptedResearchPoints,rejected:normalizeRejectedAngles(brief.rejectedAngles),generated_at:new Date().toISOString()},null,2));
   const skillManifestPath=path.join(workdir,'00-skill-manifest.json');
-  writeFile(skillManifestPath,JSON.stringify({pipelineVersion:ARTICLE_PROMPT_VERSION,promptMode:'standalone-runtime',skillsUsedFor:'workflow-and-stage-tools',orchestrator:{skill:'wechat-mp-topic-to-article',hash:orchestratorSkill.hash,files:orchestratorSkill.files,fallback:orchestratorSkill.fallback},articleType,articleTypeSelectionSource:'locked-brief',writingStance,stanceSource:stanceDecision.source,citationPolicy,visualPolicy:visualDecision.policy,stageSkillSelections:stageSelections||historicalStages,stageSkills:Object.fromEntries(Object.entries(stageSkills).map(([name,bundle])=>[name,{skill:bundle.skillName,hash:bundle.hash,files:bundle.files,fallback:bundle.fallback}])),loadedAt:new Date().toISOString()},null,2));
+  writeFile(skillManifestPath,JSON.stringify({pipelineVersion:ARTICLE_PROMPT_VERSION,promptMode:hasUserTitleSkill?'selected-title-skill':'title-prompt-fallback',skillsUsedFor:'workflow-stage-prompts-and-tools',orchestrator:{skill:'wechat-mp-topic-to-article',hash:orchestratorSkill.hash,files:orchestratorSkill.files,fallback:orchestratorSkill.fallback},articleType,articleTypeSelectionSource:'locked-brief',writingStance,stanceSource:stanceDecision.source,citationPolicy,visualPolicy:visualDecision.policy,stageSkillSelections:stageSelections||historicalStages,stageSkills:Object.fromEntries(Object.entries(stageSkills).map(([name,bundle])=>[name,{skill:bundle.skillName,hash:bundle.hash,files:bundle.files,fallback:bundle.fallback}])),loadedAt:new Date().toISOString()},null,2));
   onProgress('Step 1.5 基于来源建立结构化事实基座');
   // 事实基座包含逐条主张、证据和来源映射，内容量会随素材增长。
   // 不要在这里传固定 maxOutputTokens：gateway 的 article-fact-base
@@ -678,7 +681,10 @@ export async function runArticlePipeline({gateway,store,batchId,candidateId,prov
   writeFile(paths['05-humanized.md'], final);
 
   onProgress('Step 5 根据完成的正文生成发布标题');
-  const titlePlan = await generateTitlePlan({ gateway, store, ...modelInput, systemPrompt: ARTICLE_PROMPTS.title,
+  const titleSystemPrompt=hasUserTitleSkill
+    ? `${selectedTitleSkill.prompt}\n\n---\n\n标题阶段输出约束：如提供 decision.title_plan 工具，必须调用一次并按工具参数契约返回候选与唯一推荐；回退到文本生成时只输出符合该契约的严格 JSON。`
+    : ARTICLE_PROMPTS.title;
+  const titlePlan = await generateTitlePlan({ gateway, store, ...modelInput, systemPrompt: titleSystemPrompt,
     purpose: 'article-title-generation-final', fallbackTitle: extractArticleTitle(final) || brief.topic,
     payload: { topic: brief.topic, reader_context: readerContext, article: final,
       facts: articleFactAuthorityView(factBase),

@@ -1,8 +1,8 @@
 import { resolvePrompt } from '../../../platform/llm/prompt-registry.mjs';
 
-// Runtime prompts deliberately stand alone. Skill configuration still selects models,
-// length and routing; complete workflow/skill prose is not injected into each call.
-export const ARTICLE_PROMPT_VERSION = 'direct-brief-v24';
+// Runtime prompts own the shared contracts. The title prompt is the fallback when
+// no user title Skill is selected; other stage prompts remain standalone.
+export const ARTICLE_PROMPT_VERSION = 'direct-brief-v25';
 export const ARTICLE_LENGTH_ADJUSTMENT_THRESHOLD = 200;
 
 export function planArticleLengthAdjustment(currentVisibleChars, allowedRange) {

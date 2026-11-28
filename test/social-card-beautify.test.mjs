@@ -21,7 +21,7 @@ test('共享发布文案模块统一组装事实输入并清理标签结果', as
   assert.deepEqual(input.source_url, ['https://example.com/event']);
   let received;
   const result = await generateSocialCardCopy({
-    gateway: { complete: async (request) => { received = request; return { content: '正文\n#事件 #行业 #观察' }; } },
+      gateway: { complete: async (request) => { received = request; return { content: '小红书笔记标题：测试事件有新进展\n\n正文\n#事件 #行业 #观察' }; } },
     provider: 'test',
     skillPrompt: 'COPY_GUIDE.md\nreferences\\copy-event.md',
     channelMode: 'xiaohongshu',
