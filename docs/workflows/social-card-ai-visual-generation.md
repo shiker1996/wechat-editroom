@@ -10,8 +10,9 @@
 
 | 入口 | 实现位置 | 说明 |
 | --- | --- | --- |
+| 标题与配文生成 | `server/features/social-cards/application/social-card-copy.mjs`、`prompts/social-cards/copy.md` | 内部生成和 AI 美化共用同一调用；标题主旨透明、含 1–2 个搜索词、最多 20 字且无标题党词，程序校验长度 |
 | 社交卡图文编排 | `server/features/social-cards/application/social-card-beautify.mjs` | 准备输入、写入与审计工具、运行生成 Agent、记录阶段并启动交付 |
-| 外部 Agent MCP | `scripts/agent-integration/tools.mjs`、`server/platform/http/routes/social-card-routes.mjs` | 外部 Agent 必须把结构化视觉方案和整份 HTML 一起审计；审计报告复用装饰空间几何诊断，Agent 在自己的草稿中按实测区域重排内容，再重审并提交 |
+| 外部 Agent MCP | `scripts/agent-integration/tools.mjs`、`server/platform/http/routes/social-card-routes.mjs` | 外部 Agent 必须把结构化视觉方案和整份 HTML 一起审计；可选发布标题须不超过 20 字；审计报告复用装饰空间几何诊断，Agent 在自己的草稿中按实测区域重排内容，再重审并提交 |
 | 单 Agent 文档协议 | `server/platform/agent/ai-visual-document-agent.mjs` | 读取资料、管理写入/审计时序及 finish 条件；社交卡和文章封面共用 Agent 编排 |
 | 社交卡写入能力 | `plugins/ai-visual-document-writer/adapter.mjs`、`plugins/ai-visual-document-writer/manifest.json` | 在活动会话内追加文档，或按锚点精确替换单页 |
 | 程序布局与方案兑现审计 | `server/features/social-cards/application/social-card-visual-audit.mjs`、`server/features/social-cards/application/social-card-design-scheme-contract.mjs`、`server/features/social-cards/application/social-card-design-conformance.mjs`、`server/platform/browser/html-layout-probe.mjs` | Chromium 检查 375×667 画布、正文溢出、内容文字范围相对正文可用区的垂直居中偏差（18px 以内）、内容页占用率、列表条目，以及统一方案与每页 DOM 标记、共用锚点和渲染背景差异。测量正文主体/内容栈矩形、文字边界和装饰矩形；装饰与内容相交时，审计结果附带相交框及左右/上下可用版心建议，供 Agent 重排正文；这组几何数据用于诊断和修复，不新增独立准入门槛 |

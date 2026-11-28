@@ -78,6 +78,12 @@ export function parseSocialCardCopyOutput(value = '', { channelMode = 'wechat' }
   return { publishTitle, copy };
 }
 
+export function validateSocialCardPublishTitle(title = '') {
+  const value=String(title||'').trim();
+  const length=Array.from(value).length;
+  return { valid:!!value&&length<=20, length, issues:!value?['图文发布标题为空']:length>20?[`图文发布标题超过 20 字（当前 ${length} 字）`]:[] };
+}
+
 export function formatSocialCardCopyArtifact({ publishTitle = '', copy = '', channelMode = 'wechat' } = {}) {
   const title = String(publishTitle || '').trim();
   const body = String(copy || '').trim();
@@ -126,5 +132,7 @@ export async function generateSocialCardCopy({
     ],
   });
   const parsed = parseSocialCardCopyOutput(result?.content || '', { channelMode });
+  const titleCheck=validateSocialCardPublishTitle(parsed.publishTitle);
+  if(!titleCheck.valid) throw new Error(`图文标题校验失败：${titleCheck.issues.join('；')}`);
   return { publishTitle: parsed.publishTitle, copy: parsed.copy, result, input };
 }

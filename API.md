@@ -657,7 +657,7 @@ AI 起草（单步）{ provider, instructions, existingDraft }
 提交待审计的图文 HTML 进行浏览器布局审计。故事板须先锁定；请求提供 `html`，可用 `page` 只审计指定页。返回逐页问题和 `valid`，审计未通过时返回 HTTP 422。
 
 ### POST /api/candidates/:id/social-cards/external
-提交外部 Agent 生成的最终图文。故事板须先锁定；请求提供 `html`、`copy`，可选 `publishTitle` 和 `designScheme`。工作台执行 HTML 安全、文案和页数校验，再做浏览器布局审计、截图和交付门禁；通过后登记 AI 视觉 HTML、文案、PNG 和报告。
+提交外部 Agent 生成的最终图文。故事板须先锁定；请求提供 `html`、`copy`，可选 `publishTitle`（不超过 20 字）和 `designScheme`。工作台执行 HTML 安全、标题长度、文案和页数校验，再做浏览器布局审计、截图和交付门禁；通过后登记 AI 视觉 HTML、文案、PNG 和报告。
 
 ### GET /api/candidates/:id/social-cards
 读取图文交付状态、图片清单、公众号发布标题（`publishTitle`）、文案、事实清单和报告。标题与文案在同一次文案生成调用中产出；`copy.txt` 以“公众号发布标题：”首行保存标题，独立文件为 `publish-title.txt`。

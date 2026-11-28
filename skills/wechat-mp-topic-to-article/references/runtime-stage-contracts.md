@@ -26,7 +26,7 @@ locked-brief + fact-base → drafting → review → length-adjustment → title
 
 ## title-lock
 
-直接依据锁定简报、事实基座、发布主张登记和当前文章生成候选并锁定唯一发布标题。程序将标题写入文章唯一 H1，并生成 03-titles.md 与 03-title-lock.json。标题承诺必须由正文兑现；锁题后不得因普通润色修改标题。
+直接依据锁定简报、事实基座、发布主张登记和当前文章生成候选并锁定唯一发布标题。选中用户标题 Skill 时使用该 Skill 的提示词；没有用户标题 Skill 时使用 `prompts/articles/title.md` 兜底。程序将标题写入文章唯一 H1，并生成 03-titles.md 与 03-title-lock.json。标题承诺必须由正文兑现；锁题后不得因普通润色修改标题。
 
 ## 自动链之后的可选操作
 

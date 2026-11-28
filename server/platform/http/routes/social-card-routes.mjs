@@ -1,5 +1,5 @@
 import { bindGenerationSnapshot, createRequestHarnessGateway, prepareSkillRun, resolveSkillToolPolicy } from '../../skills/pipeline-runtime.mjs';
-import { SOCIAL_CARD_BEAUTIFY_HTML, SOCIAL_CARD_BEAUTIFY_OUTPUT, aiVisualPageCountPolicy, auditSocialCardHtmlFit, buildSocialCardFactEnvelope, buildSocialCardStoryboardSystemPrompt, enrichEventAnalysis, eventGroupsForCandidate, socialStoryboardSkillForMaterialType, toLegacySocialCardPromptInput, validateAiVisualScreenshotSet, validateSocialCardCopy } from '../../../features/social-cards/index.mjs';
+import { SOCIAL_CARD_BEAUTIFY_HTML, SOCIAL_CARD_BEAUTIFY_OUTPUT, aiVisualPageCountPolicy, auditSocialCardHtmlFit, buildSocialCardFactEnvelope, buildSocialCardStoryboardSystemPrompt, enrichEventAnalysis, eventGroupsForCandidate, socialStoryboardSkillForMaterialType, toLegacySocialCardPromptInput, validateAiVisualScreenshotSet, validateSocialCardCopy, validateSocialCardPublishTitle } from '../../../features/social-cards/index.mjs';
 import { listSocialCardStageSkillSlots, resolveSocialCardStageSkills } from '../../skills/entry-routing.mjs';
 import { requestGitHubJson } from '../../plugin-sdk/github-client.mjs';
 import { pipeFile } from '../route-helpers.mjs';
@@ -153,7 +153,8 @@ export async function handleSocialCardRoutes(context) {
     const publishTitle = String(input.publishTitle || '').trim();
     const copy = String(input.copy || '').trim();
     if (!html || html.length > 10_000_000) return json(response,400,{error:'html 必须为非空字符串且不超过 10 MB'});
-    if (publishTitle.length > 120 || copy.length > 50_000) return json(response,400,{error:'publishTitle 最长 120 字，copy 最长 50 KB'});
+    const titleCheck=publishTitle?validateSocialCardPublishTitle(publishTitle):{valid:true,issues:[]};
+    if (!titleCheck.valid || copy.length > 50_000) return json(response,400,{error:[...titleCheck.issues,...(copy.length>50_000?['copy 最长 50 KB']:[])].join('；')});
     if (input.designScheme && Buffer.byteLength(JSON.stringify(input.designScheme)) > 250_000) return json(response,400,{error:'designScheme 不得超过 250 KB'});
     if (/<script\b|<iframe\b|<object\b|<embed\b|<form\b|\son[a-z]+\s*=|javascript:|@import|<link\b/i.test(html) || /(?:src|href)\s*=\s*["']https?:\/\//i.test(html)) return json(response,422,{error:'图文 HTML 含脚本、事件处理器或外部资源'});
     const copyCheck = validateSocialCardCopy(copy);
